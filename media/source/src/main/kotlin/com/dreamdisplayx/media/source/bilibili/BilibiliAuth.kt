@@ -127,28 +127,18 @@ object BilibiliAuth {
 
     /**
      * Extracts a Bilibili login cookie string (e.g. `SESSDATA=...; bili_jct=...`) from a login
-     * redirect URL, or null. Bilibili nests the cookies either as plain query params or as a single
-     * URL-encoded value; both forms are handled here.
+     * redirect URL, or null.
+     *
+     * Bilibili nests the cookies either as separate query params, or as a single URL-encoded value
+     * (`SESSDATA=xxx%26bili_jct%3Dyyy%26DedeUserID%3Dzzz` decodes to `xxx&bili_jct=yyy&DedeUserID=zzz`).
+     * Both forms are handled by decoding the whole query string once before splitting.
      */
     private fun extractBilibiliCookie(url: String?): String? {
         if (url == null) return null
-        val cookies = LinkedHashMap<String, String>()
-        // First split on '&' at the top level (cookies are usually separate query params).
-        for (part in url.split('&')) {
-            val idx = part.indexOf('=')
-            if (idx <= 0) continue
-            val key = part.substring(0, idx)
-            val raw = part.substring(idx + 1)
-            val value = runCatching { URLDecoder.decode(raw, StandardCharsets.UTF_8) }.getOrDefault(raw)
-            if (key == "SESSDATA" || key == "bili_jct" || key == "DedeUserID" || key == "DedeUserID__ckMd5") {
-                if (value.isNotEmpty()) cookies[key] = value
-            }
-        }
-        // If nothing was found at top level, Bilibili sometimes returns the whole thing URL-encoded
-        // once more (the value of the `url` param contains the cookies).
-        if (cookies.isEmpty()) {
-            val decoded = runCatching { URLDecoder.decode(url, StandardCharsets.UTF_8) }.getOrDefault(url)
-            for (part in decoded.split('&')) {
+
+        fun collect(from: String): Map<String, String> {
+            val cookies = LinkedHashMap<String, String>()
+            for (part in from.split('&')) {
                 val idx = part.indexOf('=')
                 if (idx <= 0) continue
                 val key = part.substring(0, idx)
@@ -158,7 +148,20 @@ object BilibiliAuth {
                     if (value.isNotEmpty()) cookies[key] = value
                 }
             }
+            return cookies
         }
+
+        // Pass 1: plain `&`-separated query params on the URL itself.
+        var cookies = collect(url)
+
+        // Pass 2: Bilibili sometimes URL-encodes the entire query once more; the SESSDATA value
+        // then carries the other cookies as a decoded `&`-chain (e.g. `xxx&bili_jct=yyy`).
+        if (cookies.isEmpty() || cookies["SESSDATA"]?.contains('&') == true) {
+            val decoded = runCatching { URLDecoder.decode(url, StandardCharsets.UTF_8) }.getOrDefault(url)
+            val fromDecoded = collect(decoded)
+            if (fromDecoded.isNotEmpty()) cookies = fromDecoded
+        }
+
         return cookies.entries.joinToString("; ") { (k, v) -> "$k=$v" }.ifEmpty { null }
     }
 

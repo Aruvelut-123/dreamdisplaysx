@@ -129,23 +129,34 @@ object BilibiliApi {
     )
 
     /**
-     * Fetches all danmaku for a video identified by [cid] from Bilibili's XML endpoint
-     * (`comment.bilibili.com/<cid>.xml`). Each `<d p="time,...">text</d>` entry carries its
-     * timestamp; the result is sorted ascending for timed playback.
+     * Fetches all danmaku for a video identified by [cid] from Bilibili's XML endpoints.
+     * `api.bilibili.com/x/v1/dm/list.so?oid=<cid>` is preferred (same host the mod already talks
+     * to for playback, so it works wherever the video itself loads); `comment.bilibili.com/<cid>.xml`
+     * is the fallback. Each `<d p="time,...">text</d>` entry carries its timestamp; the result is
+     * sorted ascending for timed playback.
      */
     fun fetchDanmaku(cid: Long): List<DanmakuEntry> {
-        val xml = runCatching {
-            DreamHttpClient.readText(
-                "https://comment.bilibili.com/$cid.xml",
-                DreamHttpClient.RequestOptions(
-                    headers = headers(),
-                    connectTimeoutMs = 10_000,
-                    readTimeoutMs = 15_000,
-                ),
-            )
-        }.getOrNull() ?: return emptyList()
-        if (xml.isBlank() || !xml.contains("<d ")) return emptyList()
+        val xml = fetchDanmakuXml("https://api.bilibili.com/x/v1/dm/list.so?oid=$cid")
+            ?: fetchDanmakuXml("https://comment.bilibili.com/$cid.xml")
+            ?: return emptyList()
+        return parseDanmakuXml(xml)
+    }
 
+    /** Fetches the danmaku XML body for [url], or null on failure. */
+    private fun fetchDanmakuXml(url: String): String? = runCatching {
+        DreamHttpClient.readText(
+            url,
+            DreamHttpClient.RequestOptions(
+                headers = headers(),
+                connectTimeoutMs = 10_000,
+                readTimeoutMs = 15_000,
+            ),
+        )
+    }.onFailure { logger.debug("Danmaku fetch failed for {}: {}.", url, it.message) }.getOrNull()
+
+    /** Parses a Bilibili danmaku XML document into sorted [DanmakuEntry]s. */
+    internal fun parseDanmakuXml(xml: String): List<DanmakuEntry> {
+        if (xml.isBlank() || !xml.contains("<d ")) return emptyList()
         val entries = ArrayList<DanmakuEntry>()
         val pattern = Regex("<d p=\"([^\"]*)\">([^<]*)</d>")
         for (match in pattern.findAll(xml)) {
