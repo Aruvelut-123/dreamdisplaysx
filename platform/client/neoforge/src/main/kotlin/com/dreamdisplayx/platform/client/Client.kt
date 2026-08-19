@@ -39,7 +39,9 @@ class Client(modEventBus: IEventBus) : DreamMod {
         // one (dist = [Dist.CLIENT]), and NeoForge rejects registering the same payload id twice,
         // so there can only be one registrar per mod, not one per @Mod class.
 
-        modEventBus.addListener(this::onRegisterClientCommands)
+        // RegisterClientCommandsEvent is a game-bus (NeoForge.EVENT_BUS) event, not an
+        // IModBusEvent, so it must not go through modEventBus.
+        NeoForge.EVENT_BUS.addListener(this::onRegisterClientCommands)
         NeoForge.EVENT_BUS.register(this)
     }
 
