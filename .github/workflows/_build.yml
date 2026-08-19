@@ -691,6 +691,8 @@ jobs:
 
           echo "FFMPEG_ANDROID_DIR=$PREFIX" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
+          # ffmpeg-sys-next's pkg-config probe panics on cross-compilation unless explicitly allowed.
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> "$GITHUB_ENV"
           echo "NDK_PATH=$NDK_PATH" >> "$GITHUB_ENV"
           echo "ANDROID_API=$API_LEVEL" >> "$GITHUB_ENV"
 
