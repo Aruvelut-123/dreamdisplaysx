@@ -109,8 +109,9 @@ class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
                 }
             }
         } else {
+            // No QR yet: draw the placeholder text below the QR area, not inside it.
             val msg = "加载二维码中..."
-            g.drawText(font, msg, width / 2 - font.width(msg) / 2, y0 + qrWidth / 2 - 8, colorWhite, true)
+            g.drawText(font, msg, width / 2 - font.width(msg) / 2, y0 + qrWidth + 10, colorWhite, true)
         }
     }
 

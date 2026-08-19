@@ -43,11 +43,11 @@ object BilibiliApi {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliApi")
 
     /**
-     * Bilibili `SESSDATA` cookie set by the client after a platform login (see `BilibiliAuth`).
-     * Enables VIP / higher-quality playback; empty when not logged in.
+     * Bilibili login cookie string set by the client after a platform login (see `BilibiliAuth`),
+     * e.g. `SESSDATA=...; bili_jct=...`. Enables VIP / higher-quality playback; empty when not logged in.
      */
     @Volatile
-    var sessdata: String = ""
+    var cookie: String = ""
 
     /** BIlibili's API rejects requests without a browser-shaped `Referer` / `User-Agent`; the login cookie is added when present. */
     private fun headers(): Map<String, List<String>> =
@@ -55,7 +55,7 @@ object BilibiliApi {
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
             "Accept" to "application/json",
             "Referer" to "https://www.bilibili.com",
-            "Cookie" to if (sessdata.isNotEmpty()) "SESSDATA=$sessdata" else "",
+            "Cookie" to cookie,
         )
 
     /** `b23.tv` short links get followed for at most this many hops before giving up. */
@@ -80,6 +80,85 @@ object BilibiliApi {
         source.roomId != null -> resolveLive(source.roomId!!)
         source.epId != null || source.seasonId != null -> resolveBangumi(source.epId, source.seasonId)
         else -> resolveShortlink(source.url)?.let { resolve(it) }
+    }
+
+    /** Resolves the `cid` of a VOD / bangumi episode, used to fetch its danmaku; null when not resolvable. */
+    fun resolveCid(source: MediaSource.Bilibili): Long? = when {
+        source.bvid != null || source.avid != null -> resolveVodCid(source.bvid, source.avid, source.part ?: 1)
+        source.epId != null || source.seasonId != null -> resolveBangumiCid(source.epId, source.seasonId)
+        else -> null
+    }
+
+    /** Looks up the `cid` for a VOD via the view API (same call path as playback). */
+    private fun resolveVodCid(bvid: String?, avid: Long?, part: Int): Long? {
+        val params = buildMap {
+            bvid?.let { put("bvid", it) }
+            avid?.let { put("aid", it.toString()) }
+        }
+        if (params.isEmpty()) return null
+        val data = getJson("https://api.bilibili.com/x/web-interface/view?${plainQuery(params)}")?.obj("data")
+            ?: return null
+        val pages = data.array("pages")?.mapNotNull { it.asJsonObjectOrNull() }
+        val page = pages?.firstOrNull { it.optInt("page") == part } ?: pages?.firstOrNull()
+        return page?.optLong("cid") ?: data.optLong("cid")
+    }
+
+    /** Looks up the `cid` for a bangumi episode via the pgc season API. */
+    private fun resolveBangumiCid(epId: Long?, seasonId: Long?): Long? {
+        val params = buildMap {
+            epId?.let { put("ep_id", it.toString()) }
+            seasonId?.let { put("season_id", it.toString()) }
+        }
+        if (params.isEmpty()) return null
+        val result = getJson("https://api.bilibili.com/pgc/view/web/season?${plainQuery(params)}")?.obj("result")
+            ?: return null
+        val episodes = result.array("episodes")?.mapNotNull { it.asJsonObjectOrNull() } ?: emptyList()
+        val episode = when {
+            epId != null -> episodes.firstOrNull { it.optLong("id") == epId } ?: episodes.firstOrNull()
+            else -> episodes.firstOrNull()
+        }
+        return episode?.optLong("cid") ?: result.optLong("cid")
+    }
+
+    /** One timed danmaku entry for a VOD / bangumi video. */
+    data class DanmakuEntry(
+        /** Seconds into the video. */
+        val timeSec: Double,
+        val text: String,
+        val color: Int,
+    )
+
+    /**
+     * Fetches all danmaku for a video identified by [cid] from Bilibili's XML endpoint
+     * (`comment.bilibili.com/<cid>.xml`). Each `<d p="time,...">text</d>` entry carries its
+     * timestamp; the result is sorted ascending for timed playback.
+     */
+    fun fetchDanmaku(cid: Long): List<DanmakuEntry> {
+        val xml = runCatching {
+            DreamHttpClient.readText(
+                "https://comment.bilibili.com/$cid.xml",
+                DreamHttpClient.RequestOptions(
+                    headers = headers(),
+                    connectTimeoutMs = 10_000,
+                    readTimeoutMs = 15_000,
+                ),
+            )
+        }.getOrNull() ?: return emptyList()
+        if (xml.isBlank() || !xml.contains("<d ")) return emptyList()
+
+        val entries = ArrayList<DanmakuEntry>()
+        val pattern = Regex("<d p=\"([^\"]*)\">([^<]*)</d>")
+        for (match in pattern.findAll(xml)) {
+            val p = match.groupValues[1]
+            val text = match.groupValues[2].trim()
+            if (text.isEmpty() || text.length > 200) continue
+            val fields = p.split(',')
+            val time = fields.getOrNull(0)?.toDoubleOrNull() ?: continue
+            val color = fields.getOrNull(3)?.toLongOrNull()?.let { it.toInt() } ?: 0xFFFFFF
+            entries += DanmakuEntry(time, text, color)
+        }
+        entries.sortBy { it.timeSec }
+        return entries
     }
 
     /** Metadata-only lookup for the cache. */

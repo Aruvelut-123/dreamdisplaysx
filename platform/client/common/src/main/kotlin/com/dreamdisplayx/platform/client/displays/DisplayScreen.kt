@@ -500,22 +500,29 @@ class DisplayScreen(
     }
 
     /**
-     * Subscribes / unsubscribes Bilibili live-room danmaku for this display based on the current
-     * [videoUrl]. A `live.bilibili.com/<roomId>` URL starts a danmaku channel; anything else stops it.
+     * Subscribes / unsubscribes Bilibili danmaku for this display based on the current [videoUrl].
+     * A `live.bilibili.com/<roomId>` URL starts a live WebSocket channel; a VOD / bangumi URL
+     * resolves its `cid` and fetches the timed danmaku list.
      */
     private fun syncDanmaku(videoUrl: String) {
         val source = com.dreamdisplayx.api.media.source.url.BilibiliUrls.parse(videoUrl)
+        val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
         val roomId = source?.roomId
         if (roomId != null) {
-            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.subscribe(
-                com.dreamdisplayx.api.display.model.property.DisplayId(uuid),
-                roomId,
-            )
-        } else {
-            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(
-                com.dreamdisplayx.api.display.model.property.DisplayId(uuid),
-            )
+            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.subscribeLive(did, roomId)
+            return
         }
+        if (source != null && (source.bvid != null || source.avid != null || source.epId != null || source.seasonId != null)) {
+            // Resolve the cid on an IO thread, then subscribe the timed danmaku list.
+            Thread {
+                val cid = com.dreamdisplayx.media.source.bilibili.BilibiliApi.resolveCid(source)
+                if (cid != null) {
+                    com.dreamdisplayx.platform.client.danmaku.DanmakuManager.subscribeVideo(did, cid)
+                }
+            }.apply { isDaemon = true }.start()
+            return
+        }
+        com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(did)
     }
 
     /** True while the screen is holding back the picture until the server's first timeline arrives. */
@@ -1051,6 +1058,7 @@ class DisplayScreen(
         val maxRadius = if (isPopoutActive) Double.MAX_VALUE else ClientStateManager.config.defaultDistance.toDouble()
         val distance = getDistanceToScreen(pos)
         mediaPlayer?.tick(distance, maxRadius)
+        advanceDanmaku()
         if (isPopoutActive) {
             if (distanceQualitySteps != 0) {
                 distanceQualitySteps = 0
@@ -1072,23 +1080,24 @@ class DisplayScreen(
                 environment = probeEnvironment(plane),
             ),
         )
-        advanceDanmaku()
     }
 
-    /** Advances the Bilibili danmaku overlay's scroll position (client tick, main thread). */
+    /** Advances the Bilibili danmaku overlay (client tick, main thread). */
     private fun advanceDanmaku() {
-        com.dreamdisplayx.platform.client.danmaku.DanmakuManager.queue(
-            com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
-        )?.let { messages ->
-            val overlay = danmakuOverlay
-            if (overlay == null) {
-                danmakuOverlay = com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(width, height).also {
-                    messages.forEach { msg -> it.add(msg) }
-                }
+        val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
+        val messages = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.queue(did)
+        val overlay = danmakuOverlay
+        if (messages != null && messages.isNotEmpty()) {
+            val o = overlay ?: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(width, height).also {
+                danmakuOverlay = it
             }
-            danmakuOverlay?.tick()
-        } ?: run {
-            danmakuOverlay?.dispose()
+            // VOD / bangumi: consume timed danmaku as playback advances.
+            val positionSec = currentTimeNanos / 1_000_000_000.0
+            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec).forEach { o.add(it) }
+            messages.forEach { o.add(it) }
+            o.tick()
+        } else {
+            overlay?.dispose()
             danmakuOverlay = null
         }
     }

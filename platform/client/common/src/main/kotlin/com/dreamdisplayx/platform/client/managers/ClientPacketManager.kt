@@ -60,7 +60,7 @@ object ClientPacketManager {
             is ScreenShareAck -> ScreenShareCommand.onAck(packet.watchUrl)
             is PlatformCredentials -> {
                 ClientStateManager.bilibiliSessdata = packet.bilibiliSessdata
-                BilibiliApi.sessdata = packet.bilibiliSessdata
+                BilibiliApi.cookie = packet.bilibiliSessdata
                 if (packet.bilibiliSessdata.isNotEmpty()) {
                     logger.info("Received Bilibili login credential from the server.")
                 }

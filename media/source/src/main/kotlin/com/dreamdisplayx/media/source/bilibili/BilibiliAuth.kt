@@ -79,7 +79,7 @@ object BilibiliAuth {
         val url = data?.optString("url")
         return when (code) {
             0 -> {
-                val sessdata = extractSessdata(url)
+                val sessdata = extractBilibiliCookie(url)
                 if (sessdata != null) PollResult.Success(sessdata)
                 else PollResult.Failure("登录成功，但响应里没有 SESSDATA。")
             }
@@ -113,7 +113,7 @@ object BilibiliAuth {
         val data = root?.obj("data")
         return when {
             code == 0 && data != null -> {
-                val sessdata = extractSessdata(data.optString("url"))
+                val sessdata = extractBilibiliCookie(data.optString("url"))
                 if (sessdata != null) LoginResult.Success(sessdata)
                 else LoginResult.Failure("登录成功，但响应里没有 SESSDATA。")
             }
@@ -125,14 +125,41 @@ object BilibiliAuth {
         }
     }
 
-    /** Extracts the `SESSDATA` cookie value from a Bilibili login redirect URL, or null. */
-    private fun extractSessdata(url: String?): String? {
+    /**
+     * Extracts a Bilibili login cookie string (e.g. `SESSDATA=...; bili_jct=...`) from a login
+     * redirect URL, or null. Bilibili nests the cookies either as plain query params or as a single
+     * URL-encoded value; both forms are handled here.
+     */
+    private fun extractBilibiliCookie(url: String?): String? {
         if (url == null) return null
-        val value = url.split('&')
-            .firstOrNull { it.startsWith("SESSDATA=") }
-            ?.removePrefix("SESSDATA=")
-            ?: return null
-        return runCatching { URLDecoder.decode(value, StandardCharsets.UTF_8) }.getOrDefault(value)
+        val cookies = LinkedHashMap<String, String>()
+        // First split on '&' at the top level (cookies are usually separate query params).
+        for (part in url.split('&')) {
+            val idx = part.indexOf('=')
+            if (idx <= 0) continue
+            val key = part.substring(0, idx)
+            val raw = part.substring(idx + 1)
+            val value = runCatching { URLDecoder.decode(raw, StandardCharsets.UTF_8) }.getOrDefault(raw)
+            if (key == "SESSDATA" || key == "bili_jct" || key == "DedeUserID" || key == "DedeUserID__ckMd5") {
+                if (value.isNotEmpty()) cookies[key] = value
+            }
+        }
+        // If nothing was found at top level, Bilibili sometimes returns the whole thing URL-encoded
+        // once more (the value of the `url` param contains the cookies).
+        if (cookies.isEmpty()) {
+            val decoded = runCatching { URLDecoder.decode(url, StandardCharsets.UTF_8) }.getOrDefault(url)
+            for (part in decoded.split('&')) {
+                val idx = part.indexOf('=')
+                if (idx <= 0) continue
+                val key = part.substring(0, idx)
+                val raw = part.substring(idx + 1)
+                val value = runCatching { URLDecoder.decode(raw, StandardCharsets.UTF_8) }.getOrDefault(raw)
+                if (key == "SESSDATA" || key == "bili_jct" || key == "DedeUserID" || key == "DedeUserID__ckMd5") {
+                    if (value.isNotEmpty()) cookies[key] = value
+                }
+            }
+        }
+        return cookies.entries.joinToString("; ") { (k, v) -> "$k=$v" }.ifEmpty { null }
     }
 
     /** RSA-encrypts [plain] with Bilibili's PEM public key (PKCS#1 padding, base64 output). */
