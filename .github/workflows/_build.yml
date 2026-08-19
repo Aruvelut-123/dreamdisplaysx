@@ -1063,7 +1063,25 @@ jobs:
       - name: Collect artifacts
         run: |
           mkdir -p artifacts
-          cp build/libs/dreamdisplayx-*.jar artifacts/
+          # The Paper jar is cross-version and the proxy plugins are loader-independent; they are
+          # built only in the paper_build_version job and uploaded as their own artifact below.
+          cp build/libs/dreamdisplayx-fabric-*.jar build/libs/dreamdisplayx-neoforge-*.jar artifacts/
+
+      # Paper is one cross-version jar (1.21.1 through 26.x, dispatched at runtime) and the proxy
+      # plugins are loader-independent, so they are built once in the paper_build_version job. Ship
+      # them as their own artifact instead of burying them in the versioned build-jars archive.
+      - name: Upload cross-version platform jars
+        if: matrix.mc == needs.metadata.outputs.paper_build_version
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: platform-jars
+          path: |
+            build/libs/dreamdisplayx-paper-*.jar
+            build/libs/dreamdisplayx-velocity-*.jar
+            build/libs/dreamdisplayx-bungeecord-*.jar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7.0.1

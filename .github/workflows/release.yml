@@ -47,6 +47,14 @@ jobs:
           path: build/libs
           merge-multiple: true
 
+      - name: Download cross-version platform jars
+        if: needs.build.outputs.is_dev == 'true' || needs.build.outputs.is_preview == 'true'
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: platform-jars
+          path: build/libs
+          merge-multiple: true
+
       - name: Extract preview changelog
         if: needs.build.outputs.is_preview == 'true'
         run: |
@@ -128,6 +136,14 @@ jobs:
           path: build/libs
           merge-multiple: true
 
+      - name: Download cross-version platform jars
+        if: needs.build.outputs.is_marketplace_publishable == 'true'
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: platform-jars
+          path: build/libs
+          merge-multiple: true
+
       - name: Extract Paper game versions
         if: needs.build.outputs.is_marketplace_publishable == 'true'
         id: versions
@@ -199,6 +215,14 @@ jobs:
         uses: actions/download-artifact@v8.0.1
         with:
           pattern: build-jars-*
+          path: build/libs
+          merge-multiple: true
+
+      - name: Download cross-version platform jars
+        if: needs.build.outputs.is_marketplace_publishable == 'true' && needs.build.outputs.is_release == 'true'
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: platform-jars
           path: build/libs
           merge-multiple: true
 
