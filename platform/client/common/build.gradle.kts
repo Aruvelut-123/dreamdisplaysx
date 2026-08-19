@@ -26,6 +26,8 @@ dependencies {
     api(libs.newpipeExtractor)
     api(libs.kotlinxCoroutinesCore)
     api(libs.zxingCore)
+    api(libs.okhttp)
+    api(libs.okio)
     compileOnly(libs.kotlinStdlib)
 }
 

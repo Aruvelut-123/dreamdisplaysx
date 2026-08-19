@@ -8,7 +8,9 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import net.minecraft.client.Minecraft
+//? if >=1.21.11 {
 import net.minecraft.client.input.MouseButtonEvent
+//?}
 import net.minecraft.network.chat.Component
 
 /**
@@ -121,8 +123,14 @@ class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
         return false
     }
 
+    //? if >=1.21.11 {
     override fun onMouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         if (handleClick(event.x().toInt(), event.y().toInt())) return true
         return super.onMouseClicked(event, doubleClick)
     }
+    //?} else
+    /*override fun onMouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
+        if (handleClick(mouseX.toInt(), mouseY.toInt())) return true
+        return super.onMouseClicked(mouseX, mouseY, button)
+    }*/
 }

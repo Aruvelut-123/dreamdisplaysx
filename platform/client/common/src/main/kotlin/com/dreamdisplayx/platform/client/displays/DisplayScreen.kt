@@ -496,6 +496,26 @@ class DisplayScreen(
         this.lang = lang
         waitingForInitialTimeline = requiresServerTimeline()
         waitingSinceNanos = if (waitingForInitialTimeline) System.nanoTime() else 0L
+        syncDanmaku(videoUrl)
+    }
+
+    /**
+     * Subscribes / unsubscribes Bilibili live-room danmaku for this display based on the current
+     * [videoUrl]. A `live.bilibili.com/<roomId>` URL starts a danmaku channel; anything else stops it.
+     */
+    private fun syncDanmaku(videoUrl: String) {
+        val source = com.dreamdisplayx.api.media.source.url.BilibiliUrls.parse(videoUrl)
+        val roomId = source?.roomId
+        if (roomId != null) {
+            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.subscribe(
+                com.dreamdisplayx.api.display.model.property.DisplayId(uuid),
+                roomId,
+            )
+        } else {
+            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(
+                com.dreamdisplayx.api.display.model.property.DisplayId(uuid),
+            )
+        }
     }
 
     /** True while the screen is holding back the picture until the server's first timeline arrives. */
@@ -855,6 +875,11 @@ class DisplayScreen(
     /** Stops the media player, releases GPU texture, closes any popout, and closes the display menu if open. */
     fun unregister() {
         captureReplayCache()
+        com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(
+            com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
+        )
+        danmakuOverlay?.dispose()
+        danmakuOverlay = null
         val currentPlayer = media.shutdown()
         popoutManager.unregister(currentPlayer)
         currentPlayer?.stop()
@@ -1047,7 +1072,30 @@ class DisplayScreen(
                 environment = probeEnvironment(plane),
             ),
         )
+        advanceDanmaku()
     }
+
+    /** Advances the Bilibili danmaku overlay's scroll position (client tick, main thread). */
+    private fun advanceDanmaku() {
+        com.dreamdisplayx.platform.client.danmaku.DanmakuManager.queue(
+            com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
+        )?.let { messages ->
+            val overlay = danmakuOverlay
+            if (overlay == null) {
+                danmakuOverlay = com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(width, height).also {
+                    messages.forEach { msg -> it.add(msg) }
+                }
+            }
+            danmakuOverlay?.tick()
+        } ?: run {
+            danmakuOverlay?.dispose()
+            danmakuOverlay = null
+        }
+    }
+
+    /** The danmaku overlay texture, or null when no Bilibili live room is playing. */
+    var danmakuOverlay: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay? = null
+        private set
 
     /** Acoustic environment (voxel raytrace cached every [ENV_PROBE_INTERVAL_TICKS] ticks). */
     private fun probeEnvironment(plane: SourcePlane): AcousticEnvironment {

@@ -109,6 +109,7 @@ object ScreenRenderer : ClientRenderService {
             DisplayGeometry.applyScreenTransform(stack, facing, w, h)
             renderGpuTexture(drawQuad, displayScreen)
             stack.popPose()
+            renderDanmakuOverlay(displayScreen, stack, drawQuad, facing, w, h)
         } else {
             renderPlaceholder(
                 stack,
@@ -119,6 +120,24 @@ object ScreenRenderer : ClientRenderService {
                 h,
                 displayScreen.errored
             )
+        }
+    }
+
+    /** Draws the Bilibili danmaku overlay (if any) on top of the video quad, slightly lifted toward the viewer. */
+    private fun renderDanmakuOverlay(
+        displayScreen: DisplayScreen,
+        stack: PoseStack,
+        drawQuad: QuadRenderer,
+        facing: DisplayFacing,
+        w: Int,
+        h: Int,
+    ) {
+        val overlay = displayScreen.danmakuOverlay ?: return
+        val type = overlay.overlayRenderType() ?: return
+        drawLayer(stack, facing, w, h, OVERLAY_LIFT * 2f) {
+            drawQuad(type) { pose, builder ->
+                appendQuad(pose, builder, 255, 255, 255, displayScreen.rotation)
+            }
         }
     }
 
