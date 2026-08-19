@@ -4,6 +4,7 @@ main: com.dreamdisplayx.platform.server.PaperServer
 api-version: '${paperMinecraftApi}'
 description: 'Plugin for the Dream DisplaysX mod.'
 authors:
+  - Baymaxawa
   - arnodoelinger
   - INotSleep
   - Kolyakot33

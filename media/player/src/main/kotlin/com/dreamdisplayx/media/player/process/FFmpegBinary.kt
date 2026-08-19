@@ -99,15 +99,37 @@ object FFmpegBinary {
     /** Downloads [url] to [dest], following up to 10 HTTP redirects manually (GitHub releases use multiple hops). */
     @Throws(IOException::class)
     private fun downloadWithRedirects(url: String, dest: File) {
-        DreamHttpClient.downloadToFile(
-            url,
-            dest.toPath(),
-            DreamHttpClient.RequestOptions(
-                headers = DreamHttpClient.headersOf("User-Agent" to "DreamDisplaysX-ffmpeg-bootstrap"),
-                connectTimeoutMs = 15_000,
-                readTimeoutMs = 300_000,
-            ),
-        )
+        // GitHub-hosted binaries are routed through gh-proxy.com first (some networks cannot reach
+        // github.com directly), falling back to the original URL if the mirror fails.
+        val candidates = if (url.startsWith("https://github.com/")) {
+            listOf("https://gh-proxy.com/$url", url)
+        } else {
+            listOf(url)
+        }
+        var lastError: Exception? = null
+        for (candidate in candidates) {
+            try {
+                DreamHttpClient.downloadToFile(
+                    candidate,
+                    dest.toPath(),
+                    DreamHttpClient.RequestOptions(
+                        headers = DreamHttpClient.headersOf("User-Agent" to "DreamDisplaysX-ffmpeg-bootstrap"),
+                        connectTimeoutMs = 20_000,
+                        readTimeoutMs = 300_000,
+                    ),
+                )
+                return
+            } catch (e: Exception) {
+                lastError = e
+                if (dest.exists() && !dest.delete()) dest.deleteOnExit()
+                val retry = candidate != candidates.last()
+                logger.warn(
+                    "FFmpeg download failed via {} ({});{}",
+                    candidate, e.message, if (retry) " trying next source." else " giving up.",
+                )
+            }
+        }
+        throw lastError ?: IOException("FFmpeg download failed.")
     }
 
     /** Extracts the first ZIP entry whose name ends with [suffix] from [archive] to [dest]. */

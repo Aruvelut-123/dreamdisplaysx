@@ -1,5 +1,5 @@
 name: DreamDisplaysXProxy
 main: com.dreamdisplayx.platform.proxy.bungeecord.DreamDisplaysXBungeecord
 version: ${version}
-author: arnodoelinger
+author: Baymaxawa, arnodoelinger
 description: Network coordinator for Dream DisplaysX.

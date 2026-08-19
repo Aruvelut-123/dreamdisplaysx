@@ -6,7 +6,11 @@
   "license": "LGPL-3.0",
   "description": "Create in-game screens to stream videos on any Minecraft server.",
   "authors": [
-    "arnodoelinger, INotSleep, Kolyakot33, Toffikk"
+    "Baymaxawa",
+    "arnodoelinger",
+    "INotSleep",
+    "Kolyakot33",
+    "Toffikk"
   ],
   "entrypoints": {
     "client": [
