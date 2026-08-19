@@ -35,6 +35,11 @@ object ScreenShareCommand {
 
     /** Sends [message] to the local player as a client-side chat line, when one is present. */
     fun feedback(message: String) {
-        Minecraft.getInstance().player?.displayClientMessage(Component.literal(message), false)
+        val player = Minecraft.getInstance().player ?: return
+        val component = Component.literal(message)
+        //? if >=26 {
+        player.sendSystemMessage(component)
+        //?} else
+        /*player.displayClientMessage(component, false)*/
     }
 }

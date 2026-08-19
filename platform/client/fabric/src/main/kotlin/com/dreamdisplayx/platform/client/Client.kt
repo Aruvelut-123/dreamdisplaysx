@@ -35,7 +35,10 @@ import com.dreamdisplayx.platform.client.screenshare.ScreenShareCommand
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
 import net.fabricmc.api.ClientModInitializer
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager
+//? if >=26 {
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands
+//?} else
+/*import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager*/
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -126,16 +129,16 @@ class Client : ClientModInitializer, Mod {
         // Client-side screen sharing over the mod protocol: /share start begins a cast, /share stop ends it.
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
-                ClientCommandManager.literal("share")
+                clientLiteral("share")
                     .then(
-                        ClientCommandManager.literal("start")
+                        clientLiteral("start")
                             .executes {
                                 ScreenShareCommand.feedback(ScreenShareCommand.start())
                                 1
                             }
                     )
                     .then(
-                        ClientCommandManager.literal("stop")
+                        clientLiteral("stop")
                             .executes {
                                 ScreenShareCommand.feedback(ScreenShareCommand.stop())
                                 1
@@ -158,6 +161,12 @@ class Client : ClientModInitializer, Mod {
 
         ClientLifecycleEvents.CLIENT_STOPPING.register { Initializer.onStop() }
     }
+
+    /** Client command literal builder; the Fabric command API moved from `ClientCommandManager` to `ClientCommands` in 26.x. */
+    //? if >=26 {
+    private fun clientLiteral(name: String) = ClientCommands.literal(name)
+    //?} else
+    /*private fun clientLiteral(name: String) = ClientCommandManager.literal(name)*/
 
     /** Packet sender. */
     override fun sendPacket(packet: CustomPacketPayload) {
