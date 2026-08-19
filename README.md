@@ -22,9 +22,9 @@ independently. Players just install the client-side mod, and they're ready to go
 
 Compared to the original Dream Displays, this fork adds:
 
-- **Bilibili account login** — a client-side login screen (`/dlogin`) with **QR-code scanning** and
-  **phone-number + password** login. Your `SESSDATA` is stored **encrypted** on the server (AES-256-GCM)
+- **Bilibili account login** — a client-side login screen (`/dlogin`) with **QR-code scanning**. Your `SESSDATA` is stored **encrypted** on the server (AES-256-GCM)
   and is only pushed back to *your* client, unlocking higher quality / VIP Bilibili streams.
+- **Bilibili live danmaku** — live-room bullet comments (弹幕) scroll across the display while a `live.bilibili.com/<roomId>` video plays.
 - **Bilibili bangumi support** — `/bangumi/play/ep<id>` and `/ss<id>` (episodes / seasons / movies) URLs work.
 - **Screen sharing over the mod protocol** — press `/share start` in-game and your screen is streamed to the
   server's relay, where others can watch it in a browser at the provided URL. No RTMP server needed; only works
@@ -138,9 +138,9 @@ Done! To customize the display, look at it and press `Shift + RMB`
 | `/dlogin`                                        | Client     | Open the Bilibili login screen (QR code or phone + password) |
 | `/share start` / `/share stop`                   | Client     | Start / stop streaming your screen to the server relay    |
 
-> **Bilibili login tip:** prefer `/dlogin` in-game. Scan the QR code with the Bilibili mobile app, or enter your
-> phone number + password. On success the mod sends your `SESSDATA` to the server, which stores it encrypted and
-> uses it to unlock higher-quality streams for you.
+> **Bilibili login tip:** run `/dlogin` in-game and scan the QR code with the Bilibili mobile app.
+> On success the mod sends your `SESSDATA` to the server, which stores it encrypted and uses it to
+> unlock higher-quality streams for you. Already have a cookie? Use `/display login bilibili <sessdata>`.
 
 [Read more in our wiki](https://github.com/Aruvelut-123/dreamdisplaysx/wiki).
 
