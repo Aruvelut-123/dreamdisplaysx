@@ -147,35 +147,24 @@ Remote: `origin https://github.com/Aruvelut-123/dreamdisplaysx.git` (branch `mai
   to the player's client on hello/login/logout, client `/dlogin` UI with QR + phone/password flows,
   SESSDATA cookie wired into `BilibiliApi` playback requests. Twitch/YouTube left for later.
 
-### 8. Singleplayer support (user's latest request: "make the mod works under singleplayer too")
-- Client.kt already handles `isLocalServer` / `hasSingleplayerServer()` (serverId "singleplayer") in fabric+neoforge.
-- Investigate whether integrated server runs `platform:server` bootstrap (VanillaBootstrap/NeoForgeServerMod covers
-  "dedicated + integrated servers alike" per comment). Likely missing: display creation command UX in singleplayer,
-  or permission checks, or the client resolving URLs without a network server. Test locally (gradle run) and fix gaps:
-  e.g. ensure `PaperServer`/`VanillaServerState` bootstrap runs on integrated server, no reliance on external proxy,
-  bstats/update check offline tolerance. Add/verify a `runSingleplayer` dev flow.
+### 8. Singleplayer support — DONE
+- Verified: Fabric `ModInitializer`/NeoForge `ServerStartedEvent` run on integrated servers; client uses
+  serverId `"singleplayer"` on both loaders; `VanillaBootstrap` covers dedicated + integrated servers alike.
+  No gaps found (see DONE section above).
 
-### 9. Build verification (user provided proxy: `http://127.0.0.1:7897`, no auth)
-- Java 25 present; cargo/rustc NOT installed locally (native builds must be validated by CI or via rustup install).
-- Run JVM-side Gradle build with proxy: `$env:HTTPS_PROXY='http://127.0.0.1:7897'; $env:HTTP_PROXY=...`
-  then `./gradlew :api:compileKotlin :core:compileKotlin :util:compileKotlin :platform:server:compileKotlin` etc.
-  (or a full `:platform:client:fabric:build`). Native resources convention skips natives when
-  `DREAMDISPLAYS_REQUIRE_NATIVES` unset and cargo unavailable.
-- Validate workflow YAML (e.g., python yaml.safe_load or actionlint if available).
+### 9. Build verification — DONE
+- Local JVM compile verified on 1.21.11 (api/core/util/media*/platform server/client fabric/neoforge all green).
+- 26.x (26.1.2/26.2) compat verified (`b6612d6`); 1.21.1 local build blocked by page-file JVM crash in
+  neoform mergeMappings (environment, not code) — CI `build-jars-1.21.1` artifact is the source for the
+  user's NeoForge test jar. Workflow YAML validated.
 
-### 10. Commit + push
-- Commit each step with conventional commits (e.g.):
-  1. `refactor: rename mod/plugin from dreamdisplays to dreamdisplayx` (the rename tree)
-  2. `feat: add built-in simplified chinese translations` + `chore: remove crowdin workflow`
-  3. `chore: bump version to 1.9.1.1 and note base version in changelog`
-  4. `fix(workflow): build android ffmpeg from source, fix native-platform output typo, publish to github only`
-  5. `feat(bilibili): support bangumi/play/movie urls (#188)`
-  6. `feat: add screen casting via rtmp/srt ingest (#120)`
-  7. `fix: apply server default volume to new displays (#190)`
-  8. `feat: add platform login with server-side encrypted credentials`
-  9. `feat: support singleplayer`
-  Then `git push origin main`.
-- Note: approval policy is "never" — no sandbox escalations; file policy is danger-full-access (pwsh can write anywhere).
+### 10. Commit + push — DONE
+- All commits pushed to `origin/main` (no GPG signing, message-file style): `1707b31` rename,
+  `6f248ef` bilibili bangumi + screen share + ingest, `0a5b1d1` `b1b4bdf` `6ecc87d` `8c1d674` CI fixes,
+  `4b716df` mod-protocol screen sharing, `b6612d6` 26.x compat, `69e4324` platform-jars artifact,
+  `cabcead` neoforge bus fix, `de438fd` gh-proxy FFmpeg + authors, `7431b09` bilibili login,
+  `c672728` docs task-7 done. Only remaining: user downloads `build-jars-1.21.1` artifact from CI
+  and tests `dreamdisplayx-neoforge-1.21.1-1.9.1.1.jar` locally.
 
 ---
 
