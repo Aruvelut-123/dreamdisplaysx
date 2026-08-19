@@ -1,15 +1,15 @@
-import support.shadow.excludeDreamDisplaysSqliteNativeExtras
-import support.shadow.includeDreamDisplaysSharedContents
-import support.shadow.relocateDreamDisplaysSharedPackages
+import support.shadow.excludeDreamDisplaysXSqliteNativeExtras
+import support.shadow.includeDreamDisplaysXSharedContents
+import support.shadow.relocateDreamDisplaysXSharedPackages
 import support.stonecutter.StonecutterVersions
 
 plugins {
     id("net.fabricmc.fabric-loom") apply false
     id("net.fabricmc.fabric-loom-remap") apply false
     id("maven-publish")
-    id("dreamdisplays.kotlin-conventions")
-    id("dreamdisplays.native-resources")
-    id("dreamdisplays.shadow-conventions")
+    id("dreamdisplayx.kotlin-conventions")
+    id("dreamdisplayx.native-resources")
+    id("dreamdisplayx.shadow-conventions")
     alias(libs.plugins.platformweaver)
 }
 
@@ -56,9 +56,9 @@ sourceSets.main {
     kotlin.srcDir(project(":platform:server").layout.buildDirectory.dir("generated/chisel/main/kotlin"))
     // Translations live once in :platform:resources and are pulled in here instead of being duplicated per platform.
     // The lang/client/ split is source-tree organization only; vanilla's language system requires the actual
-    // jar to have client lang files directly under assets/dreamdisplays/lang/, so processResources flattens it back.
+    // jar to have client lang files directly under assets/dreamdisplayx/lang/, so processResources flattens it back.
     resources.srcDir(project(":platform:resources").file("src/main/resources"))
-    resources.exclude("assets/dreamdisplays/lang/client/**")
+    resources.exclude("assets/dreamdisplayx/lang/client/**")
 }
 
 platformweaver {
@@ -73,9 +73,9 @@ tasks.matching { it.name == "sourcesJar" }.configureEach {
     dependsOn(":platform:server:chiselSource")
 }
 
-val sourceClassTweaker = project(":platform:client:common").file("src/main/resources/dreamdisplays.classtweaker")
+val sourceClassTweaker = project(":platform:client:common").file("src/main/resources/dreamdisplayx.classtweaker")
 val classTweakerNamespace = if (isLegacyObfuscated) "named" else "official"
-val generatedClassTweaker = layout.buildDirectory.file("generated/classtweaker/dreamdisplays.classtweaker").get().asFile
+val generatedClassTweaker = layout.buildDirectory.file("generated/classtweaker/dreamdisplayx.classtweaker").get().asFile
 run {
     val rewritten = sourceClassTweaker.readText().lineSequence().joinToString("\n") { line ->
         if (line.startsWith("classTweaker v1 ")) "classTweaker v1 $classTweakerNamespace" else line
@@ -164,8 +164,8 @@ dependencies {
 
 tasks.processResources {
     from(generatedClassTweaker)
-    from(project(":platform:resources").file("src/main/resources/assets/dreamdisplays/lang/client")) {
-        into("assets/dreamdisplays/lang")
+    from(project(":platform:resources").file("src/main/resources/assets/dreamdisplayx/lang/client")) {
+        into("assets/dreamdisplayx/lang")
     }
     val projectVersion = project.version.toString()
     val fabricMcVer = scVersion("fabric.minecraft.dependency")
@@ -179,10 +179,10 @@ tasks.processResources {
     filesMatching("quilt.mod.json") {
         expand(mapOf("version" to projectVersion, "minecraftVersion" to fabricMcVer, "javaVersion" to javaVersion))
     }
-    filesMatching(listOf("dreamdisplays.mixins.json", "dreamdisplays.server.mixins.json")) {
+    filesMatching(listOf("dreamdisplayx.mixins.json", "dreamdisplayx.server.mixins.json")) {
         expand(mapOf("javaVersion" to javaVersion))
     }
-    filesMatching("assets/dreamdisplays/version.txt") {
+    filesMatching("assets/dreamdisplayx/version.txt") {
         expand(mapOf("version" to projectVersion))
     }
 }
@@ -198,15 +198,15 @@ tasks.findByName("validateAccessWidener")?.enabled = false
 
 tasks.shadowJar {
     configurations = listOf(project.configurations.getByName("shadow"))
-    archiveBaseName.set("dreamdisplays-fabric")
+    archiveBaseName.set("dreamdisplayx-fabric")
     archiveVersion.set("$activeStonecutterVersion-${rootProject.version}")
     if (isLegacyObfuscated) {
         archiveClassifier.set("dev-shadow")
         destinationDirectory.set(layout.buildDirectory.dir("devlibs"))
     }
-    includeDreamDisplaysSharedContents()
-    relocateDreamDisplaysSharedPackages()
-    excludeDreamDisplaysSqliteNativeExtras()
+    includeDreamDisplaysXSharedContents()
+    relocateDreamDisplaysXSharedPackages()
+    excludeDreamDisplaysXSqliteNativeExtras()
 }
 
 // If it's a legacy version (like 1.21.11 where the shadow jar is obfuscated), we need to remap the shadow jar with
@@ -216,7 +216,7 @@ if (isLegacyObfuscated) {
         dependsOn(tasks.shadowJar)
         inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
         addNestedDependencies.set(false)
-        archiveBaseName.set("dreamdisplays-fabric")
+        archiveBaseName.set("dreamdisplayx-fabric")
         archiveVersion.set("$activeStonecutterVersion-${rootProject.version}")
         archiveClassifier.set("")
         destinationDirectory.set(rootProject.layout.buildDirectory.dir("libs"))

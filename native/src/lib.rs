@@ -1,4 +1,4 @@
-//! C ABI surface for the Dream Displays native media pipeline, consumed from Kotlin via
+//! C ABI surface for the Dream DisplaysX native media pipeline, consumed from Kotlin via
 //! the Java FFM API (Project Panama).
 //!
 //! Design rules:
@@ -25,7 +25,7 @@ pub const ABI_VERSION: u32 = 1;
 static SESSIONS: OnceLock<Sessions> = OnceLock::new();
 
 fn sessions() -> &'static Sessions {
-    dreamdisplays_logging::init();
+    dreamdisplayx_logging::init();
     SESSIONS.get_or_init(Sessions::new)
 }
 
@@ -35,7 +35,7 @@ fn on_panic<T: Copy>(entry: &'static str, code: T) -> impl FnOnce(Box<dyn Any + 
     move |payload| {
         log::error!(
             "{entry} panicked: {}.",
-            dreamdisplays_logging::panic_message(&*payload)
+            dreamdisplayx_logging::panic_message(&*payload)
         );
         code
     }
@@ -44,7 +44,7 @@ fn on_panic<T: Copy>(entry: &'static str, code: T) -> impl FnOnce(Box<dyn Any + 
 /// Returns [`ABI_VERSION`]; the JVM bridge calls this first as a sanity check.
 #[unsafe(no_mangle)]
 pub extern "C" fn dd_abi_version() -> u32 {
-    dreamdisplays_logging::init();
+    dreamdisplayx_logging::init();
     ABI_VERSION
 }
 

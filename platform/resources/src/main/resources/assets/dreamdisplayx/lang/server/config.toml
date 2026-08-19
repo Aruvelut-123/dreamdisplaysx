@@ -1,0 +1,120 @@
+# Dream DisplaysX configuration
+# Support: https://discord.gg/uwMMZ2KWk6
+
+[language]
+# Default language if no translation is available
+default_language = "en"
+
+[proxy]
+# BungeeCord / Velocity network coordination
+enabled = false
+
+# Seconds between clock-offset probes to the proxy
+clock_sync_interval = 5
+
+[display]
+# Selection tool and base material
+selection_material = "minecraft:diamond_axe"
+base_material = "minecraft:black_concrete"
+
+# Display size limits
+# All values are in blocks
+max_render_distance = 96.0
+min_width = 1
+min_height = 1
+max_width = 32
+max_height = 24
+
+# Particle effects for selection visualization
+# Note that it doesn't work on Folia and Fabric servers for now
+particles = true
+particles_color = "#00FFFF"
+
+# Mod detection notifications
+# Players without Dream DisplaysX will be asked to install it
+mod_detection_enabled = true
+
+# Update notifications
+updates = true
+
+# Default volume for new players in percent (0 to 100, default 50)
+default_volume = 50
+
+# Max displays one player may own at once. 0 or less means no limit.
+max_displays_per_player = 0
+
+[custom_media]
+# Custom videos: links players paste themselves (direct .mp4 / .m3u8 files, file hosts,
+# and any other site the resolver can open).
+# Note that this section never affects supported platforms (YouTube, Twitch, Vimeo, Kick).
+enabled = true
+
+# Optional allowlist of hosts. Empty = every host is allowed.
+# Subdomains are included, so "example.com" also covers "cdn.example.com".
+# allowed_hosts = ["cdn.example.com", "files.myserver.net"]
+allowed_hosts = []
+
+# Hosts that are always refused, checked before allowed_hosts.
+# blocked_hosts = ["bad.example"]
+blocked_hosts = []
+
+[fullscreen]
+# Default visual sub-mode when /display fullscreen start omits one: "STANDARD" or "IMMERSIVE"
+default_mode = "STANDARD"
+
+# Whether forced (un-closeable, only minimizable) broadcasts are allowed
+allow_forced = true
+
+# Quality cap in pixels of height; clamped down further to the source's own max
+quality_cap = 1080
+
+[reports]
+# Report settings
+# webhook_url is a discord webhook URL for sending reports
+# cooldown is in seconds
+webhook_url = ""
+cooldown = 30
+
+[storage]
+# Storage type: SQLITE or MYSQL
+# If you choose MYSQL, fill in the details below
+type = "SQLITE"
+host = "localhost"
+port = "3306"
+database = "database"
+username = "username"
+password = "password"
+table_prefix = ""
+use_ssl = false
+
+[permissions]
+# Permission nodes
+# LuckPerms suppor is available for all platforms
+create = "dreamdisplayx.create"                         # Default: everyone
+video = "dreamdisplayx.video"                           # Default: everyone
+info = "dreamdisplayx.info"                             # Default: everyone
+help = "dreamdisplayx.help"                             # Default: everyone
+local = "dreamdisplayx.local"                           # Default: everyone
+synced = "dreamdisplayx.synced"                         # Default: everyone
+broadcast = "dreamdisplayx.broadcast"                   # Default: everyone
+watchparty = "dreamdisplayx.watchparty"                 # Default: everyone
+custom = "dreamdisplayx.custom"                         # Default: everyone
+lock = "dreamdisplayx.lock"                             # Default: everyone
+delete = "dreamdisplayx.delete"                         # Default: everyone
+name = "dreamdisplayx.name"                             # Default: everyone
+schedule = "dreamdisplayx.schedule"                     # Default: everyone
+name_others = "dreamdisplayx.name.others"               # Default: operator
+schedule_others = "dreamdisplayx.schedule.others"       # Default: operator
+delete_others = "dreamdisplayx.delete.others"           # Default: operator
+list = "dreamdisplayx.list"                             # Default: operator
+stats = "dreamdisplayx.stats"                           # Default: operator
+premium = "dreamdisplayx.premium"                       # Default: operator
+reload = "dreamdisplayx.reload"                         # Default: operator
+updates = "dreamdisplayx.updates"                       # Default: operator
+toggle_others = "dreamdisplayx.toggle.others"           # Default: operator
+create_bypass = "dreamdisplayx.create.bypass"           # Default: operator
+fullscreen_start = "dreamdisplayx.fullscreen.start"     # Default: operator
+fullscreen_stop = "dreamdisplayx.fullscreen.stop"       # Default: operator
+fullscreen_list = "dreamdisplayx.fullscreen.list"       # Default: operator
+fullscreen_network = "dreamdisplayx.fullscreen.network" # Default: operator
+remote = "dreamdisplayx.remote"                         # Default: operator

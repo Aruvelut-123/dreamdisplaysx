@@ -1,6 +1,6 @@
 plugins {
-    id("dreamdisplays.kotlin-conventions")
-    id("dreamdisplays.serialization-conventions")
+    id("dreamdisplayx.kotlin-conventions")
+    id("dreamdisplayx.serialization-conventions")
 }
 
 dependencies {

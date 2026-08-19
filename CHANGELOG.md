@@ -1,3 +1,38 @@
+# 1.9.1.1 Release
+
+Based on Dream Displays 1.9.1 (https://github.com/arnodoelinger/dreamdisplays).
+
+## Highlights
+
+- Fork: renamed mod / plugin to **Dream DisplaysX** (`dreamdisplayx`).
+- Built-in Simplified Chinese translations (`zh_cn.json`); Crowdin integration removed.
+- Bilibili bangumi / movie URL support (`/bangumi/play/ep<id>` and `/bangumi/play/ss<id>`).
+- Client-side screen sharing: `/share <rtmp-url>` pushes your screen over RTMP (Linux X11 +
+  XWayland, Windows, macOS; not available on Android).
+- CI builds the Android FFmpeg from source per ABI, matching the desktop 8.1.x series.
+- CI publishes to GitHub only (no Modrinth upload, no personal access token).
+
+## Client
+
+### Features
+
+- Added `zh_cn.json` with a full Simplified Chinese translation of the interface.
+- Added client-side screen sharing (`/share`) backed by FFmpeg capture devices
+  (`x11grab` / `gdigrab` / `avfoundation`); Android is intentionally unsupported.
+- Added Bilibili bangumi / movie playback for `ep` / `ss` URLs.
+
+## Server
+
+### Improvements
+
+- Android native builds now compile FFmpeg 8.1.x from source with the NDK instead of relying on
+  dead prebuilt artifacts, and the CI native-platform output typo was fixed.
+
+### Fixes
+
+- Fixed the CI `required_native_plats` -> `required_native_platforms` output name that would break
+  the "Verify jar native bundle" step.
+
 # 1.9.1 Release
 
 ## Highlights
@@ -49,27 +84,27 @@
 - New `/display schedule` and `/display name` commands
 - Full `LuckPerms` support on `Fabric` / `NeoForge` servers
 - Added YouTube chapter markers
-- Improved `Dream Displays` wiki
+- Improved `Dream DisplaysX` wiki
 - Various other fixes and improvements
 
 ## Client
 
 ### Features
 
-- `NeoForge` server support (including single-player) ([#95](https://github.com/arnodoelinger/dreamdisplays/issues/95))
+- `NeoForge` server support (including single-player) ([#95](https://github.com/Aruvelut-123/dreamdisplaysx/issues/95))
 - Full Twitch support
 - New Borderless and Fullscreen display modes, with a new `/display fullscreen` command for events and presentations
-  ([#135](https://github.com/arnodoelinger/dreamdisplays/pull/135))
+  ([#135](https://github.com/Aruvelut-123/dreamdisplaysx/pull/135))
 - Added custom video support and file-host share link support (Google Drive, Dropbox, imgur, etc.) — paste a direct link
   to any video and play it on a display (server must be 1.9.0 or higher)
-- Added Twitch, Kick, Vimeo, and Bilibili support ([#129](https://github.com/arnodoelinger/dreamdisplays/pull/129), [#129](https://github.com/arnodoelinger/dreamdisplays/pull/156), [#173](https://github.com/arnodoelinger/dreamdisplays/issues/173))
+- Added Twitch, Kick, Vimeo, and Bilibili support ([#129](https://github.com/Aruvelut-123/dreamdisplaysx/pull/129), [#129](https://github.com/Aruvelut-123/dreamdisplaysx/pull/156), [#173](https://github.com/Aruvelut-123/dreamdisplaysx/issues/173))
 - Added 3D acoustics for displays: sound is muffled by walls (occlusion), loses highs over distance (air absorption),
   and picks up room / cave reverberation raytraced from nearby blocks and their material; e.g., stone reflects, wool
-  absorbs ([#147](https://github.com/arnodoelinger/dreamdisplays/pull/147))
+  absorbs ([#147](https://github.com/Aruvelut-123/dreamdisplaysx/pull/147))
 - Added an audio track selector, so you can pick your language right in the display menu
-  ([#149](https://github.com/arnodoelinger/dreamdisplays/pull/149))
+  ([#149](https://github.com/Aruvelut-123/dreamdisplaysx/pull/149))
 - Added `/display schedule` command to schedule a video to play at a specific time
-- Added `/display name` command ([#151](https://github.com/arnodoelinger/dreamdisplays/pull/151))
+- Added `/display name` command ([#151](https://github.com/Aruvelut-123/dreamdisplaysx/pull/151))
 - Changed some display commands syntax: now you can choose the display by its ID or by looking at it and typing "this"
 - Added support for saving and restoring the last known playback position everywhere, and each display's custom render
   distance across game restarts
@@ -79,13 +114,13 @@
 - Added a filter button
 - Added click sounds when clicking buttons in the display menu
 - Gray-out only seekbar and near buttons when the display isn't ready yet, instead of the whole menu
-- Added [Crowdin](https://crowdin.com/project/dreamdisplays) integration
-  ([#141](https://github.com/arnodoelinger/dreamdisplays/pull/141))
+- Added [Crowdin](https://crowdin.com/project/dreamdisplayx) integration
+  ([#141](https://github.com/Aruvelut-123/dreamdisplaysx/pull/141))
 - Brought back `NeoForge` 1.21.11 releases to the [corporate ad dispenser](https://www.curseforge.com/)
 
 ### Improvements
 
-- Improved displays performance ([#131](https://github.com/arnodoelinger/dreamdisplays/pull/131))
+- Improved displays performance ([#131](https://github.com/Aruvelut-123/dreamdisplaysx/pull/131))
 - Reduced native decode-path overhead on every frame, for smoother in-process playback
 - Increased stall watchdog threshold from 30 to 45 seconds to avoid false positives on slow networks
 - Added scrubbing preview on the seek bar (frame preview on hover)
@@ -96,9 +131,9 @@
   isn't offered
 - Raised the `Broadcast` quality cap from 360p to 720p
 - The quality performance warning in the display menu now only appears above 1080p instead of at 1080p and up
-- Enhanced UI components ([#148](https://github.com/arnodoelinger/dreamdisplays/pull/148))
+- Enhanced UI components ([#148](https://github.com/Aruvelut-123/dreamdisplaysx/pull/148))
 - Now recommendations are endlessly scrolling
-- Enhanced ambient grid ([#136](https://github.com/arnodoelinger/dreamdisplays/pull/136))
+- Enhanced ambient grid ([#136](https://github.com/Aruvelut-123/dreamdisplaysx/pull/136))
 - All sliders now have snap behavior and fixed subdivisions for better precision
 - Improved popout context menu positioning
 - Improved scrollbars: now you can drag them
@@ -107,7 +142,7 @@
 - Added an author's avatar and a verified badge next to their name
 - Enhanced cursor handling for 1.21.11
 - Improved `Gradle` build system, so it looks less like a frankenstein
-  ([#150](https://github.com/arnodoelinger/dreamdisplays/pull/150))
+  ([#150](https://github.com/Aruvelut-123/dreamdisplaysx/pull/150))
 - Improved platform resources structure
 - Codebase improvements: more Kotlin analogues instead of Java imports, optimized imports
 - Improved KDoc documentation in the codebase
@@ -117,9 +152,9 @@
 
 - Fixed video sometimes freezing indefinitely
 - Fixed a `Synced` / `Broadcast` display sometimes getting stuck on "Waiting for video..." forever
-  ([#138](https://github.com/arnodoelinger/dreamdisplays/issue/138))
+  ([#138](https://github.com/Aruvelut-123/dreamdisplaysx/issue/138))
 - Fixed "Unrecoverable stream failure" error when using Iris shaders
-  ([#146](https://github.com/arnodoelinger/dreamdisplays/issue/146))
+  ([#146](https://github.com/Aruvelut-123/dreamdisplaysx/issue/146))
 - Fixed live resume, live quality switches, and stall recovery blocking every other play / pause / seek / etc. action on
   the display for the whole network re-resolve
 - Fixed some videos getting a permanently broken stream (403 Forbidden) instead of falling back to a working one
@@ -127,7 +162,7 @@
 - Fixed the background quality refresher endlessly restarting a live stream when the closest available rendition didn't
   exactly match the requested quality
 - Fixed video getting stuck when seeking right after changing quality
-  ([#121](https://github.com/arnodoelinger/dreamdisplays/issues/121))
+  ([#121](https://github.com/Aruvelut-123/dreamdisplaysx/issues/121))
 - Fixed a failed quality switch permanently blocking re-selecting that same quality
 - Loop `Local` displays on instead of freezing
 - Fixed disappearing suggestions in some cases after a stutter / lag spike, requiring a seek to unstick it
@@ -149,12 +184,12 @@
 ### Features
 
 - Support `Bungeecord` and `Velocity`
-- `NeoForge` server support ([#95](https://github.com/arnodoelinger/dreamdisplays/issues/95))
+- `NeoForge` server support ([#95](https://github.com/Aruvelut-123/dreamdisplaysx/issues/95))
 - New command: `/display fullscreen` for events and presentations
-  ([#135](https://github.com/arnodoelinger/dreamdisplays/pull/135))
+  ([#135](https://github.com/Aruvelut-123/dreamdisplaysx/pull/135))
 - Full `LuckPerms` support on `Fabric` / `NeoForge` servers
-  ([#128](https://github.com/arnodoelinger/dreamdisplays/pull/128))
-- Added a `[custom_media]` config section and a `dreamdisplays.custom` permission to control whether players may play
+  ([#128](https://github.com/Aruvelut-123/dreamdisplaysx/pull/128))
+- Added a `[custom_media]` config section and a `dreamdisplayx.custom` permission to control whether players may play
   their own links (Vimeo, Kick, and direct files), with optional per-host allow / blocklists
 - `/display video` now accepts any supported link, not only YouTube URLs
 - Added `max_displays_per_player` config limit and wired up the `create_bypass` permission and
@@ -164,10 +199,10 @@
 ### Improvements
 
 - Reduced per-player memory overhead on long-running servers with many unique joins
-- `Dream Displays` security improvements
+- `Dream DisplaysX` security improvements
 - Added a `storage.use_ssl` option in `config.toml` to enable TLS on the `MySQL` connection (was hardcoded off)
 - Repeat all videos for all platforms on every playback mode
-  ([#127](https://github.com/arnodoelinger/dreamdisplays/pull/127))
+  ([#127](https://github.com/Aruvelut-123/dreamdisplaysx/pull/127))
 - `Fabric` / `NeoForge` server display deletion now notifies nearby clients itself, matching `Paper`, so a future caller
   can't forget to broadcast
 - `/display delete` is now available to everyone for their own displays
@@ -185,7 +220,7 @@
 - Fixed a reported video duration being trusted from any player anywhere on the server
 - Fixed the Picture-in-Picture pin packet being able to flood the server with disk writes
 - Now fullscreen command flags are fixed to stop command-tree blowup on join
-  ([#164](https://github.com/arnodoelinger/dreamdisplays/issue/164))
+  ([#164](https://github.com/Aruvelut-123/dreamdisplaysx/issue/164))
 - Fixed displays removed by the startup material-validation sweep not telling online players to forget them, leaving
   ghost displays until reconnect
 - Fixed deleted displays leaking their legacy v1 sync state, which kept being carried by the periodic broadcast
@@ -209,7 +244,7 @@
 
 ### Fixes
 
-- Fixed explosion display protection mixin crash ([#161](https://github.com/arnodoelinger/dreamdisplays/issue/161))
+- Fixed explosion display protection mixin crash ([#161](https://github.com/Aruvelut-123/dreamdisplaysx/issue/161))
 
 # 1.9.0 Preview 4
 
@@ -240,7 +275,7 @@
 
 ### Features
 
-- Added a `[custom_media]` config section and a `dreamdisplays.custom` permission to control whether players may play
+- Added a `[custom_media]` config section and a `dreamdisplayx.custom` permission to control whether players may play
   their own links (Vimeo, Kick, and direct files), with optional per-host allow / blocklists
 - `/display video` now accepts any supported link, not only YouTube URLs
 - Added `max_displays_per_player` config limit and wired up the `create_bypass` permission and `fullscreen.quality_cap`
@@ -261,7 +296,7 @@
   self-exploding blocks (beds, respawn anchors)
 - Fixed HTTP responses (media metadata, thumbnails, resolved segments) being buffered into memory with no size limit
 - Fixed Velocity / proxy disconnect from unsynced fullscreen command argument type
-  ([#138](https://github.com/arnodoelinger/dreamdisplays/issue/153))
+  ([#138](https://github.com/Aruvelut-123/dreamdisplaysx/issue/153))
 
 # 1.9.0 Preview 3
 
@@ -270,7 +305,7 @@
 - 3D audio support
 - Language selector right in the display menu
 - Now recommendations are endlessly scrolling
-- [Crowdin](https://crowdin.com/project/dreamdisplays) platform integration
+- [Crowdin](https://crowdin.com/project/dreamdisplayx) platform integration
 - Fixed some bugs, including crash on `Fabric` 1.21.11
 - New Gradle build system
 - Some other minor improvements
@@ -281,17 +316,17 @@
 
 - Added 3D acoustics for displays: sound is now muffled by walls (occlusion), loses highs over distance (air
   absorption), and picks up room / cave reverberation raytraced from nearby blocks and their material; e.g., stone
-  reflects, wool absorbs ([#147](https://github.com/arnodoelinger/dreamdisplays/pull/147))
+  reflects, wool absorbs ([#147](https://github.com/Aruvelut-123/dreamdisplaysx/pull/147))
 - Added audio track selector, so you can select your language right in the display menu
-  ([#149](https://github.com/arnodoelinger/dreamdisplays/pull/149))
-- Added subtitles support ([#151](https://github.com/arnodoelinger/dreamdisplays/pull/151))
+  ([#149](https://github.com/Aruvelut-123/dreamdisplaysx/pull/149))
+- Added subtitles support ([#151](https://github.com/Aruvelut-123/dreamdisplaysx/pull/151))
 - Added click sounds when clicking on buttons in the display menu
-- Added [Crowdin](https://crowdin.com/project/dreamdisplays) integration
-  ([#141](https://github.com/arnodoelinger/dreamdisplays/pull/141))
+- Added [Crowdin](https://crowdin.com/project/dreamdisplayx) integration
+  ([#141](https://github.com/Aruvelut-123/dreamdisplaysx/pull/141))
 
 ### Improvements
 
-- Enhanced UI components ([#148](https://github.com/arnodoelinger/dreamdisplays/pull/148))
+- Enhanced UI components ([#148](https://github.com/Aruvelut-123/dreamdisplaysx/pull/148))
 - Now recommendations are endlessly scrolling
 - Enhanced cursor handling for 1.21.11
 - Improved popout context menu positioning
@@ -301,7 +336,7 @@
 - Added author's avatar by their name
 - Added verified badge by author's name
 - Improved Gradle build system, so that looks less like a frankenstein
-  ([#150](https://github.com/arnodoelinger/dreamdisplays/pull/150))
+  ([#150](https://github.com/Aruvelut-123/dreamdisplaysx/pull/150))
 - Improved platform resources structure
 - Use more Kotlin analogues instead of Java imports
 - Optimized imports
@@ -309,9 +344,9 @@
 ### Fixes
 
 - Fixed "Unrecoverable stream failure" error when using Iris shaders
-  ([#146](https://github.com/arnodoelinger/dreamdisplays/issue/146))
+  ([#146](https://github.com/Aruvelut-123/dreamdisplaysx/issue/146))
 - Fixed a `Synced` / `Broadcast` display sometimes getting stuck on "Waiting for video..." forever
-  ([#138](https://github.com/arnodoelinger/dreamdisplays/issue/138))
+  ([#138](https://github.com/Aruvelut-123/dreamdisplaysx/issue/138))
 - Fixed disappearing video preview when pausing and returning to the menu
 - Fixed video sometimes freezing indefinitely
 - Fixed disappearing suggestions in some cases after a stutter / lag spike, requiring a seek to unstick it
@@ -324,7 +359,7 @@
 ### Fixes
 
 - Fixed crash on `Fabric` 1.21.11 caused by invalid `BareTokenArgumentType` registration
-  ([#137](https://github.com/arnodoelinger/dreamdisplays/issue/137))
+  ([#137](https://github.com/Aruvelut-123/dreamdisplaysx/issue/137))
 - Use more Kotlin analogues instead of Java imports
 - Optimized imports
 
@@ -384,11 +419,11 @@
 
 ### Features
 
-- `NeoForge` server support (including single-player) ([#95](https://github.com/arnodoelinger/dreamdisplays/issues/95))
-- Full Twitch support ([#129](https://github.com/arnodoelinger/dreamdisplays/pull/129))
-- New Borderless and Fullscreen display modes ([#135](https://github.com/arnodoelinger/dreamdisplays/pull/135))
+- `NeoForge` server support (including single-player) ([#95](https://github.com/Aruvelut-123/dreamdisplaysx/issues/95))
+- Full Twitch support ([#129](https://github.com/Aruvelut-123/dreamdisplaysx/pull/129))
+- New Borderless and Fullscreen display modes ([#135](https://github.com/Aruvelut-123/dreamdisplaysx/pull/135))
 - New command: `/display fullscreen` for events and presentations
-  ([#135](https://github.com/arnodoelinger/dreamdisplays/pull/135))
+  ([#135](https://github.com/Aruvelut-123/dreamdisplaysx/pull/135))
 - Added support for saving and restoring the last known playback position everywhere
 - Added support for saving and restoring each display's custom render distance across game restarts
 
@@ -396,11 +431,11 @@
 
 - Enhanced UI components
 - Now all sliders have snap behavior and fixed subdivisions for better precision
-- Improved displays performance ([#131](https://github.com/arnodoelinger/dreamdisplays/pull/131))
+- Improved displays performance ([#131](https://github.com/Aruvelut-123/dreamdisplaysx/pull/131))
 - Added scrubbing preview on the seek bar (frame preview on hover)
 - Reduced native decode-path overhead on every frame, for smoother in-process playback
 - Increased stall watchdog threshold from 30 to 45 seconds to avoid false positives on slow networks
-- Enhanced ambient grid ([#136](https://github.com/arnodoelinger/dreamdisplays/pull/136))
+- Enhanced ambient grid ([#136](https://github.com/Aruvelut-123/dreamdisplaysx/pull/136))
 - Codebase improvements
 
 ### Fixes
@@ -410,7 +445,7 @@
   exactly match the requested quality
 - Fixed the display menu's video preview being fit to the display's own block shape instead of the video's aspect ratio
 - Fixed video getting stuck when seeking right after changing quality
-  ([#121](https://github.com/arnodoelinger/dreamdisplays/issues/121))
+  ([#121](https://github.com/Aruvelut-123/dreamdisplaysx/issues/121))
 - Fixed a stale pre-seek frame occasionally slipping through and briefly rewinding the picture right after a seek
 - Fixed a failed quality switch permanently blocking re-selecting that same quality
 - Fixed the reappearance bridge occasionally playing audio from just before a seek instead of the resumed position
@@ -427,22 +462,22 @@
 
 ### Features
 
-- `NeoForge` server support ([#95](https://github.com/arnodoelinger/dreamdisplays/issues/95))
+- `NeoForge` server support ([#95](https://github.com/Aruvelut-123/dreamdisplaysx/issues/95))
 - Full `LuckPerms` support on `Fabric` / `NeoForge` servers
-  ([#128](https://github.com/arnodoelinger/dreamdisplays/pull/128))
+  ([#128](https://github.com/Aruvelut-123/dreamdisplaysx/pull/128))
 - New command: `/display fullscreen` for events and presentations
-  ([#135](https://github.com/arnodoelinger/dreamdisplays/pull/135))
+  ([#135](https://github.com/Aruvelut-123/dreamdisplaysx/pull/135))
 
 ### Improvements
 
 - `/display delete` is now available to everyone for their own displays
 - Codebase improvements: more modularization and cleanup
-  ([#127](https://github.com/arnodoelinger/dreamdisplays/pull/127))
+  ([#127](https://github.com/Aruvelut-123/dreamdisplaysx/pull/127))
 - `Fabric` / `NeoForge` server display deletion now notifies nearby clients itself, matching `Paper`, so a future caller
   can't forget to broadcast
 - Added a `storage.use_ssl` option in `config.toml` to enable TLS on the `MySQL` connection (was hardcoded off)
 - Reduced per-player memory overhead on long-running servers with many unique joins
-- Dream Displays security improvements
+- Dream DisplaysX security improvements
 - Codebase improvements
 
 ### Fixes
@@ -523,7 +558,7 @@
 
 - Fixed default volume protocol that was not working
 - Fixed video freezing / losing audio after seeking or pausing when the selected quality isn't actually available
-  ([#121](https://github.com/arnodoelinger/dreamdisplays/issues/121))
+  ([#121](https://github.com/Aruvelut-123/dreamdisplaysx/issues/121))
 - Fixed video restarting right at the end of a video when the audio track finished a moment before the video did
 - Fixed z-fighting when player is very far away from the display
 
@@ -549,7 +584,7 @@
 
 ### Fixes
 
-- Fix critical crash for `Fabric` 1.21.11 & 26.1.2 ([#118](https://github.com/arnodoelinger/dreamdisplays/issues/118))
+- Fix critical crash for `Fabric` 1.21.11 & 26.1.2 ([#118](https://github.com/Aruvelut-123/dreamdisplaysx/issues/118))
 
 ## Server
 
@@ -618,11 +653,11 @@ No changes.
 - Improved local display settings saving so settings survive crashes and future updates better
 - Reduced extra background threads in media tasks
 - Synced and broadcast displays now default to 50% volume instead of 100%
-- Improved Dream Displays security
+- Improved Dream DisplaysX security
 
 ### Fixes
 
-- Fixed incompatibilities with high-quality shaders ([#108](https://github.com/arnodoelinger/dreamdisplays/issues/108))
+- Fixed incompatibilities with high-quality shaders ([#108](https://github.com/Aruvelut-123/dreamdisplaysx/issues/108))
 - Fixed unnecessary sync corrections while media is paused or parked
 - Fixed a rare internal service lookup issue that could affect features with multiple service implementations
 
@@ -635,7 +670,7 @@ No changes.
 - Improved media links, network requests, and JSON handling for server-side media features
 - Improved saved display storage so display data is safer across restarts and crashes
 - The mod update notification is now shown once per server session
-- Improved Dream Displays security
+- Improved Dream DisplaysX security
 
 ### Fixes
 
@@ -658,7 +693,7 @@ No changes.
 - Display targeting now only triggers on the screen's own block face instead of the whole block
 - Enhanced documentation in codebase
 - Updated version dependencies
-- Improved Dream Displays security
+- Improved Dream DisplaysX security
 
 ### Fixes
 
@@ -676,7 +711,7 @@ No changes.
 - Moved webhook reports and `Fabric` database saves off the main server thread
 - Enhanced documentation in codebase
 - Updated version dependencies
-- Improved Dream Displays security
+- Improved Dream DisplaysX security
 
 ### Fixes
 
@@ -703,11 +738,11 @@ No changes.
 - Enhanced error screen when video loading fails
 - Enhanced video loading animation
 - Added 26.2 version to Paper building system
-- Improved Dream Displays security
+- Improved Dream DisplaysX security
 
 ### Fixes
 
-- Fixed audio cutting out after about 10 seconds ([#107](https://github.com/arnodoelinger/dreamdisplays/pull/107))
+- Fixed audio cutting out after about 10 seconds ([#107](https://github.com/Aruvelut-123/dreamdisplaysx/pull/107))
 - Fixed repeating video playback in local playback mode
 
 ## Server
@@ -715,7 +750,7 @@ No changes.
 ### Improvements
 
 - Players can no longer spam the report system
-- Improved Dream Displays security
+- Improved Dream DisplaysX security
 
 # 1.8.1 Release
 
@@ -752,7 +787,7 @@ No changes.
 ## Highlights
 
 - Added support for Minecraft 26.2
-- Brought back Minecraft 1.21.11 support ([#91](https://github.com/arnodoelinger/dreamdisplays/pull/91))
+- Brought back Minecraft 1.21.11 support ([#91](https://github.com/Aruvelut-123/dreamdisplaysx/pull/91))
 - Added a native Rust media pipeline with `FFmpeg` and in-process LAV decoding
 - Added stable `Vulkan` support for display rendering (`OpenGL` rendering is still supported)
 - Replaced the old synchronization mode with new local, synced, and broadcast playback modes
@@ -765,7 +800,7 @@ No changes.
 ### Features
 
 - Added support for Minecraft 26.2
-- Brought back Minecraft 1.21.11 support ([#91](https://github.com/arnodoelinger/dreamdisplays/pull/91))
+- Brought back Minecraft 1.21.11 support ([#91](https://github.com/Aruvelut-123/dreamdisplaysx/pull/91))
 - Added a new packet protocol v2
 - Added fallback support for protocol v1, but v1 is now deprecated and will be removed in the future
 - Introduced an unstable client-side API that will be scaled in the future
@@ -840,7 +875,7 @@ No changes.
 - Fixed a critical `Quilt` entry point crash
 - Fixed an ancient `NeoForge` and IntelliJ IDEA compatibility issue
 - Fixed `NeoForge` client shutdown on normal server disconnect
-- Fixed FFmpeg extraction on Linux ([#93](https://github.com/arnodoelinger/dreamdisplays/issues/93))
+- Fixed FFmpeg extraction on Linux ([#93](https://github.com/Aruvelut-123/dreamdisplaysx/issues/93))
 - Fixed incompatibility between the popout window and `Vivecraft`
 - Fixed GUI scale handling in the display menu
 - Fixed several shader compatibility issues
@@ -871,8 +906,8 @@ No changes.
 - Added Java 21 support for Minecraft 1.21.11 servers
 - Added a new packet protocol v2
 - Added fallback support for protocol v1, but v1 is now deprecated and will be removed in the future
-- Added `dreamdisplays.local`, `dreamdisplays.synced`, `dreamdisplays.broadcast`, `dreamdisplays.lock`,
-  `dreamdisplays.delete.others`, and `dreamdisplays.create.bypass` permissions
+- Added `dreamdisplayx.local`, `dreamdisplayx.synced`, `dreamdisplayx.broadcast`, `dreamdisplayx.lock`,
+  `dreamdisplayx.delete.others`, and `dreamdisplayx.create.bypass` permissions
 - Added more anonymous telemetry data to improve development, compatibility, and stability
 
 ### Improvements
@@ -888,7 +923,7 @@ No changes.
 
 ### Fixes
 
-- Fixed `MariaDB` compatibility issue ([#88](https://github.com/arnodoelinger/dreamdisplays/pull/88))
+- Fixed `MariaDB` compatibility issue ([#88](https://github.com/Aruvelut-123/dreamdisplaysx/pull/88))
 - Fixed sending display enabled packets to clients
 - Fixed several `Fabric` server compatibility issues
 - Fixed several small server-side stability issues
@@ -934,7 +969,7 @@ No changes.
 - Show max 72 recommended videos based on the current video instead of 24
 - Switch from RGBA to RGB24 for improved rendering performance
 - Fix the "You have to look at the display block" error when there is actually display
-  ([#79](https://github.com/arnodoelinger/dreamdisplays/issues/79))
+  ([#79](https://github.com/Aruvelut-123/dreamdisplaysx/issues/79))
 
 ## Client
 
@@ -966,12 +1001,12 @@ No changes.
 - Fix mute logic and allow players to mute displays in sync mode
 - Fix admins can't delete displays through the menu
 - Fix the "You have to look at the display block" error when there is actually display
-  ([#79](https://github.com/arnodoelinger/dreamdisplays/issues/79))
-- Fix a strange version number in the menu ([#81](https://github.com/arnodoelinger/dreamdisplays/issues/81))
+  ([#79](https://github.com/Aruvelut-123/dreamdisplaysx/issues/79))
+- Fix a strange version number in the menu ([#81](https://github.com/Aruvelut-123/dreamdisplaysx/issues/81))
 - Fix version semantic versioning parsing for mod updates
 - Fix tiled thumbnail rendering in the menu
 - Fix texture race crash in some rare cases
-- Fix a locked quality bug ([#80](https://github.com/arnodoelinger/dreamdisplays/issues/80))
+- Fix a locked quality bug ([#80](https://github.com/Aruvelut-123/dreamdisplaysx/issues/80))
 - Fix seek time overwriting the current playback time
 - Fix hanging `yt-dlp` when cookies are unavailable
 
@@ -1028,9 +1063,9 @@ No changes.
 - Fix `BufferOverflow` in specific edge cases
 - Fix some edge cases of audio desynchronization after long playback
 - Fix suggestion scroller not showing up when in large menu mode
-- Fix language selector ([#73](https://github.com/arnodoelinger/dreamdisplays/issues/73))
+- Fix language selector ([#73](https://github.com/Aruvelut-123/dreamdisplaysx/issues/73))
 - Fix volume reset after leaving active display distance
-  ([#76](https://github.com/arnodoelinger/dreamdisplays/issues/76))
+  ([#76](https://github.com/Aruvelut-123/dreamdisplaysx/issues/76))
 - Enhance project structure and code quality in some places
 
 ## Server
@@ -1235,8 +1270,8 @@ No changes.
 
 - We've created a [Discord server](https://discord.gg/uwMMZ2KWk6)!
 - Video brightness control
-- Change maximum of render distance to 128 blocks ([#59](https://github.com/arnodoelinger/dreamdisplays/issues/59))
-- Change maximum volume to 200% ([#60](https://github.com/arnodoelinger/dreamdisplays/issues/60))
+- Change maximum of render distance to 128 blocks ([#59](https://github.com/Aruvelut-123/dreamdisplaysx/issues/59))
+- Change maximum volume to 200% ([#60](https://github.com/Aruvelut-123/dreamdisplaysx/issues/60))
 - Support CurseForge releases
 - Smoother video playback and some optimizations
 
@@ -1246,8 +1281,8 @@ No changes.
 - Smoother video playback and some optimizations
 - Video brightness control
 - Store paused state of display
-- Change maximum of render distance to 128 blocks ([#59](https://github.com/arnodoelinger/dreamdisplays/issues/59))
-- Change maximum volume to 200% ([#60](https://github.com/arnodoelinger/dreamdisplays/issues/60))
+- Change maximum of render distance to 128 blocks ([#59](https://github.com/Aruvelut-123/dreamdisplaysx/issues/59))
+- Change maximum volume to 200% ([#60](https://github.com/Aruvelut-123/dreamdisplaysx/issues/60))
 - Fix playing videos after changing quality
 - Support CurseForge releases
 - Documentation in codebase of the mod
@@ -1256,7 +1291,7 @@ No changes.
 
 - Refactors and small improvements
 - Documentation in codebase of the plugin
-- Improve update logic and fix ignoring mod versions ([#63](https://github.com/arnodoelinger/dreamdisplays/issues/63))
+- Improve update logic and fix ignoring mod versions ([#63](https://github.com/Aruvelut-123/dreamdisplaysx/issues/63))
 
 # 1.2.0 Release
 
@@ -1439,7 +1474,7 @@ No changes.
 - Release channel is now Release
 - English as the default language
 - New configuration
-- New mod name Dream Displays
+- New mod name Dream DisplaysX
 - Added support for old mod clients
 - Added plugin information
 

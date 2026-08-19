@@ -1,6 +1,6 @@
 # Media audio
 
-Platform-agnostic acoustics engine for Dream Displays, implementing `AudioAcousticsService` /
+Platform-agnostic acoustics engine for Dream DisplaysX, implementing `AudioAcousticsService` /
 `AudioDspStage` from `:api`. Turns the S16LE stereo PCM block from the media pipeline into an
 occlusion/reverb/distance-aware binaural (or speaker-pan) mix, per display, in-process — no OpenAL / native dependency.
 

@@ -1,7 +1,7 @@
 plugins {
-    id("dreamdisplays.kotlin-conventions")
-    id("dreamdisplays.serialization-conventions")
-    id("dreamdisplays.shadow-conventions")
+    id("dreamdisplayx.kotlin-conventions")
+    id("dreamdisplayx.serialization-conventions")
+    id("dreamdisplayx.shadow-conventions")
     alias(libs.plugins.platformweaver)
 }
 
@@ -36,8 +36,8 @@ tasks.jar {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("dreamdisplays-bungeecord")
-    val prefix = "com.dreamdisplays.libs"
+    archiveBaseName.set("dreamdisplayx-bungeecord")
+    val prefix = "com.dreamdisplayx.libs"
     listOf(
         "kotlin",
         "kotlinx.serialization",

@@ -35,7 +35,7 @@ pluginManagement {
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
     id("dev.kikugie.stonecutter") version "0.9.7"
-    id("dreamdisplays.stonecutter-versions")
+    id("dreamdisplayx.stonecutter-versions")
 }
 
 @Suppress("UnstableApiUsage")
@@ -53,7 +53,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "dreamdisplays"
+rootProject.name = "dreamdisplayx"
 include(":native")
 include(":core")
 include(":api")

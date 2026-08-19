@@ -1,6 +1,6 @@
 # Platform server
 
-Server platform for Dream Displays. This module adapts core / protocol / storage to `Paper` / `Folia` / `Purpur` and
+Server platform for Dream DisplaysX. This module adapts core / protocol / storage to `Paper` / `Folia` / `Purpur` and
 `Fabric` server targets through `Stonecutter` / `OFRAT`.
 
 ## Contents

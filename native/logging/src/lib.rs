@@ -1,6 +1,6 @@
-//! Shared stderr logger for the `Dream Displays` native libraries.
+//! Shared stderr logger for the `Dream DisplaysX` native libraries.
 //!
-//! Both cdylibs (`dreamdisplays_native` and `dreamdisplays_lav`) link this crate statically and
+//! Both cdylibs (`dreamdisplayx_native` and `dreamdisplayx_lav`) link this crate statically and
 //! call [`init`] from their ABI entry points; the JVM launcher captures the process stderr, so
 //! log lines land in the regular game / launcher log next to the `FFmpeg` output.
 //!

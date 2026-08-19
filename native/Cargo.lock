@@ -103,29 +103,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
-name = "dreamdisplays-lav"
+name = "dreamdisplayx-lav"
 version = "1.3.0"
 dependencies = [
  "anyhow",
- "dreamdisplays-logging",
+ "dreamdisplayx-logging",
  "ffmpeg-next",
  "log",
  "rayon",
 ]
 
 [[package]]
-name = "dreamdisplays-logging"
+name = "dreamdisplayx-logging"
 version = "1.3.0"
 dependencies = [
  "log",
 ]
 
 [[package]]
-name = "dreamdisplays-native"
+name = "dreamdisplayx-native"
 version = "1.3.0"
 dependencies = [
  "anyhow",
- "dreamdisplays-logging",
+ "dreamdisplayx-logging",
  "kanal",
  "log",
  "rayon",

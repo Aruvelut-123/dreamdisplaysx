@@ -1,6 +1,6 @@
 plugins {
-    id("dreamdisplays.kotlin-conventions")
-    id("dreamdisplays.serialization-conventions")
+    id("dreamdisplayx.kotlin-conventions")
+    id("dreamdisplayx.serialization-conventions")
 }
 
 dependencies {
@@ -13,8 +13,8 @@ dependencies {
 // Regenerates the committed .proto schema artifact from the @Serializable wire classes.
 tasks.register<JavaExec>("generateProto") {
     group = "build"
-    description = "Regenerates src/main/proto/dreamdisplays.proto from the packet classes."
+    description = "Regenerates src/main/proto/dreamdisplayx.proto from the packet classes."
     classpath = sourceSets.test.get().runtimeClasspath
-    mainClass.set("com.dreamdisplays.core.protocol.common.SchemaExporterKt")
-    args(layout.projectDirectory.file("src/main/proto/dreamdisplays.proto").asFile.absolutePath)
+    mainClass.set("com.dreamdisplayx.core.protocol.common.SchemaExporterKt")
+    args(layout.projectDirectory.file("src/main/proto/dreamdisplayx.proto").asFile.absolutePath)
 }

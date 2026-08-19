@@ -1,12 +1,12 @@
 # Platform resources
 
-Shared, platform-agnostic asset source of truth for Dream Displays. No code, no build logic — a plain
+Shared, platform-agnostic asset source of truth for Dream DisplaysX. No code, no build logic — a plain
 `src/main/resources` tree that other platform modules pull files out of via
 `project(":platform:resources").file(...)` instead of duplicating assets per loader.
 
 ## Contents
 
-- Mixin config (`dreamdisplays.mixins.json`), mod icon, `version.txt` template
+- Mixin config (`dreamdisplayx.mixins.json`), mod icon, `version.txt` template
 - Shaders (fog, YUV / NV12 color conversion)
 - GUI sprite textures
 - Client and server translations, plus the default `config.toml`

@@ -4,34 +4,34 @@ license = "LGPL-3.0"
 
 [[mods]]
 
-modId = "dreamdisplays"
+modId = "dreamdisplayx"
 version = "${version}"
-displayName = "Dream Displays"
-logoFile = "assets/dreamdisplays/icon.png"
+displayName = "Dream DisplaysX"
+logoFile = "assets/dreamdisplayx/icon.png"
 authors = "arnodoelinger, INotSleep, Kolyakot33, Toffikk"
 description = "Create in-game screens to stream videos on any Minecraft server."
 
 [[mixins]]
-config = "dreamdisplays.mixins.json"
+config = "dreamdisplayx.mixins.json"
 
 [[mixins]]
-config = "dreamdisplays.server.mixins.json"
+config = "dreamdisplayx.server.mixins.json"
 
-[[dependencies.dreamdisplays]]
+[[dependencies.dreamdisplayx]]
 modId = "neoforge"
 type = "required"
 versionRange = "${neoforgeLoaderRange}"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.dreamdisplays]]
+[[dependencies.dreamdisplayx]]
 modId = "minecraft"
 type = "required"
 versionRange = "${minecraftRange}"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.dreamdisplays]]
+[[dependencies.dreamdisplayx]]
 modId = "luckperms"
 type = "optional"
 versionRange = "[5,)"

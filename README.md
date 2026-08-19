@@ -1,20 +1,17 @@
-[![Latest release](https://img.shields.io/github/release/arnodoelinger/dreamdisplays.svg)](https://github.com/arnodoelinger/dreamdisplays/releases/latest)
-[![License](https://img.shields.io/github/license/arnodoelinger/dreamdisplays)](https://github.com/arnodoelinger/dreamdisplays/blob/master/LICENSE)
-[![Crowdin](https://badges.crowdin.net/dreamdisplays/localized.svg)](https://crowdin.com/project/dreamdisplays)
-[![Discord](http://img.shields.io/discord/1456716690879676501?label=Discord&style=flat&logo=discord)](https://discord.gg/uwMMZ2KWk6)
+[![Latest release](https://img.shields.io/github/release/Aruvelut-123/dreamdisplaysx.svg)](https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest)
+[![License](https://img.shields.io/github/license/Aruvelut-123/dreamdisplaysx)](https://github.com/Aruvelut-123/dreamdisplaysx/blob/master/LICENSE)
 
 <div align="center">
-  <img src="https://i.imgur.com/HM4JUdj.png" alt="Dream Displays"> 
+  <img src="https://i.imgur.com/HM4JUdj.png" alt="Dream DisplaysX"> 
   <div>
-    <a href="https://modrinth.com/plugin/dreamdisplays">Download from Modrinth</a>
-    <span> | </span>
-    <a href="https://www.curseforge.com/minecraft/mc-mods/dreamdisplays">CurseForge</a>
-    <span> | </span>
-    <a href="https://github.com/arnodoelinger/dreamdisplays">GitHub</a>
-    <span> | </span>
-    <a href="https://discord.com/invite/uwMMZ2KWk6">Discord</a>
+    <a href="https://github.com/Aruvelut-123/dreamdisplaysx">Download from GitHub</a>
   </div>
 </div>
+
+## What's in this fork?
+
+This fork is trying to add an android support for dream displays, and in case make others confused, i renamed it to Dream DisplaysX.  
+If you encourted any error on this version, do not submit issues to original GitHub repository! Thanks.
 
 ## Works with all popular server software
 
@@ -34,7 +31,7 @@ Setting it up on the server takes seconds:
 
 ### What you can watch
 
-Create a display, paste a link with `/display video <link>` — Dream Displays figures out the rest.
+Create a display, paste a link with `/display video <link>` — Dream DisplaysX figures out the rest.
 
 |                                                                                                                                                                                                                                                                           | Source                        | What works                                                                     |
 |---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|--------------------------------------------------------------------------------|
@@ -83,13 +80,17 @@ created, type `/display video <link> [language]`
 
 Done! To customize the display, look at it and press `Shift + RMB`
 
-[Read more in our wiki](https://github.com/arnodoelinger/dreamdisplays/wiki).
+[Read more in our wiki](https://github.com/Aruvelut-123/dreamdisplaysx/wiki).
 
 ![Display](https://i.imgur.com/yyIKdp8.png)
 
 ## Support this project
 
-If you enjoy Dream Displays, consider [buying me a coffee](https://ko-fi.com/arnodoelinger). Every contribution helps
+If you enjoy Dream DisplaysX, consider [buying me a coffee](https://ko-fi.com/arnodoelinger). Every contribution helps
 keep the project alive!
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/arnodoelinger)
+
+## Disclaimer
+
+Dream DisplaysX is not affiliated with original Dream Display nor Mojang Studio.

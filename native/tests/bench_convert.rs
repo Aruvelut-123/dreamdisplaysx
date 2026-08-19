@@ -1,6 +1,6 @@
 //! Throughput sanity check for the conversion kernel (run with --ignored).
 
-use dreamdisplays_native::convert;
+use dreamdisplayx_native::convert;
 
 #[test]
 #[ignore]

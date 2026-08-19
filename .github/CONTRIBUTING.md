@@ -1,6 +1,6 @@
 # Contributing
 
-We welcome contributions to Dream Displays! Whether it's fixing bugs, adding new features, or improving other things,
+We welcome contributions to Dream DisplaysX! Whether it's fixing bugs, adding new features, or improving other things,
 your help makes the project better for everyone.
 
 ## How to contribute
@@ -27,7 +27,7 @@ your help makes the project better for everyone.
 - Respect the project's license
 - Respect our guidelines
 
-Thank you for helping make Dream Displays better!
+Thank you for helping make Dream DisplaysX better!
 
 ## Useful links
 

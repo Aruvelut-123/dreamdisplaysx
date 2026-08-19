@@ -1,6 +1,6 @@
 # Core
 
-Internal domain implementation for Dream Displays. `core` knows product rules, but it does not know Minecraft
+Internal domain implementation for Dream DisplaysX. `core` knows product rules, but it does not know Minecraft
 loader-specific APIs.
 
 ## Contents

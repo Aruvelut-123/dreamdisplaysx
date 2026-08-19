@@ -4,9 +4,9 @@ Rust native kernels.
 
 ## Contents
 
-- `dreamdisplays_native` (`src/`) — low-level helpers for Kotlin media code: pixel-format `convert` and the `session`
+- `dreamdisplayx_native` (`src/`) — low-level helpers for Kotlin media code: pixel-format `convert` and the `session`
   bridge.
-- `dreamdisplays_lav` (`lav/src/`) — optional in-process video decode path through `FFmpeg` / `libav`:
+- `dreamdisplayx_lav` (`lav/src/`) — optional in-process video decode path through `FFmpeg` / `libav`:
   `session`, `surface`, and a rolling packet `cache`.
 - C ABI declarations consumed from Kotlin through `Project Panama`.
 
@@ -25,7 +25,7 @@ Rust native kernels.
 
 The auto-build needs a Rust toolchain (`cargo` on `PATH`, or `~/.cargo/bin/cargo`). Machines without Rust — or CI using
 the `native/build/ci-bundle/` artifacts — skip it automatically; force-disable with
-`-Pdreamdisplays.autoBuildNatives=false`.
+`-Pdreamdisplayx.autoBuildNatives=false`.
 
 > [WARNING]
 > `cargo test` builds a separate debug test binary — it does **not** refresh the release

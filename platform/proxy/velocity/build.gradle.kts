@@ -1,7 +1,7 @@
 plugins {
-    id("dreamdisplays.kotlin-conventions")
-    id("dreamdisplays.serialization-conventions")
-    id("dreamdisplays.shadow-conventions")
+    id("dreamdisplayx.kotlin-conventions")
+    id("dreamdisplayx.serialization-conventions")
+    id("dreamdisplayx.shadow-conventions")
     alias(libs.plugins.platformweaver)
 }
 
@@ -18,11 +18,11 @@ val generatePluginVersion by tasks.registering {
     inputs.property("version", versionValue)
     outputs.dir(outputDir)
     doLast {
-        val file = outputDir.get().file("com/dreamdisplays/platform/proxy/velocity/PluginVersion.kt").asFile
+        val file = outputDir.get().file("com/dreamdisplayx/platform/proxy/velocity/PluginVersion.kt").asFile
         file.parentFile.mkdirs()
         file.writeText(
             """
-            package com.dreamdisplays.platform.proxy.velocity
+            package com.dreamdisplayx.platform.proxy.velocity
 
             internal const val PLUGIN_VERSION = "$versionValue"
 
@@ -70,8 +70,8 @@ tasks.jar {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("dreamdisplays-velocity")
-    val prefix = "com.dreamdisplays.libs"
+    archiveBaseName.set("dreamdisplayx-velocity")
+    val prefix = "com.dreamdisplayx.libs"
     listOf(
         "kotlin",
         "kotlinx.serialization",

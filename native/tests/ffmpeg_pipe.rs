@@ -4,7 +4,7 @@
 //! Skips (passes trivially) when no FFmpeg binary is available. Point `DD_TEST_FFMPEG`
 //! at a binary explicitly, otherwise a few well-known locations are probed.
 
-use dreamdisplays_native::session::{PixFmt, READ_EOF, READ_OK, Sessions};
+use dreamdisplayx_native::session::{PixFmt, READ_EOF, READ_OK, Sessions};
 
 fn find_ffmpeg() -> Option<String> {
     if let Ok(p) = std::env::var("DD_TEST_FFMPEG") {
@@ -13,7 +13,7 @@ fn find_ffmpeg() -> Option<String> {
         }
     }
     let candidates = [
-        "../platform/client/fabric/run/dreamdisplays/ffmpeg/macos-aarch64/ffmpeg",
+        "../platform/client/fabric/run/dreamdisplayx/ffmpeg/macos-aarch64/ffmpeg",
         "/opt/homebrew/bin/ffmpeg",
         "/usr/local/bin/ffmpeg",
         "/usr/bin/ffmpeg",

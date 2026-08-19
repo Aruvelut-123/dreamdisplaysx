@@ -1,6 +1,6 @@
 # Security policy
 
-At the moment, **there is one known vulnerability** in Dream Displays. See it [here](https://github.com/arnodoelinger/dreamdisplays/security/advisories/GHSA-5j65-hvgq-c585).
+At the moment, **there is one known vulnerability** in Dream DisplaysX. See it [here](https://github.com/Aruvelut-123/dreamdisplaysx/security/advisories/GHSA-5j65-hvgq-c585).
 
 As the project evolves (especially when adding support for other platforms or custom video sources, like links) new security issues could arise.
 

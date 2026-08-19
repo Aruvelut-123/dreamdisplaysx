@@ -1,0 +1,29 @@
+package com.dreamdisplayx.api.display.model.property
+
+import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
+
+/**
+ * The bounds of a display.
+ *
+ * @since 1.8.x
+ */
+@DreamDisplaysXUnstableApi
+data class DisplayBounds(
+    /** The [x] coordinate of the display's center, in world units. */
+    val x: Double,
+
+    /** The [y] coordinate of the display's center, in world units. */
+    val y: Double,
+
+    /** The [z] coordinate of the display's center, in world units. */
+    val z: Double,
+
+    /** The width of the display, in world units. */
+    val width: Int,
+
+    /** The height of the display, in world units. */
+    val height: Int,
+
+    /** The direction the display is facing. */
+    val facing: DisplayFacing,
+)

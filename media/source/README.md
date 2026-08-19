@@ -14,7 +14,7 @@ can play.
 
 - No rendering, playback loop, or Minecraft shit
 - Resolver tooling such as `yt-dlp` is allowed here, but display state management is not
-- Results should leave through `com.dreamdisplays.media.api`
+- Results should leave through `com.dreamdisplayx.media.api`
 
 ## Dependencies
 

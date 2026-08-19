@@ -1,8 +1,8 @@
 # API
 
-Public, unstable Dream Displays API. This module is the boundary external code, platform integrations, and sibling
+Public, unstable Dream DisplaysX API. This module is the boundary external code, platform integrations, and sibling
 modules can use without depending on `core` internals. Public contracts are marked with
-`DreamDisplaysUnstableApi`.
+`DreamDisplaysXUnstableApi`.
 
 ## Contents
 
@@ -24,7 +24,7 @@ modules can use without depending on `core` internals. Public contracts are mark
 - `render` — render/upload contracts: `DisplayRenderer`, `RenderContext`, `RenderSurface`, `RenderStats`,
   `TextureUploaderService` / `TextureUploaderFactory`, `TextureHandle`, `UploadBudget`, `FrameDropPolicy`,
   `RenderBackend`, `ShaderBackend`, `TextureUploadPath`, `RenderServices`
-- `runtime` — construction contracts: `DreamDisplaysApi`, `DreamDisplaysRuntime`, `DreamDisplaysModule`,
+- `runtime` — construction contracts: `DreamDisplaysXApi`, `DreamDisplaysXRuntime`, `DreamDisplaysXModule`,
   `ModuleContext`, `ServiceRegistry`, `ServiceKey`
 - `platform` — loader-neutral platform hooks: `Platform`, `PlatformSide`, `PlatformLogger`, `PlatformPaths`,
   `PlatformScheduler`, `TaskHandle`, `PlatformId`, `PlatformServices`
@@ -34,7 +34,7 @@ modules can use without depending on `core` internals. Public contracts are mark
 
 ## Boundaries
 
-- `api` must not depend on `core` or import `com.dreamdisplays.core.*`
+- `api` must not depend on `core` or import `com.dreamdisplayx.core.*`
 - Do not put implementations, caches, file IO, network IO, Minecraft / `Paper` / `Fabric` / `NeoForge` classes here
 - If a type is meant for public consumers, it belongs here, not in `core`
 - Keep contracts loader-neutral: expose value objects, service interfaces, sinks, and handles instead of runtime classes

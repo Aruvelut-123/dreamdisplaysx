@@ -1,14 +1,14 @@
-import support.shadow.excludeDreamDisplaysSqliteNativeExtras
-import support.shadow.includeDreamDisplaysSharedContents
-import support.shadow.relocateDreamDisplaysSharedPackages
+import support.shadow.excludeDreamDisplaysXSqliteNativeExtras
+import support.shadow.includeDreamDisplaysXSharedContents
+import support.shadow.relocateDreamDisplaysXSharedPackages
 import support.stonecutter.StonecutterVersions
 
 plugins {
     id("net.neoforged.moddev")
     id("maven-publish")
-    id("dreamdisplays.kotlin-conventions")
-    id("dreamdisplays.native-resources")
-    id("dreamdisplays.shadow-conventions")
+    id("dreamdisplayx.kotlin-conventions")
+    id("dreamdisplayx.native-resources")
+    id("dreamdisplayx.shadow-conventions")
     alias(libs.plugins.platformweaver)
 }
 
@@ -27,9 +27,9 @@ sourceSets.main {
     kotlin.srcDir(project(":platform:server").layout.buildDirectory.dir("generated/chisel/main/kotlin"))
     // Translations live once in :platform:resources and are pulled in here instead of being duplicated per platform.
     // The lang/client/ split is source-tree organization only; vanilla's language system requires the actual
-    // jar to have client lang files directly under assets/dreamdisplays/lang/, so processResources flattens it back.
+    // jar to have client lang files directly under assets/dreamdisplayx/lang/, so processResources flattens it back.
     resources.srcDir(project(":platform:resources").file("src/main/resources"))
-    resources.exclude("assets/dreamdisplays/lang/client/**")
+    resources.exclude("assets/dreamdisplayx/lang/client/**")
 }
 
 platformweaver {
@@ -148,7 +148,7 @@ neoForge {
     }
     accessTransformers.from(file("src/main/resources/META-INF/accesstransformer.cfg"))
     mods {
-        register("dreamdisplays") {
+        register("dreamdisplayx") {
             sourceSet(sourceSets.main.get())
             sourceSet(mainSourceSetOf(":platform:client:common"))
             sourceSet(mainSourceSetOf(":core"))
@@ -175,8 +175,8 @@ neoForge {
 }
 
 tasks.processResources {
-    from(project(":platform:resources").file("src/main/resources/assets/dreamdisplays/lang/client")) {
-        into("assets/dreamdisplays/lang")
+    from(project(":platform:resources").file("src/main/resources/assets/dreamdisplayx/lang/client")) {
+        into("assets/dreamdisplayx/lang")
     }
     val projectVersion = project.version.toString()
     val neoForgeLoaderRange = scVersion("neoforge.loader.range")
@@ -195,10 +195,10 @@ tasks.processResources {
             )
         )
     }
-    filesMatching(listOf("dreamdisplays.mixins.json", "dreamdisplays.server.mixins.json")) {
+    filesMatching(listOf("dreamdisplayx.mixins.json", "dreamdisplayx.server.mixins.json")) {
         expand(mapOf("javaVersion" to javaVersion))
     }
-    filesMatching("assets/dreamdisplays/version.txt") {
+    filesMatching("assets/dreamdisplayx/version.txt") {
         expand(mapOf("version" to projectVersion))
     }
 }
@@ -209,11 +209,11 @@ java {
 
 tasks.shadowJar {
     configurations = listOf(project.configurations.getByName("shadow"))
-    archiveBaseName.set("dreamdisplays-neoforge")
+    archiveBaseName.set("dreamdisplayx-neoforge")
     archiveVersion.set("$activeStonecutterVersion-${rootProject.version}")
-    includeDreamDisplaysSharedContents()
-    relocateDreamDisplaysSharedPackages()
-    excludeDreamDisplaysSqliteNativeExtras()
+    includeDreamDisplaysXSharedContents()
+    relocateDreamDisplaysXSharedPackages()
+    excludeDreamDisplaysXSqliteNativeExtras()
 }
 
 tasks.withType<AbstractArchiveTask>().configureEach {

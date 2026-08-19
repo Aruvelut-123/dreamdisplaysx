@@ -1,11 +1,11 @@
-import support.shadow.excludeDreamDisplaysSqliteNativeExtras
+import support.shadow.excludeDreamDisplaysXSqliteNativeExtras
 import support.stonecutter.StonecutterVersions
 import java.util.*
 
 plugins {
-    id("dreamdisplays.kotlin-conventions")
-    id("dreamdisplays.serialization-conventions")
-    id("dreamdisplays.shadow-conventions")
+    id("dreamdisplayx.kotlin-conventions")
+    id("dreamdisplayx.serialization-conventions")
+    id("dreamdisplayx.shadow-conventions")
     alias(libs.plugins.paperweight)
     alias(libs.plugins.platformweaver)
 }
@@ -149,11 +149,11 @@ dependencies {
 
 sourceSets.main {
     resources.srcDir(project(":platform:resources").file("src/main/resources"))
-    resources.exclude("assets/dreamdisplays/lang/client/**")
+    resources.exclude("assets/dreamdisplayx/lang/client/**")
 }
 
 tasks.processResources {
-    from(project(":platform:resources").file("src/main/resources/assets/dreamdisplays/lang/server/config.toml"))
+    from(project(":platform:resources").file("src/main/resources/assets/dreamdisplayx/lang/server/config.toml"))
     val projectVersion = version.toString()
     val props = mapOf(
         "version" to projectVersion,
@@ -171,7 +171,7 @@ tasks.jar {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("dreamdisplays-paper")
+    archiveBaseName.set("dreamdisplayx-paper")
     archiveVersion.set(rootProject.version.toString())
     manifest {
         attributes(
@@ -182,7 +182,7 @@ tasks.shadowJar {
         exclude(dependency("org.jetbrains.kotlin:kotlin-reflect"))
         exclude(dependency("org.checkerframework:checker-qual"))
     }
-    val prefix = "com.dreamdisplays.libs"
+    val prefix = "com.dreamdisplayx.libs"
     listOf(
         "org.bstats",
         "org.tomlj",
@@ -197,7 +197,7 @@ tasks.shadowJar {
     ).forEach { pack ->
         relocate(pack, "$prefix.$pack")
     }
-    excludeDreamDisplaysSqliteNativeExtras()
+    excludeDreamDisplaysXSqliteNativeExtras()
 }
 
 tasks.withType<AbstractArchiveTask>().configureEach {

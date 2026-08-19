@@ -1,5 +1,5 @@
 plugins {
-    id("dreamdisplays.kotlin-conventions")
+    id("dreamdisplayx.kotlin-conventions")
 }
 
 dependencies {

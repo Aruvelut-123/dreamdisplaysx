@@ -1,5 +1,5 @@
 //! In-process libav decode backend, shipped as its own cdylib so the main
-//! `dreamdisplays_native` library stays free of libav link dependencies (this one fails to
+//! `dreamdisplayx_native` library stays free of libav link dependencies (this one fails to
 //! load on machines without the `FFmpeg` shared libraries, and the JVM treats that as
 //! "feature unavailable" instead of losing the whole native pipeline).
 //!
@@ -37,7 +37,7 @@ static SESSIONS: OnceLock<LavSessions> = OnceLock::new();
 
 /// Returns the global state.
 fn sessions() -> &'static LavSessions {
-    dreamdisplays_logging::init();
+    dreamdisplayx_logging::init();
     SESSIONS.get_or_init(LavSessions::new)
 }
 
@@ -47,7 +47,7 @@ fn on_panic<T: Copy>(entry: &'static str, code: T) -> impl FnOnce(Box<dyn Any + 
     move |payload| {
         log::error!(
             "{entry} panicked: {}.",
-            dreamdisplays_logging::panic_message(&*payload)
+            dreamdisplayx_logging::panic_message(&*payload)
         );
         code
     }
@@ -56,7 +56,7 @@ fn on_panic<T: Copy>(entry: &'static str, code: T) -> impl FnOnce(Box<dyn Any + 
 /// Returns [`LAV_ABI_VERSION`]; the JVM bridge calls this first as a sanity check.
 #[unsafe(no_mangle)]
 pub extern "C" fn dd_lav_abi_version() -> u32 {
-    dreamdisplays_logging::init();
+    dreamdisplayx_logging::init();
     LAV_ABI_VERSION
 }
 

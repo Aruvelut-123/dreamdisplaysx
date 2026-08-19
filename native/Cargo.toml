@@ -2,20 +2,20 @@
 members = ["lav", "logging"]
 
 [package]
-name = "dreamdisplays-native"
+name = "dreamdisplayx-native"
 version = "1.3.0"
 edition = "2024"
 authors = ["arnodoelinger"]
-description = "Native media pipeline kernels for Dream Displays."
+description = "Native media pipeline kernels for Dream DisplaysX."
 license = "LGPL-3.0"
 
 [lib]
-name = "dreamdisplays_native"
+name = "dreamdisplayx_native"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
 anyhow = "1.0.103"
-dreamdisplays-logging = { path = "logging" }
+dreamdisplayx-logging = { path = "logging" }
 kanal = "0.1.1"
 log = "0.4.33"
 rayon = "1.12.0"

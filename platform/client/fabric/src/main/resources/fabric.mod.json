@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "dreamdisplays",
-  "name": "Dream Displays",
+  "id": "dreamdisplayx",
+  "name": "Dream DisplaysX",
   "version": "${version}",
   "license": "LGPL-3.0",
   "description": "Create in-game screens to stream videos on any Minecraft server.",
@@ -10,17 +10,17 @@
   ],
   "entrypoints": {
     "client": [
-      "com.dreamdisplays.platform.client.Client"
+      "com.dreamdisplayx.platform.client.Client"
     ],
     "main": [
-      "com.dreamdisplays.platform.server.Server"
+      "com.dreamdisplayx.platform.server.Server"
     ]
   },
   "mixins": [
-    "dreamdisplays.mixins.json",
-    "dreamdisplays.server.mixins.json"
+    "dreamdisplayx.mixins.json",
+    "dreamdisplayx.server.mixins.json"
   ],
-  "accessWidener": "dreamdisplays.classtweaker",
+  "accessWidener": "dreamdisplayx.classtweaker",
   "depends": {
     "fabricloader": ">=0.19",
     "fabric-api": "*",
@@ -37,5 +37,5 @@
       ]
     }
   },
-  "icon": "assets/dreamdisplays/icon.png"
+  "icon": "assets/dreamdisplayx/icon.png"
 }
