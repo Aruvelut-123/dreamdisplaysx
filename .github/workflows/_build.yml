@@ -707,14 +707,15 @@ jobs:
           export ANDROID_NDK_HOME="$NDK_PATH"
           
           # cargo-ndk internally runs `cargo metadata` against the crate root and does not honor a
-          # bare `--manifest-path`, so it must run from native/ rather than the repo root.
+          # bare `--manifest-path`, so it must run from native/ rather than the repo root. The cargo
+          # subcommand and its flags come after the cargo-ndk options.
           cd native
           
           # Build with cargo-ndk
           cargo ndk \
             --target "${{ matrix.android.target }}" \
             --platform "$API_LEVEL" \
-            --release \
+            build --release \
             --package dreamdisplayx-native \
             --package dreamdisplayx-lav \
             --locked
