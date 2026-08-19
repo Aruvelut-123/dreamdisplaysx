@@ -9,6 +9,7 @@ import com.dreamdisplayx.platform.client.Mod
 import com.dreamdisplayx.platform.client.capabilities.CapabilityNegotiationService
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.platform.client.screenshare.ScreenShareCommand
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
 
@@ -55,6 +56,7 @@ object ClientPacketManager {
 
             is FullscreenState -> FullscreenController.handle(packet)
             is RemotePlaybackToggle -> DisplayRegistry.screens[packet.id]?.setPaused(packet.paused)
+            is ScreenShareAck -> ScreenShareCommand.onAck(packet.watchUrl)
             is DisplayDelete -> handleDelete(packet)
             is ClearCache -> handleClearCache(packet)
             else -> logger.debug("Ignoring non-client-bound packet {}.", packet::class.simpleName)

@@ -18,6 +18,10 @@ import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
 import com.dreamdisplayx.core.protocol.common.packets.ReportDisplay
 import com.dreamdisplayx.core.protocol.common.packets.ReportDuration
 import com.dreamdisplayx.core.protocol.common.packets.RequestSync
+import com.dreamdisplayx.core.protocol.common.packets.ScreenShareAck
+import com.dreamdisplayx.core.protocol.common.packets.ScreenShareData
+import com.dreamdisplayx.core.protocol.common.packets.ScreenShareStart
+import com.dreamdisplayx.core.protocol.common.packets.ScreenShareStop
 import com.dreamdisplayx.core.protocol.common.packets.ServerHello
 import com.dreamdisplayx.core.protocol.common.packets.SetDisplaysEnabled
 import com.dreamdisplayx.core.protocol.common.packets.SetLocked
@@ -86,6 +90,10 @@ object PacketRegistry {
         Entry(PacketType.PIP_PIN, PipPin::class, PipPin.serializer()),
         Entry(PacketType.REPORT_DURATION, ReportDuration::class, ReportDuration.serializer()),
         Entry(PacketType.REMOTE_PLAYBACK_TOGGLE, RemotePlaybackToggle::class, RemotePlaybackToggle.serializer()),
+        Entry(PacketType.SCREEN_SHARE_START, ScreenShareStart::class, ScreenShareStart.serializer()),
+        Entry(PacketType.SCREEN_SHARE_DATA, ScreenShareData::class, ScreenShareData.serializer()),
+        Entry(PacketType.SCREEN_SHARE_STOP, ScreenShareStop::class, ScreenShareStop.serializer()),
+        Entry(PacketType.SCREEN_SHARE_ACK, ScreenShareAck::class, ScreenShareAck.serializer()),
     )
 
     private val byId = entries.associateBy { it.id }

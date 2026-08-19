@@ -83,16 +83,21 @@ object DirectStreamResolver : MediaResolverService {
 
         // Walk the redirect chain through the SSRF guard first, so the probe (which follows no
         // redirects itself) only ever talks to a host the guard has cleared - closing the blind-SSRF
-        // hole where a public URL 302s to an internal address.
-        val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(url) }.getOrElse { e ->
-            if (declaredKind.isDirect) {
-                throw DreamMediaException.Network(
-                    "Could not reach this link. Check that it is public and still valid.",
-                    e
-                )
+        // hole where a public URL 302s to an internal address. The mod's own screen-share relay
+        // (http://<server>/cast/<id>) is trusted by design, even on localhost / LAN.
+        val safeUrl = if (MediaHostGuard.isCastRelayUrl(url)) {
+            url
+        } else {
+            runCatching { MediaHostGuard.resolveSafeUrl(url) }.getOrElse { e ->
+                if (declaredKind.isDirect) {
+                    throw DreamMediaException.Network(
+                        "Could not reach this link. Check that it is public and still valid.",
+                        e
+                    )
+                }
+                notDirect.put(url, true)
+                throw DreamMediaException.NotFound("Not a direct media URL: $url.", e)
             }
-            notDirect.put(url, true)
-            throw DreamMediaException.NotFound("Not a direct media URL: $url.", e)
         }
 
         // A host nobody vouched for has to prove what it serves: its headers are whatever it chose

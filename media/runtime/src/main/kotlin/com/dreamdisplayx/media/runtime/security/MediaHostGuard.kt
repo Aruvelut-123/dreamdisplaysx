@@ -102,6 +102,14 @@ object MediaHostGuard {
         hostOf(url)?.let { hostVerdicts.invalidate(it) }
     }
 
+    /**
+     * True for the mod's own screen-share relay URL (`http://<host>:<port>/cast/<castId>`). The
+     * relay is a trusted mod service, so it is exempt from the SSRF guard even when it listens on
+     * localhost or a private LAN address (singleplayer / LAN servers).
+     */
+    fun isCastRelayUrl(url: String): Boolean =
+        runCatching { URI(url.trim()).path?.startsWith("/cast/") == true }.getOrDefault(false)
+
     /** Like [isAllowed] but throws [IOException] when blocked, so it slots into the playback launch paths. */
     @Throws(IOException::class)
     fun requireAllowed(url: String) {

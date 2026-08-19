@@ -765,21 +765,18 @@ jobs:
           out="native-artifact/dreamdisplayx-natives/$platform"
           mkdir -p "$out"
           
-          # Copy the built libraries
+          # Copy the built libraries into the shared native bundle. The FFmpeg shared libs stay OUT
+          # of this bundle ("Verify jar native bundle" refuses them in the jar); they ship via the
+          # separate jniLibs artifact below.
           cp "$release_dir/$native_library" "$out/"
           cp "$release_dir/$lav_library" "$out/"
           
-          # Copy FFmpeg libraries from the prebuilt package
+          # FFmpeg shared libraries land only in the jniLibs artifact.
           FFMPEG_DIR="${FFMPEG_ANDROID_DIR:-}"
+          ffmpeg_lib_dir="native-artifact/ffmpeg-libs/$abi"
           if [[ -n "$FFMPEG_DIR" && -d "$FFMPEG_DIR/lib" ]]; then
-            # Copy FFmpeg shared libraries into the output
-            # The Android app will need these as well
-            mkdir -p "$out/ffmpeg-libs"
-            find "$FFMPEG_DIR/lib" -name "*.so" -exec cp {} "$out/ffmpeg-libs/" \;
-          
-            # Also copy headers for development
-            mkdir -p "$out/ffmpeg-include"
-            cp -r "$FFMPEG_DIR/include"/* "$out/ffmpeg-include/" 2>/dev/null || true
+            mkdir -p "$ffmpeg_lib_dir"
+            find "$FFMPEG_DIR/lib" -name "*.so" -exec cp {} "$ffmpeg_lib_dir/" \;
           fi
           
           # Collect license info
@@ -804,8 +801,8 @@ jobs:
           mkdir -p "$jni_out"
           cp "$out/$native_library" "$jni_out/"
           cp "$out/$lav_library" "$jni_out/"
-          if [[ -d "$out/ffmpeg-libs" ]]; then
-            cp "$out/ffmpeg-libs"/*.so "$jni_out/" 2>/dev/null || true
+          if [[ -d "$ffmpeg_lib_dir" ]]; then
+            cp "$ffmpeg_lib_dir"/*.so "$jni_out/" 2>/dev/null || true
           fi
           
           # Verify required files exist

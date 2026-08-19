@@ -88,6 +88,8 @@ class DefaultMediaResolverRegistry : MediaResolverRegistry {
             is MediaSource.DirectStream -> source.streamUrl
             else -> return false
         }
+        // The mod's own screen-share relay (http://<server>/cast/<id>) is trusted by design.
+        if (MediaHostGuard.isCastRelayUrl(url)) return false
         return !MediaHostGuard.isAllowed(url)
     }
 

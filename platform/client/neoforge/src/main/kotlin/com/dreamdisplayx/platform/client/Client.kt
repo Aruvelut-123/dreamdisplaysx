@@ -8,7 +8,6 @@ import com.dreamdisplayx.platform.client.render.ScreenRenderer
 import com.dreamdisplayx.platform.client.screenshare.ScreenShareCommand
 import com.dreamdisplayx.platform.client.Mod as DreamMod
 import com.mojang.blaze3d.systems.RenderSystem
-import com.mojang.brigadier.arguments.StringArgumentType
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
 import net.minecraft.commands.Commands
@@ -44,16 +43,14 @@ class Client(modEventBus: IEventBus) : DreamMod {
         NeoForge.EVENT_BUS.register(this)
     }
 
-    /** Registers the client-side screen-sharing commands (`/share <url>` / `/share stop`). */
+    /** Registers the client-side screen-sharing commands (`/share start` / `/share stop`). */
     private fun onRegisterClientCommands(event: RegisterClientCommandsEvent) {
         event.dispatcher.register(
             Commands.literal("share")
                 .then(
-                    Commands.argument("url", StringArgumentType.greedyString())
-                        .executes { ctx ->
-                            ScreenShareCommand.feedback(
-                                ScreenShareCommand.start(StringArgumentType.getString(ctx, "url")),
-                            )
+                    Commands.literal("start")
+                        .executes {
+                            ScreenShareCommand.feedback(ScreenShareCommand.start())
                             1
                         }
                 )

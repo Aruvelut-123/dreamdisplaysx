@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server
 
+import com.dreamdisplayx.platform.server.cast.CastManager
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StorageManager
@@ -73,6 +74,11 @@ class PaperServer : JavaPlugin() {
 
         ProxyBridge.init(Companion.config.proxy.enabled, Companion.config.proxy.clock_sync_interval)
 
+        val screenShare = Companion.config.settings.screenShare
+        if (screenShare.enabled) {
+            CastManager.start(screenShare.port, screenShare.public_host)
+        }
+
         ListenerRegistrar.registerListeners(this)
         ChannelRegistrar.registerChannels(this)
         runRepeatingTasks()
@@ -89,6 +95,7 @@ class PaperServer : JavaPlugin() {
 
     /** Persists state and tears down resources. Safe to call from a reload. */
     fun doDisable() {
+        CastManager.stop()
         if (::storage.isInitialized) {
             DisplayManager.save { data: PaperDisplayData -> storage.saveDisplay(data) }
             ServerCoroutines.shutdown()

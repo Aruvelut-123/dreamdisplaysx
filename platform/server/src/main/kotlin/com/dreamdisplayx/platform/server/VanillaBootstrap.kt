@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server
 
+import com.dreamdisplayx.platform.server.cast.CastManager
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StateManager
@@ -46,11 +47,16 @@ object VanillaBootstrap {
             VanillaServerState.config.proxy.enabled,
             VanillaServerState.config.proxy.clock_sync_interval
         )
+        val screenShare = VanillaServerState.config.settings.screenShare
+        if (screenShare.enabled) {
+            CastManager.start(screenShare.port, screenShare.public_host)
+        }
         startRepeatingTasks(server)
     }
 
     /** Persists all displays and disconnects storage. */
     fun onServerStopping() {
+        CastManager.stop()
         DisplayManager.save { VanillaServerState.storage?.saveDisplay(it) }
         ServerCoroutines.shutdown()
         VanillaServerState.storage?.disconnect()

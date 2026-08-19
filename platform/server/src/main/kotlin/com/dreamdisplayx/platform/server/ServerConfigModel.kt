@@ -29,6 +29,7 @@ data class SettingsSection(
     val display: DisplayConfig = DisplayConfig(),
     val fullscreen: FullscreenConfig = FullscreenConfig(),
     val customMedia: CustomMediaConfig = CustomMediaConfig(),
+    val screenShare: ScreenShareConfig = ScreenShareConfig(),
 ) {
     // Reports
     val webhookUrl get() = reports.webhook_url
@@ -121,6 +122,16 @@ data class SettingsSection(
         val default_mode: String = "STANDARD",
         val allow_forced: Boolean = true,
         val quality_cap: Int = 1080,
+    )
+
+    /**
+     * Screen-sharing section: the mod-protocol relay that lets a client push its screen and viewers
+     * pull it over an internal HTTP endpoint. Only used on modded servers.
+     */
+    data class ScreenShareConfig(
+        val enabled: Boolean = true,
+        val port: Int = 28960,
+        val public_host: String = "",
     )
 }
 
@@ -272,6 +283,11 @@ fun parseServerConfig(t: TomlTable?): ParsedServerConfig = ParsedServerConfig(
             default_mode = t?.getString("fullscreen.default_mode") ?: "STANDARD",
             allow_forced = t?.getBoolean("fullscreen.allow_forced") ?: true,
             quality_cap = t?.getLong("fullscreen.quality_cap")?.toInt() ?: 1080,
+        ),
+        screenShare = SettingsSection.ScreenShareConfig(
+            enabled = t?.getBoolean("screen_share.enabled") ?: true,
+            port = t?.getLong("screen_share.port")?.toInt() ?: 28960,
+            public_host = t?.getString("screen_share.public_host") ?: "",
         ),
     ),
     storage = StorageSection(

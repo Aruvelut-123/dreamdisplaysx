@@ -34,7 +34,6 @@ import com.dreamdisplayx.platform.client.render.ScreenRenderer
 import com.dreamdisplayx.platform.client.screenshare.ScreenShareCommand
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
-import com.mojang.brigadier.arguments.StringArgumentType
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
@@ -124,16 +123,14 @@ class Client : ClientModInitializer, Mod {
 
         ClientTickEvents.END_CLIENT_TICK.register { Initializer.onEndTick(it) }
 
-        // Client-side screen sharing: /share <rtmp-url> starts a push, /share stop ends it.
+        // Client-side screen sharing over the mod protocol: /share start begins a cast, /share stop ends it.
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
                 ClientCommandManager.literal("share")
                     .then(
-                        ClientCommandManager.argument("url", StringArgumentType.greedyString())
-                            .executes { ctx ->
-                                ScreenShareCommand.feedback(
-                                    ScreenShareCommand.start(StringArgumentType.getString(ctx, "url")),
-                                )
+                        ClientCommandManager.literal("start")
+                            .executes {
+                                ScreenShareCommand.feedback(ScreenShareCommand.start())
                                 1
                             }
                     )

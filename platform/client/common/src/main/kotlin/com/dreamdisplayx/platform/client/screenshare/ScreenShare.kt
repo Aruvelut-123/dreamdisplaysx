@@ -39,6 +39,41 @@ object ScreenShare {
     fun x11Display(): String? = System.getenv("DISPLAY")?.takeIf { it.isNotBlank() }
 
     /**
+     * Builds the FFmpeg argv that captures the screen, encodes it as a low-latency H.264 MPEG-TS
+     * stream, and writes it to stdout — the bytes the client relays to the server over the mod's own
+     * protocol (no external RTMP server involved).
+     *
+     * [maxWidth] caps the captured width (height follows aspect) to keep the bitrate budget sane
+     * over a Minecraft connection; [fps] and [bitrateKbps] control bandwidth.
+     */
+    fun buildCastCommand(
+        ffmpeg: String,
+        fps: Int = 15,
+        maxWidth: Int = 1280,
+        bitrateKbps: Int = 800,
+    ): List<String> {
+        val cmd = mutableListOf(ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostats")
+
+        when {
+            OsInfo.isWindows -> cmd += listOf("-f", "gdigrab", "-framerate", fps.toString(), "-i", "desktop")
+            OsInfo.isMac -> cmd += listOf("-f", "avfoundation", "-framerate", fps.toString(), "-i", "1:none")
+            else -> {
+                val display = x11Display() ?: throw IllegalStateException("No X11 DISPLAY available.")
+                cmd += listOf("-f", "x11grab", "-framerate", fps.toString(), "-i", display)
+            }
+        }
+
+        cmd += listOf(
+            "-vf", "scale=w=min($maxWidth\\,iw):h=-2:flags=bilinear",
+            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+            "-pix_fmt", "yuv420p", "-g", (fps * 2).toString(),
+            "-b:v", "${bitrateKbps}k", "-maxrate", "${bitrateKbps}k", "-bufsize", "${bitrateKbps * 2}k",
+            "-f", "mpegts", "-",
+        )
+        return cmd
+    }
+
+    /**
      * Builds the FFmpeg argv that captures the screen and pushes it to [rtmpUrl].
      *
      * When [width]/[height] are both positive the capture is cropped to that size; otherwise the

@@ -8,10 +8,10 @@ import net.minecraft.network.chat.Component
  * command registrars stay one-liners and never drift from each other.
  */
 object ScreenShareCommand {
-    /** Starts a screen share to [rtmpUrl]; returns the message to show the player. */
-    fun start(rtmpUrl: String): String = try {
-        ScreenShareManager.start(rtmpUrl)
-        "Screen sharing started (push to $rtmpUrl). Use /share stop to end it."
+    /** Starts a screen share to the connected modded server; returns the message to show the player. */
+    fun start(): String = try {
+        ScreenShareManager.start()
+        "Screen sharing started. The server will provide a watch URL shortly."
     } catch (e: IllegalStateException) {
         "Screen sharing failed: ${e.message}."
     }
@@ -21,6 +21,16 @@ object ScreenShareCommand {
         val wasActive = ScreenShareManager.isActive
         ScreenShareManager.stop()
         return if (wasActive) "Screen sharing stopped." else "No screen share is running."
+    }
+
+    /** Handles the server's [com.dreamdisplayx.core.protocol.common.packets.ScreenShareAck] reply. */
+    fun onAck(watchUrl: String) {
+        val message = if (watchUrl.isNotEmpty()) {
+            "Screen share is live! Viewers can watch: $watchUrl"
+        } else {
+            "Screen sharing is not available on this server (needs the mod on the server side)."
+        }
+        feedback(message)
     }
 
     /** Sends [message] to the local player as a client-side chat line, when one is present. */
