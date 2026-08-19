@@ -69,7 +69,10 @@ class Client(modEventBus: IEventBus) : DreamMod {
         event.dispatcher.register(
             Commands.literal("dlogin")
                 .executes {
-                    Minecraft.getInstance().setScreen(PlatformLoginScreen())
+                    //? if >=26.2 {
+                    Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
+                    //?} else
+                    /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
                     1
                 }
         )

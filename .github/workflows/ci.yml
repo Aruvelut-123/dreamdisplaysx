@@ -5,8 +5,18 @@ name: CI
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'SESSION_TASKS.md'
+      - '.gitignore'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'SESSION_TASKS.md'
+      - '.gitignore'
   workflow_dispatch:
 
 concurrency:

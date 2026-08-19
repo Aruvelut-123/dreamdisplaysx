@@ -150,7 +150,10 @@ class Client : ClientModInitializer, Mod {
             dispatcher.register(
                 clientLiteral("dlogin")
                     .executes {
-                        Minecraft.getInstance().setScreen(PlatformLoginScreen())
+                        //? if >=26.2 {
+                        Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
+                        //?} else
+                        /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
                         1
                     }
             )
