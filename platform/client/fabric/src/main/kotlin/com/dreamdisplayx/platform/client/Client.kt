@@ -27,6 +27,7 @@ import net.minecraft.resources.Identifier
 import com.dreamdisplayx.api.platform.service.keys.PlatformServices
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.platform.client.login.PlatformLoginScreen
 import com.dreamdisplayx.platform.client.net.Packets
 import com.dreamdisplayx.platform.client.net.V2Payload
 import com.dreamdisplayx.platform.client.platform.FabricPlatformIntegrationProvider
@@ -144,6 +145,14 @@ class Client : ClientModInitializer, Mod {
                                 1
                             }
                     )
+            )
+            // Opens the Bilibili login screen (QR code / phone + password).
+            dispatcher.register(
+                clientLiteral("dlogin")
+                    .executes {
+                        Minecraft.getInstance().setScreen(PlatformLoginScreen())
+                        1
+                    }
             )
         }
 

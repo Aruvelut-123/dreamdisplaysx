@@ -13,6 +13,7 @@ import com.dreamdisplayx.core.protocol.common.packets.FullscreenAck
 import com.dreamdisplayx.core.protocol.common.packets.FullscreenState
 import com.dreamdisplayx.core.protocol.common.packets.PipPin
 import com.dreamdisplayx.core.protocol.common.packets.PlaybackCommand
+import com.dreamdisplayx.core.protocol.common.packets.PlatformCredentials
 import com.dreamdisplayx.core.protocol.common.packets.RadiusPreview
 import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
 import com.dreamdisplayx.core.protocol.common.packets.ReportDisplay
@@ -94,6 +95,7 @@ object PacketRegistry {
         Entry(PacketType.SCREEN_SHARE_DATA, ScreenShareData::class, ScreenShareData.serializer()),
         Entry(PacketType.SCREEN_SHARE_STOP, ScreenShareStop::class, ScreenShareStop.serializer()),
         Entry(PacketType.SCREEN_SHARE_ACK, ScreenShareAck::class, ScreenShareAck.serializer()),
+        Entry(PacketType.PLATFORM_CREDENTIALS, PlatformCredentials::class, PlatformCredentials.serializer()),
     )
 
     private val byId = entries.associateBy { it.id }

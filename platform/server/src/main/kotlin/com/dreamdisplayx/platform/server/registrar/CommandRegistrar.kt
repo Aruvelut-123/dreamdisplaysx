@@ -2,12 +2,14 @@ package com.dreamdisplayx.platform.server.registrar
 
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.commands.subcommands.*
+import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.proxy.ProxyNetwork
 import com.dreamdisplayx.platform.server.registrar.CommandRegistrar.fullscreenFlagsNode
 import com.dreamdisplayx.platform.server.utils.MessageUtil
 import com.dreamdisplayx.platform.server.utils.ScheduleTimeUtil
+import com.dreamdisplayx.platform.server.utils.net.PaperV2Networking
 import com.mojang.brigadier.Command
 import com.mojang.brigadier.LiteralMessage
 import com.mojang.brigadier.StringReader
@@ -26,6 +28,7 @@ import io.github.arnodoelinger.platformweaver.PaperOnly
 import io.papermc.paper.command.brigadier.CommandSourceStack
 import io.papermc.paper.command.brigadier.Commands
 import io.papermc.paper.command.brigadier.argument.CustomArgumentType
+import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import java.util.concurrent.CompletableFuture
@@ -81,7 +84,53 @@ object CommandRegistrar {
         .then(toggleSubCommand("on", OnCommand()))
         .then(toggleSubCommand("off", OffCommand()))
         .then(fullscreenSubCommand())
+        .then(loginSubCommand())
+        .then(logoutSubCommand())
         .build()
+
+    /** `/display login <platform> <token>` — saves an encrypted credential for the player. */
+    private fun loginSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")
+        .then(
+            Commands.argument("platform", StringArgumentType.word())
+                .then(
+                    Commands.argument("token", StringArgumentType.greedyString())
+                        .executes { ctx ->
+                            val sender = ctx.source.sender
+                            val player = sender as? Player ?: return@executes 0
+                            val platform = StringArgumentType.getString(ctx, "platform")
+                            val token = StringArgumentType.getString(ctx, "token")
+                            if (token.isBlank()) {
+                                sender.sendMessage(Component.text("The credential token must not be empty."))
+                                return@executes 1
+                            }
+                            if (!CredentialActions.isSupported(platform)) {
+                                sender.sendMessage(Component.text("Unsupported platform: $platform. Supported: bilibili"))
+                                return@executes 1
+                            }
+                            val snapshot = CredentialActions.login(player.uniqueId.toString(), platform, token)
+                            PaperV2Networking.send(listOf(player), snapshot)
+                            sender.sendMessage(
+                                Component.text("Logged in on $platform. Your credential is stored on the server, encrypted.")
+                            )
+                            1
+                        }
+                )
+        )
+
+    /** `/display logout <platform>` — removes the player's credential for the platform. */
+    private fun logoutSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("logout")
+        .then(
+            Commands.argument("platform", StringArgumentType.word())
+                .executes { ctx ->
+                    val sender = ctx.source.sender
+                    val player = sender as? Player ?: return@executes 0
+                    val platform = StringArgumentType.getString(ctx, "platform")
+                    val snapshot = CredentialActions.logout(player.uniqueId.toString(), platform)
+                    PaperV2Networking.send(listOf(player), snapshot)
+                    sender.sendMessage(Component.text("Logged out of $platform."))
+                    1
+                }
+        )
 
     /** Builds a simple no-argument subcommand node optionally guarded by a permission check. */
     private fun simple(

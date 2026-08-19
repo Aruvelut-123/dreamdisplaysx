@@ -11,6 +11,7 @@ import com.dreamdisplayx.core.protocol.common.packets.FullscreenAck
 import com.dreamdisplayx.core.protocol.common.packets.FullscreenState
 import com.dreamdisplayx.core.protocol.common.packets.PipPin
 import com.dreamdisplayx.core.protocol.common.packets.PlaybackCommand
+import com.dreamdisplayx.core.protocol.common.packets.PlatformCredentials
 import com.dreamdisplayx.core.protocol.common.packets.RadiusPreview
 import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
 import com.dreamdisplayx.core.protocol.common.packets.ReportDisplay
@@ -63,7 +64,8 @@ enum class PacketType(
     SCREEN_SHARE_START(23, ScreenShareStart::class, PacketDirection.CLIENT_TO_SERVER),
     SCREEN_SHARE_DATA(24, ScreenShareData::class, PacketDirection.CLIENT_TO_SERVER),
     SCREEN_SHARE_STOP(25, ScreenShareStop::class, PacketDirection.CLIENT_TO_SERVER),
-    SCREEN_SHARE_ACK(26, ScreenShareAck::class, PacketDirection.SERVER_TO_CLIENT);
+    SCREEN_SHARE_ACK(26, ScreenShareAck::class, PacketDirection.SERVER_TO_CLIENT),
+    PLATFORM_CREDENTIALS(27, PlatformCredentials::class, PacketDirection.SERVER_TO_CLIENT);
 
     companion object {
         private val byId = entries.associateBy { it.id }

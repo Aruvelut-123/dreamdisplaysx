@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.display.service.DisplaySystem
 import com.dreamdisplayx.api.runtime.registry.service.getOrNull
 import com.dreamdisplayx.core.protocol.common.packets.*
 import com.dreamdisplayx.core.services.DisplayStorage
+import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.platform.client.Mod
 import com.dreamdisplayx.platform.client.capabilities.CapabilityNegotiationService
 import com.dreamdisplayx.platform.client.core.DreamServices
@@ -57,6 +58,13 @@ object ClientPacketManager {
             is FullscreenState -> FullscreenController.handle(packet)
             is RemotePlaybackToggle -> DisplayRegistry.screens[packet.id]?.setPaused(packet.paused)
             is ScreenShareAck -> ScreenShareCommand.onAck(packet.watchUrl)
+            is PlatformCredentials -> {
+                ClientStateManager.bilibiliSessdata = packet.bilibiliSessdata
+                BilibiliApi.sessdata = packet.bilibiliSessdata
+                if (packet.bilibiliSessdata.isNotEmpty()) {
+                    logger.info("Received Bilibili login credential from the server.")
+                }
+            }
             is DisplayDelete -> handleDelete(packet)
             is ClearCache -> handleClearCache(packet)
             else -> logger.debug("Ignoring non-client-bound packet {}.", packet::class.simpleName)

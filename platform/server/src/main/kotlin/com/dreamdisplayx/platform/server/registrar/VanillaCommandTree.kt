@@ -4,12 +4,14 @@ import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.PermissionsSection
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.commands.subcommands.*
+import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.proxy.ProxyNetwork
 import com.dreamdisplayx.platform.server.registrar.VanillaCommandTree.fullscreenFlagsNode
 import com.dreamdisplayx.platform.server.utils.MessageUtil
 import com.dreamdisplayx.platform.server.utils.ScheduleTimeUtil
 import com.dreamdisplayx.platform.server.utils.VanillaPermissions
+import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import com.mojang.brigadier.Command
 import com.mojang.brigadier.LiteralMessage
 import com.mojang.brigadier.arguments.DoubleArgumentType
@@ -23,6 +25,7 @@ import com.mojang.brigadier.tree.CommandNode
 import com.mojang.brigadier.tree.LiteralCommandNode
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands
+import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerPlayer
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -60,7 +63,54 @@ object VanillaCommandTree {
             .then(toggleNode("on"))
             .then(toggleNode("off"))
             .then(fullscreenNode())
+            .then(loginNode())
+            .then(logoutNode())
             .build()
+
+    /** `/display login <platform> <token>` — saves an encrypted credential for the player. */
+    private fun loginNode(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")
+        .then(
+            Commands.argument("platform", StringArgumentType.word())
+                .then(
+                    Commands.argument("token", StringArgumentType.greedyString())
+                        .executes { ctx ->
+                            val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                            val platform = StringArgumentType.getString(ctx, "platform")
+                            val token = StringArgumentType.getString(ctx, "token")
+                            if (token.isBlank()) {
+                                ctx.source.sendFailure(Component.literal("The credential token must not be empty."))
+                                return@executes 0
+                            }
+                            if (!CredentialActions.isSupported(platform)) {
+                                ctx.source.sendFailure(
+                                    Component.literal("Unsupported platform: $platform. Supported: bilibili"),
+                                )
+                                return@executes 0
+                            }
+                            val snapshot = CredentialActions.login(player.uuid.toString(), platform, token)
+                            VanillaNetworking.adapter.sendV2(listOf(player), snapshot)
+                            ctx.source.sendSuccess(
+                                { Component.literal("Logged in on $platform. Credential stored encrypted on the server.") },
+                                false,
+                            )
+                            1
+                        }
+                )
+        )
+
+    /** `/display logout <platform>` — removes the player's credential for the platform. */
+    private fun logoutNode(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("logout")
+        .then(
+            Commands.argument("platform", StringArgumentType.word())
+                .executes { ctx ->
+                    val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                    val platform = StringArgumentType.getString(ctx, "platform")
+                    val snapshot = CredentialActions.logout(player.uuid.toString(), platform)
+                    VanillaNetworking.adapter.sendV2(listOf(player), snapshot)
+                    ctx.source.sendSuccess({ Component.literal("Logged out of $platform.") }, false)
+                    1
+                }
+        )
 
     /** Builds the `/display help` subcommand. */
     private fun helpNode() = Commands.literal("help")

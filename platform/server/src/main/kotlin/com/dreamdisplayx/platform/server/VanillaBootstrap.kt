@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.server.cast.CastManager
+import com.dreamdisplayx.platform.server.credentials.CredentialStore
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StateManager
@@ -51,6 +52,7 @@ object VanillaBootstrap {
         if (screenShare.enabled) {
             CastManager.start(screenShare.port, screenShare.public_host)
         }
+        CredentialStore.init(dataDir)
         startRepeatingTasks(server)
     }
 

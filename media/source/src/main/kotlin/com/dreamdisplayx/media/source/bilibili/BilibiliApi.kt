@@ -42,12 +42,21 @@ object BilibiliApi {
     /** Logger. */
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliApi")
 
-    /** BIlibili's API rejects requests without a browser-shaped `Referer` / `User-Agent`. */
-    private val HEADERS = DreamHttpClient.headersOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Accept" to "application/json",
-        "Referer" to "https://www.bilibili.com",
-    )
+    /**
+     * Bilibili `SESSDATA` cookie set by the client after a platform login (see `BilibiliAuth`).
+     * Enables VIP / higher-quality playback; empty when not logged in.
+     */
+    @Volatile
+    var sessdata: String = ""
+
+    /** BIlibili's API rejects requests without a browser-shaped `Referer` / `User-Agent`; the login cookie is added when present. */
+    private fun headers(): Map<String, List<String>> =
+        DreamHttpClient.headersOf(
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            "Accept" to "application/json",
+            "Referer" to "https://www.bilibili.com",
+            "Cookie" to if (sessdata.isNotEmpty()) "SESSDATA=$sessdata" else "",
+        )
 
     /** `b23.tv` short links get followed for at most this many hops before giving up. */
     private const val MAX_REDIRECT_HOPS = 5
@@ -121,7 +130,7 @@ object BilibiliApi {
             val location = runCatching {
                 DreamHttpClient.peekRedirectLocation(
                     current,
-                    DreamHttpClient.RequestOptions(headers = HEADERS, connectTimeoutMs = 8_000, readTimeoutMs = 8_000),
+                    DreamHttpClient.RequestOptions(headers = headers(), connectTimeoutMs = 8_000, readTimeoutMs = 8_000),
                 )
             }.getOrNull() ?: return BilibiliUrls.parse(current)?.takeIf { it.isResolved }
 
@@ -391,7 +400,7 @@ object BilibiliApi {
     private fun getJson(url: String): JsonObject? = runCatching {
         val body = DreamHttpClient.readText(
             url,
-            DreamHttpClient.RequestOptions(headers = HEADERS, connectTimeoutMs = 8_000, readTimeoutMs = 8_000),
+            DreamHttpClient.RequestOptions(headers = headers(), connectTimeoutMs = 8_000, readTimeoutMs = 8_000),
         )
         DreamJson.compact.parseToJsonElement(body).asJsonObjectOrNull()
     }.onFailure { logger.debug("Bilibili API fetch failed for {}: {}.", url, it.message) }.getOrNull()

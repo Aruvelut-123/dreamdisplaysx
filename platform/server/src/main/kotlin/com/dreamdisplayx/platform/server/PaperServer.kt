@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.server.cast.CastManager
+import com.dreamdisplayx.platform.server.credentials.CredentialStore
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StorageManager
@@ -78,6 +79,7 @@ class PaperServer : JavaPlugin() {
         if (screenShare.enabled) {
             CastManager.start(screenShare.port, screenShare.public_host)
         }
+        CredentialStore.init(dataFolder)
 
         ListenerRegistrar.registerListeners(this)
         ChannelRegistrar.registerChannels(this)

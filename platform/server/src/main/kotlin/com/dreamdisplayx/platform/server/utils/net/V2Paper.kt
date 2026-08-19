@@ -10,6 +10,7 @@ import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.core.protocol.common.packets.*
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.cast.CastManager
+import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.PlayerManager
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
@@ -123,6 +124,7 @@ object PaperV2Networking : PluginMessageListener {
         if (V2PlayerTracker.isV2(player.uniqueId)) return
         V2PlayerTracker.markV2(player.uniqueId, hello)
         send(listOf(player), buildServerHello(player))
+        send(listOf(player), CredentialActions.snapshotFor(player.uniqueId.toString()))
         DisplayActions.recordVersionAndCheckUpdates(player, hello.modVersion)
         DisplayActions.sendAllDisplays(player)
         FullscreenBroadcastManager.onPlayerJoin(player.uniqueId)

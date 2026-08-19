@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.core.protocol.common.packets.*
 import com.dreamdisplayx.platform.server.cast.CastManager
+import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.client.net.V2Payload
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -123,6 +124,7 @@ object FabricV2Networking {
                 maxDisplays = VanillaDisplayActions.maxDisplaysFor(player),
             ),
         )
+        send(listOf(player), CredentialActions.snapshotFor(player.uuid.toString()))
         VanillaDisplayActions.recordVersionAndCheckUpdates(player, hello.modVersion)
         VanillaDisplayActions.sendAllDisplays(player, server)
         FullscreenBroadcastManager.onPlayerJoin(player.uuid)

@@ -27,4 +27,11 @@ object ClientStateManager : ClientMutableState {
 
     /** Id of the connected server, or `null` when not connected. */
     override var connectedServerId: String? = null
+
+    /** Bilibili `SESSDATA` provided by the server (encrypted at rest there); empty when not logged in. */
+    @Volatile
+    var bilibiliSessdata: String = ""
+
+    /** True once the server handed over a Bilibili login credential. */
+    val isBilibiliLoggedIn: Boolean get() = bilibiliSessdata.isNotEmpty()
 }

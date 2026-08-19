@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client
 
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.platform.client.login.PlatformLoginScreen
 import com.dreamdisplayx.platform.client.platform.NeoForgePlatformIntegrationProvider
 import com.dreamdisplayx.api.platform.service.keys.PlatformServices
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
@@ -63,6 +64,14 @@ class Client(modEventBus: IEventBus) : DreamMod {
                             1
                         }
                 )
+        )
+        // Opens the Bilibili login screen (QR code / phone + password).
+        event.dispatcher.register(
+            Commands.literal("dlogin")
+                .executes {
+                    Minecraft.getInstance().setScreen(PlatformLoginScreen())
+                    1
+                }
         )
     }
 
