@@ -598,12 +598,20 @@ jobs:
           ndk-version: r26d
           add-to-path: true
 
+      - name: Cache FFmpeg Android build
+        id: cache-ffmpeg-android
+        uses: actions/cache@v4.2.1
+        with:
+          path: ${{ runner.temp }}/ffmpeg-android
+          key: ffmpeg-android-${{ matrix.android.abi }}-ffmpeg-8.1.2-ndk-r26d
+
       - name: Install cargo-ndk
         shell: bash
         run: |
           cargo install cargo-ndk --locked
 
       - name: Install FFmpeg for Android
+        if: steps.cache-ffmpeg-android.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -695,12 +703,28 @@ jobs:
             test -f "$PREFIX/lib/pkgconfig/$pc.pc" || { echo "Missing $pc.pc" >&2; exit 1; }
           done
 
+      # Always export FFmpeg env (also when the cache hit above skipped the build).
+      - name: Export FFmpeg Android environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          NDK_PATH="${ANDROID_NDK_HOME:-$ANDROID_NDK_ROOT}"
+          PREFIX="${RUNNER_TEMP}/ffmpeg-android/ffmpeg"
           echo "FFMPEG_ANDROID_DIR=$PREFIX" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
           # ffmpeg-sys-next's pkg-config probe panics on cross-compilation unless explicitly allowed.
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> "$GITHUB_ENV"
           echo "NDK_PATH=$NDK_PATH" >> "$GITHUB_ENV"
-          echo "ANDROID_API=$API_LEVEL" >> "$GITHUB_ENV"
+          echo "ANDROID_API=24" >> "$GITHUB_ENV"
+          test -f "$PREFIX/lib/pkgconfig/libavcodec.pc" \
+            || { echo "Cached/installed FFmpeg missing libavcodec.pc" >&2; exit 1; }
+
+      - name: Cache Cargo (Android)
+        uses: Swatinem/rust-cache@v2.9.1
+        with:
+          workspaces: native -> target
+          key: ${{ matrix.android.target }}-ffmpeg-8.1.2
+          cache-on-failure: true
 
       - name: Build Android native libraries
         shell: bash
