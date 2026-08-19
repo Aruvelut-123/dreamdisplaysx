@@ -635,6 +635,9 @@ jobs:
             x86)
               FFMPEG_ARCH="x86"
               NDK_TRIPLE="i686-linux-android"
+              # 32-bit x86 FFmpeg asm (incl. MMX/SSE inline asm) is not PIC-safe when linking
+              # shared libraries; build pure C for this ABI.
+              CONFIGURE_EXTRA+=(--disable-asm)
               ;;
             x86_64)
               FFMPEG_ARCH="x86_64"
@@ -676,6 +679,9 @@ jobs:
             --disable-programs \
             --disable-doc \
             --disable-debug \
+            --enable-pic \
+            --extra-cflags="-fPIC" \
+            --extra-ldflags="-fPIC" \
             --disable-x86asm \
             --enable-small \
             --enable-avcodec --enable-avformat --enable-avutil \
