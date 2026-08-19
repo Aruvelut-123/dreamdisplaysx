@@ -6,6 +6,7 @@ import com.dreamdisplayx.util.optInt
 import com.dreamdisplayx.util.optString
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
+import kotlinx.serialization.json.JsonObject
 import org.slf4j.LoggerFactory
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -76,11 +77,15 @@ object BilibiliAuth {
         val root = getJson("https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=$qrcodeKey")
         val data = root?.obj("data")
         val code = data?.optInt("code") ?: -1
-        val url = data?.optString("url")
+        logger.info("QR poll response code={} hasData={} dataKeys={}", code, data != null, data?.keys?.toList())
+        if (code == 0) {
+            logger.info("QR poll success data={}", data?.toString()?.take(800))
+        }
         return when (code) {
             0 -> {
-                val sessdata = extractBilibiliCookie(url)
-                if (sessdata != null) PollResult.Success(sessdata)
+                val cookie = data?.let { extractBilibiliCookie(it) }
+                logger.info("QR login cookie extracted={}", cookie?.take(60) ?: "null")
+                if (cookie != null) PollResult.Success(cookie)
                 else PollResult.Failure("登录成功，但响应里没有 SESSDATA。")
             }
 
@@ -113,8 +118,8 @@ object BilibiliAuth {
         val data = root?.obj("data")
         return when {
             code == 0 && data != null -> {
-                val sessdata = extractBilibiliCookie(data.optString("url"))
-                if (sessdata != null) LoginResult.Success(sessdata)
+                val cookie = extractBilibiliCookie(data)
+                if (cookie != null) LoginResult.Success(cookie)
                 else LoginResult.Failure("登录成功，但响应里没有 SESSDATA。")
             }
 
@@ -127,13 +132,29 @@ object BilibiliAuth {
 
     /**
      * Extracts a Bilibili login cookie string (e.g. `SESSDATA=...; bili_jct=...`) from a login
-     * redirect URL, or null.
+     * response's `data` object, or null.
      *
-     * Bilibili nests the cookies either as separate query params, or as a single URL-encoded value
-     * (`SESSDATA=xxx%26bili_jct%3Dyyy%26DedeUserID%3Dzzz` decodes to `xxx&bili_jct=yyy&DedeUserID=zzz`).
-     * Both forms are handled by decoding the whole query string once before splitting.
+     * Bilibili's modern login endpoints return the cookies either as a `data.cookies` JSON object
+     * (preferred), or nested in the redirect URL (as separate query params or a single URL-encoded
+     * value). Both forms are handled here.
      */
-    private fun extractBilibiliCookie(url: String?): String? {
+    private fun extractBilibiliCookie(data: JsonObject): String? {
+        // Preferred: a `cookies` object like {"SESSDATA": "...", "bili_jct": "...", "DedeUserID": "..."}
+        data.obj("cookies")?.let { cookies ->
+            val parts = mutableListOf<String>()
+            for (key in listOf("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5")) {
+                val value = cookies.optString(key)
+                if (!value.isNullOrEmpty()) parts += "$key=$value"
+            }
+            if (parts.isNotEmpty()) return parts.joinToString("; ")
+        }
+
+        // Fallback: parse the redirect URL (older / third-party flows).
+        return extractBilibiliCookieFromUrl(data.optString("url"))
+    }
+
+    /** Extracts the Bilibili cookie string from a login redirect URL, or null. */
+    private fun extractBilibiliCookieFromUrl(url: String?): String? {
         if (url == null) return null
 
         fun collect(from: String): Map<String, String> {

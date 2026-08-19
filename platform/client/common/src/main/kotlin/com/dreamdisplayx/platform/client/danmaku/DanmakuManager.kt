@@ -115,14 +115,20 @@ object DanmakuManager {
             val prev = client.getAndSet(null)
             prev?.disconnect()
             status = "正在加载弹幕…"
+            logger.info("Danmaku switchToVideo display={} cid={}", displayId.uuid, cid)
             Thread {
+                val started = System.currentTimeMillis()
                 val entries = BilibiliApi.fetchDanmaku(cid)
+                val elapsed = System.currentTimeMillis() - started
                 synchronized(this) {
                     timedEntries = entries
                     timedIndex = 0
                     status = if (entries.isEmpty()) "暂无弹幕" else "已加载 ${entries.size} 条弹幕"
                 }
-                logger.info("Danmaku video loaded display={} cid={} count={}", displayId.uuid, cid, entries.size)
+                logger.info(
+                    "Danmaku video loaded display={} cid={} count={} elapsedMs={}",
+                    displayId.uuid, cid, entries.size, elapsed,
+                )
             }.apply { isDaemon = true }.start()
         }
 
@@ -131,7 +137,12 @@ object DanmakuManager {
          * Returns the newly due entries. Call on the client tick thread.
          */
         fun consumeTimed(positionSec: Double): List<DanmakuMessage> {
-            if (!isVideo || timedEntries.isEmpty()) return emptyList()
+            if (!isVideo) {
+                return emptyList()
+            }
+            if (timedEntries.isEmpty()) {
+                return emptyList()
+            }
             val due = ArrayList<DanmakuMessage>()
             synchronized(this) {
                 while (timedIndex < timedEntries.size && timedEntries[timedIndex].timeSec <= positionSec) {
@@ -145,6 +156,12 @@ object DanmakuManager {
                         color = entry.color,
                     )
                 }
+            }
+            if (due.isNotEmpty()) {
+                logger.info(
+                    "Danmaku consumed display={} at={}s due={} total={} idx={}",
+                    displayId.uuid, "%.1f".format(positionSec), due.size, timedEntries.size, timedIndex,
+                )
             }
             due.forEach { enqueue(it) }
             return due

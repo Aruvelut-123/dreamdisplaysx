@@ -144,7 +144,7 @@ object BilibiliApi {
 
     /** Fetches the danmaku XML body for [url], or null on failure. */
     private fun fetchDanmakuXml(url: String): String? = runCatching {
-        DreamHttpClient.readText(
+        val body = DreamHttpClient.readText(
             url,
             DreamHttpClient.RequestOptions(
                 headers = headers(),
@@ -152,11 +152,18 @@ object BilibiliApi {
                 readTimeoutMs = 15_000,
             ),
         )
-    }.onFailure { logger.debug("Danmaku fetch failed for {}: {}.", url, it.message) }.getOrNull()
+        logger.info("Danmaku XML fetched url={} bytes={}", url, body.length)
+        body
+    }.onFailure { e ->
+        logger.warn("Danmaku XML fetch FAILED url={} error={}", url, e.message ?: e::class.java.simpleName)
+    }.getOrNull()
 
     /** Parses a Bilibili danmaku XML document into sorted [DanmakuEntry]s. */
     internal fun parseDanmakuXml(xml: String): List<DanmakuEntry> {
-        if (xml.isBlank() || !xml.contains("<d ")) return emptyList()
+        if (xml.isBlank() || !xml.contains("<d ")) {
+            logger.warn("Danmaku XML parse skipped: blank={} hasDTag={}", xml.isBlank(), xml.contains("<d "))
+            return emptyList()
+        }
         val entries = ArrayList<DanmakuEntry>()
         val pattern = Regex("<d p=\"([^\"]*)\">([^<]*)</d>")
         for (match in pattern.findAll(xml)) {
@@ -169,6 +176,7 @@ object BilibiliApi {
             entries += DanmakuEntry(time, text, color)
         }
         entries.sortBy { it.timeSec }
+        logger.info("Danmaku XML parsed entries={}", entries.size)
         return entries
     }
 

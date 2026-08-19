@@ -1093,7 +1093,8 @@ class DisplayScreen(
             }
             // VOD / bangumi: consume timed danmaku as playback advances.
             val positionSec = currentTimeNanos / 1_000_000_000.0
-            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec).forEach { o.add(it) }
+            val due = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec)
+            if (due.isNotEmpty()) due.forEach { o.add(it) }
             messages.forEach { o.add(it) }
             o.tick()
         } else {

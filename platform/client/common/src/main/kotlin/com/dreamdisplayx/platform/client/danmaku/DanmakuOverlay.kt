@@ -62,6 +62,7 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
         )
         if (lines.size > 40) lines.removeAt(0)
         dirty = true
+        if (lines.size == 1) logger.info("Danmaku overlay first line added: {}", msg.text.take(30))
     }
 
     /** Advances scrolling; uploads the frame to GPU. Call once per client tick (main thread). */
