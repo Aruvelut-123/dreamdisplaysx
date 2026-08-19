@@ -140,6 +140,7 @@ dependencies {
     shadow(libs.exposedMigrationJdbc)
     shadow(libs.hikari)
     shadow(libs.newpipeExtractor)
+    shadow(libs.zxingCore)
 }
 
 neoForge {

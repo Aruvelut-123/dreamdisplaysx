@@ -1,7 +1,6 @@
 package com.dreamdisplayx.platform.client.login
 
 import com.dreamdisplayx.media.source.bilibili.BilibiliAuth
-import com.dreamdisplayx.media.source.bilibili.BilibiliAuth.LoginResult
 import com.dreamdisplayx.media.source.bilibili.BilibiliAuth.PollResult
 import net.minecraft.client.Minecraft
 import org.slf4j.LoggerFactory
@@ -79,19 +78,6 @@ object BilibiliLoginManager {
                 status = result.message
                 false
             }
-        }
-    }
-
-    /** Attempts a phone-number (or email) + password login. */
-    fun loginWithPassword(username: String, password: String) {
-        if (username.isBlank() || password.isBlank()) {
-            status = "请输入手机号和密码"
-            return
-        }
-        status = "正在登录..."
-        when (val result = BilibiliAuth.loginWithPassword(username, password)) {
-            is LoginResult.Success -> completeLogin(result.sessdata)
-            is LoginResult.Failure -> status = result.message
         }
     }
 

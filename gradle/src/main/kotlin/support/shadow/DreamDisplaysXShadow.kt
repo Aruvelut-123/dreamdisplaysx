@@ -49,6 +49,7 @@ val dreamDisplaysShadedDependencies = listOf(
     "com.google.protobuf:protobuf-javalite",
     "org.mozilla:rhino",
     "org.mozilla:rhino-engine",
+    "com.google.zxing:core",
 )
 
 /** Packages relocated under `com.dreamdisplayx.libs` in every fat loader jar. */
@@ -73,6 +74,7 @@ val dreamDisplaysShadedPackages = listOf(
     "com.google.protobuf",
     "org.mozilla.javascript",
     "org.mozilla.classfile",
+    "com.google.zxing",
 )
 
 /** Exclude `sqlite-jdbc` native binaries for unsupported platforms. */
