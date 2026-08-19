@@ -60,6 +60,16 @@ Remote: `origin https://github.com/Aruvelut-123/dreamdisplaysx.git` (branch `mai
 - Workflow YAML validated (python yaml.safe_load, all three OK).
 - Local test jars built (1.21.11): `build/libs/dreamdisplayx-fabric-1.21.11-1.9.1.1.jar` and
   `dreamdisplayx-neoforge-1.21.11-1.9.1.1.jar` (no native libs — cargo absent locally).
+- Task 7 (login, committed `7431b09` 2026-08-10): Bilibili-only platform login.
+  Server: `credentials/CredentialStore.kt` (AES-256-GCM, key file `credentials.key` + encrypted
+  `credentials.json`), `CredentialActions.kt` (login/logout/snapshotFor), `/display login bilibili
+  <sessdata>` / `/display logout bilibili` (Paper + Vanilla registrars), `PlatformCredentials` v2
+  packet (id 27) pushed on hello + login/logout from V2Paper/V2Fabric/V2NeoForge.
+  Client: `login/BilibiliLoginManager.kt` + `login/PlatformLoginScreen.kt` (`/dlogin` command,
+  Fabric + NeoForge) — QR-code login (scan with mobile app, poll every 2s) and phone+password
+  (RSA-encrypted via passport web key; CAPTCHA failures fall back to QR), ZXing QR rendering;
+  `BilibiliApi.sessdata` cookie used in playback requests. Compile-verified on 1.21.11
+  (core/media:source/client common/fabric/neoforge/server all green).
 
 ---
 
@@ -128,15 +138,14 @@ Remote: `origin https://github.com/Aruvelut-123/dreamdisplaysx.git` (branch `mai
   `display.default_volume` read path (`ServerConfigModel` line ~263) works after restart. Fix = make default volume
   flow reach all peers / apply server default when creating new displays.
 
-### 7. Login method + encrypted credential storage (user's own request, after issues)
+### 7. Login method + encrypted credential storage — DONE (committed 7431b09; Bilibili only)
 - "add the login method that allowed to login into corresponding platforms to get vip content or higher quality
   and store credentials to server encrypted only".
-- Plan: server-side credential store (encrypted at rest — AES-GCM with key from config/generated key file),
-  commands `/display login <platform> <token>` / `/display logout <platform>` (server), credentials handed to
-  authenticated client sessions (or used server-side for resolution). Platforms: YouTube cookies (yt-dlp),
-  Bilibili SESSDATA, Twitch OAuth. Resolvers currently run client-side (media/source is client-bundled) —
-  decide architecture: simplest = server stores encrypted; client requests token via existing v2 packet channel;
-  add `PlatformCredentials` to handshake or a new packet type. Keep compilable; document.
+- Implemented (Bilibili SESSDATA only, per user "only implment bilibili login for now"):
+  server-side encrypted credential store (AES-256-GCM, generated key file), `/display login bilibili
+  <sessdata>` / `/display logout bilibili` (Paper + Vanilla), `PlatformCredentials` v2 packet pushed
+  to the player's client on hello/login/logout, client `/dlogin` UI with QR + phone/password flows,
+  SESSDATA cookie wired into `BilibiliApi` playback requests. Twitch/YouTube left for later.
 
 ### 8. Singleplayer support (user's latest request: "make the mod works under singleplayer too")
 - Client.kt already handles `isLocalServer` / `hasSingleplayerServer()` (serverId "singleplayer") in fabric+neoforge.
