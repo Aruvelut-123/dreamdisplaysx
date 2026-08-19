@@ -706,9 +706,12 @@ jobs:
           # Set up environment for cargo-ndk
           export ANDROID_NDK_HOME="$NDK_PATH"
           
+          # cargo-ndk internally runs `cargo metadata` against the crate root and does not honor a
+          # bare `--manifest-path`, so it must run from native/ rather than the repo root.
+          cd native
+          
           # Build with cargo-ndk
           cargo ndk \
-            --manifest-path native/Cargo.toml \
             --target "${{ matrix.android.target }}" \
             --platform "$API_LEVEL" \
             --release \
