@@ -27,8 +27,9 @@ Compared to the original Dream Displays, this fork adds:
 - **Bilibili live danmaku** — live-room bullet comments (弹幕) scroll across the display while a `live.bilibili.com/<roomId>` video plays.
 - **Bilibili bangumi support** — `/bangumi/play/ep<id>` and `/ss<id>` (episodes / seasons / movies) URLs work, and **Bilibili movie / bangumi search results** are merged into the suggestion grid.
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display with `/display video rtmp://...`.
-- **Android support** — Android detection is now robust (multisignal: env vars, `/system/build.prop`, path fingerprints). The FFmpeg download caches to app-internal storage. On Android 10+ where arbitrary binaries cannot be `exec`'d, the mod falls back to system `ffmpeg` (PATH / Termux) with a `-Ddreamdisplayx.ffmpeg.path` override. The CI jar bundles native libav (`dreamdisplayx_lav.so` + FFmpeg shared libs via dlopen — no exec needed).
 - **Bilibili danmaku improvements** — HTML entities (`&lt;` &gt;`) are decoded in live and timed comments; danmaku unsubscribes when the video fails to start.
+- **Per-display danmaku settings** — manage Bilibili-style danmaku controls (opacity, font size, speed, display area, type filters) per-display in the config menu, with a global on/off in `config.yml`.
+- **Bilibili account info** — your avatar, nickname, and VIP badge are shown at the top-right of the display config screen.
 - **Maximum quality capped at 1080p** — the 60fps toggle and the 2160p/1440p quality tiers have been removed; the quality ladder stops at 1080p.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
 - **`gh-proxy.com` FFmpeg mirror** — the bundled FFmpeg downloads via a China-friendly mirror with fallback.
@@ -133,8 +134,8 @@ Done! To customize the display, look at it and press `Shift + RMB`
 | `/display on` / `/display off`                   | Server     | Toggle all displays                                       |
 | `/display login bilibili <sessdata>`             | Server     | Store your Bilibili credential (encrypted on disk)        |
 | `/display logout bilibili`                       | Server     | Remove your stored Bilibili credential                    |
-| `/dlogin`                                        | Client     | Open the Bilibili login screen (QR code or phone + password) |
-| `/share start` / `/share stop`                   | Client     | Start / stop streaming your screen to the server relay    |
+| `/dlogin`                                        | Client     | Open the Bilibili login screen (OP-only, only when not logged in) |
+| `/dlogoff`                                       | Client     | Log out of Bilibili (OP-only, only when logged in) |
 
 > **Bilibili login tip:** run `/dlogin` in-game and scan the QR code with the Bilibili mobile app.
 > On success the mod sends your `SESSDATA` to the server, which stores it encrypted and uses it to
