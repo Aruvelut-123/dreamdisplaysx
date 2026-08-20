@@ -18,4 +18,8 @@ package com.dreamdisplayx.api
     AnnotationTarget.TYPEALIAS,
 )
 
+<<<<<<<< HEAD:api/src/main/kotlin/com/dreamdisplayx/api/DreamDisplaysXUnstableApi.kt
 annotation class DreamDisplaysXUnstableApi
+========
+annotation class Unstable
+>>>>>>>> upstream/main:api/src/main/kotlin/com/dreamdisplayx/api/Unstable.kt

@@ -18,6 +18,7 @@ tasks.register<Exec>("buildHostNatives") {
     outputs.dir(file("$dir/target/release"))
 
     workingDir = dir
+    environment.remove("DEVELOPER_DIR")
     commandLine(cargo, "build", "--release")
     doFirst { logger.lifecycle("Building host natives with '$cargo' in $dir...") }
 }
@@ -26,5 +27,6 @@ tasks.register<Exec>("testHostNatives") {
     group = "native"
     description = "Runs the Rust native test suite (cargo test)."
     workingDir = projectDir
+    environment.remove("DEVELOPER_DIR")
     commandLine(cargoExecutable(), "test")
 }
