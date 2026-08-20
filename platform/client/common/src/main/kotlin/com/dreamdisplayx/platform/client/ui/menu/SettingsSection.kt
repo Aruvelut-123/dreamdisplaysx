@@ -119,31 +119,30 @@ class SettingsSection(
     ) {
         val font = Minecraft.getInstance().font
 
-        // Rows fully outside the visible area are skipped entirely (their controls keep their last
-        // placement off-screen and are drawn inside the scissor clip, so nothing leaks).
-        val visible = y + UiTheme.ROW_H > clipTop && y < clipBottom
+        // Always place the control and reset at the correct scroll position so they are never
+        // left at a stale visible position when the row scrolls off-screen. The scissor clip
+        // (applied by the caller) prevents them from leaking outside the row area.
+        var rightEdge = x + w
+        row.reset.place(UiRect(rightEdge - UiTheme.RESET_W, y, UiTheme.RESET_W, UiTheme.ROW_H))
+        rightEdge -= UiTheme.RESET_W + 4
+        val controlW = min(UiTheme.CONTROL_W, max(60, rightEdge - (x + 6 + labelColW + 8)))
+        row.control.place(UiRect(rightEdge - controlW, y, controlW, UiTheme.ROW_H))
 
-        g.fill(x, y, x + w, y + UiTheme.ROW_H, UiTheme.ROW_BG)
-        row.rowRect = UiRect(x, y, w, UiTheme.ROW_H)
+        // Rows fully outside the visible area are skipped entirely (their controls are placed above
+        // but clipped by the scissor, so nothing leaks).
+        val visible = y + UiTheme.ROW_H > clipTop && y < clipBottom
         if (!visible) {
             row.labelHover = null
             return
         }
 
+        g.fill(x, y, x + w, y + UiTheme.ROW_H, UiTheme.ROW_BG)
+        row.rowRect = UiRect(x, y, w, UiTheme.ROW_H)
+
         val label = Component.translatable(row.labelKey)
         val textY = y + UiTheme.ROW_H / 2 - font.lineHeight / 2
         g.drawText(font, label, x + 6, textY, UiTheme.TEXT_PRIMARY, false)
         row.labelHover = UiRect(x + 6, textY, font.width(label), font.lineHeight)
-
-        // Right-align the reset button to the panel's inner edge (x + w), matching the owner action
-        // buttons below; the old `- 4` inset left it 4px shy of them, looking misaligned.
-        var rightEdge = x + w
-        row.reset.place(UiRect(rightEdge - UiTheme.RESET_W, y, UiTheme.RESET_W, UiTheme.ROW_H))
-        rightEdge -= UiTheme.RESET_W + 4
-
-        // Size every control from the shared label column, so all rows get an identical control width.
-        val controlW = min(UiTheme.CONTROL_W, max(60, rightEdge - (x + 6 + labelColW + 8)))
-        row.control.place(UiRect(rightEdge - controlW, y, controlW, UiTheme.ROW_H))
     }
 
     /** Draws the vertical scrollbar along the right edge of the panel when rows overflow. */

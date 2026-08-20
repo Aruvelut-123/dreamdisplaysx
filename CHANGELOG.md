@@ -1,40 +1,14 @@
-# 1.9.2.2 Release
+# 1.9.2.1
 
 ## Highlights
 
-- **Per-display danmaku settings UI** — new Bilibili-style danmaku controls in the display config menu:
-  opacity, font size, speed, display area (with visual indicator), and type filters (scroll/top/bottom/color).
-  Global on/off toggle in `config.yml` (`danmaku-enabled`), per-display overrides in the settings UI.
-- **Bilibili account info displayed** — your avatar, nickname, and VIP badge (gold "大" / pink "V") now
-  appear at the top-right of the display config screen.
-- **Pause reliability improved** — warm park no longer requires the in-process libav decoder, so pausing
-  works consistently even with external-process FFmpeg.
-- **Command changes** — `/dlogin` is now OP-only and usable only when not logged in; new `/dlogoff` command
-  (OP-only, logged-in only) to log out of Bilibili without restarting.
-- **Android support removed** — all Android native builds, CI jobs, and code paths have been removed.
-- **Screenshare removed** — client-side screen sharing (`/share`) has been removed entirely.
-
-## Client
-
-### Features
-
-- Added per-display **danmaku settings** (opacity, font size, speed, display area, type filters)
-  in the display config menu, with reset buttons, overriding server defaults per display.
-- Added **Bilibili account label** (avatar, nickname, VIP badge) at the top-right of the display config screen.
-- Added `/dlogoff` command (OP-only, only when logged in) to log out of Bilibili.
-- `/dlogin` is now OP-only and only usable when not logged in.
-
-### Fixes
-
-- **Pause reliability**: `PlaybackSessionManager.suspend()` now always uses `canHoldWarm()` instead of
-  requiring `canPark()` (in-process libav), so pausing works with external-process FFmpeg too.
-- Downgraded "Seek can't go in place" log from `warn` to `debug` to reduce console noise.
-
-### Removed
-
-- **Android support**: removed all Android native builds, CI jobs (`build-android-natives`), and code
-  paths (OsInfo.isAndroid checks, Termux fallback, androidCacheRoot, etc.).
-- **Client-side screenshare**: removed `/share start` / `/share stop` commands and all related code.
+- **Per-display danmaku settings UI** — new Bilibili-style danmaku controls in the display config menu
+- **Global Bilibili login** — single account per server/network, broadcast to all players, OP-only
+- **Cross-server credential sync** — MySQL-based credential sharing across multiple servers
+- **Bilibili account info displayed** — avatar, nickname, and VIP badge at display config top-right
+- **Pause reliability improved** — warm park works with external-process FFmpeg
+- **Android support removed** — all Android native builds, CI jobs, and code paths removed
+- **Screenshare removed** — all screenshare packets and code removed
 
 # 1.9.2.1 Release
 

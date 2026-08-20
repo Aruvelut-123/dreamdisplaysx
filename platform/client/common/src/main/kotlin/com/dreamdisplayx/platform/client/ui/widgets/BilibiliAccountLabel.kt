@@ -66,8 +66,8 @@ object BilibiliAccountLabel {
             val info = BilibiliAccountInfo(
                 nickname = data.optString("uname") ?: data.optString("name") ?: "?",
                 avatarUrl = data.optString("face") ?: "",
-                vipType = data.obj("vip")?.optInt("vipType") ?: 0,
-                vipStatus = data.obj("vip")?.optInt("vipStatus") ?: 0,
+                vipType = data.obj("vip")?.optInt("type") ?: 0,
+                vipStatus = data.obj("vip")?.optInt("status") ?: 0,
                 level = data.obj("level_info")?.optInt("current_level") ?: 0,
             )
             this.cachedInfo = info

@@ -10,6 +10,7 @@ import com.dreamdisplayx.platform.client.Mod
 import com.dreamdisplayx.platform.client.capabilities.CapabilityNegotiationService
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
 
@@ -59,6 +60,7 @@ object ClientPacketManager {
             is PlatformCredentials -> {
                 ClientStateManager.bilibiliSessdata = packet.bilibiliSessdata
                 BilibiliApi.cookie = packet.bilibiliSessdata
+                BilibiliAccountLabel.invalidate()
                 if (packet.bilibiliRefreshToken.isNotEmpty()) {
                     com.dreamdisplayx.media.source.bilibili.BilibiliAuth.refreshToken = packet.bilibiliRefreshToken
                 }
