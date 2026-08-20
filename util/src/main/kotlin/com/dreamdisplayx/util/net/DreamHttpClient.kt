@@ -22,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
+import java.util.zip.Inflater
+import java.util.zip.InflaterInputStream
 
 /**
  * Shared blocking HTTP facade for bootstrap downloads, GitHub API requests, thumbnail fetches,
@@ -348,12 +350,31 @@ object DreamHttpClient {
         return out.toByteArray()
     }
 
-    private fun Response.bodyStream() =
-        if (header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true) {
-            GZIPInputStream(body.byteStream())
-        } else {
-            body.byteStream()
+    private fun Response.bodyStream(): java.io.InputStream {
+        val encoding = header("Content-Encoding")
+        return when {
+            encoding.equals("gzip", ignoreCase = true) -> GZIPInputStream(body.byteStream())
+            encoding.equals("deflate", ignoreCase = true) -> deflateInputStream(body.byteStream())
+            else -> body.byteStream()
         }
+    }
+
+    /**
+     * Opens an RFC 1951 raw-deflate stream (the format most servers mean by "deflate", including
+     * Bilibili's danmaku endpoint), falling back to the zlib-wrapped variant (RFC 1950) when the
+     * payload carries a zlib header. HTTP clients disagree over which one `Content-Encoding: deflate`
+     * identifies, so sniff the first bytes instead of guessing.
+     */
+    private fun deflateInputStream(raw: java.io.InputStream): java.io.InputStream {
+        val pushback = java.io.PushbackInputStream(raw, 2)
+        val first = pushback.read()
+        val second = pushback.read()
+        pushback.unread(second)
+        pushback.unread(first)
+        // zlib streams begin with 0x78 (CMF: deflate, 32K window) — raw deflate begins with arbitrary bits.
+        val zlibWrapped = first == 0x78 && second in intArrayOf(0x01, 0x5E, 0x9C, 0xDA)
+        return InflaterInputStream(pushback, Inflater(!zlibWrapped))
+    }
 
     private fun httpException(response: HttpResponse, url: String): IOException {
         val snippet = response.bodyString().take(500)

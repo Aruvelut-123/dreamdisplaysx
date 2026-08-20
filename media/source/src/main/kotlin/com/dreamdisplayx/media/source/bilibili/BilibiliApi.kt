@@ -136,10 +136,15 @@ object BilibiliApi {
      * sorted ascending for timed playback.
      */
     fun fetchDanmaku(cid: Long): List<DanmakuEntry> {
-        val xml = fetchDanmakuXml("https://api.bilibili.com/x/v1/dm/list.so?oid=$cid")
-            ?: fetchDanmakuXml("https://comment.bilibili.com/$cid.xml")
-            ?: return emptyList()
-        return parseDanmakuXml(xml)
+        val primary = fetchDanmakuXml("https://api.bilibili.com/x/v1/dm/list.so?oid=$cid")
+        val entries = primary?.let { parseDanmakuXml(it) }
+        if (entries.isNullOrEmpty()) {
+            // The primary endpoint can return an unexpected body (e.g. non-danmaku XML) or an empty
+            // pool; retry the legacy CDN endpoint before reporting no danmaku.
+            val fallback = fetchDanmakuXml("https://comment.bilibili.com/$cid.xml")
+            return fallback?.let { parseDanmakuXml(it) } ?: emptyList()
+        }
+        return entries
     }
 
     /** Fetches the danmaku XML body for [url], or null on failure. */
