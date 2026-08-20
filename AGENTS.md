@@ -113,12 +113,33 @@
 - Removed client-side screenshare code
 - Bilibili account label + dlogin/dlogoff commands
 
-## CI/CD
+## CI/CD & Versioning Rules
+
 - `_build.yml` — Main build workflow (multi-version)
 - `release.yml` — Release pipeline (dev/preview/release)
-- Version format: `1.9.2.1-dev` → CI outputs "Developer" for pre-release
-- CHANGELOG.md title should be `1.9.2.1` (no dev/preview suffix)
-- Build artifacts named per version + loader + MC version
+
+### Version Format
+- **Version in `gradle.properties`** always has `-dev` suffix (e.g. `1.9.2.1-dev`), matching upstream convention
+- CI workflow auto-detects version type from the version string:
+  - `1.9.2.1-dev` → **Developer** (pre-release)
+  - `1.9.2.1-preview.1` → **Preview 1** (pre-release)
+  - `1.9.2.1` → **Release** (full release)
+- `pretty_version` output: `1.9.2.1 Developer` / `1.9.2.1 Preview 1` / `1.9.2.1 Release`
+- GitHub Release tag: `v1.9.2.1` (no `-dev` suffix in tag)
+
+### CHANGELOG Rules
+- **Title** must include "Release" suffix: `# 1.9.2.1 Release` (even for dev/preview entries)
+- Never split a version into multiple sections — all entries for one version go under one `#`
+- When based on an upstream version, upstream's original changelog goes in a **separate section below**:
+  ```
+  # 1.9.2.1 Release
+  ...our fork's changes...
+
+  # 1.9.2 Release
+  ...upstream's original changelog...
+  ```
+- Never merge upstream changelog into our version's section
+- The CI release pipeline extracts the matching section from CHANGELOG.md by the `pretty_version` title
 
 ## Known Issues
 1. Danmaku track spacing doesn't scale with font size (hardcoded trackCount=8, 26px)
