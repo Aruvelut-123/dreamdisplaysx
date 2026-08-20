@@ -91,22 +91,21 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
     fun tick() {
         if (lines.isEmpty()) return
         val now = System.currentTimeMillis()
-        val it = lines.iterator()
-        while (it.hasNext()) {
-            val line = it.next()
+        // Build a new list instead of calling iterator.remove() on a CopyOnWriteArrayList,
+        // whose iterator snapshot does NOT support remove().
+        val kept = ArrayList<Line>(lines.size)
+        for (line in lines) {
             when (line.kind) {
-                Kind.SCROLL -> {
-                    if (line.x + line.text.length * 14f < -20f) it.remove()
-                    else {
-                        val idx = lines.indexOf(line)
-                        if (idx >= 0) lines[idx] = line.copy(x = line.x - line.speed)
-                    }
+                Kind.SCROLL -> if (line.x + line.text.length * 14f >= -20f) {
+                    kept += line.copy(x = line.x - line.speed)
                 }
-                Kind.TOP, Kind.BOTTOM -> {
-                    if (now - line.bornAtMillis > 5000) it.remove()
+                Kind.TOP, Kind.BOTTOM -> if (now - line.bornAtMillis <= 5000) {
+                    kept += line
                 }
             }
         }
+        lines.clear()
+        lines += kept
         if (lines.isNotEmpty() || dirty) {
             upload()
             dirty = false
