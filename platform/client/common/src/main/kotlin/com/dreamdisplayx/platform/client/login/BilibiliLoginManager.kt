@@ -97,6 +97,8 @@ object BilibiliLoginManager {
         // Send the refresh token along so the server can renew the session when it expires.
         val credential = if (refreshToken.isNotEmpty()) "$sessdata||$refreshToken" else sessdata
         sendServerCommand("display login bilibili $credential")
+        // Note: quality refresh happens on receipt of PlatformCredentials packet from the server,
+        // which echoes back the credential and sets BilibiliApi.cookie locally.
         status = "登录成功！凭据已加密保存到服务器"
         logger.info("Bilibili login succeeded; SESSDATA sent to the server (refresh token included={}).", refreshToken.isNotEmpty())
     }

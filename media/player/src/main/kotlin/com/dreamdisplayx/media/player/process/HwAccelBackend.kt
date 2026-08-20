@@ -6,7 +6,8 @@ import com.dreamdisplayx.util.OsInfo
  * Hardware-accelerated video decoder backends supported by `FFmpeg`.
  *
  * The intent is to offload H.264 / HEVC / VP9 / AV1 decoding from the CPU to the GPU's dedicated
- * video decode block (`NVDEC` on NVIDIA, `VCE` on AMD, `QuickSync` on Intel, the Apple VT block on macOS).
+ * video decode block (`NVDEC` on NVIDIA, `VCE` on AMD, `QuickSync` on Intel, the Apple VT block on
+ * macOS, `MediaCodec` on Android).
  */
 enum class HwAccelBackend(val ffmpegName: String?, val hwOutputFormat: String?, val lavCode: Int) {
     /** Apple platforms. Handles h264, hevc, vp9, prores. */
@@ -21,6 +22,9 @@ enum class HwAccelBackend(val ffmpegName: String?, val hwOutputFormat: String?, 
     /** NVIDIA CUDA / NVDEC are fastest on NVIDIA, but limited to NVIDIA cards. */
     CUDA("cuda", "cuda", 5),
 
+    /** Android `MediaCodec` — present on every Android device; BtbN's Android NDK builds ship it. */
+    MEDIACODEC("mediacodec", "mediacodec", 6),
+
     /** Software decoding only. */
     NONE(null, null, 0);
 
@@ -31,6 +35,7 @@ enum class HwAccelBackend(val ffmpegName: String?, val hwOutputFormat: String?, 
          * decode is worse than a stream that decodes a bit slower.
          */
         fun detectDefault(): HwAccelBackend = when {
+            OsInfo.isAndroid -> MEDIACODEC
             OsInfo.isMac -> VIDEOTOOLBOX
             OsInfo.isWindows -> D3D11VA
             OsInfo.isLinux -> VAAPI
@@ -55,6 +60,7 @@ enum class HwAccelBackend(val ffmpegName: String?, val hwOutputFormat: String?, 
             "cuda",
             "cuvid",
             "nvdec",
+            "mediacodec",
             "hardware acceleration",
             "failed setup for format",
             "no device available",

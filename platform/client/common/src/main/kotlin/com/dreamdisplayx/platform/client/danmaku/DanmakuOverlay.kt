@@ -39,12 +39,22 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
     private var textureId: Identifier? = null
     private var renderType: RenderType? = null
 
-    /** Active danmaku lines: (text, color, x position in px, y track, speed px/tick, mode kind). */
+    /** AWT font metrics for accurate text-width measurement. */
+    private val fontMetrics: java.awt.FontMetrics by lazy {
+        val font = java.awt.Font("Microsoft YaHei", java.awt.Font.BOLD, 20)
+        val img = java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.font = font
+        g.fontMetrics.also { g.dispose() }
+    }
+
+    /** Active danmaku lines: (text, color, x position in px, y track, speed px/tick, mode kind, pixel width). */
     private enum class Kind { SCROLL, TOP, BOTTOM }
 
     private data class Line(
         val text: String, val color: Int, val x: Float, val y: Int,
         val speed: Float, val kind: Kind, val bornAtMillis: Long,
+        val width: Int,
     )
 
     private val lines = CopyOnWriteArrayList<Line>()
@@ -65,9 +75,10 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
             5 -> Kind.TOP
             else -> Kind.SCROLL
         }
+        val textWidth = fontMetrics.stringWidth(msg.text)
         val x = when (kind) {
             Kind.SCROLL -> texW.toFloat()
-            else -> ((texW - msg.text.length * 14f) / 2f).coerceAtLeast(0f)
+            else -> ((texW - textWidth) / 2f).coerceAtLeast(0f)
         }
         val y = when (kind) {
             Kind.SCROLL -> pickTrack()
@@ -81,6 +92,7 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
         lines += Line(
             text = msg.text, color = msg.color, x = x, y = y,
             speed = speed, kind = kind, bornAtMillis = System.currentTimeMillis(),
+            width = textWidth,
         )
         if (lines.size > 40) lines.removeAt(0)
         dirty = true
@@ -96,7 +108,7 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
         val kept = ArrayList<Line>(lines.size)
         for (line in lines) {
             when (line.kind) {
-                Kind.SCROLL -> if (line.x + line.text.length * 14f >= -20f) {
+                Kind.SCROLL -> if (line.x + line.width >= -20f) {
                     kept += line.copy(x = line.x - line.speed)
                 }
                 Kind.TOP, Kind.BOTTOM -> if (now - line.bornAtMillis <= 5000) {

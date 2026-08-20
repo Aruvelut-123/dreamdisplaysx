@@ -188,7 +188,7 @@ class BilibiliDanmakuClient(
         val info = cmdObj["info"] as? JsonArray ?: return
         // info[0] = level etc, info[1] = metadata array where text lives at index 10.
         val meta = info.getOrNull(1) as? JsonArray ?: return
-        val text = (meta.getOrNull(10) as? JsonPrimitive)?.content?.trim() ?: return
+        val text = (meta.getOrNull(10) as? JsonPrimitive)?.content?.trim()?.htmlUnescape() ?: return
         if (text.isEmpty() || text.length > 200) return
 
         val colorRaw = (meta.getOrNull(3) as? JsonPrimitive)?.content?.toIntOrNull() ?: 0xFFFFFF
@@ -216,3 +216,49 @@ class BilibiliDanmakuClient(
     private fun readShort(buf: ByteString, off: Int): Int =
         ((buf[off].toInt() shl 8) or buf[off + 1].toInt())
 }
+
+/**
+ * Decodes HTML entities Bilibili embeds in danmaku text (live rooms send raw `&lt;` / `&gt;` /
+ * `&amp;` etc. in the JSON payload). Handles the named subset the API actually emits plus numeric
+ * `&#NN;` references; anything unknown is left as-is.
+ */
+internal fun String.htmlUnescape(): String {
+    if ('&' !in this) return this
+    val sb = StringBuilder(length)
+    var i = 0
+    while (i < length) {
+        val c = this[i]
+        if (c != '&') {
+            sb.append(c); i++; continue
+        }
+        val semi = indexOf(';', i + 1)
+        if (semi < 0 || semi - i > 10) {
+            sb.append(c); i++; continue
+        }
+        val token = substring(i + 1, semi)
+        val decoded: Char? = when {
+            token.startsWith("#") -> {
+                val num = token.drop(1)
+                val code = if (num.startsWith("x") || num.startsWith("X"))
+                    num.drop(1).toIntOrNull(16) else num.toIntOrNull(10)
+                code?.takeIf { it in 0..0x10FFFF }?.let { String(Character.toChars(it)).firstOrNull() }
+            }
+            else -> NAMED_ENTITIES[token]
+        }
+        if (decoded != null) {
+            sb.append(decoded); i = semi + 1
+        } else {
+            sb.append(c); i++
+        }
+    }
+    return sb.toString()
+}
+
+private val NAMED_ENTITIES: Map<String, Char> = mapOf(
+    "amp" to '&', "lt" to '<', "gt" to '>', "quot" to '"', "apos" to '\'',
+    "nbsp" to '\u00A0', "copy" to '\u00A9', "reg" to '\u00AE', "trade" to '\u2122',
+    "hellip" to '\u2026', "mdash" to '\u2014', "ndash" to '\u2013',
+    "lsquo" to '\u2018', "rsquo" to '\u2019', "ldquo" to '\u201C', "rdquo" to '\u201D',
+    "bull" to '\u2022', "middot" to '\u00B7', "euro" to '\u20AC', "yen" to '\u00A5',
+    "pound" to '\u00A3', "times" to '\u00D7', "divide" to '\u00F7',
+)

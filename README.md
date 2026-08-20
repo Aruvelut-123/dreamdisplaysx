@@ -25,13 +25,11 @@ Compared to the original Dream Displays, this fork adds:
 - **Bilibili account login** — a client-side login screen (`/dlogin`) with **QR-code scanning**. Your `SESSDATA` is stored **encrypted** on the server (AES-256-GCM)
   and is only pushed back to *your* client, unlocking higher quality / VIP Bilibili streams.
 - **Bilibili live danmaku** — live-room bullet comments (弹幕) scroll across the display while a `live.bilibili.com/<roomId>` video plays.
-- **Bilibili bangumi support** — `/bangumi/play/ep<id>` and `/ss<id>` (episodes / seasons / movies) URLs work.
-- **Screen sharing over the mod protocol** — press `/share start` in-game and your screen is streamed to the
-  server's relay, where others can watch it in a browser at the provided URL. No RTMP server needed; only works
-  on servers running the mod. (Windows, macOS, and Linux X11/Wayland; not available on Android.)
+- **Bilibili bangumi support** — `/bangumi/play/ep<id>` and `/ss<id>` (episodes / seasons / movies) URLs work, and **Bilibili movie / bangumi search results** are merged into the suggestion grid.
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display with `/display video rtmp://...`.
-- **Android support** — Android FFmpeg is built from source for `arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`
-  and shipped with the Android client build.
+- **Android support** — Android detection is now robust (multisignal: env vars, `/system/build.prop`, path fingerprints). The FFmpeg download caches to app-internal storage. On Android 10+ where arbitrary binaries cannot be `exec`'d, the mod falls back to system `ffmpeg` (PATH / Termux) with a `-Ddreamdisplayx.ffmpeg.path` override. The CI jar bundles native libav (`dreamdisplayx_lav.so` + FFmpeg shared libs via dlopen — no exec needed).
+- **Bilibili danmaku improvements** — HTML entities (`&lt;` &gt;`) are decoded in live and timed comments; danmaku unsubscribes when the video fails to start.
+- **Maximum quality capped at 1080p** — the 60fps toggle and the 2160p/1440p quality tiers have been removed; the quality ladder stops at 1080p.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
 - **`gh-proxy.com` FFmpeg mirror** — the bundled FFmpeg downloads via a China-friendly mirror with fallback.
 - Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.

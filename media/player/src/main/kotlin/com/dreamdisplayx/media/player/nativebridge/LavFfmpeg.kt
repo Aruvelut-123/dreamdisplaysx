@@ -64,6 +64,11 @@ object LavFfmpeg {
     /** Resolves the prebuilt shared build for this platform, or null when none is available. */
     private fun source(): Source? = when {
         OsInfo.isMac -> null
+        // Android 10+ forbids executing arbitrary binaries, and BtbN does not ship Android
+        // (bionic) shared builds — only glibc linuxarm64, which cannot run on Bionic.
+        // The CI-built Android native libav .so + FFmpeg shared libs are bundled in the jar
+        // under /dreamdisplayx-natives/linux-aarch64/; LavFfmpeg should not download anything.
+        OsInfo.isAndroid -> null
         OsInfo.isWindows -> {
             val arch = if (OsInfo.isArm64) "winarm64" else "win64"
             Source(assetRegex(arch, "zip"), isTarXz = false, libDir = "bin")

@@ -11,9 +11,8 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
   and CI apt mirror fix.
 - Fork: renamed mod / plugin to **Dream DisplaysX** (`dreamdisplayx`).
 - Built-in Simplified Chinese translations (`zh_cn.json`); Crowdin integration removed.
-- Bilibili bangumi / movie URL support (`/bangumi/play/ep<id>` and `/bangumi/play/ss<id>`).
-- Client-side screen sharing: `/share <rtmp-url>` pushes your screen over RTMP (Linux X11 +
-  XWayland, Windows, macOS; not available on Android).
+- Bilibili bangumi / movie URL support (`/bangumi/play/ep<id>` and `/bangumi/play/ss<id>`), plus
+  **Bilibili movie / bangumi search results** merged into the suggestion grid.
 - CI builds the Android FFmpeg from source per ABI, matching the desktop 8.1.x series.
 - Fixed Bilibili danmaku fetching (deflate `Content-Encoding` support in `DreamHttpClient`).
 - CI publishes to GitHub only (no Modrinth upload, no personal access token).
@@ -23,9 +22,35 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
 ### Features
 
 - Added `zh_cn.json` with a full Simplified Chinese translation of the interface.
-- Added client-side screen sharing (`/share`) backed by FFmpeg capture devices
-  (`x11grab` / `gdigrab` / `avfoundation`); Android is intentionally unsupported.
 - Added Bilibili bangumi / movie playback for `ep` / `ss` URLs.
+- **Bilibili search now covers movies and bangumi** (`media_bangumi` / `pgc` endpoints) in
+  addition to regular videos; results open the matching `ep` / `ss` URL automatically.
+- **Android compatibility hardening**:
+  - The FFmpeg download is cached in app-internal storage (`java.io.tmpdir`) instead of the
+    game directory, which sits on `noexec` emulated storage on most launchers.
+  - Android is detected robustly even though `os.name` reads "Linux" under
+    PojavLauncher / FCL / Zalith (env vars, `/system/build.prop`, path fingerprints).
+  - Android 10+ forbids executing arbitrary binaries, so the bundled download is skipped there;
+    the mod falls back to a system `ffmpeg` (PATH / Termux), or accepts a manual override via
+    `-Ddreamdisplayx.ffmpeg.path=<path>` / `DREAMDISPLAYX_FFMPEG_PATH`. Downloaded binaries are
+    verified executable before use, and the CI jar works through the bundled native libav
+    (`dreamdisplayx_lav.so` + FFmpeg shared libs, loaded via dlopen — no exec needed).
+  - Added a **MEDIACODEC** hardware-acceleration backend, used by default on Android.
+- **Quality settings**: removed the 60fps toggle; maximum quality is now capped at 1080p
+  (2160p / 1440p were dropped from the quality ladder). The faster 60fps CDN variants also
+  avoid the previous 403s because their domains are allowed for Referer forwarding now.
+
+### Fixes
+
+- **Bilibili 60fps / CDN streams no longer 403**: the Referer allow-list now covers
+  `mcdn.bilivideo.cn`, `mountaintoys.cn`, `bilivideo.cn` and `szbdyd.com` (was `bilivideo.com`
+  / `hdslb.com` only), so high-quality CDN fetches keep the Referer header.
+- **Danmaku text is HTML-unescaped** (`&lt;` / `&gt;` / `&amp;` … show as `<` `>` `&`) for both
+  live WebSocket messages and timed comments.
+- **Danmaku unsubscribes when the video fails to start**, instead of continuing to load comment
+  data against a dead player.
+- Danmaku overlay stops scrolling while the video is paused, and single-character / short
+  danmaku are measured with the real font metrics (no more oversized pills).
 
 ## Server
 

@@ -24,14 +24,18 @@ data class BilibiliPlayback(
     val isSeekable: Boolean,
 )
 
-/** One video card from a BIlibili keyword search. */
+/** One search-result card from a BIlibili keyword search (video / bangumi / media). */
 data class BilibiliSearchItem(
-    val bvid: String,
+    val bvid: String? = null,
     val title: String,
     val uploader: String?,
     val thumbnailUrl: String?,
     val durationSec: Long?,
     val viewCount: Long?,
+    /** Bangumi / movie episode id (market `bangumi/play/ep<id>`), null for plain videos. */
+    val epId: Long? = null,
+    /** Bangumi / movie season id (market `bangumi/play/ss<id>`), null for plain videos. */
+    val seasonId: Long? = null,
 )
 
 /**
@@ -205,6 +209,60 @@ object BilibiliApi {
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("pic")),
                 durationSec = parseSearchDuration(item.optString("duration")),
                 viewCount = item.optLong("play"),
+            )
+        }
+    }
+
+    /**
+     * Keyword bangumi (anime / series) search; results are keyed by `ep_id` / `season_id` instead of
+     * `bvid`, so they render as cards whose tap target is a `bangumi/play/...` URL.
+     */
+    fun searchBangumi(keyword: String, page: Int = 1): List<BilibiliSearchItem> {
+        val params = mapOf("search_type" to "media_bangumi", "keyword" to keyword, "page" to page.toString())
+        val root = getJson("https://api.bilibili.com/x/web-interface/wbi/search/type?${signedQuery(params)}")
+        val results = root?.obj("data")?.array("result")?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
+        return results.mapNotNull { item ->
+            val seasonId = item.optLong("season_id") ?: return@mapNotNull null
+            BilibiliSearchItem(
+                title = stripHighlightTags(item.optString("title").orEmpty()),
+                uploader = buildString {
+                    item.optString("areas")?.takeIf { it.isNotEmpty() }?.let { append(it) }
+                    item.optString("styles")?.takeIf { it.isNotEmpty() }?.let {
+                        if (isNotEmpty()) append(" · "); append(it)
+                    }
+                }.takeIf { it.isNotEmpty() },
+                thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),
+                durationSec = null, // Bangumi search results do not carry a duration
+                viewCount = item.optLong("play"),
+                epId = item.optLong("ep_id"),
+                seasonId = seasonId,
+            )
+        }
+    }
+
+    /** Keyword media (movie / TV / documentary) search, keyed by `ep_id` / `season_id` like [searchBangumi]. */
+    fun searchMedia(keyword: String, page: Int = 1): List<BilibiliSearchItem> {
+        val params = mapOf("search_type" to "pgc", "keyword" to keyword, "page" to page.toString())
+        val root = getJson("https://api.bilibili.com/x/web-interface/wbi/search/type?${signedQuery(params)}")
+        val results = root?.obj("data")?.array("result")?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
+        return results.mapNotNull { item ->
+            val seasonId = item.optLong("season_id") ?: return@mapNotNull null
+            val gotoType = item.optString("goto")
+            // "movie" only, so TV dramas / documentaries do not flood the movie results
+            if (gotoType != null && gotoType.isNotEmpty() && gotoType != "movie") return@mapNotNull null
+            BilibiliSearchItem(
+                title = stripHighlightTags(item.optString("title").orEmpty()),
+                uploader = buildString {
+                    item.optString("areas")?.takeIf { it.isNotEmpty() }?.let { append(it) }
+                    item.optString("styles")?.takeIf { it.isNotEmpty() }?.let {
+                        if (isNotEmpty()) append(" · "); append(it)
+                    }
+                }.takeIf { it.isNotEmpty() },
+                thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),
+                durationSec = null,
+                viewCount = item.optLong("play"),
+                epId = item.optLong("ep_id"),
+                seasonId = seasonId,
             )
         }
     }

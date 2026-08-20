@@ -28,7 +28,7 @@ object MediaHosts {
         MediaPlatform.TWITCH to listOf("twitch.tv", "ttvnw.net", "jtvnw.net", "live-video.net"),
         MediaPlatform.VIMEO to listOf("vimeo.com", "vimeocdn.com"),
         MediaPlatform.KICK to listOf("kick.com"),
-        MediaPlatform.BILIBILI to listOf("bilibili.com", "hdslb.com", "bilivideo.com"),
+        MediaPlatform.BILIBILI to listOf("bilibili.com", "hdslb.com", "bilivideo.com", "mountaintoys.cn", "bilivideo.cn", "szbdyd.com"),
     )
 
     /** The site each platform's CDNs expect to be linked from, for the ones that check. */

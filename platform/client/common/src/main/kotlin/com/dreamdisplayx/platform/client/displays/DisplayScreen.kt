@@ -1086,10 +1086,13 @@ class DisplayScreen(
     private fun advanceDanmaku() {
         val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
         // VOD / bangumi: consume timed danmaku as playback advances.
+        // When paused, positionSec is frozen so consumeTimed naturally returns nothing — safe.
         val positionSec = currentTimeNanos / 1_000_000_000.0
         val due = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec)
-        // Live: drain newly arrived messages (removes from the queue so they are not re-added).
-        val live = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.drainLive(did)
+        // Live: skip draining when paused so messages accumulate in the queue (bounded at 80).
+        // Otherwise they would pile into the overlay while tick is frozen, causing a burst on resume.
+        val live = if (isPaused) emptyList()
+            else com.dreamdisplayx.platform.client.danmaku.DanmakuManager.drainLive(did)
         val overlay = danmakuOverlay
         if (due.isNotEmpty() || live.isNotEmpty() || overlay != null) {
             val o = overlay ?: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(width, height).also {
@@ -1097,7 +1100,8 @@ class DisplayScreen(
             }
             due.forEach { o.add(it) }
             live.forEach { o.add(it) }
-            o.tick()
+            // Do not advance scrolling / expiry when the video is paused.
+            if (!isPaused) o.tick()
         } else {
             overlay?.dispose()
             danmakuOverlay = null
@@ -1153,7 +1157,7 @@ class DisplayScreen(
         private const val DEFAULT_QUALITY = 1080
 
         /** Quality rungs [applyDistanceSteps] moves down through, highest to lowest. */
-        private val QUALITY_LADDER = intArrayOf(2160, 1440, 1080, 720, 480, 360, 240, 144)
+        private val QUALITY_LADDER = intArrayOf(1080, 720, 480, 360, 240, 144)
 
         /** Distance quality step down-thresholds as render-distance fraction. */
         private val DISTANCE_STEP_THRESHOLDS = floatArrayOf(0.66f, 0.75f)

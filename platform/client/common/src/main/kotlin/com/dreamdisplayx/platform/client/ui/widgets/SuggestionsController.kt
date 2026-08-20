@@ -252,7 +252,14 @@ class SuggestionsController {
                         // then, only its truly popular hits) when the player is typing Chinese themselves.
                         val bilibiliDeferred = if (looksChinese(q)) {
                             async {
-                                runCatching { withContext(Dispatchers.IO) { BilibiliApi.searchVideos(q) } }
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        val videos = BilibiliApi.searchVideos(q)
+                                        val bangumi = BilibiliApi.searchBangumi(q)
+                                        val media = BilibiliApi.searchMedia(q)
+                                        videos + bangumi + media
+                                    }
+                                }
                                     .onFailure { if (it is CancellationException) throw it; logger.debug("Bilibili search failed: ${it.message}") }
                                     .getOrNull()
                                     ?.filter { (it.viewCount ?: 0L) >= BILIBILI_MIN_VIEWS }
@@ -364,9 +371,19 @@ class SuggestionsController {
         logger.debug("Twitch live-channel lookup failed for '$login': ${e.message}.")
     }.getOrNull()
 
-    /** Builds a search-result card for a BIlibili video hit, keyed by its watch URL like other platform cards. */
+    /** Builds a search-result card for a BIlibili hit — video by `bvid`, bangumi/movie by `epId`/`seasonId`. */
     private fun bilibiliSearchResult(item: BilibiliSearchItem): MediaSearchResult {
-        val url = "https://www.bilibili.com/video/${item.bvid}"
+        val url = when {
+            !item.bvid.isNullOrEmpty() -> "https://www.bilibili.com/video/${item.bvid}"
+            item.epId != null -> "https://www.bilibili.com/bangumi/play/ep${item.epId}"
+            item.seasonId != null -> "https://www.bilibili.com/bangumi/play/ss${item.seasonId}"
+            else -> return MediaSearchResult(
+                id = "", title = item.title, uploader = item.uploader,
+                durationSec = item.durationSec, viewCount = item.viewCount,
+                watchUrlOverride = null, thumbnailUrlOverride = item.thumbnailUrl,
+                platform = MediaPlatform.BILIBILI,
+            )
+        }
         return MediaSearchResult(
             id = url,
             title = item.title,

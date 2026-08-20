@@ -12,8 +12,17 @@ object MediaStreamSelector {
     private val realtimeSafeSelection: Boolean =
         System.getProperty("dreamdisplayx.stream.realtimeSafe", "true").toBoolean()
 
-    /** Default 60 fps preference. Can be overridden by system property. */
-    private val defaultPreferFps60: Boolean = System.getProperty("dreamdisplayx.stream.prefer60", "false").toBoolean()
+    /**
+     * Default 60 fps preference. Overridden by system property or by the client when the user
+     * toggles the "60 fps" quality option ([com.dreamdisplayx.api.media.player.PlaybackHost] consumers
+     * set this from their own config).
+     */
+    @JvmStatic
+    /**
+     * Whether to prefer 60 fps streams (e.g. Bilibili 1080p60) for the current quality when available.
+     * Universally disabled; the 60fps feature was removed for stability.
+     */
+    var prefer60fps: Boolean = false
 
     /** Default 60 fps penalty. Can be overridden by system property. */
     private val defaultFps60Penalty: Int =
@@ -74,7 +83,7 @@ object MediaStreamSelector {
      * the closest stream above it only when nothing at-or-below is available — a quality setting is
      * a ceiling, not just a target to get near, so this never silently serves more than asked for.
      */
-    fun pickVideo(streams: List<MediaStream>?, target: Int, preferFps60: Boolean = defaultPreferFps60): MediaStream? {
+    fun pickVideo(streams: List<MediaStream>?, target: Int, preferFps60: Boolean = prefer60fps): MediaStream? {
         if (streams.isNullOrEmpty()) return null
         return streams.asSequence()
             .filter { it.height != null }
@@ -94,7 +103,7 @@ object MediaStreamSelector {
      * Human-readable selector explanation for debug logs. Keep it allocation-only-on-debug by
      * calling this from debug-only branches.
      */
-    fun describeVideoChoice(stream: MediaStream?, target: Int, preferFps60: Boolean = defaultPreferFps60): String {
+    fun describeVideoChoice(stream: MediaStream?, target: Int, preferFps60: Boolean = prefer60fps): String {
         if (stream == null) return "none target=${target}p"
         return "selected=${stream.height ?: "?"}p" +
                 " fps=${stream.fps ?: "?"}" +

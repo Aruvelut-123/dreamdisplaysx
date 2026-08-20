@@ -66,6 +66,8 @@ object ClientPacketManager {
                 }
                 if (packet.bilibiliSessdata.isNotEmpty()) {
                     logger.info("Received Bilibili login credential from the server.")
+                    // Refresh quality on all active displays — login may unlock higher-quality streams.
+                    DisplayRegistry.screens.values.forEach { it.reloadQuality() }
                 }
             }
             is DisplayDelete -> handleDelete(packet)
