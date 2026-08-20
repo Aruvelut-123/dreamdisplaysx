@@ -1087,13 +1087,16 @@ class DisplayScreen(
         val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
         val messages = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.queue(did)
         val overlay = danmakuOverlay
-        if (messages != null && messages.isNotEmpty()) {
+
+        // VOD / bangumi: consume timed danmaku regardless of the current queue state — the queue
+        // starts empty and only fills as consumeTimed() drains timedEntries into it.
+        val positionSec = currentTimeNanos / 1_000_000_000.0
+        val due = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec)
+
+        if (messages != null && (messages.isNotEmpty() || due.isNotEmpty() || overlay != null)) {
             val o = overlay ?: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(width, height).also {
                 danmakuOverlay = it
             }
-            // VOD / bangumi: consume timed danmaku as playback advances.
-            val positionSec = currentTimeNanos / 1_000_000_000.0
-            val due = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec)
             if (due.isNotEmpty()) due.forEach { o.add(it) }
             messages.forEach { o.add(it) }
             o.tick()

@@ -32,7 +32,6 @@ import com.dreamdisplayx.platform.client.net.Packets
 import com.dreamdisplayx.platform.client.net.V2Payload
 import com.dreamdisplayx.platform.client.platform.FabricPlatformIntegrationProvider
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
-import com.dreamdisplayx.platform.client.render.UnshadedDisplayPass
 import com.dreamdisplayx.platform.client.screenshare.ScreenShareCommand
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
@@ -104,11 +103,7 @@ class Client : ClientModInitializer, Mod {
         /*WorldRenderEvents.AFTER_ENTITIES.register { context ->
             val mc = Minecraft.getInstance()
             if (mc.level != null && mc.player != null) {
-                val stack = worldPoseStack(context)
-                val camera = mainCamera(mc)
-                if (!UnshadedDisplayPass.capture(stack, camera)) {
-                    ScreenRenderer.render(stack, camera)
-                }
+                ScreenRenderer.render(worldPoseStack(context), mainCamera(mc))
                 DisplayRegistry.getScreens().forEach { it.renderPopout() }
             }
         }*/
@@ -212,10 +207,6 @@ class Client : ClientModInitializer, Mod {
             return
         }
 
-        if (UnshadedDisplayPass.capture(context.poseStack(), camera)) {
-            return
-        }
-
         val submitNodeCollector = runCatching {
             val method = submitNodeCollectorMethod
                 ?.takeIf { it.declaringClass.isAssignableFrom(context.javaClass) }
@@ -244,11 +235,7 @@ class Client : ClientModInitializer, Mod {
         if (!hasBufferSource(context)) {
             return
         }
-        val camera = mainCamera(mc)
-        if (UnshadedDisplayPass.capture(context.poseStack(), camera)) {
-            return
-        }
-        renderWithBufferSource(context, camera)
+        renderWithBufferSource(context, mainCamera(mc))
     }
 
     /** If the `LevelRenderContext` has a `BufferSource` API, returns true. */
