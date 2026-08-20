@@ -512,6 +512,7 @@ class DisplayMenu private constructor(
         val ds = displayScreen
 
         modLabel.draw(g, UiTheme.SCREEN_PADDING, 6)
+        BilibiliAccountLabel.draw(g, width, font.lineHeight)
         resyncQualitySlider()
         resyncModeSlider()
         audio3d.syncToCurrent()

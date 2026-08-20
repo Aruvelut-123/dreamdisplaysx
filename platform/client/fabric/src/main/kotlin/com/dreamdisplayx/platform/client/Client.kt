@@ -27,8 +27,12 @@ import net.minecraft.resources.Identifier
 import com.dreamdisplayx.api.platform.service.keys.PlatformServices
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.platform.client.login.BilibiliLoginManager
 import com.dreamdisplayx.platform.client.login.PlatformLoginScreen
+import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.net.Packets
+import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
+import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.platform.client.net.V2Payload
 import com.dreamdisplayx.platform.client.platform.FabricPlatformIntegrationProvider
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
@@ -126,15 +130,42 @@ class Client : ClientModInitializer, Mod {
 
         ClientTickEvents.END_CLIENT_TICK.register { Initializer.onEndTick(it) }
 
-        // Opens the Bilibili login screen (QR code / phone + password).
+        // Opens the Bilibili login screen (QR code / phone + password) — only usable when not
+        // already logged in and when the player is OP on the server.
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
                 clientLiteral("dlogin")
+                    .requires { ClientStateManager.isAdmin }
                     .executes {
+                        if (BilibiliApi.cookie.isNotBlank()) {
+                            Minecraft.getInstance().player?.displayClientMessage(
+                                net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false
+                            )
+                            return@executes 1
+                        }
                         //? if >=26.2 {
                         Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
                         //?} else
                         /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
+                        1
+                    }
+            )
+            dispatcher.register(
+                clientLiteral("dlogoff")
+                    .requires { ClientStateManager.isAdmin }
+                    .executes {
+                        if (BilibiliApi.cookie.isBlank()) {
+                            Minecraft.getInstance().player?.displayClientMessage(
+                                net.minecraft.network.chat.Component.literal("§eNot logged in."), false
+                            )
+                            return@executes 1
+                        }
+                        BilibiliLoginManager.logout()
+                        BilibiliApi.cookie = ""
+                        BilibiliAccountLabel.invalidate()
+                        Minecraft.getInstance().player?.displayClientMessage(
+                            net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."), false
+                        )
                         1
                     }
             )

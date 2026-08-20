@@ -5,8 +5,12 @@ import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.login.PlatformLoginScreen
 import com.dreamdisplayx.platform.client.platform.NeoForgePlatformIntegrationProvider
 import com.dreamdisplayx.api.platform.service.keys.PlatformServices
+import com.dreamdisplayx.platform.client.login.BilibiliLoginManager
+import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
+import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
 import com.dreamdisplayx.platform.client.Mod as DreamMod
+import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.mojang.blaze3d.systems.RenderSystem
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
@@ -47,14 +51,42 @@ class Client(modEventBus: IEventBus) : DreamMod {
 
     /** Registers client-side commands. */
     private fun onRegisterClientCommands(event: RegisterClientCommandsEvent) {
-        // Opens the Bilibili login screen (QR code / phone + password).
+        // Opens the Bilibili login screen (QR code / phone + password) — only usable when not
+        // already logged in and when the player is OP on the server.
         event.dispatcher.register(
             Commands.literal("dlogin")
+                .requires { ClientStateManager.isAdmin }
                 .executes {
+                    if (BilibiliApi.cookie.isNotBlank()) {
+                        Minecraft.getInstance().player?.displayClientMessage(
+                            net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false
+                        )
+                        return@executes 1
+                    }
                     //? if >=26.2 {
                     Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
                     //?} else
                     /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
+                    1
+                }
+        )
+        // Logs out of Bilibili — only usable when logged in and OP.
+        event.dispatcher.register(
+            Commands.literal("dlogoff")
+                .requires { ClientStateManager.isAdmin }
+                .executes {
+                    if (BilibiliApi.cookie.isBlank()) {
+                        Minecraft.getInstance().player?.displayClientMessage(
+                            net.minecraft.network.chat.Component.literal("§eNot logged in."), false
+                        )
+                        return@executes 1
+                    }
+                    BilibiliLoginManager.logout()
+                    BilibiliApi.cookie = ""
+                    BilibiliAccountLabel.invalidate()
+                    Minecraft.getInstance().player?.displayClientMessage(
+                        net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."), false
+                    )
                     1
                 }
         )
