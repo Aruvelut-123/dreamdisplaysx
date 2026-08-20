@@ -139,18 +139,6 @@ class Client : ClientModInitializer, Mod {
                     }
             )
         }
-            dispatcher.register(
-                clientLiteral("dlogin")
-                    .executes {
-                        //? if >=26.2 {
-                        Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
-                        //?} else
-                        /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
-                        1
-                    }
-            )
-        }
-
         ClientPlayConnectionEvents.JOIN.register { _, _, client ->
             if (client.level != null && client.player != null) {
                 val serverId = if (client.isLocalServer) "singleplayer"
