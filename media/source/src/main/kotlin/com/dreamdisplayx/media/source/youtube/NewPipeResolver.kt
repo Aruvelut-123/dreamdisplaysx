@@ -12,10 +12,13 @@ import com.dreamdisplayx.media.source.youtube.newpipe.NewPipeLadderTracker
 import com.dreamdisplayx.media.source.youtube.newpipe.NewPipeResolved
 import com.dreamdisplayx.media.source.youtube.newpipe.NewPipeStreamExtraction
 import com.dreamdisplayx.media.source.youtube.newpipe.YtHttpDownloader
+import com.dreamdisplayx.util.DreamCoroutines
+import com.dreamdisplayx.util.net.DreamHttpClient
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.github.benmanes.caffeine.cache.Expiry
 import kotlinx.atomicfu.atomic
+import kotlinx.coroutines.launch
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.services.youtube.YoutubeJavaScriptPlayerManager
 import org.slf4j.LoggerFactory
@@ -126,6 +129,21 @@ object NewPipeResolver : MediaResolverService {
         }.onFailure { e ->
             initialized.value = false
             logger.warn("NewPipe init failed: ${e.message}.")
+        }
+    }
+
+    /** Warms the TLS connection to YouTube on server join, cutting the first-resolve handshake latency. */
+    fun warmConnection() {
+        DreamCoroutines.clientIo.launch {
+            runCatching {
+                DreamHttpClient.executeLimited(
+                    "https://www.youtube.com/",
+                    maxBytes = 1,
+                    DreamHttpClient.RequestOptions(method = "HEAD", connectTimeoutMs = 5_000, readTimeoutMs = 5_000),
+                )
+            }.onFailure { e ->
+                logger.debug("Connection warmup to youtube.com failed: {}", e.message)
+            }
         }
     }
 

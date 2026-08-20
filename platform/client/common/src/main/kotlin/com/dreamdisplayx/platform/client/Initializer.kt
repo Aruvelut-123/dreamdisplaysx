@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client
 
 import com.dreamdisplayx.api.runtime.registry.service.getOrNull
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
+import com.dreamdisplayx.media.source.youtube.NewPipeResolver
 import com.dreamdisplayx.platform.client.core.ClientApplication
 import com.dreamdisplayx.platform.client.core.ClientLifecycleEvent
 import com.dreamdisplayx.platform.client.core.DreamServices
@@ -52,6 +53,7 @@ object Initializer {
     fun onServerJoined(serverId: String) {
         ClientStateManager.connectedServerId = serverId
         DisplayRegistry.loadScreensForServer(serverId)
+        NewPipeResolver.warmConnection()
         DreamServices.registry.getOrNull<ClientApplication>()
             ?.emit(ClientLifecycleEvent.ServerJoined(serverId))
     }
