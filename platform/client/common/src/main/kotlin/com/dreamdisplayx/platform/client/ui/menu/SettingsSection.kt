@@ -168,7 +168,7 @@ class SettingsSection(
         val start = top + (scrollOffset.toFloat() / maxScroll * (viewH - len)).toInt()
         //? if >=1.21.11 {
         val hovered = mouseY >= start && mouseY <= start + len
-        g.fill(barX, start, barX + barW, start + len, if (hovered) 0xFFA0A0A0 else UiTheme.SCROLLBAR_THUMB)
+        g.fill(barX, start, barX + barW, start + len, if (hovered) 0xFFA0A0A0.toInt() else UiTheme.SCROLLBAR_THUMB)
         //?} else
         /*g.fill(barX, start, barX + barW, start + len, UiTheme.SCROLLBAR_THUMB)*/
         thumbStart = start

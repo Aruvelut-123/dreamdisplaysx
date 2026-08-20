@@ -68,18 +68,6 @@ allow_forced = true
 # Quality cap in pixels of height; clamped down further to the source's own max
 quality_cap = 1080
 
-[screen_share]
-# Mod-protocol screen sharing relay (clients push their screen over the mod's own packets;
-# viewers pull it through an internal HTTP endpoint). Only used on modded servers.
-enabled = true
-
-# Port the relay HTTP endpoint listens on for viewers.
-port = 28960
-
-# Hostname/address viewers use to reach this server (for the watch URL handed to the sharer).
-# Blank = "localhost" (fine for singleplayer / LAN). Set to your public IP or domain for internet play.
-public_host = ""
-
 [reports]
 # Report settings
 # webhook_url is a discord webhook URL for sending reports
@@ -130,3 +118,5 @@ fullscreen_stop = "dreamdisplayx.fullscreen.stop"       # Default: operator
 fullscreen_list = "dreamdisplayx.fullscreen.list"       # Default: operator
 fullscreen_network = "dreamdisplayx.fullscreen.network" # Default: operator
 remote = "dreamdisplayx.remote"                         # Default: operator
+login = "dreamdisplayx.login"                           # Default: operator
+logout = "dreamdisplayx.logout"                         # Default: operator

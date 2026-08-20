@@ -9,7 +9,6 @@ import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.core.protocol.common.packets.*
 import com.dreamdisplayx.platform.server.PaperServer
-import com.dreamdisplayx.platform.server.cast.CastManager
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.PlayerManager
@@ -104,13 +103,6 @@ object PaperV2Networking : PluginMessageListener {
             } else {
                 PipPinManager.unpin(player.uniqueId, packet.id)
             }
-
-            is ScreenShareStart -> CastManager.handleStart(packet.castId, packet.width, packet.height)?.let { url ->
-                send(listOf(player), ScreenShareAck(packet.castId, url))
-            }
-
-            is ScreenShareData -> CastManager.handleData(packet.castId, packet.sequence, packet.payload)
-            is ScreenShareStop -> CastManager.handleStop(packet.castId)
 
             else -> logger.debug("Ignoring non-serverbound v2 packet {}.", packet::class.simpleName)
         }

@@ -88,8 +88,9 @@ object CommandRegistrar {
         .then(logoutSubCommand())
         .build()
 
-    /** `/display login <platform> <token>` — saves an encrypted credential for the player. */
+    /** `/display login <platform> <token>` — saves an encrypted global credential (OP-only) and broadcasts to all players. */
     private fun loginSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")
+        .requires { it.sender.isOp || it.sender.hasPermission(PaperServer.config.permissions.login) }
         .then(
             Commands.argument("platform", StringArgumentType.word())
                 .then(
@@ -107,27 +108,36 @@ object CommandRegistrar {
                                 sender.sendMessage(Component.text("Unsupported platform: $platform. Supported: bilibili"))
                                 return@executes 1
                             }
-                            val snapshot = CredentialActions.login(player.uniqueId.toString(), platform, token)
-                            PaperV2Networking.send(listOf(player), snapshot)
+                            val snapshot = CredentialActions.globalLogin(platform, token)
+                            // Broadcast to all online players
+                            val onlinePlayers = Bukkit.getOnlinePlayers()
+                            if (onlinePlayers.isNotEmpty()) {
+                                PaperV2Networking.send(onlinePlayers.toList(), snapshot)
+                            }
                             sender.sendMessage(
-                                Component.text("Logged in on $platform. Your credential is stored on the server, encrypted.")
+                                Component.text("Logged in on $platform globally. Credential broadcast to all players.")
                             )
                             1
                         }
                 )
         )
 
-    /** `/display logout <platform>` — removes the player's credential for the platform. */
+    /** `/display logout <platform>` — removes the global credential (OP-only) and broadcasts to all players. */
     private fun logoutSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("logout")
+        .requires { it.sender.isOp || it.sender.hasPermission("dreamdisplayx.logout") }
         .then(
             Commands.argument("platform", StringArgumentType.word())
                 .executes { ctx ->
                     val sender = ctx.source.sender
                     val player = sender as? Player ?: return@executes 0
                     val platform = StringArgumentType.getString(ctx, "platform")
-                    val snapshot = CredentialActions.logout(player.uniqueId.toString(), platform)
-                    PaperV2Networking.send(listOf(player), snapshot)
-                    sender.sendMessage(Component.text("Logged out of $platform."))
+                    val snapshot = CredentialActions.globalLogout(platform)
+                    // Broadcast to all online players
+                    val onlinePlayers = Bukkit.getOnlinePlayers()
+                    if (onlinePlayers.isNotEmpty()) {
+                        PaperV2Networking.send(onlinePlayers.toList(), snapshot)
+                    }
+                    sender.sendMessage(Component.text("Logged out of $platform globally."))
                     1
                 }
         )

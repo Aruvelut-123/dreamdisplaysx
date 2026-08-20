@@ -29,7 +29,6 @@ data class SettingsSection(
     val display: DisplayConfig = DisplayConfig(),
     val fullscreen: FullscreenConfig = FullscreenConfig(),
     val customMedia: CustomMediaConfig = CustomMediaConfig(),
-    val screenShare: ScreenShareConfig = ScreenShareConfig(),
 ) {
     // Reports
     val webhookUrl get() = reports.webhook_url
@@ -124,16 +123,7 @@ data class SettingsSection(
         val quality_cap: Int = 1080,
     )
 
-    /**
-     * Screen-sharing section: the mod-protocol relay that lets a client push its screen and viewers
-     * pull it over an internal HTTP endpoint. Only used on modded servers.
-     */
-    data class ScreenShareConfig(
-        val enabled: Boolean = true,
-        val port: Int = 28960,
-        val public_host: String = "",
-    )
-}
+    }
 
 /** Storage section of the config. */
 data class StorageSection(
@@ -192,6 +182,8 @@ data class PermissionsSection(
     val nameOthers get() = permissions.name_others
     val schedule get() = permissions.schedule
     val scheduleOthers get() = permissions.schedule_others
+    val login get() = permissions.login
+    val logout get() = permissions.logout
 
     data class PermissionsConfig(
         val create: String = "dreamdisplayx.create",
@@ -222,6 +214,8 @@ data class PermissionsSection(
         val name_others: String = "dreamdisplayx.name.others",
         val schedule: String = "dreamdisplayx.schedule",
         val schedule_others: String = "dreamdisplayx.schedule.others",
+        val login: String = "dreamdisplayx.login",
+        val logout: String = "dreamdisplayx.logout",
     )
 }
 
@@ -284,12 +278,7 @@ fun parseServerConfig(t: TomlTable?): ParsedServerConfig = ParsedServerConfig(
             allow_forced = t?.getBoolean("fullscreen.allow_forced") ?: true,
             quality_cap = t?.getLong("fullscreen.quality_cap")?.toInt() ?: 1080,
         ),
-        screenShare = SettingsSection.ScreenShareConfig(
-            enabled = t?.getBoolean("screen_share.enabled") ?: true,
-            port = t?.getLong("screen_share.port")?.toInt() ?: 28960,
-            public_host = t?.getString("screen_share.public_host") ?: "",
         ),
-    ),
     storage = StorageSection(
         storage = StorageSection.StorageConfig(
             type = t?.getString("storage.type") ?: StorageBackend.SQLITE.configToken,
@@ -332,6 +321,8 @@ fun parseServerConfig(t: TomlTable?): ParsedServerConfig = ParsedServerConfig(
             name_others = t?.getString("permissions.name_others") ?: "dreamdisplayx.name.others",
             schedule = t?.getString("permissions.schedule") ?: "dreamdisplayx.schedule",
             schedule_others = t?.getString("permissions.schedule_others") ?: "dreamdisplayx.schedule.others",
+            login = t?.getString("permissions.login") ?: "dreamdisplayx.login",
+            logout = t?.getString("permissions.logout") ?: "dreamdisplayx.logout",
         )
     ),
     proxy = ProxySection(

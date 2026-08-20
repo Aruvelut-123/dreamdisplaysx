@@ -1,6 +1,6 @@
 package com.dreamdisplayx.platform.server
 
-import com.dreamdisplayx.platform.server.cast.CastManager
+import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.credentials.CredentialStore
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
@@ -82,11 +82,20 @@ class PaperServer : JavaPlugin() {
 
         ProxyBridge.init(Companion.config.proxy.enabled, Companion.config.proxy.clock_sync_interval)
 
-        val screenShare = Companion.config.settings.screenShare
-        if (screenShare.enabled) {
-            CastManager.start(screenShare.port, screenShare.public_host)
-        }
         CredentialStore.init(dataFolder)
+
+        // Set up credential sync in the same database as displays (SQLite or MySQL)
+        try {
+            val syncBackend = SqlCredentialSyncBackend(
+                backend = backend, dataDir = dataFolder, tablePrefix = s.tablePrefix,
+                host = s.host, port = s.port, database = s.database,
+                username = s.username, password = s.password, useSSL = s.useSSL,
+            )
+            CredentialStore.loadFromSyncBackend(syncBackend)
+            CredentialStore.setSyncBackend(syncBackend)
+        } catch (e: Exception) {
+            Companion.logger.warn("Failed to initialize credential sync backend.", e)
+        }
 
         ListenerRegistrar.registerListeners(this)
         ChannelRegistrar.registerChannels(this)
@@ -97,12 +106,21 @@ class PaperServer : JavaPlugin() {
             delay(30_000L.milliseconds)
             while (isActive) {
                 try {
-                    CredentialActions.refreshAllBilibili { playerUuid, credentials ->
-                        val player = server.getPlayer(java.util.UUID.fromString(playerUuid))
-                        if (player != null) {
-                            PaperV2Networking.send(listOf(player), credentials)
-                        }
-                    }
+                    // Refresh global credential and broadcast to all online players
+                    CredentialActions.refreshAllBilibili(
+                        pushToPlayer = { playerUuid, credentials ->
+                            val player = server.getPlayer(java.util.UUID.fromString(playerUuid))
+                            if (player != null) {
+                                PaperV2Networking.send(listOf(player), credentials)
+                            }
+                        },
+                        broadcastToAll = { credentials ->
+                            val online = server.getOnlinePlayers()
+                            if (online.isNotEmpty()) {
+                                PaperV2Networking.send(online.toList(), credentials)
+                            }
+                        },
+                    )
                 } catch (e: Exception) {
                     Companion.logger.warn("Bilibili session refresh sweep failed.", e)
                 }
@@ -122,7 +140,6 @@ class PaperServer : JavaPlugin() {
 
     /** Persists state and tears down resources. Safe to call from a reload. */
     fun doDisable() {
-        CastManager.stop()
         if (::storage.isInitialized) {
             DisplayManager.save { data: PaperDisplayData -> storage.saveDisplay(data) }
             ServerCoroutines.shutdown()

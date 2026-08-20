@@ -19,6 +19,10 @@ import javax.crypto.spec.SecretKeySpec
  * Encrypted-at-rest store for platform login credentials (e.g. a Bilibili `SESSDATA`), keyed by
  * player UUID + platform. Values are encrypted with AES-256-GCM; the key lives in a separate file
  * next to the data file, so the ciphertext cannot be decrypted from the world or the mod jar alone.
+ *
+ * Supports per-player credentials (legacy) and a single global credential shared across all players.
+ * When a [syncBackend] is configured (e.g. MySQL), the global credential is also persisted there
+ * for cross-server synchronization.
  */
 object CredentialStore {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/CredentialStore")
@@ -27,7 +31,7 @@ object CredentialStore {
     private const val IV_BYTES = 12
     private const val GCM_TAG_BITS = 128
 
-    /** In-memory plaintext cache, keyed `"<playerUuid>:<platform>"`. */
+    /** In-memory plaintext cache, keyed `"<playerUuid>:<platform>"` or `"__global__:<platform>"`. */
     private val cache = ConcurrentHashMap<String, String>()
 
     @Volatile
@@ -38,6 +42,15 @@ object CredentialStore {
 
     @Volatile
     private var initialized = false
+
+    /** Optional cross-server sync backend (e.g. MySQL table). */
+    @Volatile
+    private var syncBackend: CredentialSyncBackend? = null
+
+    /** Sets the sync backend for cross-server credential persistence. */
+    fun setSyncBackend(backend: CredentialSyncBackend?) {
+        syncBackend = backend
+    }
 
     /** Loads (or creates) the key file and decrypts the stored credentials. Safe to call once. */
     fun init(dataDir: File) {
@@ -66,17 +79,63 @@ object CredentialStore {
         persist()
     }
 
+    // ── Global credential (single shared Bilibili account for the whole server) ────────────────────
+
+    private const val GLOBAL_PREFIX = "__global__"
+
+    /** Stores a global credential on [platform] and persists. */
+    fun setGlobal(platform: String, token: String) {
+        cache["$GLOBAL_PREFIX:$platform"] = token
+        persist()
+        // Sync to cross-server backend if configured
+        val k = this.key
+        if (k != null) {
+            val backend = this.syncBackend
+            if (backend != null) {
+                val encrypted = encrypt(token, k)
+                backend.setCredential("$GLOBAL_PREFIX:$platform", encrypted)
+            }
+        }
+    }
+
+    /** The stored global credential for [platform], or null when not set. */
+    fun getGlobal(platform: String): String? = cache["$GLOBAL_PREFIX:$platform"]
+
+    /** Removes the global credential for [platform] and persists. */
+    fun clearGlobal(platform: String) {
+        cache.remove("$GLOBAL_PREFIX:$platform")
+        persist()
+        val backend = this.syncBackend
+        if (backend != null) {
+            backend.removeCredential("$GLOBAL_PREFIX:$platform")
+        }
+    }
+
     /** Iterates every stored Bilibili credential, calling [block] with `(playerUuid, sessdata, refreshToken)`. */
     fun forEachBilibili(block: (playerUuid: String, sessdata: String, refreshToken: String) -> Unit) {
         val bilibiliPrefix = ":bilibili"
         val refreshPrefix = ":bilibili_refresh"
-        for ((key, value) in cache) {
-            if (key.endsWith(bilibiliPrefix) && !key.endsWith(refreshPrefix)) {
-                val uuid = key.substringBefore(bilibiliPrefix)
-                val refresh = cache["$uuid$refreshPrefix"] ?: ""
-                block(uuid, value, refresh)
+        for ((entryKey, value) in cache) {
+            if (entryKey.endsWith(bilibiliPrefix) && !entryKey.endsWith(refreshPrefix)) {
+                val uuid = entryKey.substringBefore(bilibiliPrefix)
+                if (uuid != GLOBAL_PREFIX) {
+                    val refresh = cache["$uuid$refreshPrefix"] ?: ""
+                    block(uuid, value, refresh)
+                }
             }
         }
+    }
+
+    /** Loads global credentials from the sync backend into the local cache. */
+    fun loadFromSyncBackend(backend: CredentialSyncBackend) {
+        val k = key ?: return
+        backend.allCredentials().forEach { (entryKey, encryptedValue) ->
+            val decrypted = decrypt(encryptedValue, k)
+            if (decrypted != null) {
+                cache[entryKey] = decrypted
+            }
+        }
+        logger.info("Loaded {} credential(s) from sync backend.", cache.size)
     }
 
     private fun loadOrCreateKey(file: File): SecretKey {
@@ -97,7 +156,10 @@ object CredentialStore {
             val root = DreamJson.compact.parseToJsonElement(file.readText()) as? JsonObject ?: return
             for ((entryKey, value) in root) {
                 val cipherText = (value as? JsonPrimitive)?.content ?: continue
-                decrypt(cipherText, k)?.let { cache[entryKey] = it }
+                val decrypted = decrypt(cipherText, k)
+                if (decrypted != null) {
+                    cache[entryKey] = decrypted
+                }
             }
         }.onFailure { logger.error("Failed to load credentials file.", it) }
     }
@@ -105,9 +167,10 @@ object CredentialStore {
     private fun persist() {
         val file = dataFile ?: return
         val k = key ?: return
+        val entries = cache.entries.toList()
         runCatching {
             val obj = buildJsonObject {
-                for ((entryKey, value) in cache) {
+                for ((entryKey, value) in entries) {
                     put(entryKey, JsonPrimitive(encrypt(value, k)))
                 }
             }

@@ -67,8 +67,9 @@ object VanillaCommandTree {
             .then(logoutNode())
             .build()
 
-    /** `/display login <platform> <token>` — saves an encrypted credential for the player. */
+    /** `/display login <platform> <token>` — saves an encrypted global credential (OP-only) and broadcasts to all players. */
     private fun loginNode(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")
+        .requires { requiresNode(it, { _ -> "dreamdisplayx.login" }, VanillaPermissions.Fallback.OP) }
         .then(
             Commands.argument("platform", StringArgumentType.word())
                 .then(
@@ -87,10 +88,14 @@ object VanillaCommandTree {
                                 )
                                 return@executes 0
                             }
-                            val snapshot = CredentialActions.login(player.uuid.toString(), platform, token)
-                            VanillaNetworking.adapter.sendV2(listOf(player), snapshot)
+                            val snapshot = CredentialActions.globalLogin(platform, token)
+                            // Broadcast to all online players
+                            val onlinePlayers = ctx.source.server.playerList.players
+                            if (onlinePlayers.isNotEmpty()) {
+                                VanillaNetworking.adapter.sendV2(onlinePlayers, snapshot)
+                            }
                             ctx.source.sendSuccess(
-                                { Component.literal("Logged in on $platform. Credential stored encrypted on the server.") },
+                                { Component.literal("Logged in on $platform globally. Credential broadcast to all players.") },
                                 false,
                             )
                             1
@@ -98,16 +103,21 @@ object VanillaCommandTree {
                 )
         )
 
-    /** `/display logout <platform>` — removes the player's credential for the platform. */
+    /** `/display logout <platform>` — removes the global credential (OP-only) and broadcasts to all players. */
     private fun logoutNode(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("logout")
+        .requires { requiresNode(it, { _ -> "dreamdisplayx.logout" }, VanillaPermissions.Fallback.OP) }
         .then(
             Commands.argument("platform", StringArgumentType.word())
                 .executes { ctx ->
                     val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
                     val platform = StringArgumentType.getString(ctx, "platform")
-                    val snapshot = CredentialActions.logout(player.uuid.toString(), platform)
-                    VanillaNetworking.adapter.sendV2(listOf(player), snapshot)
-                    ctx.source.sendSuccess({ Component.literal("Logged out of $platform.") }, false)
+                    val snapshot = CredentialActions.globalLogout(platform)
+                    // Broadcast to all online players
+                    val onlinePlayers = ctx.source.server.playerList.players
+                    if (onlinePlayers.isNotEmpty()) {
+                        VanillaNetworking.adapter.sendV2(onlinePlayers, snapshot)
+                    }
+                    ctx.source.sendSuccess({ Component.literal("Logged out of $platform globally.") }, false)
                     1
                 }
         )

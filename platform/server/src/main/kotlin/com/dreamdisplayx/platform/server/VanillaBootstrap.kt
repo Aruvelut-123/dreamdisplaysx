@@ -1,8 +1,8 @@
 package com.dreamdisplayx.platform.server
 
-import com.dreamdisplayx.platform.server.cast.CastManager
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.credentials.CredentialStore
+import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StateManager
@@ -51,17 +51,26 @@ object VanillaBootstrap {
             VanillaServerState.config.proxy.enabled,
             VanillaServerState.config.proxy.clock_sync_interval
         )
-        val screenShare = VanillaServerState.config.settings.screenShare
-        if (screenShare.enabled) {
-            CastManager.start(screenShare.port, screenShare.public_host)
-        }
         CredentialStore.init(dataDir)
+
+        // Set up credential sync in the same database as displays (SQLite or MySQL)
+        try {
+            val syncBackend = SqlCredentialSyncBackend(
+                backend = StorageBackend.fromConfig(s.type), dataDir = dataDir, tablePrefix = s.tablePrefix,
+                host = s.host, port = s.port, database = s.database,
+                username = s.username, password = s.password, useSSL = s.useSSL,
+            )
+            CredentialStore.loadFromSyncBackend(syncBackend)
+            CredentialStore.setSyncBackend(syncBackend)
+        } catch (e: Exception) {
+            VanillaServerState.logger.warn("Failed to initialize credential sync backend.", e)
+        }
+
         startRepeatingTasks(server)
     }
 
     /** Persists all displays and disconnects storage. */
     fun onServerStopping() {
-        CastManager.stop()
         DisplayManager.save { VanillaServerState.storage?.saveDisplay(it) }
         ServerCoroutines.shutdown()
         VanillaServerState.storage?.disconnect()
@@ -104,12 +113,21 @@ object VanillaBootstrap {
             delay(30_000L.milliseconds)
             while (!server.isStopped) {
                 try {
-                    CredentialActions.refreshAllBilibili { playerUuid, credentials ->
-                        val player = server.playerList.getPlayer(java.util.UUID.fromString(playerUuid))
-                        if (player != null) {
-                            VanillaNetworking.adapter.sendV2(listOf(player), credentials)
-                        }
-                    }
+                    // Refresh global credential and broadcast to all online players
+                    CredentialActions.refreshAllBilibili(
+                        pushToPlayer = { playerUuid, credentials ->
+                            val player = server.playerList.getPlayer(java.util.UUID.fromString(playerUuid))
+                            if (player != null) {
+                                VanillaNetworking.adapter.sendV2(listOf(player), credentials)
+                            }
+                        },
+                        broadcastToAll = { credentials ->
+                            val online = server.playerList.players
+                            if (online.isNotEmpty()) {
+                                VanillaNetworking.adapter.sendV2(online, credentials)
+                            }
+                        },
+                    )
                 } catch (e: Exception) {
                     com.dreamdisplayx.platform.server.VanillaServerState.logger.warn("Bilibili session refresh sweep failed.", e)
                 }

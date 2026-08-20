@@ -8,16 +8,40 @@ import org.slf4j.LoggerFactory
  * the Paper and vanilla command paths so they can never drift.
  *
  * Bilibili credentials are stored in two keys:
- * - `"<uuid>:bilibili"` — the SESSDATA cookie string
+ * - `"<uuid>:bilibili"` — the SESSDATA cookie string (per-player)
  * - `"<uuid>:bilibili_refresh"` — the refresh token (empty if not available)
+ * - `"__global__:bilibili"` — the global SESSDATA cookie string (shared across all players)
+ * - `"__global__:bilibili_refresh"` — the global refresh token
  *
- * When the client logs in, it may send the token as `"<sessdata>||<refresh_token>"`; the
- * `||` delimiter is split here so the server stores both pieces separately.
+ * When a global credential is set, it is broadcast to all online players.
  */
 object CredentialActions {
     private const val REFRESH_DELIMITER = "||"
 
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/CredentialActions")
+
+    /** Stores a global credential for [platform] and returns the snapshot. */
+    fun globalLogin(platform: String, token: String): PlatformCredentials {
+        val (sessdata, refresh) = splitToken(token.trim())
+        CredentialStore.setGlobal(platform, sessdata)
+        if (refresh.isNotEmpty()) {
+            CredentialStore.setGlobal("${platform}_refresh", refresh)
+        }
+        return globalSnapshot()
+    }
+
+    /** Removes the global credential for [platform] and returns the snapshot. */
+    fun globalLogout(platform: String): PlatformCredentials {
+        CredentialStore.clearGlobal(platform)
+        CredentialStore.clearGlobal("${platform}_refresh")
+        return globalSnapshot()
+    }
+
+    /** The current global credential snapshot. */
+    fun globalSnapshot(): PlatformCredentials = PlatformCredentials(
+        bilibiliSessdata = CredentialStore.getGlobal("bilibili") ?: "",
+        bilibiliRefreshToken = CredentialStore.getGlobal("bilibili_refresh") ?: "",
+    )
 
     /** Stores a credential for [playerUuid] on [platform] and returns the fresh snapshot. */
     fun login(playerUuid: String, platform: String, token: String): PlatformCredentials {
@@ -36,11 +60,23 @@ object CredentialActions {
         return snapshotFor(playerUuid)
     }
 
-    /** The current credential snapshot for [playerUuid], for handshakes and re-sends. */
-    fun snapshotFor(playerUuid: String): PlatformCredentials = PlatformCredentials(
-        bilibiliSessdata = CredentialStore.get(playerUuid, "bilibili") ?: "",
-        bilibiliRefreshToken = CredentialStore.get(playerUuid, "bilibili_refresh") ?: "",
-    )
+    /**
+     * Returns the credential snapshot for [playerUuid]: first checks the global credential,
+     * then falls back to the per-player credential.
+     */
+    fun snapshotFor(playerUuid: String): PlatformCredentials {
+        val globalSessdata = CredentialStore.getGlobal("bilibili")
+        if (!globalSessdata.isNullOrEmpty()) {
+            return PlatformCredentials(
+                bilibiliSessdata = globalSessdata,
+                bilibiliRefreshToken = CredentialStore.getGlobal("bilibili_refresh") ?: "",
+            )
+        }
+        return PlatformCredentials(
+            bilibiliSessdata = CredentialStore.get(playerUuid, "bilibili") ?: "",
+            bilibiliRefreshToken = CredentialStore.get(playerUuid, "bilibili_refresh") ?: "",
+        )
+    }
 
     /** True when [platform] is a supported login platform. */
     fun isSupported(platform: String): Boolean = platform.equals("bilibili", ignoreCase = true)
@@ -60,8 +96,37 @@ object CredentialActions {
     /**
      * Refreshes every stored Bilibili session using its refresh token; [pushToPlayer] receives
      * `(playerUuid, freshCredentials)` for each online player whose session was renewed.
+     * Also refreshes the global credential and broadcasts to all online players.
      */
-    fun refreshAllBilibili(pushToPlayer: (playerUuid: String, credentials: PlatformCredentials) -> Unit) {
+    fun refreshAllBilibili(
+        pushToPlayer: (playerUuid: String, credentials: PlatformCredentials) -> Unit,
+        broadcastToAll: ((PlatformCredentials) -> Unit)? = null,
+    ) {
+        // Refresh global credential first
+        val globalRefreshToken = CredentialStore.getGlobal("bilibili_refresh")
+        val globalSessdata = CredentialStore.getGlobal("bilibili")
+        if (!globalRefreshToken.isNullOrEmpty() && !globalSessdata.isNullOrEmpty()) {
+            val result = BilibiliSessionRefresher.refresh(globalRefreshToken, globalSessdata)
+            if (result.success) {
+                if (result.cookie != null && result.cookie != globalSessdata) {
+                    CredentialStore.setGlobal("bilibili", result.cookie)
+                }
+                val newRefresh = result.refreshToken
+                if (newRefresh != null && newRefresh != globalRefreshToken) {
+                    CredentialStore.setGlobal("bilibili_refresh", newRefresh)
+                }
+                val fresh = PlatformCredentials(
+                    bilibiliSessdata = result.cookie ?: globalSessdata,
+                    bilibiliRefreshToken = newRefresh ?: globalRefreshToken,
+                )
+                broadcastToAll?.invoke(fresh)
+                return
+            } else {
+                logger.warn("Global Bilibili session refresh failed: {}", result.message)
+            }
+        }
+
+        // Refresh per-player credentials (legacy path)
         CredentialStore.forEachBilibili { playerUuid, sessdata, refreshToken ->
             if (refreshToken.isEmpty()) return@forEachBilibili
             val result = BilibiliSessionRefresher.refresh(refreshToken, sessdata)
