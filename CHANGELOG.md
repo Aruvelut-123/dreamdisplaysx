@@ -1,15 +1,21 @@
-# 1.9.1.1 Release
+# 1.9.2.1 Release
 
-Based on Dream Displays 1.9.1 (https://github.com/arnodoelinger/dreamdisplays).
+Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
 
 ## Highlights
 
+- **Merged upstream 1.9.2**: pull in all upstream changes from Dream Displays 1.9.2
+  (upstream commit `09b19b91`, merged as a second parent; upstream history preserved).
+- From upstream: `Unstable` API annotation migration, improved shader support, instant pause,
+  warm YouTube connection on server join, wall-clock snap on warm pause, faster media resolvers,
+  and CI apt mirror fix.
 - Fork: renamed mod / plugin to **Dream DisplaysX** (`dreamdisplayx`).
 - Built-in Simplified Chinese translations (`zh_cn.json`); Crowdin integration removed.
 - Bilibili bangumi / movie URL support (`/bangumi/play/ep<id>` and `/bangumi/play/ss<id>`).
 - Client-side screen sharing: `/share <rtmp-url>` pushes your screen over RTMP (Linux X11 +
   XWayland, Windows, macOS; not available on Android).
 - CI builds the Android FFmpeg from source per ABI, matching the desktop 8.1.x series.
+- Fixed Bilibili danmaku fetching (deflate `Content-Encoding` support in `DreamHttpClient`).
 - CI publishes to GitHub only (no Modrinth upload, no personal access token).
 
 ## Client
