@@ -58,9 +58,12 @@ class Client(modEventBus: IEventBus) : DreamMod {
                 .requires { ClientStateManager.isAdmin }
                 .executes {
                     if (BilibiliApi.cookie.isNotBlank()) {
-                        Minecraft.getInstance().player?.displayClientMessage(
-                            net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false
-                        )
+                        //? if >=26 {
+                        Minecraft.getInstance().player?.sendSystemMessage(
+                            net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."))
+                        //?} else
+                        /*Minecraft.getInstance().player?.displayClientMessage(
+                            net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false)*/
                         return@executes 1
                     }
                     //? if >=26.2 {
@@ -76,17 +79,23 @@ class Client(modEventBus: IEventBus) : DreamMod {
                 .requires { ClientStateManager.isAdmin }
                 .executes {
                     if (BilibiliApi.cookie.isBlank()) {
-                        Minecraft.getInstance().player?.displayClientMessage(
-                            net.minecraft.network.chat.Component.literal("§eNot logged in."), false
-                        )
+                        //? if >=26 {
+                        Minecraft.getInstance().player?.sendSystemMessage(
+                            net.minecraft.network.chat.Component.literal("§eNot logged in."))
+                        //?} else
+                        /*Minecraft.getInstance().player?.displayClientMessage(
+                            net.minecraft.network.chat.Component.literal("§eNot logged in."), false)*/
                         return@executes 1
                     }
                     BilibiliLoginManager.logout()
                     BilibiliApi.cookie = ""
                     BilibiliAccountLabel.invalidate()
-                    Minecraft.getInstance().player?.displayClientMessage(
-                        net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."), false
-                    )
+                    //? if >=26 {
+                    Minecraft.getInstance().player?.sendSystemMessage(
+                        net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."))
+                    //?} else
+                    /*Minecraft.getInstance().player?.displayClientMessage(
+                        net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."), false)*/
                     1
                 }
         )
