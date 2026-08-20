@@ -66,6 +66,19 @@ object CredentialStore {
         persist()
     }
 
+    /** Iterates every stored Bilibili credential, calling [block] with `(playerUuid, sessdata, refreshToken)`. */
+    fun forEachBilibili(block: (playerUuid: String, sessdata: String, refreshToken: String) -> Unit) {
+        val bilibiliPrefix = ":bilibili"
+        val refreshPrefix = ":bilibili_refresh"
+        for ((key, value) in cache) {
+            if (key.endsWith(bilibiliPrefix) && !key.endsWith(refreshPrefix)) {
+                val uuid = key.substringBefore(bilibiliPrefix)
+                val refresh = cache["$uuid$refreshPrefix"] ?: ""
+                block(uuid, value, refresh)
+            }
+        }
+    }
+
     private fun loadOrCreateKey(file: File): SecretKey {
         if (file.isFile && file.length() >= 16) {
             return SecretKeySpec(file.readBytes(), "AES")

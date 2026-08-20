@@ -55,7 +55,7 @@ object BilibiliLoginManager {
         val key = _qrKey ?: return false
         return when (val result = BilibiliAuth.pollQrCode(key)) {
             is PollResult.Success -> {
-                completeLogin(result.sessdata)
+                completeLogin(result.sessdata, result.refreshToken)
                 true
             }
 
@@ -90,13 +90,15 @@ object BilibiliLoginManager {
         status = "已退出登录"
     }
 
-    private fun completeLogin(sessdata: String) {
+    private fun completeLogin(sessdata: String, refreshToken: String = "") {
         loggedIn = true
         _qrKey = null
         qrContent = null
-        sendServerCommand("display login bilibili $sessdata")
+        // Send the refresh token along so the server can renew the session when it expires.
+        val credential = if (refreshToken.isNotEmpty()) "$sessdata||$refreshToken" else sessdata
+        sendServerCommand("display login bilibili $credential")
         status = "登录成功！凭据已加密保存到服务器"
-        logger.info("Bilibili login succeeded; SESSDATA sent to the server.")
+        logger.info("Bilibili login succeeded; SESSDATA sent to the server (refresh token included={}).", refreshToken.isNotEmpty())
     }
 
     private fun sendServerCommand(command: String) {

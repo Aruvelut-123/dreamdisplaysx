@@ -68,6 +68,11 @@ object DanmakuManager {
     fun consumeTimed(displayId: DisplayId, positionSec: Double): List<DanmakuMessage> =
         subscribers[displayId]?.consumeTimed(positionSec) ?: emptyList()
 
+    /** Drains and clears the live danmaku queue for [displayId]; empty when no subscription exists. */
+    fun drainLive(displayId: DisplayId): List<DanmakuMessage> = synchronized(subscribers) {
+        subscribers[displayId]?.drainMessages() ?: emptyList()
+    }
+
     /** Returns live status text for [displayId], or null. */
     fun status(displayId: DisplayId): String? = subscribers[displayId]?.status
 
@@ -154,6 +159,7 @@ object DanmakuManager {
                         text = entry.text,
                         sender = "",
                         color = entry.color,
+                        mode = entry.mode,
                     )
                 }
             }
@@ -163,7 +169,6 @@ object DanmakuManager {
                     displayId.uuid, "%.1f".format(positionSec), due.size, timedEntries.size, timedIndex,
                 )
             }
-            due.forEach { enqueue(it) }
             return due
         }
 
@@ -186,6 +191,13 @@ object DanmakuManager {
         private fun enqueue(msg: DanmakuMessage) {
             messages += msg
             if (messages.size > maxMessages) messages.removeAt(0)
+        }
+
+        /** Drains and clears the live message queue; called from [DanmakuManager.drainLive]. */
+        fun drainMessages(): List<DanmakuMessage> {
+            val msgs = messages.toList()
+            messages.clear()
+            return msgs
         }
     }
 }

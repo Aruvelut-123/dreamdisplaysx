@@ -31,6 +31,10 @@ object BilibiliAuth {
         "Referer" to "https://www.bilibili.com",
     )
 
+    /** Refresh token for extending the session, obtained from QR login. */
+    @Volatile
+    var refreshToken: String = ""
+
     /** A freshly generated QR login session. */
     data class QrCodeInfo(
         /** The QR image content the mobile app scans. */
@@ -42,7 +46,7 @@ object BilibiliAuth {
     /** Outcome of one QR poll. */
     sealed interface PollResult {
         /** Login succeeded; [sessdata] is the credential to hand to the server. */
-        data class Success(val sessdata: String) : PollResult
+        data class Success(val sessdata: String, val refreshToken: String = "") : PollResult
 
         /** The QR code expired; a new one must be generated. */
         data object Expired : PollResult
@@ -84,9 +88,18 @@ object BilibiliAuth {
         return when (code) {
             0 -> {
                 val cookie = data?.let { extractBilibiliCookie(it) }
-                logger.info("QR login cookie extracted={}", cookie?.take(60) ?: "null")
-                if (cookie != null) PollResult.Success(cookie)
-                else PollResult.Failure("登录成功，但响应里没有 SESSDATA。")
+                    ?: data?.optString("url")?.let { url -> fetchCrossDomainCookies(url) }
+                val refreshTokenVal = data?.optString("refresh_token").orEmpty()
+                if (cookie != null) {
+                    logger.info("QR login succeeded, cookie extracted (len={})", cookie.length)
+                    if (refreshTokenVal.isNotEmpty()) {
+                        refreshToken = refreshTokenVal
+                        logger.info("Bilibili refresh token stored (len={})", refreshTokenVal.length)
+                    }
+                    PollResult.Success(cookie, refreshTokenVal)
+                } else {
+                    PollResult.Failure("登录成功，但无法获取 SESSDATA cookie。请尝试手机+密码登录。")
+                }
             }
 
             86038 -> PollResult.Expired
@@ -184,6 +197,87 @@ object BilibiliAuth {
         }
 
         return cookies.entries.joinToString("; ") { (k, v) -> "$k=$v" }.ifEmpty { null }
+    }
+
+    /**
+     * Fetches a Bilibili cross-domain ticket URL to collect the actual Set-Cookie headers that
+     * contain SESSDATA, bili_jct, DedeUserID, etc. Called after the QR poll returns code=0 with a
+     * crossDomain URL (whose JSON response has no cookies itself — they come from the Set-Cookie
+     * headers of that endpoint).
+     */
+    private fun fetchCrossDomainCookies(url: String): String? = runCatching {
+        val response = DreamHttpClient.execute(
+            url,
+            DreamHttpClient.RequestOptions(
+                headers = HEADERS,
+                connectTimeoutMs = 10_000,
+                readTimeoutMs = 10_000,
+                followRedirects = false,
+            ),
+        )
+        // Collect Set-Cookie headers from all redirect hops.
+        val allCookies = linkedSetOf<String>()
+        fun collectCookies(headers: Map<String, List<String>>) {
+            for ((name, values) in headers) {
+                if (name.equals("Set-Cookie", ignoreCase = true)) {
+                    for (value in values) {
+                        val cookie = value.substringBefore(';').trim()
+                        if (cookie.contains('=')) allCookies.add(cookie)
+                    }
+                }
+            }
+        }
+        collectCookies(response.headers)
+        // Follow the (usually 302) redirect once to collect the cookies on the next hop too.
+        val location = response.headers.entries
+            .firstOrNull { it.key.equals("Location", ignoreCase = true) }
+            ?.value?.firstOrNull()
+        if (location != null) {
+            runCatching {
+                val follow = DreamHttpClient.execute(
+                    location,
+                    DreamHttpClient.RequestOptions(
+                        headers = HEADERS,
+                        connectTimeoutMs = 10_000,
+                        readTimeoutMs = 10_000,
+                        followRedirects = true,
+                    ),
+                )
+                collectCookies(follow.headers)
+            }
+        }
+        // Build the cookie string from the meaningful cookies.
+        val parts = allCookies.filter { cookie ->
+            cookie.substringBefore('=') in setOf("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5")
+        }
+        parts.joinToString("; ").ifEmpty { null }
+    }.onFailure { e ->
+        logger.debug("Bilibili crossDomain cookie fetch failed for {}: {}.", url, e.message)
+    }.getOrNull()
+
+    /**
+     * Attempts to extend the Bilibili session using the stored [refreshToken]. Returns true when the
+     * refresh call was accepted. Should be called periodically (e.g. every hour) to keep the login
+     * alive; when it returns false the stored session is likely expired and the user must log in again.
+     */
+    fun refreshSession(): Boolean {
+        if (refreshToken.isEmpty()) return false
+        val csrf = BilibiliApi.cookie.split(';').mapNotNull { part ->
+            val trimmed = part.trim()
+            if (trimmed.startsWith("bili_jct=")) trimmed.substringAfter("bili_jct=") else null
+        }.firstOrNull() ?: return false
+
+        val form = "csrf=$csrf&refresh_token=$refreshToken"
+        val result = postForm("https://passport.bilibili.com/x/passport-login/web/cookie/refresh", form)
+        val code = result?.optInt("code") ?: -1
+        if (code != 0) {
+            logger.warn("Bilibili session refresh rejected: code={} message={}", code, result?.optString("message"))
+            return false
+        }
+        val newRefresh = result?.obj("data")?.optString("refresh_token")
+        if (newRefresh != null) refreshToken = newRefresh
+        logger.info("Bilibili session refreshed; new refresh token stored={}", newRefresh != null)
+        return true
     }
 
     /** RSA-encrypts [plain] with Bilibili's PEM public key (PKCS#1 padding, base64 output). */

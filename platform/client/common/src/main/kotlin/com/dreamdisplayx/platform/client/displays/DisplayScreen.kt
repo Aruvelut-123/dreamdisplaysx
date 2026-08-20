@@ -1085,20 +1085,18 @@ class DisplayScreen(
     /** Advances the Bilibili danmaku overlay (client tick, main thread). */
     private fun advanceDanmaku() {
         val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
-        val messages = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.queue(did)
-        val overlay = danmakuOverlay
-
-        // VOD / bangumi: consume timed danmaku regardless of the current queue state — the queue
-        // starts empty and only fills as consumeTimed() drains timedEntries into it.
+        // VOD / bangumi: consume timed danmaku as playback advances.
         val positionSec = currentTimeNanos / 1_000_000_000.0
         val due = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec)
-
-        if (messages != null && (messages.isNotEmpty() || due.isNotEmpty() || overlay != null)) {
+        // Live: drain newly arrived messages (removes from the queue so they are not re-added).
+        val live = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.drainLive(did)
+        val overlay = danmakuOverlay
+        if (due.isNotEmpty() || live.isNotEmpty() || overlay != null) {
             val o = overlay ?: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(width, height).also {
                 danmakuOverlay = it
             }
-            if (due.isNotEmpty()) due.forEach { o.add(it) }
-            messages.forEach { o.add(it) }
+            due.forEach { o.add(it) }
+            live.forEach { o.add(it) }
             o.tick()
         } else {
             overlay?.dispose()

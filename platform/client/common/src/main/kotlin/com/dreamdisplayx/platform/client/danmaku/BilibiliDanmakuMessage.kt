@@ -13,6 +13,7 @@ data class DanmakuMessage(
     val text: String,
     val sender: String,
     val color: Int = 0xFFFFFF,
+    val mode: Int = 1,
     val timestamp: Instant = Instant.now(),
 ) {
     companion object {

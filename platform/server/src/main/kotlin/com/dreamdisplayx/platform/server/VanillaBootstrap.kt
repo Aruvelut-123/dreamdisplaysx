@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.server.cast.CastManager
+import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.credentials.CredentialStore
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -11,10 +12,12 @@ import com.dreamdisplayx.platform.server.meta.Updater
 import com.dreamdisplayx.platform.server.playback.*
 import com.dreamdisplayx.platform.server.proxy.VanillaProxyBridge
 import com.dreamdisplayx.platform.server.storage.StorageBackend
+import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.minecraft.server.MinecraftServer
 import java.io.File
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -92,6 +95,25 @@ object VanillaBootstrap {
                     delay((60L * 60L * 1000L).milliseconds)
                     runCatching { Updater.checkForUpdates(settings.repoOwner, settings.repoName) }
                 }
+            }
+        }
+
+        // Hourly Bilibili session refresh: extend every stored credential before it expires.
+        ServerCoroutines.io.launch {
+            // First refresh after a short delay to let the server settle
+            delay(30_000L.milliseconds)
+            while (!server.isStopped) {
+                try {
+                    CredentialActions.refreshAllBilibili { playerUuid, credentials ->
+                        val player = server.playerList.getPlayer(java.util.UUID.fromString(playerUuid))
+                        if (player != null) {
+                            VanillaNetworking.adapter.sendV2(listOf(player), credentials)
+                        }
+                    }
+                } catch (e: Exception) {
+                    com.dreamdisplayx.platform.server.VanillaServerState.logger.warn("Bilibili session refresh sweep failed.", e)
+                }
+                delay(1.hours)
             }
         }
     }

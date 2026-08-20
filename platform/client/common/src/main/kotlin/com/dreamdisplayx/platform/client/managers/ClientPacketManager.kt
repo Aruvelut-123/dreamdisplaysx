@@ -61,6 +61,9 @@ object ClientPacketManager {
             is PlatformCredentials -> {
                 ClientStateManager.bilibiliSessdata = packet.bilibiliSessdata
                 BilibiliApi.cookie = packet.bilibiliSessdata
+                if (packet.bilibiliRefreshToken.isNotEmpty()) {
+                    com.dreamdisplayx.media.source.bilibili.BilibiliAuth.refreshToken = packet.bilibiliRefreshToken
+                }
                 if (packet.bilibiliSessdata.isNotEmpty()) {
                     logger.info("Received Bilibili login credential from the server.")
                 }

@@ -15,4 +15,6 @@ import kotlinx.serialization.protobuf.ProtoNumber
 data class PlatformCredentials(
     /** Bilibili `SESSDATA` cookie value (empty when the player is not logged in). */
     @ProtoNumber(1) val bilibiliSessdata: String = "",
+    /** Bilibili refresh token, used by the server to extend the session periodically. */
+    @ProtoNumber(2) val bilibiliRefreshToken: String = "",
 ) : DreamPacket

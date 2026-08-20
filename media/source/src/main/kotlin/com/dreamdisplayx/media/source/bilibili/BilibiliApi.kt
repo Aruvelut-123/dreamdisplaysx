@@ -126,6 +126,8 @@ object BilibiliApi {
         val timeSec: Double,
         val text: String,
         val color: Int,
+        /** Bilibili danmaku mode: 1-3 scroll, 4 bottom, 5 top, 6 reverse. Default 1. */
+        val mode: Int = 1,
     )
 
     /**
@@ -178,7 +180,8 @@ object BilibiliApi {
             val fields = p.split(',')
             val time = fields.getOrNull(0)?.toDoubleOrNull() ?: continue
             val color = fields.getOrNull(3)?.toLongOrNull()?.let { it.toInt() } ?: 0xFFFFFF
-            entries += DanmakuEntry(time, text, color)
+            val mode = fields.getOrNull(1)?.toIntOrNull() ?: 1
+            entries += DanmakuEntry(time, text, color, mode)
         }
         entries.sortBy { it.timeSec }
         logger.info("Danmaku XML parsed entries={}", entries.size)

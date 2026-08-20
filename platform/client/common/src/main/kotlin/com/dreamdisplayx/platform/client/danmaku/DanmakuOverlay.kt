@@ -39,13 +39,20 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
     private var textureId: Identifier? = null
     private var renderType: RenderType? = null
 
-    /** Active danmaku lines: (text, color, x position in px, y track, speed px/tick). */
-    private data class Line(val text: String, val color: Int, val x: Float, val y: Int, val speed: Float)
+    /** Active danmaku lines: (text, color, x position in px, y track, speed px/tick, mode kind). */
+    private enum class Kind { SCROLL, TOP, BOTTOM }
+
+    private data class Line(
+        val text: String, val color: Int, val x: Float, val y: Int,
+        val speed: Float, val kind: Kind, val bornAtMillis: Long,
+    )
 
     private val lines = CopyOnWriteArrayList<Line>()
     private var lastTrackAssign = 0
     private var dirty = false
     private val trackCount = 8
+    private val topTrack = LongArray(4) { -1L }
+    private val bottomTrack = LongArray(4) { -1L }
 
     init {
         ensureTexture()
@@ -53,12 +60,27 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
 
     /** Pushes [msg] onto the overlay; render thread advances it during [tick]. */
     fun add(msg: DanmakuMessage) {
+        val kind = when (msg.mode) {
+            4 -> Kind.BOTTOM
+            5 -> Kind.TOP
+            else -> Kind.SCROLL
+        }
+        val x = when (kind) {
+            Kind.SCROLL -> texW.toFloat()
+            else -> ((texW - msg.text.length * 14f) / 2f).coerceAtLeast(0f)
+        }
+        val y = when (kind) {
+            Kind.SCROLL -> pickTrack()
+            Kind.TOP -> 24 + pickVerticalTrack(Kind.TOP)
+            Kind.BOTTOM -> texH - 24 - pickVerticalTrack(Kind.BOTTOM)
+        }
+        val speed = when (kind) {
+            Kind.SCROLL -> 3f + Math.random().toFloat() * 2f
+            else -> 0f
+        }
         lines += Line(
-            text = msg.text,
-            color = msg.color,
-            x = texW.toFloat(),
-            y = pickTrack(),
-            speed = (3f + Math.random().toFloat() * 2f),
+            text = msg.text, color = msg.color, x = x, y = y,
+            speed = speed, kind = kind, bornAtMillis = System.currentTimeMillis(),
         )
         if (lines.size > 40) lines.removeAt(0)
         dirty = true
@@ -68,15 +90,24 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
     /** Advances scrolling; uploads the frame to GPU. Call once per client tick (main thread). */
     fun tick() {
         if (lines.isEmpty()) return
+        val now = System.currentTimeMillis()
         val it = lines.iterator()
         while (it.hasNext()) {
             val line = it.next()
-            if (line.x + line.text.length * 14f < -20f) it.remove() else {
-                lines[lines.indexOf(line)] = line.copy(x = line.x - line.speed)
+            when (line.kind) {
+                Kind.SCROLL -> {
+                    if (line.x + line.text.length * 14f < -20f) it.remove()
+                    else {
+                        val idx = lines.indexOf(line)
+                        if (idx >= 0) lines[idx] = line.copy(x = line.x - line.speed)
+                    }
+                }
+                Kind.TOP, Kind.BOTTOM -> {
+                    if (now - line.bornAtMillis > 5000) it.remove()
+                }
             }
         }
-        dirty = true
-        if (dirty) {
+        if (lines.isNotEmpty() || dirty) {
             upload()
             dirty = false
         }
@@ -98,6 +129,33 @@ class DanmakuOverlay(private val widthBlocks: Int, private val heightBlocks: Int
     private fun pickTrack(): Int {
         lastTrackAssign = (lastTrackAssign + 1) % trackCount
         return 24 + lastTrackAssign * 26
+    }
+
+    private fun pickVerticalTrack(kind: Kind): Int {
+        val tracks = when (kind) {
+            Kind.TOP -> topTrack
+            Kind.BOTTOM -> bottomTrack
+            else -> return 0
+        }
+        // Find the lowest track (for top) or highest (for bottom) that's stale
+        val now = System.currentTimeMillis()
+        var best = 0
+        var bestTime = Long.MAX_VALUE
+        for (i in tracks.indices) {
+            val t = tracks[i]
+            // A track is free if its last line was placed > 3 seconds ago, or if this is the first line
+            if (t < 0 || now - t > 3000) {
+                tracks[i] = now
+                return i * 26
+            }
+            // Track the oldest line to pile on top of it
+            if (t < bestTime) {
+                bestTime = t
+                best = i
+            }
+        }
+        tracks[best] = now
+        return best * 26
     }
 
     private fun ensureTexture() {
