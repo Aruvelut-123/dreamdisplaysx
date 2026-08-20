@@ -94,69 +94,36 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
 
 # 1.9.2 Release
 
-Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
-
 ## Highlights
 
-- **Merged upstream 1.9.2**: pull in all upstream changes from Dream Displays 1.9.2
-  (upstream commit `09b19b91`, merged as a second parent; upstream history preserved).
-- From upstream: `Unstable` API annotation migration, improved shader support, instant pause,
-  warm YouTube connection on server join, wall-clock snap on warm pause, faster media resolvers,
-  and CI apt mirror fix.
-- Fork: renamed mod / plugin to **Dream DisplaysX** (`dreamdisplayx`).
-- Built-in Simplified Chinese translations (`zh_cn.json`); Crowdin integration removed.
-- Bilibili bangumi / movie URL support (`/bangumi/play/ep<id>` and `/bangumi/play/ss<id>`), plus
-  **Bilibili movie / bangumi search results** merged into the suggestion grid.
-- CI builds the Android FFmpeg from source per ABI, matching the desktop 8.1.x series.
-- Fixed Bilibili danmaku fetching (deflate `Content-Encoding` support in `DreamHttpClient`).
-- CI publishes to GitHub only (no Modrinth upload, no personal access token).
+- Performance improvements to frame scaling and pause / resume
+- Displays now render on top of shaders instead of being affected by them
+- Some improvements like a crash on newer `Velocity` versions
+- Minor fixes and codebase refactoring
 
 ## Client
 
-### Features
+### Improvements
 
-- Added `zh_cn.json` with a full Simplified Chinese translation of the interface.
-- Added Bilibili bangumi / movie playback for `ep` / `ss` URLs.
-- **Bilibili search now covers movies and bangumi** (`media_bangumi` / `pgc` endpoints) in
-  addition to regular videos; results open the matching `ep` / `ss` URL automatically.
-- **Android compatibility hardening**:
-  - The FFmpeg download is cached in app-internal storage (`java.io.tmpdir`) instead of the
-    game directory, which sits on `noexec` emulated storage on most launchers.
-  - Android is detected robustly even though `os.name` reads "Linux" under
-    PojavLauncher / FCL / Zalith (env vars, `/system/build.prop`, path fingerprints).
-  - Android 10+ forbids executing arbitrary binaries, so the bundled download is skipped there;
-    the mod falls back to a system `ffmpeg` (PATH / Termux), or accepts a manual override via
-    `-Ddreamdisplayx.ffmpeg.path=<path>` / `DREAMDISPLAYX_FFMPEG_PATH`. Downloaded binaries are
-    verified executable before use, and the CI jar works through the bundled native libav
-    (`dreamdisplayx_lav.so` + FFmpeg shared libs, loaded via dlopen — no exec needed).
-  - Added a **MEDIACODEC** hardware-acceleration backend, used by default on Android.
-- **Quality settings**: removed the 60fps toggle; maximum quality is now capped at 1080p
-  (2160p / 1440p were dropped from the quality ladder). The faster 60fps CDN variants also
-  avoid the previous 403s because their domains are allowed for Referer forwarding now.
+- Displays are no longer affected by shaders
+- Pausing and resuming playback is now instant
+- YouTube connections are pre-warmed on server join, cutting the delay before the first frame resolves
+- Frame scaling now runs band-parallel across cores instead of on a single core
+- Added `LuckPerms` as an optional dependency in the release workflow
+- Removed unused suppression annotations and refactored minor stuff ([#183](https://github.com/arnodoelinger/dreamdisplays/pull/183))
+- General codebase improvements ([#184](https://github.com/arnodoelinger/dreamdisplays/pull/184))
 
 ### Fixes
 
-- **Bilibili 60fps / CDN streams no longer 403**: the Referer allow-list now covers
-  `mcdn.bilivideo.cn`, `mountaintoys.cn`, `bilivideo.cn` and `szbdyd.com` (was `bilivideo.com`
-  / `hdslb.com` only), so high-quality CDN fetches keep the Referer header.
-- **Danmaku text is HTML-unescaped** (`&lt;` / `&gt;` / `&amp;` … show as `<` `>` `&`) for both
-  live WebSocket messages and timed comments.
-- **Danmaku unsubscribes when the video fails to start**, instead of continuing to load comment
-  data against a dead player.
-- Danmaku overlay stops scrolling while the video is paused, and single-character / short
-  danmaku are measured with the real font metrics (no more oversized pills).
+- Fixed clock jumps when pausing
+- Fixed a frame nudge / jump right after resuming from pause
+- Fixed duplicated translations on Crowdin
 
 ## Server
 
-### Improvements
-
-- Android native builds now compile FFmpeg 8.1.x from source with the NDK instead of relying on
-  dead prebuilt artifacts, and the CI native-platform output typo was fixed.
-
 ### Fixes
 
-- Fixed the CI `required_native_plats` -> `required_native_platforms` output name that would break
-  the "Verify jar native bundle" step.
+- Fixed `Velocity` support by using the correct inject annotation for newer versions ([#182](https://github.com/arnodoelinger/dreamdisplays/pull/182))
 
 # 1.9.1 Release
 
