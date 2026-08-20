@@ -10,7 +10,6 @@ import com.dreamdisplayx.platform.client.Mod
 import com.dreamdisplayx.platform.client.capabilities.CapabilityNegotiationService
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
-import com.dreamdisplayx.platform.client.screenshare.ScreenShareCommand
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
 
@@ -57,7 +56,6 @@ object ClientPacketManager {
 
             is FullscreenState -> FullscreenController.handle(packet)
             is RemotePlaybackToggle -> DisplayRegistry.screens[packet.id]?.setPaused(packet.paused)
-            is ScreenShareAck -> ScreenShareCommand.onAck(packet.watchUrl)
             is PlatformCredentials -> {
                 ClientStateManager.bilibiliSessdata = packet.bilibiliSessdata
                 BilibiliApi.cookie = packet.bilibiliSessdata

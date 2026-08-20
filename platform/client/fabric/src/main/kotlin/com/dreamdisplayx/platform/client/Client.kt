@@ -32,7 +32,6 @@ import com.dreamdisplayx.platform.client.net.Packets
 import com.dreamdisplayx.platform.client.net.V2Payload
 import com.dreamdisplayx.platform.client.platform.FabricPlatformIntegrationProvider
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
-import com.dreamdisplayx.platform.client.screenshare.ScreenShareCommand
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
 import net.fabricmc.api.ClientModInitializer
@@ -127,26 +126,19 @@ class Client : ClientModInitializer, Mod {
 
         ClientTickEvents.END_CLIENT_TICK.register { Initializer.onEndTick(it) }
 
-        // Client-side screen sharing over the mod protocol: /share start begins a cast, /share stop ends it.
+        // Opens the Bilibili login screen (QR code / phone + password).
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
-                clientLiteral("share")
-                    .then(
-                        clientLiteral("start")
-                            .executes {
-                                ScreenShareCommand.feedback(ScreenShareCommand.start())
-                                1
-                            }
-                    )
-                    .then(
-                        clientLiteral("stop")
-                            .executes {
-                                ScreenShareCommand.feedback(ScreenShareCommand.stop())
-                                1
-                            }
-                    )
+                clientLiteral("dlogin")
+                    .executes {
+                        //? if >=26.2 {
+                        Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
+                        //?} else
+                        /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
+                        1
+                    }
             )
-            // Opens the Bilibili login screen (QR code / phone + password).
+        }
             dispatcher.register(
                 clientLiteral("dlogin")
                     .executes {

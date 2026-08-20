@@ -34,6 +34,12 @@ object Initializer {
 
     /** Called once during mod startup; initializes config, `yt-dlp`, `FFmpeg`, disk cache, and the focuser thread. */
     fun onModInit(dreamDisplaysMod: Mod) {
+        // Android is not supported — the mod relies on native libraries (dlopen/JNI) and
+        // subprocess execution that SELinux and noexec policies prevent on stock Android.
+        if (OsInfo.isAndroid) {
+            logger.warn("Dream DisplaysX is not supported on Android. Disabling mod.")
+            return
+        }
         // On macOS, VideoPopoutWindow uses GLFW (not AWT), so no AWT setup is needed.
         // On Windows / Linux, AWT is used: override java.awt.headless so a JFrame can open.
         // Must run before any AWT class initializes the Toolkit.

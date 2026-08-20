@@ -14,7 +14,6 @@ import com.dreamdisplayx.media.player.process.FFmpegBinary
 import com.dreamdisplayx.media.player.process.HlsAudioFeeder
 import com.dreamdisplayx.media.player.process.HwAccelBackend
 import com.dreamdisplayx.media.player.process.MediaProcess
-import com.dreamdisplayx.util.OsInfo
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.MediaUtil
@@ -140,16 +139,6 @@ internal class PlaybackSessionManager(
             } else null
             if (lavThread != null) {
                 process = null; thread = lavThread; inProcess = true; return
-            }
-            // Android 10+ forbids executing arbitrary binaries, so there is no point trying the
-            // FFmpeg subprocess path.  The CI build must bundle native libav with FFmpeg shared
-            // libs (dlopen path) — without it playback is impossible.
-            if (OsInfo.isAndroid) {
-                throw IOException(
-                    "Android requires native libav. Use the CI build which bundles " +
-                        "dreamdisplayx_lav.so + FFmpeg shared libraries, or install Termux's " +
-                        "ffmpeg and set DREAMDISPLAYX_FFMPEG_PATH."
-                )
             }
             if (nativePipe != null) {
                 val nv12 = NativeMedia.nv12Enabled

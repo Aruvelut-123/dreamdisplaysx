@@ -6,7 +6,6 @@ import com.dreamdisplayx.platform.client.login.PlatformLoginScreen
 import com.dreamdisplayx.platform.client.platform.NeoForgePlatformIntegrationProvider
 import com.dreamdisplayx.api.platform.service.keys.PlatformServices
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
-import com.dreamdisplayx.platform.client.screenshare.ScreenShareCommand
 import com.dreamdisplayx.platform.client.Mod as DreamMod
 import com.mojang.blaze3d.systems.RenderSystem
 import net.minecraft.client.Camera
@@ -46,25 +45,8 @@ class Client(modEventBus: IEventBus) : DreamMod {
         NeoForge.EVENT_BUS.register(this)
     }
 
-    /** Registers the client-side screen-sharing commands (`/share start` / `/share stop`). */
+    /** Registers client-side commands. */
     private fun onRegisterClientCommands(event: RegisterClientCommandsEvent) {
-        event.dispatcher.register(
-            Commands.literal("share")
-                .then(
-                    Commands.literal("start")
-                        .executes {
-                            ScreenShareCommand.feedback(ScreenShareCommand.start())
-                            1
-                        }
-                )
-                .then(
-                    Commands.literal("stop")
-                        .executes {
-                            ScreenShareCommand.feedback(ScreenShareCommand.stop())
-                            1
-                        }
-                )
-        )
         // Opens the Bilibili login screen (QR code / phone + password).
         event.dispatcher.register(
             Commands.literal("dlogin")
