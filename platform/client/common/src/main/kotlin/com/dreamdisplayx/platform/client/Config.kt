@@ -22,6 +22,9 @@ class Config(private val baseDir: File) {
     /** Whether displays are enabled at all. */
     var displaysEnabled: Boolean = true
 
+    /** Global master toggle for Bilibili danmaku rendering; when false, no danmaku is drawn anywhere. */
+    var danmakuEnabled: Boolean = true
+
     /** Browser to import `yt-dlp` cookies from, or [CookieSource.NONE] to disable. */
     var ytdlpCookieSource: CookieSource = CookieSource.NONE
 
@@ -68,6 +71,7 @@ class Config(private val baseDir: File) {
         defaultDistance = ((rawDistance / 16.0).roundToInt().coerceIn(2, 12)) * 16
         defaultDisplayVolume = data["default-default-display-volume"]?.toDoubleOrNull() ?: defaultDisplayVolume
         displaysEnabled = data["displays-enabled"]?.toBooleanStrictOrNull() ?: displaysEnabled
+        danmakuEnabled = data["danmaku-enabled"]?.toBooleanStrictOrNull() ?: danmakuEnabled
         ytdlpCookieSource = data["ytdlp-cookies-from-browser"]
             ?.let { CookieSource.fromConfig(it) }
             ?: ytdlpCookieSource
@@ -91,6 +95,7 @@ class Config(private val baseDir: File) {
             appendLine("default-render-distance: $defaultDistance")
             appendLine("default-default-display-volume: $defaultDisplayVolume")
             appendLine("displays-enabled: $displaysEnabled")
+            appendLine("danmaku-enabled: $danmakuEnabled")
             appendLine("ytdlp-cookies-from-browser: ${ytdlpCookieSource.configToken.yamlQuoted()}")
             appendLine("ytdlp-proxy: ${ytdlpProxy.yamlQuoted()}")
             appendLine("use-hw-accel: $useHwAccel")

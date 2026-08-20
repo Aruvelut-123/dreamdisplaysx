@@ -10,10 +10,14 @@ import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
- * The settings panel of the display menu: labeled rows (volume, render distance, quality, brightness, sync), each with a
- * control and a reset button.
+ * The settings panel of the display menu: labeled rows (volume, render distance, quality, brightness, sync,
+ * danmaku, ...), each with a control and a reset button.
+ *
+ * When the rows do not fit in the panel height, the row area becomes vertically scrollable (mouse wheel
+ * and a draggable scrollbar). The panel title and the owner action buttons stay pinned.
  */
 class SettingsSection(
     private val rows: List<Row>,
@@ -34,33 +38,98 @@ class SettingsSection(
         val tooltip: () -> List<Component>,
     ) {
         internal var labelHover: UiRect? = null
+        /** The row's current on-screen rect (accounting for scroll), used for hit-testing. */
+        internal var rowRect: UiRect? = null
     }
 
+    // ── Scroll state ──────────────────────────────────────────────────────────────────────────────
+
+    /** Current vertical scroll offset in pixels inside the row area. */
+    private var scrollOffset = 0
+
+    /** Maximum scroll offset; > 0 means the row area overflows and scrolling is active. */
+    private var maxScroll = 0
+
+    /** Vertical bounds of the scrollable row area (panel-local, in virtual pixels). */
+    private var areaTop = 0
+    private var areaBottom = 0
+
+    /** True while the user is dragging the scrollbar thumb. */
+    private var draggingThumb = false
+
+    /** Scrollbar thumb geometry for hit-testing / dragging, populated during [render]. */
+    private var thumbStart = 0
+    private var thumbLen = 0
+    private var barX = 0
+
+    /** Horizontal scissor bounds of the row area, populated during [render]. */
+    private var clipLeft = 0
+    private var clipRight = 0
+
     /** Draws all rows into [panel] and places the owner action buttons in its bottom-right corner. */
-    fun render(g: GuiGraphicsCompat, panel: UiRect) {
+    fun render(g: GuiGraphicsCompat, panel: UiRect, mouseX: Int, mouseY: Int) {
         val font = Minecraft.getInstance().font
         val innerX = panel.x + UiTheme.PANEL_PADDING_X
         val innerW = panel.w - UiTheme.PANEL_PADDING_X * 2
-        var rowY = panel.y + UiTheme.PANEL_PADDING_Y + font.lineHeight + 6
+        val titleH = panel.y + UiTheme.PANEL_PADDING_Y + font.lineHeight + 6
 
         // Reserve a shared label column as wide as the widest label so every control gets the same
         // width and left edge, instead of each being squeezed by its own label length (which made
         // the sliders visibly different widths from row to row).
         val labelColW = rows.maxOf { font.width(Component.translatable(it.labelKey)) }
 
+        // Row area spans from below the title up to the owner-action row at the bottom.
+        areaTop = titleH
+        areaBottom = panel.bottom - UiTheme.PANEL_PADDING_X - UiTheme.CONTROL_BUTTON - 6
+        val areaH = max(0, areaBottom - areaTop)
+
+        val contentH = rows.sumOf { it.extraGapBefore + UiTheme.ROW_H } +
+            UiTheme.ROW_GAP * (rows.size - 1)
+        maxScroll = max(0, contentH - areaH)
+        scrollOffset = scrollOffset.coerceIn(0, maxScroll)
+        clipLeft = panel.x + UiTheme.PANEL_PADDING_X
+        clipRight = panel.right - UiTheme.PANEL_PADDING_X
+
+        // Clip the row drawing to the scrollable area.
+        g.enableScissor(clipLeft, areaTop, clipRight, areaBottom)
+
+        var rowY = titleH - scrollOffset
         for (row in rows) {
             rowY += row.extraGapBefore
-            renderRow(g, row, innerX, rowY, innerW, labelColW)
+            renderRow(g, row, innerX, rowY, innerW, labelColW, areaTop, areaBottom)
             rowY += UiTheme.ROW_H + UiTheme.ROW_GAP
         }
 
+        g.disableScissor()
+
+        drawScrollbar(g, panel, areaTop, areaBottom, areaH, mouseY)
         placeOwnerActions(panel)
     }
 
     /** Draws one row's background and label, and places its control and reset button. */
-    private fun renderRow(g: GuiGraphicsCompat, row: Row, x: Int, y: Int, w: Int, labelColW: Int) {
+    private fun renderRow(
+        g: GuiGraphicsCompat,
+        row: Row,
+        x: Int,
+        y: Int,
+        w: Int,
+        labelColW: Int,
+        clipTop: Int,
+        clipBottom: Int,
+    ) {
         val font = Minecraft.getInstance().font
+
+        // Rows fully outside the visible area are skipped entirely (their controls keep their last
+        // placement off-screen and are drawn inside the scissor clip, so nothing leaks).
+        val visible = y + UiTheme.ROW_H > clipTop && y < clipBottom
+
         g.fill(x, y, x + w, y + UiTheme.ROW_H, UiTheme.ROW_BG)
+        row.rowRect = UiRect(x, y, w, UiTheme.ROW_H)
+        if (!visible) {
+            row.labelHover = null
+            return
+        }
+
         val label = Component.translatable(row.labelKey)
         val textY = y + UiTheme.ROW_H / 2 - font.lineHeight / 2
         g.drawText(font, label, x + 6, textY, UiTheme.TEXT_PRIMARY, false)
@@ -75,6 +144,88 @@ class SettingsSection(
         // Size every control from the shared label column, so all rows get an identical control width.
         val controlW = min(UiTheme.CONTROL_W, max(60, rightEdge - (x + 6 + labelColW + 8)))
         row.control.place(UiRect(rightEdge - controlW, y, controlW, UiTheme.ROW_H))
+    }
+
+    /** Draws the vertical scrollbar along the right edge of the panel when rows overflow. */
+    private fun drawScrollbar(
+        g: GuiGraphicsCompat,
+        panel: UiRect,
+        top: Int,
+        bottom: Int,
+        viewH: Int,
+        mouseY: Int,
+    ) {
+        if (maxScroll <= 0) {
+            draggingThumb = false
+            thumbLen = 0
+            return
+        }
+        val barW = 3
+        barX = panel.right - UiTheme.PANEL_PADDING_X + 2
+        val content = maxScroll + viewH
+        g.fill(barX, top, barX + barW, bottom, UiTheme.SCROLLBAR_TRACK)
+        val len = max(14, (viewH.toFloat() / content * viewH).toInt())
+        val start = top + (scrollOffset.toFloat() / maxScroll * (viewH - len)).toInt()
+        //? if >=1.21.11 {
+        val hovered = mouseY >= start && mouseY <= start + len
+        g.fill(barX, start, barX + barW, start + len, if (hovered) 0xFFA0A0A0 else UiTheme.SCROLLBAR_THUMB)
+        //?} else
+        /*g.fill(barX, start, barX + barW, start + len, UiTheme.SCROLLBAR_THUMB)*/
+        thumbStart = start
+        thumbLen = len
+    }
+
+    /** True when ([mx], [my]) is over the scrollbar thumb or its track. */
+    fun overScrollbar(mx: Int, my: Int): Boolean {
+        if (maxScroll <= 0 || thumbLen <= 0) return false
+        return mx >= barX - 1 && mx <= barX + 4 && my >= areaTop && my <= areaBottom
+    }
+
+    /** Handles a mouse-wheel scroll over the row area. Returns true if consumed. */
+    fun handleScroll(mouseX: Int, mouseY: Int, scrollY: Double): Boolean {
+        if (maxScroll <= 0) return false
+        if (mouseY < areaTop || mouseY > areaBottom) return false
+        if (mouseX < 0 || mouseX > barX + 4) return false
+        scrollOffset = (scrollOffset - scrollY.toInt() * SCROLL_STEP).coerceIn(0, maxScroll)
+        return true
+    }
+
+    /** Handles a mouse press on the scrollbar; starts a thumb drag. Returns true if consumed. */
+    fun handleScrollbarPress(mx: Int, my: Int): Boolean {
+        if (maxScroll <= 0 || thumbLen <= 0 || !overScrollbar(mx, my)) return false
+        if (my >= thumbStart && my <= thumbStart + thumbLen) {
+            draggingThumb = true
+            return true
+        }
+        // Track click: jump the thumb so its centre lands on the cursor.
+        scrollFromPos(my)
+        draggingThumb = true
+        return true
+    }
+
+    /** Handles a scrollbar thumb drag. Returns true if consumed. */
+    fun handleScrollbarDrag(my: Int): Boolean {
+        if (!draggingThumb) return false
+        scrollFromPos(my)
+        return true
+    }
+
+    /** Ends a scrollbar thumb drag. Returns true if a drag was active. */
+    fun handleScrollbarRelease(): Boolean {
+        val was = draggingThumb
+        draggingThumb = false
+        return was
+    }
+
+    /** Maps a cursor [pos] along the scroll axis to [scrollOffset], centering the thumb on it. */
+    private fun scrollFromPos(pos: Int) {
+        val travel = areaBottom - areaTop - thumbLen
+        if (travel <= 0) {
+            scrollOffset = 0
+            return
+        }
+        val rel = (pos - areaTop - thumbLen / 2.0).coerceIn(0.0, travel.toDouble())
+        scrollOffset = (rel / travel * maxScroll).roundToInt().coerceIn(0, maxScroll)
     }
 
     /** Places the owner action buttons right-to-left along the panel's bottom-right corner. */
@@ -117,5 +268,25 @@ class SettingsSection(
         g.setComponentTooltipForNextFrame(font, lines, x, y)
         //?} else
         /*g.renderComponentTooltip(font, lines, x, y)*/
+    }
+
+    /**
+     * After [render], call this before [drawChildren] to clip child widgets (sliders, buttons) to the
+     * scrollable row area. Call [endChildClip] after [drawChildren]. No-op when no scrolling is active.
+     */
+    fun beginChildClip(g: GuiGraphicsCompat) {
+        if (maxScroll <= 0) return
+        g.enableScissor(clipLeft, areaTop, clipRight, areaBottom)
+    }
+
+    /** Ends the child-widget scissor started by [beginChildClip]. */
+    fun endChildClip(g: GuiGraphicsCompat) {
+        if (maxScroll <= 0) return
+        g.disableScissor()
+    }
+
+    companion object {
+        /** Pixels scrolled per mouse-wheel notch. */
+        private const val SCROLL_STEP = 24
     }
 }

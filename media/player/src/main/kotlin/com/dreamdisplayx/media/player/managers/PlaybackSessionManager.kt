@@ -465,7 +465,7 @@ internal class PlaybackSessionManager(
             MediaProcess.gracefulDestroy(ap)
             discardHalvesAsync(null, oldAudio)
         } else {
-            logger.warn(
+            logger.debug(
                 "$debugLabel Seek can't go in place (inProcess=${old.inProcess}, " +
                         "pipe=${old.nativePipe?.expectedW}x${old.nativePipe?.expectedH}, target=${w} x $h); " +
                         "reopening the channel."
@@ -903,7 +903,7 @@ internal class PlaybackSessionManager(
                 (audioHalf != null || silentSession)
 
     fun suspend(allowExternalProcess: Boolean = false, retainBuffered: Boolean = false): Boolean {
-        if (!(if (allowExternalProcess) canHoldWarm() else canPark()) || parkFlag.get()) return false
+        if (!(if (allowExternalProcess) canHoldWarm() else canHoldWarm()) || parkFlag.get()) return false
         parkFlag.set(true)
         // Nothing may switch tracks while dormant, so holding idle FFmpeg processes would be pure cost.
         audioWarmPool.invalidateAll()

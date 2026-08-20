@@ -94,7 +94,7 @@ class DisplayScreen(
     var rotation: DisplayRotation = DisplayRotation.NONE,
 ) {
     /** Per-display client settings (volume, quality, mute, ...) loaded from disk. */
-    private val savedSettings = ClientSettingsStore.getSettings(uuid, defaultVolume())
+    internal val savedSettings = ClientSettingsStore.getSettings(uuid, defaultVolume())
 
     /** True if the local player owns this display. */
     var owner: Boolean = Minecraft.getInstance().player?.gameProfile?.id?.toString() == ownerUuid.toString()
@@ -137,6 +137,15 @@ class DisplayScreen(
 
     /** 3D acoustics engine (directivity, occlusion, reverb); false = legacy distance-gain only. */
     var acousticsEnabled: Boolean = savedSettings.acousticsEnabled
+
+    /** Whether danmaku (bullet comments) is enabled for this display. */
+    var danmakuEnabled: Boolean = savedSettings.danmakuEnabled
+        set(value) {
+            field = value
+            savedSettings.danmakuEnabled = value
+            ClientSettingsStore.save()
+            DisplayRegistry.recordScreen(this)
+        }
 
     /** Legacy mirror of [mode]; true only for [PlaybackMode.SYNCED]. */
     val isSync: Boolean get() = mode == PlaybackMode.SYNCED
@@ -922,6 +931,23 @@ class DisplayScreen(
         )
     }
 
+    /** Saves the current danmaku settings from [savedSettings] to the persistent store. */
+    internal fun saveDanmakuSettings() {
+        ClientSettingsStore.updateDanmakuSettings(
+            uuid,
+            savedSettings.danmakuEnabled,
+            savedSettings.danmakuOpacity,
+            savedSettings.danmakuFontSize,
+            savedSettings.danmakuSpeed,
+            savedSettings.danmakuDisplayArea,
+            savedSettings.danmakuFilterScroll,
+            savedSettings.danmakuFilterTop,
+            savedSettings.danmakuFilterBottom,
+            savedSettings.danmakuFilterColor,
+        )
+        DisplayRegistry.recordScreen(this)
+    }
+
     /** Mutes or unmutes the screen; no-op if already in the requested state. */
     fun mute(status: Boolean) {
         if (muted == status) return
@@ -1084,6 +1110,12 @@ class DisplayScreen(
 
     /** Advances the Bilibili danmaku overlay (client tick, main thread). */
     private fun advanceDanmaku() {
+        // Global client toggle: when disabled, skip danmaku entirely
+        if (!com.dreamdisplayx.platform.client.managers.ClientStateManager.config.danmakuEnabled) {
+            danmakuOverlay?.dispose()
+            danmakuOverlay = null
+            return
+        }
         val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
         // VOD / bangumi: consume timed danmaku as playback advances.
         // When paused, positionSec is frozen so consumeTimed naturally returns nothing — safe.
@@ -1095,7 +1127,10 @@ class DisplayScreen(
             else com.dreamdisplayx.platform.client.danmaku.DanmakuManager.drainLive(did)
         val overlay = danmakuOverlay
         if (due.isNotEmpty() || live.isNotEmpty() || overlay != null) {
-            val o = overlay ?: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(width, height).also {
+            val o = overlay ?: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(
+                width, height,
+                settings = { savedSettings },
+            ).also {
                 danmakuOverlay = it
             }
             due.forEach { o.add(it) }

@@ -33,6 +33,20 @@ interface ClientSettingsStorage {
         paused: Boolean,
     )
 
+    /** Updates the danmaku settings for [displayUuid] and immediately persists them to disk. */
+    fun updateDanmakuSettings(
+        displayUuid: UUID,
+        enabled: Boolean,
+        opacity: Float,
+        fontSize: Float,
+        speed: Float,
+        displayArea: Float,
+        filterScroll: Boolean,
+        filterTop: Boolean,
+        filterBottom: Boolean,
+        filterColor: Boolean,
+    )
+
     /** Sets the client-side URL and language override for [displayUuid] and saves. */
     fun setUrlOverride(displayUuid: UUID, url: String?, lang: String?)
 

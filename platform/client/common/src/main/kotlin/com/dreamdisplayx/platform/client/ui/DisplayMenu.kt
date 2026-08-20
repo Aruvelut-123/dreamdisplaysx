@@ -82,6 +82,14 @@ class DisplayMenu private constructor(
     private lateinit var popoutButton: IconButton
     private lateinit var audioTrackButton: IconButton
 
+    // ── Danmaku settings widgets ──────────────────────────────────────────────────────────────────
+    private lateinit var danmakuToggle: ModeSlider<Boolean>
+    private lateinit var danmakuOpacity: ValueSlider
+    private lateinit var danmakuFontSize: ValueSlider
+    private lateinit var danmakuSpeed: ValueSlider
+    private lateinit var danmakuArea: DanmakuAreaSlider
+    private lateinit var danmakuFilters: DanmakuFilterBar
+
     private var lastSuggestedVideoId: String? = null
     private var prevQualityListSize = 0
     private var suggestionsRect: UiRect? = null
@@ -348,13 +356,93 @@ class DisplayMenu private constructor(
         // the panel shows an "unavailable" notice to everyone else instead of pickable suggestions.
         suggestions.available = { ds.canSetVideoHere }
 
+        // ── Danmaku settings ──────────────────────────────────────────────────────────────────────
+        val saved = ds.savedSettings
+
+        danmakuToggle = addUi(
+            ModeSlider(
+                modes = listOf(true, false),
+                initial = saved.danmakuEnabled,
+                current = { saved.danmakuEnabled },
+                enabledFor = { true },
+                label = { enabled ->
+                    Component.translatable(if (enabled) "dreamdisplayx.mode.danmaku_on" else "dreamdisplayx.mode.danmaku_off")
+                },
+            ) { enabled ->
+                saved.danmakuEnabled = enabled
+                ds.saveDanmakuSettings()
+            })
+        danmakuToggle.visibleWhen = notErrored
+
+        danmakuOpacity = addUi(
+            ValueSlider(
+                initial = saved.danmakuOpacity.toDouble().coerceIn(0.0, 1.0),
+                label = { Component.literal("${floor(it * 100).toInt()}%") },
+                step = 0.05,
+            ) { v ->
+                saved.danmakuOpacity = v.toFloat()
+                ds.saveDanmakuSettings()
+            })
+        danmakuOpacity.visibleWhen = notErrored
+
+        danmakuFontSize = addUi(
+            ValueSlider(
+                initial = fontFraction(saved.danmakuFontSize),
+                label = { Component.literal("${((0.5 + it * 1.5) * 10).roundToInt() / 10.0}x") },
+                step = 1.0 / 30, // 0.05 of the 0.5–2.0 range
+            ) { v ->
+                saved.danmakuFontSize = (0.5f + v.toFloat() * 1.5f)
+                ds.saveDanmakuSettings()
+            })
+        danmakuFontSize.visibleWhen = notErrored
+
+        danmakuSpeed = addUi(
+            ValueSlider(
+                initial = fontFraction(saved.danmakuSpeed),
+                label = { Component.literal("${((0.5 + it * 1.5) * 10).roundToInt() / 10.0}x") },
+                step = 1.0 / 30,
+            ) { v ->
+                saved.danmakuSpeed = (0.5f + v.toFloat() * 1.5f)
+                ds.saveDanmakuSettings()
+            })
+        danmakuSpeed.visibleWhen = notErrored
+
+        danmakuArea = addUi(
+            DanmakuAreaSlider(
+                initial = saved.danmakuDisplayArea.toDouble().coerceIn(0.0, 1.0),
+                label = { Component.literal("${floor(it * 100).toInt()}%") },
+                step = 0.05,
+            ) { v ->
+                saved.danmakuDisplayArea = v.toFloat()
+                ds.saveDanmakuSettings()
+            })
+        danmakuArea.visibleWhen = notErrored
+
+        danmakuFilters = addUi(
+            DanmakuFilterBar(
+                initialScroll = saved.danmakuFilterScroll,
+                initialTop = saved.danmakuFilterTop,
+                initialBottom = saved.danmakuFilterBottom,
+                initialColor = saved.danmakuFilterColor,
+            ) { _, _ ->
+                saved.danmakuFilterScroll = danmakuFilters.filterScroll
+                saved.danmakuFilterTop = danmakuFilters.filterTop
+                saved.danmakuFilterBottom = danmakuFilters.filterBottom
+                saved.danmakuFilterColor = danmakuFilters.filterColor
+                ds.saveDanmakuSettings()
+            })
+        danmakuFilters.visibleWhen = notErrored
+
+        val danmakuResetButtons = danmakuResetButtons()
+
         preview =
             PreviewSection(
                 ds, muteButton, volume, popoutButton, audioTrackButton, pauseButton, progress,
                 dropdown, audioTrackDropdown,
             )
         settings = SettingsSection(
-            rows = settingsRows(renderDReset, qualityReset, brightnessReset, audio3dReset, syncReset),
+            rows = settingsRows(renderDReset, qualityReset, brightnessReset, audio3dReset, syncReset) +
+                danmakuSettingsRows(danmakuResetButtons),
             ownerActions = listOf(reportButton, deleteButton, lockButton),
             buttonTooltips = listOf(
                 lockButton to {
@@ -516,6 +604,7 @@ class DisplayMenu private constructor(
         resyncQualitySlider()
         resyncModeSlider()
         audio3d.syncToCurrent()
+        danmakuToggle.syncToCurrent()
 
         if (ds.errored) {
             dropdown.hide()
@@ -531,7 +620,7 @@ class DisplayMenu private constructor(
         g.drawPanel(font, layout.preview, Component.translatable("dreamdisplayx.ui.preview").string)
         g.drawPanel(font, layout.settings, Component.translatable("dreamdisplayx.ui.settings").string)
         preview.render(g, layout.preview, mouseX, mouseY)
-        settings.render(g, layout.settings)
+        settings.render(g, layout.settings, mouseX, mouseY)
 
         val suggestionsArea = layout.suggestions
         if (suggestionsArea != null) {
@@ -544,7 +633,11 @@ class DisplayMenu private constructor(
         }
         refreshRelatedVideos()
 
+        // When the settings rows overflow, clip their child widgets to the row area so scrolled
+        // controls never draw outside the panel.
+        settings.beginChildClip(g)
         drawChildren(g, mouseX, mouseY, partialTick)
+        settings.endChildClip(g)
         //? if <1.21.11 {
         suggestions.redrawSortDropdownOnTop(g, mouseX, mouseY)
         //?}
@@ -583,12 +676,14 @@ class DisplayMenu private constructor(
     }
 
     override fun onMouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean =
-        audioTrackDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
+        settings.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY) ||
+            audioTrackDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
 
     //? if >=1.21.11 {
     override fun onMouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val mx = event.x().toInt()
         val my = event.y().toInt()
+        if (event.button() == 0 && settings.handleScrollbarPress(mx, my)) return true
         val onPopoutButton = popoutButton.isMouseOver(mx.toDouble(), my.toDouble())
         if (dropdown.visible && event.button() == 0 && !onPopoutButton && dropdown.handleClick(mx, my)) return true
         val onAudioTrackButton = audioTrackButton.isMouseOver(mx.toDouble(), my.toDouble())
@@ -601,14 +696,18 @@ class DisplayMenu private constructor(
     }
 
     override fun onMouseDragged(event: MouseButtonEvent, dragX: Double, dragY: Double): Boolean =
-        audioTrackDropdown.handleDrag(event.y().toInt())
+        settings.handleScrollbarDrag(event.y().toInt()) ||
+            audioTrackDropdown.handleDrag(event.y().toInt())
 
     override fun onMouseReleased(event: MouseButtonEvent): Boolean =
-        audioTrackDropdown.handleRelease() || progress.commitDragIfActive()
+        settings.handleScrollbarRelease() ||
+            audioTrackDropdown.handleRelease() ||
+            progress.commitDragIfActive()
     //?} else
     /*override fun onMouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
         val mx = mouseX.toInt()
         val my = mouseY.toInt()
+        if (button == 0 && settings.handleScrollbarPress(mx, my)) return true
         val onPopoutButton = popoutButton.isMouseOver(mouseX, mouseY)
         if (dropdown.visible && button == 0 && !onPopoutButton && dropdown.handleClick(mx, my)) return true
         val onAudioTrackButton = audioTrackButton.isMouseOver(mouseX, mouseY)
@@ -617,10 +716,131 @@ class DisplayMenu private constructor(
     }
 
     override fun onMouseDragged(mouseX: Double, mouseY: Double, button: Int, dragX: Double, dragY: Double): Boolean =
-        audioTrackDropdown.handleDrag(mouseY.toInt())
+        settings.handleScrollbarDrag(mouseY.toInt()) ||
+            audioTrackDropdown.handleDrag(mouseY.toInt())
 
     override fun onMouseReleased(mouseX: Double, mouseY: Double, button: Int): Boolean =
-        audioTrackDropdown.handleRelease() || progress.commitDragIfActive()*/
+        settings.handleScrollbarRelease() ||
+            audioTrackDropdown.handleRelease() ||
+            progress.commitDragIfActive()*/
+
+    /** Converts a 0.5–2.0 font/speed value to a 0.0–1.0 slider fraction. */
+    private fun fontFraction(value: Float): Double = ((value - 0.5f) / 1.5f).toDouble().coerceIn(0.0, 1.0)
+
+    /** Creates reset buttons for each danmaku setting row. */
+    private fun danmakuResetButtons(): List<IconButton> {
+        val ds = displayScreen
+        val saved = ds.savedSettings
+        val toggleReset = addUi(IconButton("refresh") {
+            saved.danmakuEnabled = true
+            danmakuToggle.syncToCurrent()
+            ds.saveDanmakuSettings()
+        })
+        toggleReset.enabledWhen = { !saved.danmakuEnabled }
+        toggleReset.visibleWhen = { !ds.errored }
+
+        val opacityReset = addUi(IconButton("refresh") {
+            saved.danmakuOpacity = 0.8f
+            danmakuOpacity.value = 0.8
+            ds.saveDanmakuSettings()
+        })
+        opacityReset.enabledWhen = { abs(saved.danmakuOpacity - 0.8f) > 0.01f }
+        opacityReset.visibleWhen = { !ds.errored }
+
+        val fontSizeReset = addUi(IconButton("refresh") {
+            saved.danmakuFontSize = 1.0f
+            danmakuFontSize.value = fontFraction(1.0f)
+            ds.saveDanmakuSettings()
+        })
+        fontSizeReset.enabledWhen = { abs(saved.danmakuFontSize - 1.0f) > 0.01f }
+        fontSizeReset.visibleWhen = { !ds.errored }
+
+        val speedReset = addUi(IconButton("refresh") {
+            saved.danmakuSpeed = 1.0f
+            danmakuSpeed.value = fontFraction(1.0f)
+            ds.saveDanmakuSettings()
+        })
+        speedReset.enabledWhen = { abs(saved.danmakuSpeed - 1.0f) > 0.01f }
+        speedReset.visibleWhen = { !ds.errored }
+
+        val areaReset = addUi(IconButton("refresh") {
+            saved.danmakuDisplayArea = 0.5f
+            danmakuArea.value = 0.5
+            ds.saveDanmakuSettings()
+        })
+        areaReset.enabledWhen = { abs(saved.danmakuDisplayArea - 0.5f) > 0.01f }
+        areaReset.visibleWhen = { !ds.errored }
+
+        val filterReset = addUi(IconButton("refresh") {
+            saved.danmakuFilterScroll = true
+            saved.danmakuFilterTop = true
+            saved.danmakuFilterBottom = true
+            saved.danmakuFilterColor = true
+            danmakuFilters.setStates(true, true, true, true)
+            ds.saveDanmakuSettings()
+        })
+        filterReset.enabledWhen = {
+            !saved.danmakuFilterScroll || !saved.danmakuFilterTop ||
+                !saved.danmakuFilterBottom || !saved.danmakuFilterColor
+        }
+        filterReset.visibleWhen = { !ds.errored }
+
+        return listOf(toggleReset, opacityReset, fontSizeReset, speedReset, areaReset, filterReset)
+    }
+
+    /** Builds the danmaku settings rows. */
+    private fun danmakuSettingsRows(resetButtons: List<IconButton>): List<SettingsSection.Row> {
+        val ds = displayScreen
+        val saved = ds.savedSettings
+        return listOf(
+            SettingsSection.Row("dreamdisplayx.button.danmaku", danmakuToggle, resetButtons[0]) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku.tooltip.2"),
+                    Component.literal(""),
+                    tooltipValue(
+                        "dreamdisplayx.button.danmaku.tooltip.3",
+                        if (saved.danmakuEnabled) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled",
+                    ),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku.opacity", danmakuOpacity, resetButtons[1]) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku.opacity.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku.opacity.tooltip.2"),
+                    Component.literal(""),
+                    tooltipValue("dreamdisplayx.button.danmaku.opacity.tooltip.3", floor(saved.danmakuOpacity * 100).toInt()),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku.fontsize", danmakuFontSize, resetButtons[2]) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku.fontsize.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku.fontsize.tooltip.2"),
+                    Component.literal(""),
+                    tooltipValue("dreamdisplayx.button.danmaku.fontsize.tooltip.3", "%.1f".format(saved.danmakuFontSize)),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku.speed", danmakuSpeed, resetButtons[3]) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku.speed.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku.speed.tooltip.2"),
+                    Component.literal(""),
+                    tooltipValue("dreamdisplayx.button.danmaku.speed.tooltip.3", "%.1f".format(saved.danmakuSpeed)),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku.area", danmakuArea, resetButtons[4]) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku.area.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku.area.tooltip.2"),
+                    Component.literal(""),
+                    tooltipValue("dreamdisplayx.button.danmaku.area.tooltip.3", floor(saved.danmakuDisplayArea * 100).toInt()),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku.filter", danmakuFilters, resetButtons[5], extraGapBefore = 6) {
+                danmakuFilters.stateTooltip()
+            },
+        )
+    }
 
     override fun isPauseScreen(): Boolean = false
 
