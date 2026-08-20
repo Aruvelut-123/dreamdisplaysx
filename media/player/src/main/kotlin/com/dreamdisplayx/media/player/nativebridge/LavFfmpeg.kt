@@ -30,6 +30,9 @@ object LavFfmpeg {
     /** Ensures [dir] contains FFmpeg libraries, downloading and unpacking them on first run. */
     fun ensure(dir: File): Boolean {
         if (hasFfmpeg(dir)) return true
+        // Android: the CI jar bundles FFmpeg shared libs under /dreamdisplayx-natives/<platform>/
+        // alongside dreamdisplayx_lav.so.  Extract them from the jar resource instead of downloading.
+        if (OsInfo.isAndroid) return extractFromJar(dir)
         val source = source() ?: return false
         return runCatching {
             if (!dir.exists() && !dir.mkdirs()) throw IOException("Cannot create $dir.")
@@ -156,10 +159,11 @@ object LavFfmpeg {
     /** Downloads [url] to [dest] with periodic progress log lines (every 10 %). */
     @Throws(IOException::class)
     private fun downloadWithProgress(url: String, dest: File) {
+        val proxied = proxyUrl(url)
         var announced = false
         var lastLoggedPct = -1
         DreamHttpClient.downloadToFile(
-            url,
+            proxied,
             dest.toPath(),
             DreamHttpClient.RequestOptions(
                 headers = DreamHttpClient.headersOf("User-Agent" to "DreamDisplaysX-lav-ffmpeg"),
@@ -198,5 +202,44 @@ object LavFfmpeg {
                 readTimeoutMs = 60_000,
             ),
         )
+    }
+
+    /** Extracts FFmpeg shared libraries from the jar resource bundle for the current Android ABI. */
+    private fun extractFromJar(dir: File): Boolean {
+        val pk = androidPlatformKey()
+        val ffmpegLibs = listOf("avutil", "swresample", "swscale", "avcodec", "avformat", "avfilter", "avdevice")
+        if (!dir.exists() && !dir.mkdirs()) {
+            logger.warn("Cannot create $dir for FFmpeg extraction.")
+            return false
+        }
+        var count = 0
+        for (lib in ffmpegLibs) {
+            val resourcePath = "/dreamdisplayx-natives/$pk/lib$lib.so"
+            javaClass.getResourceAsStream(resourcePath)?.use { input ->
+                val dest = File(dir, "lib$lib.so")
+                if (!dest.exists() || dest.length() == 0L) {
+                    BufferedOutputStream(FileOutputStream(dest)).use { out -> input.transferTo(out) }
+                }
+                count++
+            }
+        }
+        if (count > 0) logger.info("Extracted $count FFmpeg shared libs from jar bundle to ${dir.absolutePath}.")
+        else logger.warn("No FFmpeg shared libs found in jar bundle at /dreamdisplayx-natives/$pk/.")
+        return hasFfmpeg(dir)
+    }
+
+    private fun androidPlatformKey(): String = when {
+        OsInfo.isArm64 -> "android-arm64"
+        OsInfo.isArm -> "android-armv7"
+        "64" in System.getProperty("os.arch", "").lowercase() -> "android-x86_64"
+        else -> "android-x86"
+    }
+
+    /** Wraps a GitHub release asset URL through gh-proxy.com for faster downloads in China. */
+    private fun proxyUrl(original: String): String {
+        // Only proxy GitHub release asset downloads, not API calls.
+        return if (original.startsWith("https://github.com/") && "releases/download" in original) {
+            "https://gh-proxy.com/$original"
+        } else original
     }
 }

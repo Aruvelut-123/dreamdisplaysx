@@ -804,6 +804,13 @@ jobs:
             find "$FFMPEG_DIR/lib" -name "*.so" -exec cp {} "$ffmpeg_lib_dir/" \;
           fi
           
+          # For Android, pack FFmpeg shared libraries right alongside the native bundle so
+          # preloadLavDependencies() finds them in the extracted cache dir.  Desktop platforms
+          # download them from BtbN at first run instead.
+          if [[ -n "$FFMPEG_DIR" && -d "$FFMPEG_DIR/lib" ]]; then
+            find "$FFMPEG_DIR/lib" -name "*.so" -exec cp {} "$out/" \;
+          fi
+          
           # Collect license info
           license_dir="$out/licenses"
           mkdir -p "$license_dir"
@@ -1075,6 +1082,7 @@ jobs:
               bundled_ffmpeg = [
                   name for name in names
                   if name.startswith("dreamdisplayx-natives/")
+                  and not name.split("/")[1].startswith("android-")  # Android bundles FFmpeg libs by design
                   and any(component in name.rsplit("/", 1)[-1].lower() for component in ffmpeg_components)
                   and (name.endswith(".dll") or name.endswith(".dylib") or ".so" in name.rsplit("/", 1)[-1])
               ]

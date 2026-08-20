@@ -595,8 +595,14 @@ object NativeMedia {
         return null
     }
 
-    /** Platform key matching the layout used by the FFmpeg binary cache. */
+    /** Platform key matching the layout used by the FFmpeg binary cache and CI jar bundle. */
     private fun platformKey(): String = when {
+        OsInfo.isAndroid -> when {
+            OsInfo.isArm64 -> "android-arm64"
+            OsInfo.isArm -> "android-armv7"
+            "64" in System.getProperty("os.arch", "").lowercase() -> "android-x86_64"
+            else -> "android-x86"
+        }
         OsInfo.isWindows -> if (OsInfo.isArm) "windows-aarch64" else "windows-x64"
         OsInfo.isMac -> if (OsInfo.isArm) "macos-aarch64" else "macos-x64"
         else -> if (OsInfo.isArm) "linux-aarch64" else "linux-x64"
