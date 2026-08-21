@@ -41,6 +41,7 @@ object VanillaPacketUtil {
                 virtual = display.virtual, forced = forced,
                 scheduledStartEpochMillis = display.scheduledStart?.toEpochMilliseconds() ?: 0,
                 scheduledAction = display.scheduledAction?.wire ?: -1,
+                positionNanos = display.seekPositionNanos,
             ),
         )
         if (legacy.isEmpty()) return

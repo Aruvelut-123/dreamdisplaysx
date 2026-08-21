@@ -50,6 +50,9 @@ interface DisplayData {
     /** Duration of the video. */
     var duration: Long?
 
+    /** Playback position in nanoseconds, persisted so a server restart resumes rather than replays from the start. */
+    var seekPositionNanos: Long
+
     /** Pending scheduled-playback start; null when no schedule is set. One-shot, cleared once it fires. */
     var scheduledStart: Instant?
 
@@ -91,6 +94,9 @@ abstract class BaseDisplayData(override val virtual: Boolean = false) : DisplayD
 
     /** Duration of the video. */
     override var duration: Long? = null
+
+    /** Persisted playback position in nanoseconds (see [DisplayData.seekPositionNanos]). */
+    override var seekPositionNanos: Long = 0L
 
     /** Pending scheduled-playback start; null when no schedule is set. */
     override var scheduledStart: Instant? = null

@@ -325,6 +325,9 @@ class DisplayScreen(
     /** Last known playback position in nanoseconds, restored on reconnect. */
     var savedTimeNanos: Long = 0
 
+    /** Tick counter throttling how often this LOCAL screen reports its position to the server. */
+    private var positionReportTicks = 0
+
     /** Follows the server-authoritative timeline (Synced / Broadcast / watch party). */
     internal val timelineFollower = TimelineFollower(this)
 
@@ -571,6 +574,9 @@ class DisplayScreen(
         scheduledStartEpochMillis = packet.scheduledStartEpochMillis
         scheduledAction = packet.scheduledAction
         owner = Minecraft.getInstance().player?.gameProfile?.id?.toString() == packet.ownerId.toString()
+
+        // Server-persisted seek position: apply it when the URL is unchanged so playback resumes there.
+        if (packet.positionNanos > 0 && packet.url == videoUrl) savedTimeNanos = packet.positionNanos
 
         if (videoUrl != packet.url || lang != packet.lang) {
             val previousUrl = videoUrl
@@ -957,6 +963,15 @@ class DisplayScreen(
         if (savedTimeNanos > 0) mp.seekTo(savedTimeNanos, false)
     }
 
+    /** Reports this LOCAL display's playback position to the server (throttled) so it can persist it. */
+    private fun reportPositionToServer() {
+        if (mode != PlaybackMode.LOCAL || watchParty != null || paused) return
+        if (++positionReportTicks % POSITION_REPORT_INTERVAL_TICKS != 0) return
+        val nanos = currentTimeNanos
+        savedTimeNanos = nanos
+        Initializer.sendPacket(ReportPosition(uuid, nanos))
+    }
+
     /** Primes player volume before prelude audio to avoid blast on return. */
     internal fun primeNewPlayerVolume(mp: MediaPlayer) {
         val player = Minecraft.getInstance().player ?: return
@@ -1025,6 +1040,7 @@ class DisplayScreen(
         val maxRadius = if (isPopoutActive) Double.MAX_VALUE else ClientStateManager.config.defaultDistance.toDouble()
         val distance = getDistanceToScreen(pos)
         mediaPlayer?.tick(distance, maxRadius)
+        reportPositionToServer()
         if (isPopoutActive) {
             if (distanceQualitySteps != 0) {
                 distanceQualitySteps = 0
@@ -1104,6 +1120,9 @@ class DisplayScreen(
 
         /** Skip the restore seek when already within this tolerance of the saved position. */
         private const val RESTORE_SEEK_TOLERANCE_NS = 250_000_000L
+
+        /** Every N ticks a LOCAL display reports its position to the server (~1s at 20 TPS). */
+        private const val POSITION_REPORT_INTERVAL_TICKS = 20
 
         /** Duration of the first-frame fade-in (see [appearProgress]). */
         private const val APPEAR_FADE_NANOS = 260_000_000L

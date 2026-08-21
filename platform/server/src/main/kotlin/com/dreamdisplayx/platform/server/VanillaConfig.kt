@@ -51,6 +51,32 @@ class VanillaConfig(private val configDir: File) {
                 logger.error("Could not find bundled config.toml; writing an empty file.")
                 configFile.createNewFile()
             }
+        } else {
+            appendMissingStorageSection()
+        }
+    }
+
+    /** Older configs predate the `[storage]` section; append the defaults so MySQL switching stays visible. */
+    private fun appendMissingStorageSection() {
+        val existing = runCatching { Toml.parse(configFile.toPath()) }.getOrNull() ?: return
+        if (existing.getTable("storage") != null) return
+        val sb = StringBuilder("\n")
+        sb.append("[storage]\n")
+        sb.append("# Storage type: SQLITE or MYSQL\n")
+        sb.append("# If you choose MYSQL, fill in the details below\n")
+        sb.append("type = \"SQLITE\"\n")
+        sb.append("host = \"localhost\"\n")
+        sb.append("port = \"3306\"\n")
+        sb.append("database = \"database\"\n")
+        sb.append("username = \"username\"\n")
+        sb.append("password = \"password\"\n")
+        sb.append("table_prefix = \"\"\n")
+        sb.append("use_ssl = false\n")
+        try {
+            configFile.appendText(sb.toString())
+            logger.info("Added missing [storage] section to config.toml.")
+        } catch (e: Exception) {
+            logger.warn("Could not append [storage] section to config.toml.", e)
         }
     }
 

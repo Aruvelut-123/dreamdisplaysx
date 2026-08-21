@@ -10,6 +10,7 @@ import com.dreamdisplayx.platform.client.Mod
 import com.dreamdisplayx.platform.client.capabilities.CapabilityNegotiationService
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
@@ -93,11 +94,12 @@ object ClientPacketManager {
         ClientStateManager.config.save()
     }
 
-    /** Removes a deleted display from the registry and erases its saved data. */
+    /** Removes a deleted display from the registry and erases its saved data (including seek position). */
     private fun handleDelete(packet: DisplayDelete) {
         DisplayRegistry.screens[packet.id]?.let { DisplayRegistry.unregisterScreen(it) }
         DisplayRegistry.unloadedScreens.remove(packet.id)
         DisplayStorage.removeDisplay(packet.id)
+        ClientSettingsStore.remove(packet.id)
         logger.info("Display deleted and removed from saved data: ${packet.id}.")
     }
 
@@ -108,6 +110,7 @@ object ClientPacketManager {
             DisplayRegistry.unloadedScreens.remove(uuid)
             DreamServices.registry.getOrNull<DisplaySystem>()?.removeDisplay(DisplayId(uuid))
             DisplayStorage.removeDisplay(uuid)
+            ClientSettingsStore.remove(uuid)
         }
     }
 

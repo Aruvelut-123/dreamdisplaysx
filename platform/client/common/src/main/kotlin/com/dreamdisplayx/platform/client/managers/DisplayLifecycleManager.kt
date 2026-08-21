@@ -77,6 +77,7 @@ object DisplayLifecycleManager {
             packet.id, packet.ownerId, Vector3i(packet.x, packet.y, packet.z), facing,
             packet.width, packet.height, packet.url, packet.lang,
             mode, packet.qualityCap, DisplayRotation.fromQuarterTurns(packet.rotation),
+            positionNanos = packet.positionNanos,
         )
         DisplayRegistry.screens[packet.id]?.virtual = packet.virtual
     }
@@ -107,6 +108,7 @@ object DisplayLifecycleManager {
         uuid: UUID, ownerUuid: UUID, pos: Vector3i, facingUtil: FacingUtil,
         width: Int, height: Int, code: String, lang: String,
         mode: PlaybackMode, qualityCap: Int, rotation: DisplayRotation = DisplayRotation.NONE,
+        positionNanos: Long = 0,
     ) {
         val displayScreen = DisplayScreen(
             uuid, ownerUuid, pos.x(), pos.y(), pos.z(), facingUtil.toDisplayFacing(),
@@ -115,6 +117,9 @@ object DisplayLifecycleManager {
 
         val savedData = DisplayStorage.getDisplayData(uuid)
         displayScreen.renderDistance = savedData?.renderDistance ?: persistedRenderDistance(uuid)
+
+        // A server-persisted seek position overrides the local cache, so a restart resumes rather than replays.
+        if (positionNanos > 0) displayScreen.savedTimeNanos = positionNanos
 
         displayScreen.createTexture()
         DisplayRegistry.registerScreen(displayScreen)

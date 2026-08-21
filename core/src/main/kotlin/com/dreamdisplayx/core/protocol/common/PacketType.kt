@@ -16,6 +16,7 @@ import com.dreamdisplayx.core.protocol.common.packets.RadiusPreview
 import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
 import com.dreamdisplayx.core.protocol.common.packets.ReportDisplay
 import com.dreamdisplayx.core.protocol.common.packets.ReportDuration
+import com.dreamdisplayx.core.protocol.common.packets.ReportPosition
 import com.dreamdisplayx.core.protocol.common.packets.RequestSync
 import com.dreamdisplayx.core.protocol.common.packets.ServerHello
 import com.dreamdisplayx.core.protocol.common.packets.SetDisplaysEnabled
@@ -57,6 +58,7 @@ enum class PacketType(
     PIP_PIN(20, PipPin::class, PacketDirection.CLIENT_TO_SERVER),
     REPORT_DURATION(21, ReportDuration::class, PacketDirection.CLIENT_TO_SERVER),
     REMOTE_PLAYBACK_TOGGLE(22, RemotePlaybackToggle::class, PacketDirection.SERVER_TO_CLIENT),
+    REPORT_POSITION(23, ReportPosition::class, PacketDirection.CLIENT_TO_SERVER),
     PLATFORM_CREDENTIALS(27, PlatformCredentials::class, PacketDirection.SERVER_TO_CLIENT);
 
     companion object {

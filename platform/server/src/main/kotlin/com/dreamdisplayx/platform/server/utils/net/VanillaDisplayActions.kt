@@ -47,6 +47,10 @@ object VanillaDisplayActions {
     private val requestSyncThrottle = ActionThrottle()
     private const val REQUEST_SYNC_COOLDOWN_MS = 250L
 
+    /** Bounds position-persistence writes per display (clients report on a ticking cadence). */
+    private val reportPositionThrottle = ActionThrottle()
+    private const val REPORT_POSITION_COOLDOWN_MS = 5_000L
+
     /** Records the player's reported mod version and runs the mod / plugin update checks. */
     fun recordVersionAndCheckUpdates(player: ServerPlayer, version: String) {
         val parsedVersion = VersionUtil.parseOrNull(version)
@@ -245,6 +249,15 @@ object VanillaDisplayActions {
     fun reportDuration(player: ServerPlayer, displayId: java.util.UUID, durationMs: Long) {
         val displayData = DisplayManager.getDisplayData(displayId) ?: return
         TimelineManager.onDurationReported(displayData, player.uuid, durationMs)
+    }
+
+    /** Persists a LOCAL-mode display's playback position so a server restart resumes instead of replaying. */
+    fun reportPosition(player: ServerPlayer, displayId: java.util.UUID, positionNanos: Long) {
+        val displayData = DisplayManager.getDisplayData(displayId) as? VanillaDisplayData ?: return
+        if (!reportPositionThrottle.tryAcquire(displayId, REPORT_POSITION_COOLDOWN_MS)) return
+        if (displayData.seekPositionNanos == positionNanos) return
+        displayData.seekPositionNanos = positionNanos
+        ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(displayData) }
     }
 
     /** Builds the permission context for [player] acting on [display]. */

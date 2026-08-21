@@ -70,6 +70,7 @@ object PacketUtil {
         forced: Boolean = false,
         scheduledStartEpochMillis: Long = 0,
         scheduledAction: Int = -1,
+        positionNanos: Long = 0,
     ) {
         val isVertical = facing == BlockFace.UP || facing == BlockFace.DOWN
         val recipients = if (isVertical) players.filterNotNull().filter { supportsVertical(it.uniqueId) } else players
@@ -86,6 +87,7 @@ object PacketUtil {
                 rotation = rotation.quarterTurns,
                 virtual = virtual, forced = forced,
                 scheduledStartEpochMillis = scheduledStartEpochMillis, scheduledAction = scheduledAction,
+                positionNanos = positionNanos,
             ),
         )
         if (players.isEmpty()) return

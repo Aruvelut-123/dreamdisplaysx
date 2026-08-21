@@ -33,6 +33,7 @@ data class DisplayInfo(
     @ProtoNumber(17) val forced: Boolean = false,
     @ProtoNumber(18) val scheduledStartEpochMillis: Long = 0,
     @ProtoNumber(19) val scheduledAction: Int = -1,
+    @ProtoNumber(20) val positionNanos: Long = 0,
 ) : DreamPacket
 
 /** Removes a display (server broadcast) or requests its deletion (client action). */

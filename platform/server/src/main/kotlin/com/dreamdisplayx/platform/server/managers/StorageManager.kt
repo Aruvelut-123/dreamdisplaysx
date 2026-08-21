@@ -77,6 +77,9 @@ class DisplaysTable(prefix: String = "") : Table("${prefix}displays") {
     /** Nullable long representing the duration of the video associated with the display. */
     val duration = long("duration").nullable()
 
+    /** Playback position in nanos, persisted so a server restart resumes playback instead of restarting. */
+    val position = long("position").default(0)
+
     /** String representing the language code of the video associated with the display. */
     val lang = varchar("lang", 255).default("")
 
@@ -247,6 +250,7 @@ class StorageManager(
                 it[isLocked] = data.isLocked
                 it[mode] = data.mode.wire
                 it[name] = data.name
+                it[position] = data.seekPositionNanos
                 it[scheduledStart] = data.scheduledStart?.toEpochMilliseconds()
                 it[scheduledAction] = data.scheduledAction?.wire
             }
@@ -268,6 +272,7 @@ class StorageManager(
         lang = row[table.lang]
         isLocked = row[table.isLocked]
         name = row[table.name]
+        seekPositionNanos = row[table.position]
         scheduledStart = row[table.scheduledStart]?.let(Instant::fromEpochMilliseconds)
         scheduledAction = row[table.scheduledAction]?.let(PlaybackAction::fromWire)
     }

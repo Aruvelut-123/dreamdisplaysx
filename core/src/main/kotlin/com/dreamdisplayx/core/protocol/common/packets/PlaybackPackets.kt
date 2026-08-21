@@ -45,3 +45,10 @@ data class RemotePlaybackToggle(
     @ProtoNumber(1) val id: @Serializable(UuidSerializer::class) UUID = ZERO_UUID,
     @ProtoNumber(2) val paused: Boolean = true,
 ) : DreamPacket
+
+/** Client reports a LOCAL-mode display's current playback position so the server can persist it. */
+@Serializable
+data class ReportPosition(
+    @ProtoNumber(1) val id: @Serializable(UuidSerializer::class) UUID = ZERO_UUID,
+    @ProtoNumber(2) val positionNanos: Long = 0,
+) : DreamPacket
