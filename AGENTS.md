@@ -113,6 +113,25 @@
 - Removed client-side screenshare code
 - Bilibili account label + dlogin/dlogoff commands
 
+## Workflow Rules
+
+### Post-Change Checklist (MANDATORY)
+Every code change MUST be followed by ALL of the below before the task is considered complete:
+1. **Commit** — stage all changes and create a descriptive commit message
+2. **Push** — push to the remote branch immediately after commit
+3. **Documentation** — update `README.md` and `CHANGELOG.md` when the change is user-visible or affects behavior/features
+4. **AGENTS.md** — if the change affects architecture, build process, or workflow rules, update `AGENTS.md` accordingly
+
+### Commit Message Format
+- Use clear, descriptive messages following conventional commits when possible
+- Always include the affected module/component in the message
+- Example: `fix(danmaku): resolve segment API JSON parsing compilation errors`
+
+### Changelog Format
+- Follow the existing format in `CHANGELOG.md`
+- Add entries under the current/next version heading
+- Never merge upstream changelog into our version's section
+
 ## CI/CD & Versioning Rules
 
 - `_build.yml` — Main build workflow (multi-version)

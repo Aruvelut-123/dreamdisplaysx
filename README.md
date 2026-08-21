@@ -31,6 +31,7 @@ Compared to the original Dream Displays, this fork adds:
 - **Bilibili VIP badge** — official VIP badge image, differentiating normal and annual VIP.
 - **Bilibili bangumi / movie support** — `/bangumi/play/ep<id>` and `/ss<id>` URLs.
 - **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions.
+- **Improved Bilibili danmaku fetching** — uses V2 segment API (`/x/v2/dm/list/segment`) for more complete danmaku coverage on VODs.
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
 - **`gh-proxy.com` FFmpeg mirror** — China-friendly download mirror with fallback.
