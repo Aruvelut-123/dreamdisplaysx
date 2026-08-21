@@ -70,28 +70,6 @@
 - `dreamdisplayx.login` — Default OP (LuckPerms supported)
 - `dreamdisplayx.logout` — Default OP (LuckPerms supported)
 
-## Danmaku System
-
-### Architecture
-- `DanmakuManager` subscribes to live (room_id) and VOD (cid) danmaku
-- `DanmakuOverlay` renders via AWT `BufferedImage` → `NativeImage`/`DynamicTexture` → textured quad
-- Settings read live from `ClientDisplaySettings` via `settings()` lambda
-
-### Key Files
-| File | Purpose |
-|------|---------|
-| `danmaku/DanmakuOverlay.kt` | Rendering, track management, font caching |
-| `danmaku/DanmakuManager.kt` | Subscription, message queue |
-| `danmaku/BilibiliDanmakuClient.kt` | WebSocket live client |
-| `ui/DisplayMenu.kt` | Danmaku settings UI rows |
-| `ui/widgets/DanmakuAreaSlider.kt` | Display area slider with visual indicator |
-| `ui/widgets/DanmakuFilterBar.kt` | Scroll/Top/Bottom/Color toggle buttons |
-
-### Danmaku Settings (3-Layer Model)
-1. **Global toggle** — `config.yml` `danmaku-enabled` (client-side)
-2. **Per-display overrides** — `ClientDisplaySettings` danmaku fields (JSON, per-display)
-3. **Server defaults** — (future) server config for opacity/fontsize/speed/area/filter defaults
-
 ## Changes & Commits
 
 ### 2025-01-DD — Global Bilibili login + cross-server sync

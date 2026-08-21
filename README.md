@@ -26,12 +26,9 @@ Compared to the original Dream Displays, this fork adds:
   (AES-256-GCM) and pushed back to unlock higher-quality / VIP Bilibili streams.
 - **Global Bilibili login** — single account per server/network, broadcast to all players,
   OP-only with LuckPerms support and cross-server credential sync (SQLite/MySQL).
-- **Bilibili live danmaku** (弹幕) — live-room bullet comments scroll across the display.
-- **Per-display danmaku settings** — opacity, font size, speed, display area, and type filters.
 - **Bilibili VIP badge** — official VIP badge image, differentiating normal and annual VIP.
 - **Bilibili bangumi / movie support** — `/bangumi/play/ep<id>` and `/ss<id>` URLs.
 - **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions.
-- **Improved Bilibili danmaku fetching** — uses V2 segment API (`/x/v2/dm/list/segment`) for more complete danmaku coverage on VODs.
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
 - **`gh-proxy.com` FFmpeg mirror** — China-friendly download mirror with fallback.
@@ -172,4 +169,3 @@ Dream DisplaysX is not affiliated with original Dream Display nor Mojang Studio.
 ## Credits
 
 - **[Dream Displays](https://github.com/arnodoelinger/dreamdisplays)** — the original upstream project that this fork is based on.
-- **[PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus)** — a third-party Bilibili client. The Bilibili protobuf danmaku segment API schema (`DmSegMobileReply` / `DanmakuElem`) is referenced from PiliPlus's `lib/grpc/bilibili/community/service/dm/v1.proto`.
