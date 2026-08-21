@@ -37,7 +37,8 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 - VIP badge uses official Bilibili image (`img_label_uri_hans_static`).
 - Fixed VIP field names (`vipType` → `type`, `vipStatus` → `status`).
 - Downgraded noisy "Seek can't go in place" log to debug.
-- Bilibili VOD danmaku now uses V2 segment API (`/x/v2/dm/list/segment`) for more complete danmaku coverage.
+- Bilibili VOD danmaku now uses segmented XML (`/x/v2/dm/list/seg.so`) for more complete danmaku coverage.
+- Fixed danmaku fetch for cids where the V2 JSON segment endpoint returns 404.
 - Fixed Bilibili danmaku JSON parsing compilation errors in segment API implementation.
 - TOP/BOTTOM danmaku padding now aligns with SCROLL padding (uses 24px top margin).
 - Danmaku overlay clears when toggled off or when a live stream is loaded.

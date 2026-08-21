@@ -143,25 +143,26 @@ object BilibiliApi {
      * sorted ascending for timed playback.
      */
     fun fetchDanmaku(cid: Long): List<DanmakuEntry> {
-        val all = ArrayList<DanmakuEntry>()
-        // Try the primary V2 API first, which supports multiple segments
+        // Try segmented XML first, which is the same format the legacy endpoint uses
+        // but fetched in chunks; this avoids the V2 JSON 404s we saw for some cids.
+        val segAll = ArrayList<DanmakuEntry>()
         for (seg in 1..7) {
-            val url = "https://api.bilibili.com/x/v2/dm/list/segment?oid=$cid&segment_index=$seg&type=1"
-            val json = fetchDanmakuJson(url)
-            if (json != null) {
-                val segEntries = parseDanmakuJson(json)
+            val url = "https://api.bilibili.com/x/v2/dm/list/seg.so?oid=$cid&type=1&segment_index=$seg"
+            val xml = fetchDanmakuXml(url)
+            if (xml != null) {
+                val segEntries = parseDanmakuXml(xml)
                 if (segEntries.isEmpty()) break // no more segments
-                all += segEntries
+                segAll += segEntries
             } else {
                 break
             }
         }
-        if (all.isNotEmpty()) {
-            all.sortBy { it.timeSec }
-            logger.info("Danmaku V2 fetched segments={} total={}", all.size)
-            return all
+        if (segAll.isNotEmpty()) {
+            segAll.sortBy { it.timeSec }
+            logger.info("Danmaku XML segments fetched segments={} total={}", segAll.size)
+            return segAll
         }
-        // Fallback: legacy XML endpoint
+        // Fallback: legacy full XML endpoint
         val primary = fetchDanmakuXml("https://api.bilibili.com/x/v1/dm/list.so?oid=$cid")
         val entries = primary?.let { parseDanmakuXml(it) }
         if (entries.isNullOrEmpty()) {
