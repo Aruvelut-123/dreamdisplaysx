@@ -50,6 +50,12 @@ object Thumbnails {
         .expireAfterAccess(6, TimeUnit.HOURS)
         .build()
 
+    /** Original width/height of each decoded image, for aspect-ratio scaling (e.g. VIP badge). */
+    private val DIMENSIONS: Cache<String, Pair<Int, Int>> = Caffeine.newBuilder()
+        .maximumSize(1_024)
+        .expireAfterAccess(6, TimeUnit.HOURS)
+        .build()
+
     /**
      * The Minecraft texture [Identifier] of a tiny, heavily downsampled copy of each decoded
      * thumbnail — a YouTube-style blurred "ambient" backdrop rendered by stretching it across the
@@ -124,6 +130,9 @@ object Thumbnails {
 
     /** Returns the average ARGB color of [videoId]'s thumbnail, or null until it has been decoded. */
     fun averageColor(videoId: String): Int? = AVG_COLOR.getIfPresent(videoId)
+
+    /** Returns the original (width, height) of the image registered under [key], or null until decoded. */
+    fun dimensions(key: String): Pair<Int, Int>? = DIMENSIONS.getIfPresent(key)
 
     /** Returns the blurred ambient-backdrop texture [Identifier] for [videoId], or null until decoded. */
     fun ambientTexture(videoId: String): Identifier? = AMBIENT_TEX.getIfPresent(videoId)
@@ -235,8 +244,8 @@ object Thumbnails {
         Integer.toHexString(s.hashCode())
     }
 
-    /** A decoded thumbnail: the full-res GPU image, its average color, and a tiny blurred copy for the ambient backdrop. */
-    private class Decoded(val image: NativeImage, val avgColor: Int, val ambientImage: NativeImage)
+    /** A decoded thumbnail: the full-res GPU image, its average color, its source dimensions, and a tiny blurred copy for the ambient backdrop. */
+    private class Decoded(val image: NativeImage, val avgColor: Int, val width: Int, val height: Int, val ambientImage: NativeImage)
 
     /**
      * Decodes [bytes] into a [NativeImage] and registers it under [key] (the composite videoId +
@@ -262,6 +271,7 @@ object Thumbnails {
             TextureUploadUtil.applyBilinearFilter(tex)
             AVG_COLOR.put(avgColorKey, decoded.avgColor)
             READY.put(key, id)
+            DIMENSIONS.put(key, decoded.width to decoded.height)
 
             if (AMBIENT_TEX.getIfPresent(avgColorKey) == null) {
                 //? if >=1.21.11 {
@@ -331,7 +341,7 @@ object Thumbnails {
 
         val n = pixels.size.coerceAtLeast(1)
         val avg = (0xFF shl 24) or (((rSum / n).toInt()) shl 16) or (((gSum / n).toInt()) shl 8) or (bSum / n).toInt()
-        Decoded(image, avg, ambientImage)
+        Decoded(image, avg, w, h, ambientImage)
     }
 
     /**

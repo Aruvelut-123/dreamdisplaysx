@@ -176,14 +176,28 @@ class DanmakuOverlay(
         image = null
     }
 
+    /** Clears all active danmaku lines. Call after a seek or replay to avoid stale entries. */
+    fun clear() {
+        lines.clear()
+        dirty = true
+    }
+
     // ── Display area helpers ──────────────────────────────────────────────────────────────────────
 
-    /** Top padding of the danmaku band. */
-    private fun areaTop(displayArea: Float): Int = 24
+    /** Top padding of the danmaku band, scaled by current font size. */
+    private fun areaTop(displayArea: Float): Int {
+        val s = settings()
+        val px = fontForScale(s.danmakuFontSize).size
+        return 8 + px / 2
+    }
 
-    /** Bottom pixel of the danmaku band for the given [displayArea] fraction [0,1]. */
-    private fun areaBottom(displayArea: Float): Int =
-        ((texH - 48) * displayArea.coerceIn(0f, 1f)).toInt().coerceIn(24, texH - 48) + 24
+    /** Bottom pixel of the danmaku band for the given [displayArea] fraction [0,1], scaled by font size. */
+    private fun areaBottom(displayArea: Float): Int {
+        val s = settings()
+        val px = fontForScale(s.danmakuFontSize).size
+        val band = ((texH - 48) * displayArea.coerceIn(0f, 1f)).toInt().coerceIn(24, texH - 48)
+        return (band - 8 - px / 2).coerceAtLeast(areaTop(displayArea))
+    }
 
     /** Track height (line spacing) in pixels for the current font [scale]. */
     private fun trackHeight(scale: Float): Int {

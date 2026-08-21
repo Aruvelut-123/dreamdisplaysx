@@ -633,10 +633,10 @@ class DisplayMenu private constructor(
         }
         refreshRelatedVideos()
 
-        // Clip the settings child widgets (sliders, buttons) to the settings row area so scrolled
-        // controls are cut off at the panel edge as intended. The scissor covers only the settings
-        // panel's row band (x: clipLeft..clipRight, y: areaTop..areaBottom); the preview controls
-        // sit above it and the suggestions panel sits to the right, so neither is affected.
+        // Clip the child widgets (sliders, buttons) to the settings row area so scrolled controls
+        // are cut off at the panel edge. The scissor covers only the settings panel's row band
+        // (x: clipLeft..clipRight, y: areaTop..areaBottom); the preview controls sit above it
+        // and the suggestions panel sits to the right, so neither is affected.
         settings.beginChildClip(g)
         drawChildren(g, mouseX, mouseY, partialTick)
         settings.endChildClip(g)

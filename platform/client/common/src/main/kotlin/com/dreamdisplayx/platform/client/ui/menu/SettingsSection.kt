@@ -90,11 +90,14 @@ class SettingsSection(
         clipRight = panel.right - UiTheme.PANEL_PADDING_X
 
         var rowY = titleH - scrollOffset
+        // Clip row backgrounds and labels to the scrollable area.
+        g.enableScissor(clipLeft, areaTop, clipRight, areaBottom)
         for (row in rows) {
             rowY += row.extraGapBefore
             renderRow(g, row, innerX, rowY, innerW, labelColW, areaTop, areaBottom)
             rowY += UiTheme.ROW_H + UiTheme.ROW_GAP
         }
+        g.disableScissor()
 
         drawScrollbar(g, panel, areaTop, areaBottom, areaH, mouseY)
         placeOwnerActions(panel)

@@ -58,6 +58,11 @@ object DanmakuManager {
         synchronized(subscribers) { subscribers.remove(displayId) }?.stop()
     }
 
+    /** Rewinds the timed index for [displayId] to just before [positionSec]. Used after a seek or replay. */
+    fun rewindTimed(displayId: DisplayId, positionSec: Double) {
+        subscribers[displayId]?.rewindTo(positionSec)
+    }
+
     /** Returns the current danmaku queue for [displayId], or null if none. */
     fun queue(displayId: DisplayId): List<DanmakuMessage>? = subscribers[displayId]?.messages
 
@@ -101,6 +106,11 @@ object DanmakuManager {
         private var timedIndex = 0
         private var isVideo = false
 
+        /** Max danmaku to release around a seek point when rewinding or fast-forwarding. */
+        private companion object {
+            const val RENDER_WINDOW = 120
+        }
+
         fun switchToLive(roomId: Long) {
             isVideo = false
             timedEntries = emptyList()
@@ -137,21 +147,50 @@ object DanmakuManager {
             }.apply { isDaemon = true }.start()
         }
 
+        /** Rewinds [timedIndex] so [consumeTimed] will re-emit danmaku around [positionSec]. */
+        fun rewindTo(positionSec: Double) {
+            synchronized(this) {
+                if (!isVideo || timedEntries.isEmpty()) return
+                var target = timedEntries.binarySearch { it.timeSec.compareTo(positionSec) }
+                if (target < 0) target = -(target + 1)
+                timedIndex = maxOf(0, target - RENDER_WINDOW)
+            }
+        }
+
         /**
          * Consumes timed danmaku whose timestamp has been reached by playback position [positionSec].
-         * Returns the newly due entries. Call on the client tick thread.
+         *
+         * Handles both forward playback and seeking:
+         * - On forward playback, returns entries strictly after the previously consumed position up to
+         *   [positionSec], so danmaku stream out naturally frame by frame.
+         * - On a backward seek, rewinds and returns the bounded window around the seek point.
+         * - On a forward seek past many entries, rewinds greedily and returns only a bounded window so
+         *   the screen isn't flooded with a huge burst.
          */
         fun consumeTimed(positionSec: Double): List<DanmakuMessage> {
-            if (!isVideo) {
+            if (!isVideo || timedEntries.isEmpty()) {
                 return emptyList()
             }
-            if (timedEntries.isEmpty()) {
-                return emptyList()
-            }
-            val due = ArrayList<DanmakuMessage>()
             synchronized(this) {
-                while (timedIndex < timedEntries.size && timedEntries[timedIndex].timeSec <= positionSec) {
-                    val entry = timedEntries[timedIndex]
+                if (timedIndex < 0 || timedEntries.isEmpty()) {
+                    timedIndex = 0
+                }
+                // Find the index of the first entry whose time is at or before positionSec.
+                var target = timedEntries.binarySearch { it.timeSec.compareTo(positionSec) }
+                if (target < 0) target = -(target + 1)
+                // target is now the insertion point: first entry > positionSec.
+                // Entries strictly before it are "seen". We want to render a window ending here.
+                val windowStart = maxOf(0, target - RENDER_WINDOW)
+                if (timedIndex > target) {
+                    // Backward seek: rewind and re-render the window around the seek point.
+                    timedIndex = windowStart
+                } else if (timedIndex < windowStart) {
+                    // Forward seek past a gap: jump to the window start to avoid flooding.
+                    timedIndex = windowStart
+                }
+                val due = ArrayList<DanmakuMessage>()
+                while (timedIndex < target) {
+                    val entry = timedEntries.getOrNull(timedIndex) ?: break
                     timedIndex++
                     due += DanmakuMessage(
                         id = DanmakuMessage.nextId(),
@@ -162,14 +201,14 @@ object DanmakuManager {
                         mode = entry.mode,
                     )
                 }
+                if (due.isNotEmpty()) {
+                    logger.debug(
+                        "Danmaku consumed display={} at={}s due={} total={} idx={}",
+                        displayId.uuid, "%.1f".format(positionSec), due.size, timedEntries.size, timedIndex,
+                    )
+                }
+                return due
             }
-            if (due.isNotEmpty()) {
-                logger.info(
-                    "Danmaku consumed display={} at={}s due={} total={} idx={}",
-                    displayId.uuid, "%.1f".format(positionSec), due.size, timedEntries.size, timedIndex,
-                )
-            }
-            return due
         }
 
         fun stop() {

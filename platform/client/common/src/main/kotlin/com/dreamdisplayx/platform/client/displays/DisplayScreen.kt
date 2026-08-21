@@ -1114,6 +1114,7 @@ class DisplayScreen(
         if (!com.dreamdisplayx.platform.client.managers.ClientStateManager.config.danmakuEnabled) {
             danmakuOverlay?.dispose()
             danmakuOverlay = null
+            lastDanmakuPositionSec = -1.0
             return
         }
         val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
@@ -1133,6 +1134,14 @@ class DisplayScreen(
             ).also {
                 danmakuOverlay = it
             }
+            // Detect replay / backward seek: if position jumps back by more than 2s, clear stale
+            // overlay lines so the new playback starts fresh. Also resets the timed index so
+            // consumeTimed rewinds to the correct window.
+            if (lastDanmakuPositionSec > 0 && positionSec < lastDanmakuPositionSec - 2.0) {
+                o.clear()
+                com.dreamdisplayx.platform.client.danmaku.DanmakuManager.rewindTimed(did, positionSec)
+            }
+            lastDanmakuPositionSec = positionSec
             due.forEach { o.add(it) }
             live.forEach { o.add(it) }
             // Do not advance scrolling / expiry when the video is paused.
@@ -1140,12 +1149,16 @@ class DisplayScreen(
         } else {
             overlay?.dispose()
             danmakuOverlay = null
+            lastDanmakuPositionSec = -1.0
         }
     }
 
     /** The danmaku overlay texture, or null when no Bilibili live room is playing. */
     var danmakuOverlay: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay? = null
         private set
+
+    /** Previous playback position (seconds) used to detect replay / backward seeks for danmaku. */
+    private var lastDanmakuPositionSec: Double = -1.0
 
     /** Acoustic environment (voxel raytrace cached every [ENV_PROBE_INTERVAL_TICKS] ticks). */
     private fun probeEnvironment(plane: SourcePlane): AcousticEnvironment {

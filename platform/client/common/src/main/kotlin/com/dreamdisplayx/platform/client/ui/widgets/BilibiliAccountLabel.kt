@@ -12,6 +12,7 @@ import com.dreamdisplayx.util.obj
 import com.dreamdisplayx.util.optInt
 import com.dreamdisplayx.util.optString
 import kotlinx.serialization.json.JsonObject
+import kotlin.math.roundToInt
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
 import org.slf4j.LoggerFactory
@@ -122,10 +123,14 @@ object BilibiliAccountLabel {
                 val tex = Thumbnails.get(badgeUrl)
                 if (tex != null) {
                     // Scale the badge to match the avatar height, preserving its aspect ratio
+                    val dims = Thumbnails.dimensions(badgeUrl)
+                    val badgeW = if (dims != null) {
+                        (avatarSize.toFloat() * dims.first / dims.second).roundToInt()
+                    } else avatarSize
                     //? if >=1.21.11 {
-                    g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, tex, badgeX, y, 0f, 0f, avatarSize, avatarSize, avatarSize, avatarSize)
+                    g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, tex, badgeX, y, 0f, 0f, badgeW, avatarSize, badgeW, avatarSize)
                     //?} else
-                    /*g.blit(tex, badgeX, y, 0f, 0f, avatarSize, avatarSize, avatarSize, avatarSize)*/
+                    /*g.blit(tex, badgeX, y, 0f, 0f, badgeW, avatarSize, badgeW, avatarSize)*/
                 } else {
                     Thumbnails.request(badgeUrl, badgeUrl)
                     // Draw fallback text while loading
