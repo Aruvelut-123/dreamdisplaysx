@@ -22,17 +22,18 @@ independently. Players just install the client-side mod, and they're ready to go
 
 Compared to the original Dream Displays, this fork adds:
 
-- **Bilibili account login** — a client-side login screen (`/dlogin`) with **QR-code scanning**. Your `SESSDATA` is stored **encrypted** on the server (AES-256-GCM)
-  and is only pushed back to *your* client, unlocking higher quality / VIP Bilibili streams.
-- **Bilibili live danmaku** — live-room bullet comments (弹幕) scroll across the display while a `live.bilibili.com/<roomId>` video plays.
-- **Bilibili bangumi support** — `/bangumi/play/ep<id>` and `/ss<id>` (episodes / seasons / movies) URLs work, and **Bilibili movie / bangumi search results** are merged into the suggestion grid.
-- **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display with `/display video rtmp://...`.
-- **Bilibili danmaku improvements** — HTML entities (`&lt;` &gt;`) are decoded in live and timed comments; danmaku unsubscribes when the video fails to start.
-- **Per-display danmaku settings** — manage Bilibili-style danmaku controls (opacity, font size, speed, display area, type filters) per-display in the config menu, with a global on/off in `config.yml`.
-- **Bilibili account info** — your avatar, nickname, and VIP badge are shown at the top-right of the display config screen.
-- **Maximum quality capped at 1080p** — the 60fps toggle and the 2160p/1440p quality tiers have been removed; the quality ladder stops at 1080p.
+- **Bilibili account login** — QR-code login screen (`/dlogin`); `SESSDATA` is stored **encrypted** on the server
+  (AES-256-GCM) and pushed back to unlock higher-quality / VIP Bilibili streams.
+- **Global Bilibili login** — single account per server/network, broadcast to all players,
+  OP-only with LuckPerms support and cross-server credential sync (SQLite/MySQL).
+- **Bilibili live danmaku** (弹幕) — live-room bullet comments scroll across the display.
+- **Per-display danmaku settings** — opacity, font size, speed, display area, and type filters.
+- **Bilibili VIP badge** — official VIP badge image, differentiating normal and annual VIP.
+- **Bilibili bangumi / movie support** — `/bangumi/play/ep<id>` and `/ss<id>` URLs.
+- **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions.
+- **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
-- **`gh-proxy.com` FFmpeg mirror** — the bundled FFmpeg downloads via a China-friendly mirror with fallback.
+- **`gh-proxy.com` FFmpeg mirror** — China-friendly download mirror with fallback.
 - Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.
 
 > If you encounter any error on this version, **do not** submit issues to the original repository — open an issue
@@ -132,14 +133,14 @@ Done! To customize the display, look at it and press `Shift + RMB`
 | `/display video <link> [language]`               | Server     | Play a video, live stream, or ingest URL                  |
 | `/display list` / `/display info`                | Server     | List / inspect displays                                   |
 | `/display on` / `/display off`                   | Server     | Toggle all displays                                       |
-| `/display login bilibili <sessdata>`             | Server     | Store your Bilibili credential (encrypted on disk)        |
-| `/display logout bilibili`                       | Server     | Remove your stored Bilibili credential                    |
-| `/dlogin`                                        | Client     | Open the Bilibili login screen (OP-only, only when not logged in) |
-| `/dlogoff`                                       | Client     | Log out of Bilibili (OP-only, only when logged in) |
+| `/display login bilibili <sessdata>`             | Server     | Store Bilibili credential globally (OP-only)              |
+| `/display logout bilibili`                       | Server     | Remove stored Bilibili credential (OP-only)               |
+| `/dlogin`                                        | Client     | Open the Bilibili login screen (OP-only)                  |
+| `/dlogoff`                                       | Client     | Log out of Bilibili (OP-only)                             |
 
 > **Bilibili login tip:** run `/dlogin` in-game and scan the QR code with the Bilibili mobile app.
-> On success the mod sends your `SESSDATA` to the server, which stores it encrypted and uses it to
-> unlock higher-quality streams for you. Already have a cookie? Use `/display login bilibili <sessdata>`.
+> On success the mod sends your `SESSDATA` to the server, which stores it encrypted, syncs it across
+> the server network, and broadcasts it to all online players — everyone gets the unlocked streams.
 
 [Read more in our wiki](https://github.com/Aruvelut-123/dreamdisplaysx/wiki).
 

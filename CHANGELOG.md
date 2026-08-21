@@ -61,6 +61,16 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
   data against a dead player.
 - Danmaku overlay stops scrolling while the video is paused, and single-character / short
   danmaku are measured with the real font metrics (no more oversized pills).
+- Danmaku font size setting now only affects new danmaku — existing messages keep their original size,
+  matching Bilibili's behaviour.
+- Danmaku track spacing now scales dynamically with font size instead of using hardcoded values.
+- SettingsSection scissor clip no longer leaks into the preview panel and suggestions area,
+  fixing the pause button and recommendations being invisible while still clickable.
+- DanmakuFilterBar and danmaku toggle tooltips now properly translate enabled/disabled labels.
+- DanmakuAreaSlider blue indicator fill removed (the slider track sprite already shows state).
+- BilibiliAccountLabel VIP badge now uses the official Bilibili API image URL
+  (`vip.label.img_label_uri_hans_static`) when available, falling back to coloured text.
+- Fixed BilibiliAccountLabel VIP field names (`vipType` → `type`, `vipStatus` → `status`).
 - Downgraded "Seek can't go in place" log from `warn` to `debug` to reduce console noise.
 
 ### Removed
