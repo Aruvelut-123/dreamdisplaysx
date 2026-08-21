@@ -27,6 +27,7 @@ run {
 repositories {
     mavenCentral()
     maven("https://maven.fabricmc.net/")
+    maven("https://maven.terraformersmc.com/releases/")
     maven("https://maven.parchmentmc.org")
     maven("https://maven.quiltmc.org/repository/release/")
     maven("https://maven.quiltmc.org/repository/snapshot/")
@@ -107,6 +108,14 @@ configurations.register("mappedFabricApiElements") {
 dependencies {
     compileOnly(libs.platformweaverAnnotations)
     compileOnly(libs.luckpermsApi)
+    // ModMenu is a soft dependency: only needed at compile time so we can provide a config screen button.
+    // Legacy (obfuscated) targets use modCompileOnly so Loom remaps ModMenu's Screen signature; 26.x
+    // ships deobfuscated so plain compileOnly is correct there.
+    if (isLegacyObfuscated) {
+        "modCompileOnly"("com.terraformersmc:modmenu:${scVersion("modmenu.version")}")
+    } else {
+        compileOnly("com.terraformersmc:modmenu:${scVersion("modmenu.version")}")
+    }
     compileOnly("io.papermc.paper:paper-api:${scVersion("paper.api.version")}")
     compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
     compileOnly("net.neoforged:bus:8.0.5")

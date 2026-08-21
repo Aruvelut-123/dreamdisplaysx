@@ -18,6 +18,9 @@
     ],
     "main": [
       "com.dreamdisplayx.platform.server.Server"
+    ],
+    "modmenu": [
+      "com.dreamdisplayx.platform.client.ModMenuIntegration"
     ]
   },
   "mixins": [
@@ -32,7 +35,8 @@
     "java": ">=${javaVersion}"
   },
   "suggests": {
-    "luckperms": "*"
+    "luckperms": "*",
+    "modmenu": "*"
   },
   "custom": {
     "modmenu": {

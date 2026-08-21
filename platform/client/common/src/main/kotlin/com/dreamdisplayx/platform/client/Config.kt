@@ -157,6 +157,92 @@ class Config(private val baseDir: File) {
         System.setProperty("dreamdisplayx.stream.preferFps60", preferFps60.toString())
     }
 
+    /**
+     * Declarative list of every editable setting, so the config screen can render controls (and their
+     * comments) from this definition instead of hand-writing a row per field.
+     */
+    fun configEntries(): List<ConfigEntry<*>> = listOf(
+        ConfigEntry(
+            "displays-enabled", "Displays enabled",
+            "Whether displays are enabled at all.",
+            ConfigEntryType.BOOLEAN,
+            get = { displaysEnabled },
+            apply = { displaysEnabled = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-enabled", "Danmaku enabled",
+            "Global master toggle for Bilibili danmaku rendering; when false, no danmaku is drawn anywhere.",
+            ConfigEntryType.BOOLEAN,
+            get = { danmakuEnabled },
+            apply = { danmakuEnabled = it; save() },
+        ),
+        ConfigEntry(
+            "prefer-fps60", "Prefer 60fps",
+            "Prefer 60 fps streams when the video supports them. Videos without a 60fps variant fall back to native framerate.",
+            ConfigEntryType.BOOLEAN,
+            get = { preferFps60 },
+            apply = { preferFps60 = it; save() },
+        ),
+        ConfigEntry(
+            "use-hw-accel", "Hardware acceleration",
+            "Whether to use hardware-accelerated video decoding.",
+            ConfigEntryType.BOOLEAN,
+            get = { useHwAccel },
+            apply = { useHwAccel = it; save() },
+        ),
+        ConfigEntry(
+            "mute-on-alt-tab", "Mute on alt-tab",
+            "Mute all displays while the game window is not focused.",
+            ConfigEntryType.BOOLEAN,
+            get = { muteOnAltTab },
+            apply = { muteOnAltTab = it; save() },
+        ),
+        ConfigEntry(
+            "audio-output-profile", "Binaural audio",
+            "Render binaural audio for headphones (ON) or a plain stereo pan for speakers (OFF).",
+            ConfigEntryType.BOOLEAN,
+            get = { audioBinauralOutput },
+            apply = { audioBinauralOutput = it; save() },
+        ),
+        ConfigEntry(
+            "default-render-distance", "Default render distance",
+            "Default render distance for new displays, in blocks.",
+            ConfigEntryType.INT,
+            get = { defaultDistance },
+            apply = { defaultDistance = it; save() },
+        ),
+        ConfigEntry(
+            "default-display-volume", "Default volume",
+            "Default volume for new displays, in range 0.0 to 1.0.",
+            ConfigEntryType.DOUBLE,
+            get = { defaultDisplayVolume },
+            apply = { defaultDisplayVolume = it; save() },
+        ),
+        ConfigEntry(
+            "audio-acoustics", "Audio acoustics",
+            "3D acoustics rendering tier applied to every display's audio.",
+            ConfigEntryType.ENUM,
+            values = AcousticQuality.entries.toList(),
+            get = { audioAcoustics },
+            apply = { audioAcoustics = it; save() },
+        ),
+        ConfigEntry(
+            "ytdlp-cookies-from-browser", "yt-dlp cookies",
+            "Browser to import yt-dlp cookies from, or NONE to disable.",
+            ConfigEntryType.ENUM,
+            values = CookieSource.entries.toList(),
+            get = { ytdlpCookieSource },
+            apply = { ytdlpCookieSource = it; save() },
+        ),
+        ConfigEntry(
+            "ytdlp-proxy", "yt-dlp proxy",
+            "Proxy URL passed to yt-dlp, or empty for a direct connection.",
+            ConfigEntryType.STRING,
+            get = { ytdlpProxy },
+            apply = { ytdlpProxy = it; save() },
+        ),
+    )
+
     /** Persists the current configuration values to disk as standard TOML. */
     fun save() {
         baseDir.mkdirs()
