@@ -14,6 +14,7 @@ dependencies {
     api(libs.tukaaniXz)
     api(libs.kotlinxCoroutinesCore)
     api(libs.kotlinxSerializationJson)
+    api(libs.kotlinxSerializationProtobuf)
     compileOnly(libs.slf4jApi)
     testImplementation(libs.slf4jApi)
 }

@@ -8,6 +8,9 @@ import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
 import com.dreamdisplayx.util.*
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.protobuf.ProtoBuf
+import kotlinx.serialization.protobuf.ProtoNumber
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
@@ -136,15 +139,44 @@ object BilibiliApi {
     )
 
     /**
-     * Fetches all danmaku for a video identified by [cid] from Bilibili's XML endpoints.
-     * `api.bilibili.com/x/v1/dm/list.so?oid=<cid>` is preferred (same host the mod already talks
-     * to for playback, so it works wherever the video itself loads); `comment.bilibili.com/<cid>.xml`
-     * is the fallback. Each `<d p="time,...">text</d>` entry carries its timestamp; the result is
-     * sorted ascending for timed playback.
+     * Fetches all danmaku for a video identified by [cid] from Bilibili's segment API.
+     *
+     * Uses the protobuf-based segment endpoint (`/x/v2/dm/list/seg.so`) which returns
+     * binary [DmSegMobileReply] messages. This is the same format the Bilibili web/ mobile
+     * clients use (see [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) for the
+     * protobuf schema reference). Falls back to legacy XML when the segment API fails.
+     *
+     * Each segment covers a time window of the video; we iterate segment_index=1..N
+     * until an empty segment is returned, then merge and sort by timestamp.
      */
     fun fetchDanmaku(cid: Long): List<DanmakuEntry> {
-        // Note: /x/v2/dm/list/seg.so returns binary protobuf, not XML/JSON,
-        // so we skip it here and fall back to the legacy XML endpoints which we can parse.
+        // Try protobuf segment API first (same binary format as Bilibili's own clients)
+        val segAll = ArrayList<DanmakuEntry>()
+        for (seg in 1..7) {
+            val url = "https://api.bilibili.com/x/v2/dm/list/seg.so?oid=$cid&type=1&segment_index=$seg"
+            val reply = fetchDmSegMobile(url)
+            if (reply != null) {
+                if (reply.elems.isEmpty()) break // no more segments
+                for (elem in reply.elems) {
+                    val text = elem.content.trim()
+                    if (text.isEmpty() || text.length > 200) continue
+                    segAll += DanmakuEntry(
+                        timeSec = elem.progress / 1000.0,
+                        text = text,
+                        color = elem.color,
+                        mode = elem.mode,
+                    )
+                }
+            } else {
+                break
+            }
+        }
+        if (segAll.isNotEmpty()) {
+            segAll.sortBy { it.timeSec }
+            logger.info("Danmaku protobuf segments fetched segments={} total={}", segAll.size)
+            return segAll
+        }
+        // Fallback: legacy XML endpoint
         val primary = fetchDanmakuXml("https://api.bilibili.com/x/v1/dm/list.so?oid=$cid")
         val entries = primary?.let { parseDanmakuXml(it) }
         if (entries.isNullOrEmpty()) {
@@ -153,6 +185,52 @@ object BilibiliApi {
         }
         return entries
     }
+
+    /**
+     * Protobuf schema for `DmSegMobileReply` / `DanmakuElem` from Bilibili's
+     * `bilibili.community.service.dm.v1.DM/DmSegMobile` gRPC service.
+     *
+     * Reference: [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) -
+     * `lib/grpc/bilibili/community/service/dm/v1.proto`
+     */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @Serializable
+    data class DmSegMobileReply(
+        @ProtoNumber(1) val elems: List<DanmakuElem> = emptyList(),
+        @ProtoNumber(2) val state: Int = 0,
+    )
+
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @Serializable
+    data class DanmakuElem(
+        @ProtoNumber(1) val id: Long = 0,
+        /** Progress in milliseconds. */
+        @ProtoNumber(2) val progress: Int = 0,
+        @ProtoNumber(3) val mode: Int = 1,
+        @ProtoNumber(4) val fontsize: Int = 25,
+        @ProtoNumber(5) val color: Int = 0xFFFFFF,
+        @ProtoNumber(6) val midHash: String = "",
+        @ProtoNumber(7) val content: String = "",
+        @ProtoNumber(8) val ctime: Long = 0,
+        @ProtoNumber(9) val weight: Int = 0,
+        @ProtoNumber(11) val pool: Int = 0,
+    )
+
+    /** Fetches and decodes a protobuf [DmSegMobileReply] from [url], or null on failure. */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    private fun fetchDmSegMobile(url: String): DmSegMobileReply? = runCatching<DmSegMobileReply> {
+        val body = DreamHttpClient.readBytes(
+            url,
+            DreamHttpClient.RequestOptions(
+                headers = headers(),
+                connectTimeoutMs = 10_000,
+                readTimeoutMs = 15_000,
+            ),
+        )
+        ProtoBuf.decodeFromByteArray(DmSegMobileReply.serializer(), body)
+    }.onFailure { e ->
+        logger.warn("Danmaku protobuf fetch FAILED url={} error={}", url, e.message ?: e::class.java.simpleName)
+    }.getOrNull()
 
     /** Fetches the danmaku XML body for [url], or null on failure. */
     private fun fetchDanmakuXml(url: String): String? = runCatching {

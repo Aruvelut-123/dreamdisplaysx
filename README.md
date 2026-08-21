@@ -168,3 +168,8 @@ keep the project alive!
 ## Disclaimer
 
 Dream DisplaysX is not affiliated with original Dream Display nor Mojang Studio.
+
+## Credits
+
+- **[Dream Displays](https://github.com/arnodoelinger/dreamdisplays)** — the original upstream project that this fork is based on.
+- **[PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus)** — a third-party Bilibili client. The Bilibili protobuf danmaku segment API schema (`DmSegMobileReply` / `DanmakuElem`) is referenced from PiliPlus's `lib/grpc/bilibili/community/service/dm/v1.proto`.
