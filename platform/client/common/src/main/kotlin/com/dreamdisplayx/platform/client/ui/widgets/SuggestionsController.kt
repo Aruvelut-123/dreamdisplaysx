@@ -38,15 +38,6 @@ class SuggestionsController {
     val cards = ArrayList<MediaSearchResult>()
 
     /**
-     * Starts with the Bilibili home recommendation feed loaded, so an open menu is never a blank
-     * panel. A search or a related-videos request (once a video is playing) supersedes it via the
-     * request sequence number.
-     */
-    init {
-        loadRecommend()
-    }
-
-    /**
      * [cards] after applying [sortOption]'s client-side effect: [SortOption.POPULARITY] / [SortOption.NEWEST] re-sort,
      * [SortOption.STREAMS] filters to live.
      */
@@ -120,7 +111,7 @@ class SuggestionsController {
             lastQuery = null
             // No video to derive "related" from — fall back to the Bilibili home recommendation feed
             // instead of leaving the panel blank.
-            loadRecommend()
+            loadRecommendations()
             return
         }
         if (videoId == currentVideoId && cards.isNotEmpty()) return
@@ -167,7 +158,7 @@ class SuggestionsController {
             if (currentId != null) {
                 loadRelated(currentId)
             } else {
-                loadRecommend()
+                loadRecommendations()
             }
             return
         }
@@ -447,8 +438,13 @@ class SuggestionsController {
      * there is neither a search query nor a playing video to derive related content from). Uses the
      * logged-in SESSDATA cookie when present for personalized results; published with no pagination
      * mode so scroll never pages past the one feed.
+     *
+     * No-op when the panel already has cards, so reopening the display configuration UI while a
+     * recommendation feed (or a search / related list) is already on screen never triggers a wasteful
+     * reload. The suggestion panel calls this once it has wired up [onResults].
      */
-    private fun loadRecommend() {
+    fun loadRecommendations() {
+        if (cards.isNotEmpty()) return
         startLoad()
         val seq = requestSeq.incrementAndGet()
         launchLoad {
@@ -531,7 +527,7 @@ class SuggestionsController {
         cards.clear()
         moreMode = null
         continuationToken = null
-        onResults()
+        onResults?.invoke()
     }
 
     /**
