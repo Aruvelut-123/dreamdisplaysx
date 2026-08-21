@@ -139,7 +139,7 @@ class DanmakuOverlay(
     }
 
     /** Advances scrolling; uploads the frame to GPU. Call once per client tick (main thread). */
-    fun tick() {
+    fun tick(paused: Boolean = false) {
         if (lines.isEmpty()) return
         val now = System.currentTimeMillis()
         // Build a new list instead of calling iterator.remove() on a CopyOnWriteArrayList,
@@ -147,8 +147,11 @@ class DanmakuOverlay(
         val kept = ArrayList<Line>(lines.size)
         for (line in lines) {
             when (line.kind) {
-                Kind.SCROLL -> if (line.x + line.width >= -20f) {
+                Kind.SCROLL -> if (!paused && line.x + line.width >= -20f) {
                     kept += line.copy(x = line.x - line.speed)
+                } else if (paused && line.x + line.width >= -20f) {
+                    // Keep the line but don't advance position when paused
+                    kept += line
                 }
                 Kind.TOP, Kind.BOTTOM -> if (now - line.bornAtMillis <= 5000) {
                     kept += line

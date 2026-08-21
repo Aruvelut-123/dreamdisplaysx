@@ -78,6 +78,10 @@ object DanmakuManager {
         subscribers[displayId]?.drainMessages() ?: emptyList()
     }
 
+    /** Returns the last danmaku entry time (seconds) for [displayId], or null. */
+    fun lastEntryTimeSec(displayId: DisplayId): Double? =
+        subscribers[displayId]?.lastEntryTimeSec()
+
     /** Returns live status text for [displayId], or null. */
     fun status(displayId: DisplayId): String? = subscribers[displayId]?.status
 
@@ -151,11 +155,23 @@ object DanmakuManager {
         fun rewindTo(positionSec: Double) {
             synchronized(this) {
                 if (!isVideo || timedEntries.isEmpty()) return
-                var target = timedEntries.binarySearch { it.timeSec.compareTo(positionSec) }
-                if (target < 0) target = -(target + 1)
-                timedIndex = maxOf(0, target - RENDER_WINDOW)
+                var lo = 0
+                var hi = timedEntries.size
+                while (lo < hi) {
+                    val mid = (lo + hi) / 2
+                    if (timedEntries[mid].timeSec <= positionSec) {
+                        lo = mid + 1
+                    } else {
+                        hi = mid
+                    }
+                }
+                val target = lo
+                timedIndex = Math.max(0, target - RENDER_WINDOW)
             }
         }
+
+        /** Returns the last danmaku entry time in seconds, or null if empty. */
+        fun lastEntryTimeSec(): Double? = timedEntries.lastOrNull()?.timeSec
 
         /**
          * Consumes timed danmaku whose timestamp has been reached by playback position [positionSec].
@@ -175,12 +191,20 @@ object DanmakuManager {
                 if (timedIndex < 0 || timedEntries.isEmpty()) {
                     timedIndex = 0
                 }
-                // Find the index of the first entry whose time is at or before positionSec.
-                var target = timedEntries.binarySearch { it.timeSec.compareTo(positionSec) }
-                if (target < 0) target = -(target + 1)
-                // target is now the insertion point: first entry > positionSec.
-                // Entries strictly before it are "seen". We want to render a window ending here.
-                val windowStart = maxOf(0, target - RENDER_WINDOW)
+                // Find the index of the first entry whose time is strictly greater than positionSec
+                // (i.e., the upper bound for timeSec <= positionSec).
+                var lo = 0
+                var hi = timedEntries.size
+                while (lo < hi) {
+                    val mid = (lo + hi) / 2
+                    if (timedEntries[mid].timeSec <= positionSec) {
+                        lo = mid + 1
+                    } else {
+                        hi = mid
+                    }
+                }
+                val target = lo
+                val windowStart = Math.max(0, target - RENDER_WINDOW)
                 if (timedIndex > target) {
                     // Backward seek: rewind and re-render the window around the seek point.
                     timedIndex = windowStart

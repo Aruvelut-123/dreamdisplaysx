@@ -1144,8 +1144,9 @@ class DisplayScreen(
             lastDanmakuPositionSec = positionSec
             due.forEach { o.add(it) }
             live.forEach { o.add(it) }
-            // Do not advance scrolling / expiry when the video is paused.
-            if (!isPaused) o.tick()
+            // Always tick expired/expiry logic so TOP/BOTTOM danmaku still disappear after 5s
+            // even when paused. Only SCROLL position is frozen during pause.
+            o.tick(isPaused)
         } else {
             overlay?.dispose()
             danmakuOverlay = null
