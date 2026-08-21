@@ -207,7 +207,7 @@ object VanillaCreateCommand {
 
         val displayData = sel.generateDisplayData(player.uuid)
 
-        // Optional `<name>` alias on creation — same shape / uniqueness rules as `/display name`.
+        // Optional <name> on creation - same shape / uniqueness rules as /display rename.
         if (requestedName != null) {
             val normalized = normalizeDisplayName(requestedName)
             if (normalized == null) {
