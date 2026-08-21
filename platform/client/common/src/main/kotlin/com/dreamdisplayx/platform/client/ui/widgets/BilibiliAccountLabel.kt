@@ -90,8 +90,15 @@ object BilibiliAccountLabel {
         val avatarSize = fontHeight + 2
         val name = info.nickname
         val nameWidth = font.width(name)
-        val badgeWidth = if (info.isVip) avatarSize else 0
         val gap = 4
+
+        // VIP badge width: use the actual image aspect ratio when loaded, fall back to avatarSize
+        val vipBadgeUrl = if (info.isVip) info.vipBadgeUrl else null
+        val vipBadgeActualW = if (vipBadgeUrl != null) {
+            val dims = Thumbnails.dimensions(vipBadgeUrl)
+            if (dims != null) (avatarSize.toFloat() * dims.first / dims.second).roundToInt() else avatarSize
+        } else 0
+        val badgeWidth = if (info.isVip) vipBadgeActualW else 0
         val totalW = avatarSize + gap + nameWidth + (if (badgeWidth > 0) gap + badgeWidth else 0)
         val x = screenWidth - UiTheme.SCREEN_PADDING - totalW
         val y = 6
