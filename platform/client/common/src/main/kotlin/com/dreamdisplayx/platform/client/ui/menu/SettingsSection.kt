@@ -113,17 +113,16 @@ class SettingsSection(
     ) {
         val font = Minecraft.getInstance().font
 
-        // Always place the control and reset at the correct scroll position so they are never
-        // left at a stale visible position when the row scrolls off-screen.
+        // Rows fully outside the visible area are moved off-screen so drawChildren never
+        // paints them; visible rows are placed at their correct scroll position.
+        val visible = y + UiTheme.ROW_H > clipTop && y < clipBottom
+        val placeY = if (visible) y else -9999
         var rightEdge = x + w
-        row.reset.place(UiRect(rightEdge - UiTheme.RESET_W, y, UiTheme.RESET_W, UiTheme.ROW_H))
+        row.reset.place(UiRect(rightEdge - UiTheme.RESET_W, placeY, UiTheme.RESET_W, UiTheme.ROW_H))
         rightEdge -= UiTheme.RESET_W + 4
         val controlW = min(UiTheme.CONTROL_W, max(60, rightEdge - (x + 6 + labelColW + 8)))
-        row.control.place(UiRect(rightEdge - controlW, y, controlW, UiTheme.ROW_H))
+        row.control.place(UiRect(rightEdge - controlW, placeY, controlW, UiTheme.ROW_H))
 
-        // Rows fully outside the visible area are skipped entirely (their controls are placed above
-        // but remain outside the visible area, so nothing leaks).
-        val visible = y + UiTheme.ROW_H > clipTop && y < clipBottom
         if (!visible) {
             row.labelHover = null
             return
