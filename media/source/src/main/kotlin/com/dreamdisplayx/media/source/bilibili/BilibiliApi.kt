@@ -40,8 +40,12 @@ data class BilibiliSearchItem(
     val epId: Long? = null,
     /** Bangumi / movie season id (market `bangumi/play/ss<id>`), null for plain videos. */
     val seasonId: Long? = null,
-    /** Media category returned by the search API: `video` / `media_bangumi` / `pgc`. */
+    /** Media category returned by the search API: `video` / `media_bangumi` / `media_ft` / `pgc`. */
     val mediaType: String = "video",
+    /** Access mode returned by the API: 0=free, 1=VIP, 2=pay-per-view, etc. */
+    val mediaMode: Int? = null,
+    /** Display label for the access mode (e.g. "VIP", "付费", "独家"), or null. */
+    val accessLabel: String? = null,
 )
 
 /**
@@ -300,46 +304,62 @@ object BilibiliApi {
      * `bvid`, so they render as cards whose tap target is a `bangumi/play/...` URL.
      */
     fun searchBangumi(keyword: String, page: Int = 1): List<BilibiliSearchItem> {
-        val params = mapOf("search_type" to "media_bangumi", "keyword" to keyword, "page" to page.toString())
+        val params = mutableMapOf(
+            "search_type" to "media_bangumi",
+            "keyword" to keyword,
+            "page" to page.toString(),
+            "page_size" to "20",
+            "platform" to "pc",
+            "web_location" to "1430654",
+        )
         val root = getJson("https://api.bilibili.com/x/web-interface/wbi/search/type?${signedQuery(params)}")
         val results = root?.obj("data")?.array("result")?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
         return results.mapNotNull { item ->
             val seasonId = item.optLong("season_id") ?: return@mapNotNull null
+            val mode = item.optInt("media_mode")
+            val label = accessLabelFor(mode ?: 0, item.optString("index_show"), item.optString("badge"))
             BilibiliSearchItem(
-                // Prefer the real series title (`media_name`) over the sub-episode title (`title`/`index_title`).
+                // Prefer the real series title: org_title > media_name > title (stripped of highlight markup).
                 title = stripHighlightTags(
-                    item.optString("media_name")
+                    item.optString("org_title")
+                        ?: item.optString("media_name")
                         ?: item.optString("title").orEmpty()
                 ),
-                // Bangumi entries have no per-video uploader; leave empty rather than showing regions/styles.
                 uploader = null,
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),
-                durationSec = null, // Bangumi search results do not carry a duration
+                durationSec = null,
                 viewCount = item.optLong("play"),
                 epId = item.optLong("ep_id"),
                 seasonId = seasonId,
                 mediaType = "media_bangumi",
+                mediaMode = mode,
+                accessLabel = label,
             )
         }
     }
 
-    /** Keyword media (movie / TV / documentary) search, keyed by `ep_id` / `season_id` like [searchBangumi]. */
+    /** Keyword media (movie / TV / documentary) search via `media_ft`. */
     fun searchMedia(keyword: String, page: Int = 1): List<BilibiliSearchItem> {
-        val params = mapOf("search_type" to "pgc", "keyword" to keyword, "page" to page.toString())
+        val params = mutableMapOf(
+            "search_type" to "media_ft",
+            "keyword" to keyword,
+            "page" to page.toString(),
+            "page_size" to "20",
+            "platform" to "pc",
+            "web_location" to "1430654",
+        )
         val root = getJson("https://api.bilibili.com/x/web-interface/wbi/search/type?${signedQuery(params)}")
         val results = root?.obj("data")?.array("result")?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
         return results.mapNotNull { item ->
             val seasonId = item.optLong("season_id") ?: return@mapNotNull null
-            val gotoType = item.optString("goto")
-            // "movie" only, so TV dramas / documentaries do not flood the movie results
-            if (gotoType != null && gotoType.isNotEmpty() && gotoType != "movie") return@mapNotNull null
+            val mode = item.optInt("media_mode")
+            val label = accessLabelFor(mode ?: 0, item.optString("index_show"), item.optString("badge"))
             BilibiliSearchItem(
-                // Prefer the real series/media title (`media_name`) over the sub-episode title (`title`/`index_title`).
                 title = stripHighlightTags(
-                    item.optString("media_name")
+                    item.optString("org_title")
+                        ?: item.optString("media_name")
                         ?: item.optString("title").orEmpty()
                 ),
-                // PGC entries have no per-video uploader; leave empty rather than showing regions/styles.
                 uploader = null,
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),
                 durationSec = null,
@@ -347,12 +367,26 @@ object BilibiliApi {
                 epId = item.optLong("ep_id"),
                 seasonId = seasonId,
                 mediaType = "pgc",
+                mediaMode = mode,
+                accessLabel = label,
             )
         }
     }
 
     /** Strips the `<em class="keyword">...</em>` highlight markup BIlibili's search API wraps matches in. */
     private fun stripHighlightTags(title: String): String = title.replace(Regex("</?em[^>]*>"), "")
+
+    /**
+     * Derives a user-facing access label for a bangumi / movie search result from the API's
+     * `media_mode` field: 0 = free (null), 1 = VIP (大会员), 2 = pay-per-view (付费), else falls
+     * back to the `index_show` / `badge` strings Bilibili often provides.
+     */
+    private fun accessLabelFor(mode: Int, indexShow: String?, badge: String?): String? = when (mode) {
+        0 -> null
+        1 -> "vip"
+        2 -> "paid"
+        else -> indexShow?.takeIf { it.isNotBlank() } ?: badge?.takeIf { it.isNotBlank() }
+    }
 
     /** BIlibili's search API returns protocol-relative thumbnail URLs (`//i0.hdslb.com/...`). */
     private fun normalizeThumbnailUrl(pic: String?): String? = when {

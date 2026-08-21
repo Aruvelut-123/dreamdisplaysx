@@ -254,6 +254,7 @@ class SuggestionsController {
                 watchUrlOverride = null, thumbnailUrlOverride = item.thumbnailUrl,
                 platform = MediaPlatform.BILIBILI,
                 bilibiliMediaType = item.mediaType,
+                bilibiliAccess = item.accessLabel,
             )
         }
         return MediaSearchResult(
@@ -266,6 +267,7 @@ class SuggestionsController {
             thumbnailUrlOverride = item.thumbnailUrl,
             platform = MediaPlatform.BILIBILI,
             bilibiliMediaType = item.mediaType,
+            bilibiliAccess = item.accessLabel,
         )
     }
 

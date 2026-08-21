@@ -24,6 +24,12 @@ object PlatformBadge {
     private val BILIBILI = Badge("dreamdisplayx.ui.bilibili", UiTheme.ACCENT_BILIBILI_TAG, DARK_TEXT)
     private val CUSTOM = Badge("dreamdisplayx.ui.custom", UiTheme.ACCENT_CUSTOM_TAG, UiTheme.TEXT_PRIMARY)
 
+    /** Pink VIP badge for Bilibili results that need 大会员 to watch. */
+    private val VIP = Badge("dreamdisplayx.ui.bilibili_vip", UiTheme.ACCENT_BILIBILI_VIP, UiTheme.TEXT_PRIMARY)
+
+    /** Yellow "paid" badge for Bilibili results that must be bought per-view. */
+    private val PAID = Badge("dreamdisplayx.ui.bilibili_paid", UiTheme.ACCENT_BILIBILI_PAID, DARK_TEXT)
+
     /** The badge for [platform], or null when it needs none (a plain YouTube / long-tail result). */
     fun forPlatform(platform: MediaPlatform): Badge? = when (platform) {
         MediaPlatform.TWITCH -> TWITCH
@@ -34,10 +40,26 @@ object PlatformBadge {
         MediaPlatform.YOUTUBE, MediaPlatform.OTHER -> null
     }
 
-    /** The badge for a search-result card, honoring the legacy `isTwitch` / `isCustom` flags too. */
+    /**
+     * The badge for a search-result card, honoring the legacy `isTwitch` / `isCustom` flags too.
+     * Bilibili results show a "大会员" (VIP) or "付费" tag instead of the generic platform tag when
+     * they aren't free to watch; free Bilibili videos render with no badge at all.
+     */
     fun forResult(info: MediaSearchResult): Badge? = when {
         info.isCustom -> CUSTOM
         info.isTwitch -> TWITCH
+        info.platform == MediaPlatform.BILIBILI && info.bilibiliAccess != null -> bilibiliAccessBadge(info.bilibiliAccess)
         else -> forPlatform(info.platform)
+    }
+
+    /**
+     * Maps a Bilibili access marker to a badge: null / unknown → the generic [BILIBILI] tag,
+     * else the VIP or paid plate. Returns null for free results so they show no tag.
+     */
+    private fun bilibiliAccessBadge(access: String?): Badge? = when (access) {
+        null -> BILIBILI
+        "vip" -> VIP
+        "paid" -> PAID
+        else -> BILIBILI
     }
 }

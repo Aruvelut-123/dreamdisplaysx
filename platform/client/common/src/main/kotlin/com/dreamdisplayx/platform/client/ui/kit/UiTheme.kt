@@ -36,6 +36,10 @@ object UiTheme {
     const val ACCENT_VIMEO_TAG = 0xFF17D5FF.toInt()
     const val ACCENT_KICK_TAG = 0xFF53FC18.toInt()
     const val ACCENT_BILIBILI_TAG = 0xFF00A1D6.toInt()
+    /** Pink plate for results that need 大会员. */
+    const val ACCENT_BILIBILI_VIP = 0xFFFB7299.toInt()
+    /** Yellow/gold plate for results that require per-view payment. */
+    const val ACCENT_BILIBILI_PAID = 0xFFFFD700.toInt()
     const val ACCENT_CUSTOM_TAG = 0xFF2E9E7B.toInt()
     const val CUSTOM_ART_TOP = 0xFF243A34.toInt()
     const val CUSTOM_ART_BOTTOM = 0xFF16221E.toInt()

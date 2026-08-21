@@ -136,6 +136,8 @@
   "dreamdisplayx.sort.bilibili.video": "视频",
   "dreamdisplayx.sort.bilibili.bangumi": "番剧",
   "dreamdisplayx.sort.bilibili.movie": "影视",
+  "dreamdisplayx.ui.bilibili_vip": "大会员",
+  "dreamdisplayx.ui.bilibili_paid": "付费",
   "dreamdisplayx.ui.custom": "链接",
   "dreamdisplayx.sort.my_links": "我的链接",
   "dreamdisplayx.suggestions.no_links": "还没有保存的链接。粘贴上方视频链接即可播放。"

@@ -136,6 +136,8 @@
   "dreamdisplayx.sort.bilibili.video": "Video",
   "dreamdisplayx.sort.bilibili.bangumi": "Bangumi",
   "dreamdisplayx.sort.bilibili.movie": "Movie",
+  "dreamdisplayx.ui.bilibili_vip": "大会员",
+  "dreamdisplayx.ui.bilibili_paid": "付费",
   "dreamdisplayx.ui.custom": "Link",
   "dreamdisplayx.sort.my_links": "My links",
   "dreamdisplayx.suggestions.no_links": "No saved links yet. Paste a video link above to play it."

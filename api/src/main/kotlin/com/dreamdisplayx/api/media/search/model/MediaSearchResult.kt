@@ -61,6 +61,9 @@ data class MediaSearchResult(
 
     /** Non-null for Bilibili results: "video", "media_bangumi", or "pgc". */
     val bilibiliMediaType: String? = null,
+
+    /** Bilibili access mode: null=free, "vip", or "paid". Drives the VIP/付费 tag on a card. */
+    val bilibiliAccess: String? = null,
 ) {
     /** True when thumbnail can be derived from [id] as YouTube image (real YouTube results only). */
     val isYouTubeResult: Boolean get() = !isCustom && !isTwitch && platform == MediaPlatform.YOUTUBE
