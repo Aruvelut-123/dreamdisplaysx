@@ -183,7 +183,7 @@ class SuggestionsController {
                         q, videos.size, bangumi.size, media.size, bilibiliFilter.apiName,
                     )
                     all.filter { bilibiliFilter.matches(it) }
-                        .map(::bilibiliSearchResult)
+                        .mapNotNull(::bilibiliSearchResult)
                         .sortedWith(bilibiliRank(q))
                         .also { pendingResults = it }
                         .take(BILIBILI_PAGE_SIZE)
@@ -253,19 +253,15 @@ class SuggestionsController {
     }.getOrNull()
 
     /** Builds a search-result card for a Bilibili hit — video by `bvid`, bangumi/movie by `epId`/`seasonId`. */
-    private fun bilibiliSearchResult(item: BilibiliSearchItem): MediaSearchResult {
+    private fun bilibiliSearchResult(item: BilibiliSearchItem): MediaSearchResult? {
         val url = when {
             !item.bvid.isNullOrEmpty() -> "https://www.bilibili.com/video/${item.bvid}"
             item.epId != null -> "https://www.bilibili.com/bangumi/play/ep${item.epId}"
             item.seasonId != null -> "https://www.bilibili.com/bangumi/play/ss${item.seasonId}"
-            else -> return MediaSearchResult(
-                id = "", title = item.title, uploader = item.uploader,
-                durationSec = item.durationSec, viewCount = item.viewCount,
-                watchUrlOverride = null, thumbnailUrlOverride = item.thumbnailUrl,
-                platform = MediaPlatform.BILIBILI,
-                bilibiliMediaType = item.mediaType,
-                bilibiliAccess = item.accessLabel,
-            )
+            // No bvid, epId or seasonId — there is no playable URL behind this card (some recommendation
+            // feed entries carry none). Drop it rather than render an unplayable card, and never hand
+            // an empty id to the YouTube watch-URL builder via dedupeKey.
+            else -> return null
         }
         return MediaSearchResult(
             id = url,
@@ -450,7 +446,7 @@ class SuggestionsController {
         launchLoad {
             val results = runCatching {
                 withContext(Dispatchers.IO) {
-                    BilibiliApi.recommendVideos(RECOMMEND_PAGE_SIZE).map(::bilibiliSearchResult)
+                    BilibiliApi.recommendVideos(RECOMMEND_PAGE_SIZE).mapNotNull(::bilibiliSearchResult)
                 }
             }.onFailure { e ->
                 if (e is CancellationException) throw e
@@ -602,7 +598,11 @@ class SuggestionsController {
     private fun dedupeKey(info: MediaSearchResult): String? {
         val title = info.title.trim()
         if (title.isEmpty()) return null
-        return title.lowercase() + "|" + info.getWatchUrl().lowercase()
+        // Guard against any card whose watch URL cannot be derived (e.g. an empty id being routed to
+        // the YouTube builder) — such a card is skipped rather than crashing the panel.
+        val watchUrl = runCatching { info.getWatchUrl() }.getOrNull() ?: return null
+        if (watchUrl.isEmpty()) return null
+        return title.lowercase() + "|" + watchUrl.lowercase()
     }
 
     /**
