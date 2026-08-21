@@ -2,13 +2,26 @@ package com.dreamdisplayx.platform.client
 
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
 import com.dreamdisplayx.media.source.youtube.cookie.CookieSource
+import org.tomlj.Toml
+import org.tomlj.TomlParseResult
+import org.tomlj.TomlTable
 import java.io.File
+import java.nio.file.Files
 import kotlin.math.roundToInt
 
-/** Client configuration loaded from and persisted to `config.yml`. */
+/**
+ * Client configuration persisted to `config.toml` in the mod's config directory.
+ *
+ * `TomlWriter` produces standard TOML, which Configured (MrCrayfish) and other config editors can
+ * parse. A legacy `config.yml` file, if present, is read once and merged into `config.toml`, then
+ * deleted — so existing installs keep their settings without keeping the old YAML format around.
+ */
 class Config(private val baseDir: File) {
-    /** The backing `config.yml` file on disk. */
-    private val file = File(baseDir, "config.yml")
+    /** The backing `config.toml` file on disk. */
+    private val file = File(baseDir, "config.toml")
+
+    /** Legacy `config.yml` migrated on first load, then removed. */
+    private val legacyFile = File(baseDir, "config.yml")
 
     /** Whether to mute all displays while the game window is not focused. */
     var muteOnAltTab: Boolean = false
@@ -55,13 +68,40 @@ class Config(private val baseDir: File) {
 
     /**
      * Loads the configuration from disk, applying default values for missing or malformed entries.
-     * If the configuration file does not exist, it will be created with default values.
+     * A legacy `config.yml` is migrated into `config.toml` (and removed) if the TOML does not exist yet.
+     * If neither file exists, a `config.toml` is created with default values.
      */
     private fun load() {
+        migrateLegacyYaml()
         if (!file.exists()) {
             save(); return
         }
-        val data = file.readLines()
+        val t = runCatching { Toml.parse(file.toPath()) }.getOrNull()
+        if (t == null || !t.hasErrors()) {
+            readToml(t)
+        } else {
+            save()
+        }
+    }
+
+    /**
+     * Migrates a legacy `config.yml` into `config.toml` when the TOML doesn't exist yet, then deletes
+     * the YAML. When a `config.toml` already exists, any stale `config.yml` is simply removed (the TOML
+     * is authoritative). This keeps Configured and other editors on one canonical TOML file.
+     */
+    private fun migrateLegacyYaml() {
+        if (!legacyFile.exists()) return
+        if (!file.exists()) {
+            val yaml = parseLegacyYaml(legacyFile)
+            readLegacy(yaml)
+            save()
+        }
+        runCatching { Files.delete(legacyFile.toPath()) }
+    }
+
+    /** Parses the old flat `key: value` YAML into a map, tolerating quotes around values. */
+    private fun parseLegacyYaml(f: File): Map<String, String> = runCatching {
+        f.readLines()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith('#') }
             .mapNotNull { line ->
@@ -71,58 +111,72 @@ class Config(private val baseDir: File) {
                         line.substring(colon + 1).trim().removeSurrounding("'").removeSurrounding("\"")
             }
             .toMap()
+    }.getOrDefault(emptyMap())
 
+    /** Applies the migrated YAML values onto the in-memory defaults before the TOML is written. */
+    private fun readLegacy(data: Map<String, String>) {
         muteOnAltTab = data["mute-on-alt-tab"]?.toBooleanStrictOrNull() ?: muteOnAltTab
-        val rawDistance = data["default-render-distance"]?.toIntOrNull() ?: defaultDistance
-        defaultDistance = ((rawDistance / 16.0).roundToInt().coerceIn(2, 12)) * 16
-        defaultDisplayVolume = data["default-default-display-volume"]?.toDoubleOrNull() ?: defaultDisplayVolume
-        displaysEnabled = data["displays-enabled"]?.toBooleanStrictOrNull() ?: displaysEnabled
-        danmakuEnabled = data["danmaku-enabled"]?.toBooleanStrictOrNull() ?: danmakuEnabled
-        ytdlpCookieSource = data["ytdlp-cookies-from-browser"]
-            ?.let { CookieSource.fromConfig(it) }
-            ?: ytdlpCookieSource
-        ytdlpProxy = data["ytdlp-proxy"] ?: ytdlpProxy
-        useHwAccel = data["use-hw-accel"]?.toBooleanStrictOrNull() ?: useHwAccel
-        preferFps60 = data["prefer-fps60"]?.toBooleanStrictOrNull() ?: preferFps60
-        // Expose to the media player / stream selector, which read it via system property.
-        System.setProperty("dreamdisplayx.stream.preferFps60", preferFps60.toString())
-        audioAcoustics = data["audio-acoustics"]?.let { token ->
-            AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }
-        } ?: audioAcoustics
-        audioBinauralOutput = when (data["audio-output-profile"]?.lowercase()) {
-            "speakers" -> false
-            "headphones", "auto" -> true
-            else -> audioBinauralOutput
+        data["default-render-distance"]?.toIntOrNull()?.let { defaultDistance = ((it / 16.0).roundToInt().coerceIn(2, 12)) * 16 }
+        data["default-default-display-volume"]?.toDoubleOrNull()?.let { defaultDisplayVolume = it }
+        data["displays-enabled"]?.toBooleanStrictOrNull()?.let { displaysEnabled = it }
+        data["danmaku-enabled"]?.toBooleanStrictOrNull()?.let { danmakuEnabled = it }
+        data["ytdlp-cookies-from-browser"]?.let { CookieSource.fromConfig(it)?.let { c -> ytdlpCookieSource = c } }
+        data["ytdlp-proxy"]?.let { ytdlpProxy = it }
+        data["use-hw-accel"]?.toBooleanStrictOrNull()?.let { useHwAccel = it }
+        data["prefer-fps60"]?.toBooleanStrictOrNull()?.let { preferFps60 = it }
+        data["audio-acoustics"]?.let { token ->
+            AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }?.let { audioAcoustics = it }
+        }
+        when (data["audio-output-profile"]?.lowercase()) {
+            "speakers" -> audioBinauralOutput = false
+            "headphones", "auto" -> audioBinauralOutput = true
         }
     }
 
-    /** Persists the current configuration values to disk. */
+    /** Applies values from the parsed TOML table (null / wrong-typed entries fall back to defaults). */
+    private fun readToml(t: TomlTable?) {
+        muteOnAltTab = t?.getBoolean("mute-on-alt-tab") ?: muteOnAltTab
+        t?.getLong("default-render-distance")?.let { raw ->
+            defaultDistance = ((raw.toInt() / 16.0).roundToInt().coerceIn(2, 12)) * 16
+        }
+        t?.getDouble("default-display-volume")?.let { defaultDisplayVolume = it }
+        displaysEnabled = t?.getBoolean("displays-enabled") ?: displaysEnabled
+        danmakuEnabled = t?.getBoolean("danmaku-enabled") ?: danmakuEnabled
+        t?.getString("ytdlp-cookies-from-browser")?.let { CookieSource.fromConfig(it)?.let { c -> ytdlpCookieSource = c } }
+        t?.getString("ytdlp-proxy")?.let { ytdlpProxy = it }
+        useHwAccel = t?.getBoolean("use-hw-accel") ?: useHwAccel
+        preferFps60 = t?.getBoolean("prefer-fps60") ?: preferFps60
+        t?.getString("audio-acoustics")?.let { token ->
+            AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }?.let { audioAcoustics = it }
+        }
+        when (t?.getString("audio-output-profile")?.lowercase()) {
+            "speakers" -> audioBinauralOutput = false
+            "headphones", "auto" -> audioBinauralOutput = true
+        }
+        // Expose to the media player / stream selector, which read it via system property.
+        System.setProperty("dreamdisplayx.stream.preferFps60", preferFps60.toString())
+    }
+
+    /** Persists the current configuration values to disk as standard TOML. */
     fun save() {
         baseDir.mkdirs()
         file.writeText(buildString {
-            appendLine("mute-on-alt-tab: $muteOnAltTab")
-            appendLine("default-render-distance: $defaultDistance")
-            appendLine("default-default-display-volume: $defaultDisplayVolume")
-            appendLine("displays-enabled: $displaysEnabled")
-            appendLine("danmaku-enabled: $danmakuEnabled")
-            appendLine("ytdlp-cookies-from-browser: ${ytdlpCookieSource.configToken.yamlQuoted()}")
-            appendLine("ytdlp-proxy: ${ytdlpProxy.yamlQuoted()}")
-            appendLine("use-hw-accel: $useHwAccel")
-            appendLine("prefer-fps60: $preferFps60")
-            appendLine("audio-acoustics: ${audioAcoustics.name.lowercase()}")
-            appendLine("audio-output-profile: ${if (audioBinauralOutput) "headphones" else "speakers"}")
+            appendLine("# Dream DisplaysX client configuration")
+            appendLine("mute-on-alt-tab = $muteOnAltTab")
+            appendLine("default-render-distance = $defaultDistance")
+            appendLine("default-display-volume = $defaultDisplayVolume")
+            appendLine("displays-enabled = $displaysEnabled")
+            appendLine("danmaku-enabled = $danmakuEnabled")
+            appendLine("ytdlp-cookies-from-browser = \"${tomlQuote(ytdlpCookieSource.configToken)}\"")
+            appendLine("ytdlp-proxy = \"${tomlQuote(ytdlpProxy)}\"")
+            appendLine("use-hw-accel = $useHwAccel")
+            appendLine("prefer-fps60 = $preferFps60")
+            appendLine("audio-acoustics = \"${audioAcoustics.name.lowercase()}\"")
+            appendLine("audio-output-profile = \"${if (audioBinauralOutput) "headphones" else "speakers"}\"")
         })
     }
 
-    companion object {
-        init {
-            System.setProperty("file.encoding", "UTF-8")
-        }
-
-        /** Wraps the string in single quotes if it is empty or contains YAML-special characters. */
-        private fun String.yamlQuoted(): String =
-            if (isEmpty() || any { it in ":#{}[]|>&!*'\",\n\r\t" })
-                "'${replace("'", "''")}'"
-            else this
-    }
+    /** Escapes a string for inclusion in a TOML basic string literal. */
+    private fun tomlQuote(s: String): String =
+        s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
 }

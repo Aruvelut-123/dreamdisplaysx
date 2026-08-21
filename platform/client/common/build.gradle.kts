@@ -28,6 +28,7 @@ dependencies {
     api(libs.zxingCore)
     api(libs.okhttp)
     api(libs.okio)
+    api(libs.tomlj)
     compileOnly(libs.kotlinStdlib)
 }
 
