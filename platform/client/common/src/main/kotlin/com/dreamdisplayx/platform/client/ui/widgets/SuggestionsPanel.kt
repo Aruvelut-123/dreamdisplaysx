@@ -43,9 +43,9 @@ class SuggestionsPanel(
     private val searchBox: EditBox
     private val clearButton: IconButton
     private val sortButton: IconButton
-    private val sortDropdown: SortDropdown = SortDropdown(
-        current = { controller.sortOption },
-        onSelect = { controller.setSort(it) },
+    private val sortDropdown: BilibiliFilterDropdown = BilibiliFilterDropdown(
+        current = { controller.bilibiliFilter },
+        onSelect = { controller.setBilibiliFilter(it) },
     )
     private val searchButton: IconButton
 

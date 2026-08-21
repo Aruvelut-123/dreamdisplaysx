@@ -28,18 +28,20 @@ data class BilibiliPlayback(
     val isSeekable: Boolean,
 )
 
-/** One search-result card from a BIlibili keyword search (video / bangumi / media). */
+/** One search-result card from a Bilibili keyword search (video / bangumi / movie). */
 data class BilibiliSearchItem(
     val bvid: String? = null,
     val title: String,
-    val uploader: String?,
-    val thumbnailUrl: String?,
-    val durationSec: Long?,
-    val viewCount: Long?,
+    val uploader: String? = null,
+    val thumbnailUrl: String? = null,
+    val durationSec: Long? = null,
+    val viewCount: Long? = null,
     /** Bangumi / movie episode id (market `bangumi/play/ep<id>`), null for plain videos. */
     val epId: Long? = null,
     /** Bangumi / movie season id (market `bangumi/play/ss<id>`), null for plain videos. */
     val seasonId: Long? = null,
+    /** Media category returned by the search API: `video` / `media_bangumi` / `pgc`. */
+    val mediaType: String = "video",
 )
 
 /**
@@ -284,10 +286,11 @@ object BilibiliApi {
             BilibiliSearchItem(
                 bvid = bvid,
                 title = stripHighlightTags(item.optString("title").orEmpty()),
-                uploader = item.optString("author"),
+                uploader = item.optString("author"), // real uploader name from search result
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("pic")),
                 durationSec = parseSearchDuration(item.optString("duration")),
                 viewCount = item.optLong("play"),
+                mediaType = "video",
             )
         }
     }
@@ -303,18 +306,19 @@ object BilibiliApi {
         return results.mapNotNull { item ->
             val seasonId = item.optLong("season_id") ?: return@mapNotNull null
             BilibiliSearchItem(
-                title = stripHighlightTags(item.optString("title").orEmpty()),
-                uploader = buildString {
-                    item.optString("areas")?.takeIf { it.isNotEmpty() }?.let { append(it) }
-                    item.optString("styles")?.takeIf { it.isNotEmpty() }?.let {
-                        if (isNotEmpty()) append(" · "); append(it)
-                    }
-                }.takeIf { it.isNotEmpty() },
+                // Prefer the real series title (`media_name`) over the sub-episode title (`title`/`index_title`).
+                title = stripHighlightTags(
+                    item.optString("media_name")
+                        ?: item.optString("title").orEmpty()
+                ),
+                // Bangumi entries have no per-video uploader; leave empty rather than showing regions/styles.
+                uploader = null,
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),
                 durationSec = null, // Bangumi search results do not carry a duration
                 viewCount = item.optLong("play"),
                 epId = item.optLong("ep_id"),
                 seasonId = seasonId,
+                mediaType = "media_bangumi",
             )
         }
     }
@@ -330,18 +334,19 @@ object BilibiliApi {
             // "movie" only, so TV dramas / documentaries do not flood the movie results
             if (gotoType != null && gotoType.isNotEmpty() && gotoType != "movie") return@mapNotNull null
             BilibiliSearchItem(
-                title = stripHighlightTags(item.optString("title").orEmpty()),
-                uploader = buildString {
-                    item.optString("areas")?.takeIf { it.isNotEmpty() }?.let { append(it) }
-                    item.optString("styles")?.takeIf { it.isNotEmpty() }?.let {
-                        if (isNotEmpty()) append(" · "); append(it)
-                    }
-                }.takeIf { it.isNotEmpty() },
+                // Prefer the real series/media title (`media_name`) over the sub-episode title (`title`/`index_title`).
+                title = stripHighlightTags(
+                    item.optString("media_name")
+                        ?: item.optString("title").orEmpty()
+                ),
+                // PGC entries have no per-video uploader; leave empty rather than showing regions/styles.
+                uploader = null,
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),
                 durationSec = null,
                 viewCount = item.optLong("play"),
                 epId = item.optLong("ep_id"),
                 seasonId = seasonId,
+                mediaType = "pgc",
             )
         }
     }

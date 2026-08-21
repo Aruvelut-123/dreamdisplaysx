@@ -58,6 +58,9 @@ data class MediaSearchResult(
 
     /** True when this result is a currently-live broadcast. */
     val isLive: Boolean = false,
+
+    /** Non-null for Bilibili results: "video", "media_bangumi", or "pgc". */
+    val bilibiliMediaType: String? = null,
 ) {
     /** True when thumbnail can be derived from [id] as YouTube image (real YouTube results only). */
     val isYouTubeResult: Boolean get() = !isCustom && !isTwitch && platform == MediaPlatform.YOUTUBE

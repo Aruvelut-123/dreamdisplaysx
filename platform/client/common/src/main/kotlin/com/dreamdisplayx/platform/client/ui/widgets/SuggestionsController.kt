@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.media.source.bilibili.BilibiliMetadataCache
 import com.dreamdisplayx.media.source.bilibili.BilibiliSearchItem
+import com.dreamdisplayx.media.source.bilibili.BilibiliSearchType
 import com.dreamdisplayx.media.source.kick.KickMetadataCache
 import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
 import com.dreamdisplayx.media.source.twitch.TwitchApi
@@ -142,8 +143,10 @@ class SuggestionsController {
     }
 
     /**
-     * Runs a free-text or URL search for [query]; an empty query falls back to the current related list.
-     * URL queries resolve directly instead of searching.
+     * Runs a Bilibili-only free-text search. This fork's search is Bilibili-exclusive; it queries the
+     * three Bilibili categories (video / bangumi / movie), ranks them by relevance, then publishes
+     * the first page of [BILIBILI_PAGE_SIZE] results. An empty query falls back to the current
+     * related list.
      */
     fun runSearch(query: String) {
         val q = query.trim()
@@ -162,179 +165,47 @@ class SuggestionsController {
         startLoad()
 
         val seq = requestSeq.incrementAndGet()
-        val svc = DreamServices.registry.get(MediaServices.SEARCH)
-        val maybeId = YouTubeUrls.extractVideoId(q)
-        val source = MediaSource.from(q)
-
-        // A direct / long-tail link needs no network to show its card, so publish it synchronously.
-        // Platform links (Twitch / Vimeo / Kick / Bilibili) instead resolve real metadata below.
-        if (maybeId == null && source !is MediaSource.Twitch &&
-            source !is MediaSource.Vimeo && source !is MediaSource.Kick && source !is MediaSource.Bilibili
-        ) {
-            customUrlOf(source)?.let {
-                publish(seq, listOf(customResult(it)), null)
-                return
-            }
-        }
-
         launchLoad {
             val results = runCatching {
-                when {
-                    maybeId != null -> {
-                        val meta = runCatching { svc.metadata(maybeId) }
-                            .onFailure { if (it is CancellationException) throw it; logger.warn("URL meta: ${it.message}") }
-                            .getOrNull()
-                        listOf(meta ?: fallbackResult(maybeId))
-                    }
-
-                    source is MediaSource.Twitch -> {
-                        val meta = runCatching {
-                            withContext(Dispatchers.IO) { TwitchMetadataCache.resolveBlocking(source) }
-                        }
-                            .onFailure { if (it is CancellationException) throw it; logger.warn("Twitch meta: ${it.message}") }
-                            .getOrNull()
-                        listOf(twitchResult(source, meta))
-                    }
-
-                    source is MediaSource.Vimeo -> {
-                        val meta = runCatching {
-                            withContext(Dispatchers.IO) { VimeoMetadataCache.resolveBlocking(source) }
-                        }
-                            .onFailure { if (it is CancellationException) throw it; logger.warn("Vimeo meta: ${it.message}") }
-                            .getOrNull()
-                        listOf(
-                            platformResult(
-                                source.url,
-                                MediaPlatform.VIMEO,
-                                meta,
-                                fallbackTitle = "Vimeo ${source.videoId}"
-                            )
-                        )
-                    }
-
-                    source is MediaSource.Kick -> {
-                        val meta = runCatching {
-                            withContext(Dispatchers.IO) { KickMetadataCache.resolveBlocking(source) }
-                        }
-                            .onFailure { if (it is CancellationException) throw it; logger.warn("Kick meta: ${it.message}") }
-                            .getOrNull()
-                        val fallback = source.channel ?: source.videoUuid ?: "Kick"
-                        listOf(platformResult(source.url, MediaPlatform.KICK, meta, fallbackTitle = fallback))
-                    }
-
-                    source is MediaSource.Bilibili -> {
-                        val meta = runCatching {
-                            withContext(Dispatchers.IO) { BilibiliMetadataCache.resolveBlocking(source) }
-                        }
-                            .onFailure {
-                                if (it is CancellationException) throw it
-                                logger.warn("Bilibili meta: ${it.message}.")
-                            }
-                            .getOrNull()
-                        val fallback = source.bvid ?: source.avid?.let { "av$it" } ?: source.roomId?.toString() ?: "Bilibili"
-                        listOf(platformResult(source.url, MediaPlatform.BILIBILI, meta, fallbackTitle = fallback))
-                    }
-
-                    else -> {
-                        val twitchLogin = twitchLoginCandidate(q)
-
-                        val ytDeferred = async {
-                            runCatching { svc.searchPage(q, PAGE_SIZE, sortOption.networkSort) }
-                                .onFailure { if (it is CancellationException) throw it; logger.warn("Search failed: ${it.message}") }
-                                .getOrNull()
-                        }
-
-                        val twitchDeferred = async {
-                            twitchLogin?.let { runCatching { liveTwitchResult(it) }.getOrNull() }
-                        }
-
-                        // Bilibili is overwhelmingly Chinese-language content; only worth searching (and even
-                        // then, only its truly popular hits) when the player is typing Chinese themselves.
-                        val bilibiliDeferred = if (looksChinese(q)) {
-                            async {
-                                runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        val videos = BilibiliApi.searchVideos(q)
-                                        val bangumi = BilibiliApi.searchBangumi(q)
-                                        val media = BilibiliApi.searchMedia(q)
-                                        videos + bangumi + media
-                                    }
-                                }
-                                    .onFailure { if (it is CancellationException) throw it; logger.debug("Bilibili search failed: ${it.message}") }
-                                    .getOrNull()
-                                    ?.filter { (it.viewCount ?: 0L) >= BILIBILI_MIN_VIEWS }
-                                    ?.map(::bilibiliSearchResult)
-                            }
-                        } else null
-                        val twitchSearchDeferred = async {
-                            runCatching {
-                                withContext(Dispatchers.IO) { TwitchApi.searchChannels(twitchSearchFragment(q)) }
-                            }
-                                .onFailure { if (it is CancellationException) throw it; logger.debug("Twitch search failed: ${it.message}") }
-                                .getOrNull()
-                                ?.map(::twitchSearchResult)
-                        }
-
-                        val youtubePage = ytDeferred.await()
-                        val youtubeResults = youtubePage?.results
-                        var liveTwitch = twitchDeferred.await()
-                        val bilibiliResults = bilibiliDeferred?.await()
-                        val twitchSearchResults = twitchSearchDeferred.await()
-
-                        if (liveTwitch == null) {
-                            val fuzzyLogin = fuzzyTwitchLogin(q, youtubeResults)
-                            if (fuzzyLogin != null && fuzzyLogin != twitchLogin) {
-                                liveTwitch = runCatching { liveTwitchResult(fuzzyLogin) }.getOrNull()
-                            }
-                        }
-
-                        if (youtubeResults == null && liveTwitch == null &&
-                            bilibiliResults.isNullOrEmpty() && twitchSearchResults.isNullOrEmpty()
-                        ) {
-                            publish(seq, null, KEY_ERROR)
-                            return@launchLoad
-                        }
-
-                        // YouTube stays the dominant source (~80%). Bilibili (gated to Chinese queries and
-                        // popular-only hits above) gets a strong share once it's competing at all, since a
-                        // Chinese query is exactly where it's most useful. Kick is not mixed in here at all
-                        // anymore. Twitch keeps its own unweighted mix-in below, untouched by this ratio.
-                        val youtubeAndMinor = weightedInterleave(
-                            listOf(
-                                youtubeResults.orEmpty() to YOUTUBE_WEIGHT,
-                                bilibiliResults.orEmpty().take(BILIBILI_RESULT_CAP) to BILIBILI_WEIGHT,
-                            )
-                        )
-                        // Twitch channel hits get folded in at a small weight too, same idea as Bilibili
-                        // above: YouTube should stay the thing you mostly see, Twitch an occasional find.
-                        val onDemand = weightedInterleave(
-                            listOf(
-                                youtubeAndMinor to (1.0 - TWITCH_WEIGHT),
-                                twitchSearchResults.orEmpty().take(TWITCH_RESULT_CAP) to TWITCH_WEIGHT,
-                            )
-                        )
-                        val combined = ArrayList<MediaSearchResult>(1 + onDemand.size).apply {
-                            liveTwitch?.let(::add)
-                            addAll(onDemand)
-                        }
-                        publish(
-                            seq,
-                            combined,
-                            null,
-                            nextToken = youtubePage?.continuationToken,
-                            mode = MoreMode.Search(q)
-                        )
-                        return@launchLoad
-                    }
+                withContext(Dispatchers.IO) {
+                    val videos = BilibiliApi.searchVideos(q)
+                    val bangumi = BilibiliApi.searchBangumi(q)
+                    val media = BilibiliApi.searchMedia(q)
+                    val all = videos + bangumi + media
+                    all.filter { (it.viewCount ?: 0L) >= BILIBILI_MIN_VIEWS }
+                        .filter { bilibiliFilter.matches(it) }
+                        .map(::bilibiliSearchResult)
+                        .sortedWith(bilibiliRank(q))
+                        .also { pendingResults = it }
+                        .also { pendingOffset = 0 }
+                        .take(BILIBILI_PAGE_SIZE)
                 }
             }.onFailure { e ->
                 if (e is CancellationException) throw e
-                publish(seq, null, KEY_ERROR)
+                logger.warn("Bilibili search failed: ${e.message}")
             }.getOrNull()
 
-            results?.let { publish(seq, it, null) }
+            results?.let { publish(seq, it, null, mode = MoreMode.Search(q)) }
         }
     }
+
+    /** The active Bilibili media-type filter; see [setBilibiliFilter]. */
+    var bilibiliFilter: BilibiliSearchType = BilibiliSearchType.ALL
+        private set
+
+    /** Switches the Bilibili media-type filter and re-runs the current search when one is active. */
+    fun setBilibiliFilter(type: BilibiliSearchType) {
+        if (type == bilibiliFilter) return
+        bilibiliFilter = type
+        onResults()
+        lastQuery?.let { runSearch(it) }
+    }
+
+    /** Full sorted result set for the current Bilibili search, kept client-side for pagination. */
+    private var pendingResults: List<MediaSearchResult> = emptyList()
+
+    /** How many items from [pendingResults] have already been exposed to [cards]. */
+    private var pendingOffset: Int = 0
 
     /** True when [query] contains a Han (Chinese-script) character, the gate for even trying a Bilibili search. */
     private fun looksChinese(query: String): Boolean = CHINESE_CHAR_RE.containsMatchIn(query)
@@ -371,7 +242,7 @@ class SuggestionsController {
         logger.debug("Twitch live-channel lookup failed for '$login': ${e.message}.")
     }.getOrNull()
 
-    /** Builds a search-result card for a BIlibili hit — video by `bvid`, bangumi/movie by `epId`/`seasonId`. */
+    /** Builds a search-result card for a Bilibili hit — video by `bvid`, bangumi/movie by `epId`/`seasonId`. */
     private fun bilibiliSearchResult(item: BilibiliSearchItem): MediaSearchResult {
         val url = when {
             !item.bvid.isNullOrEmpty() -> "https://www.bilibili.com/video/${item.bvid}"
@@ -382,6 +253,7 @@ class SuggestionsController {
                 durationSec = item.durationSec, viewCount = item.viewCount,
                 watchUrlOverride = null, thumbnailUrlOverride = item.thumbnailUrl,
                 platform = MediaPlatform.BILIBILI,
+                bilibiliMediaType = item.mediaType,
             )
         }
         return MediaSearchResult(
@@ -393,7 +265,30 @@ class SuggestionsController {
             watchUrlOverride = url,
             thumbnailUrlOverride = item.thumbnailUrl,
             platform = MediaPlatform.BILIBILI,
+            bilibiliMediaType = item.mediaType,
         )
+    }
+
+    /** Priority bucket for Bilibili ranking. Lower = shown first. */
+    private enum class RankClass { BANGUMI_MOVIE, UPLOADER_MATCH, TITLE_MATCH, OTHER }
+
+    /**
+     * Ranks Bilibili results so bangumi/movies surface first, then uploader-name matches, then
+     * title matches, then everything else. The [query] is lowercased once for case-insensitive matching.
+     */
+    private fun bilibiliRank(query: String): Comparator<MediaSearchResult> {
+        val q = query.lowercase()
+        return compareBy<MediaSearchResult> { result ->
+            when {
+                result.bilibiliMediaType == "media_bangumi" || result.bilibiliMediaType == "pgc" -> RankClass.BANGUMI_MOVIE
+                result.uploader?.lowercase()?.contains(q) == true -> RankClass.UPLOADER_MATCH
+                result.title.lowercase().contains(q) -> RankClass.TITLE_MATCH
+                else -> RankClass.OTHER
+            }
+        }.thenBy { result ->
+            // Within the same bucket, sort by view count (descending).
+            -(result.viewCount ?: 0L)
+        }
     }
 
     /** Builds a search-result card for a Twitch channel hit, keyed by its channel URL like other platform cards. */
@@ -528,14 +423,28 @@ class SuggestionsController {
 
     /**
      * Appends the next page of results if the current list came from a paginable search / related load,
-     * a page isn't already in flight, and the list isn't already exhausted. Called by the panel as the
-     * user scrolls near the end of the currently loaded cards; safe to call every frame.
+     * a page isn't already in flight, and the list isn't already exhausted. Bilibili searches page
+     * locally from the fully-loaded sorted set, exposing [BILIBILI_PAGE_SIZE] more items per scroll.
      */
     fun loadMoreIfNeeded() {
         if (loadingMore || isLoading) return
         // The local link list is complete by definition; there is no page two to fetch
         if (sortOption.isOwnList) return
         val mode = moreMode ?: return
+
+        if (mode is MoreMode.Search) {
+            // Bilibili search: serve more from the already-fetched ranked list.
+            val remaining = pendingResults.size - pendingOffset
+            if (remaining <= 0) return
+            val next = pendingResults.subList(pendingOffset, minOf(pendingOffset + BILIBILI_PAGE_SIZE, pendingResults.size))
+            pendingOffset += next.size
+            Minecraft.getInstance().execute {
+                loadingMore = false
+                appendCards(next)
+            }
+            return
+        }
+
         val token = continuationToken ?: return
         loadingMore = true
         val seq = requestSeq.value
@@ -726,6 +635,9 @@ class SuggestionsController {
 
         /** Max distinct uploader names scanned for a fuzzy Twitch-login match, so a big result page stays cheap. */
         private const val FUZZY_CANDIDATE_LIMIT = 8
+
+        /** Items exposed per scroll-triggered "load more" for Bilibili searches. */
+        private const val BILIBILI_PAGE_SIZE = 20
 
         /** Max BIlibili search hits mixed into a single results page — generous, since BIlibili only ever
          *  competes at all on a Chinese query ([looksChinese]), where it should show up strongly. */

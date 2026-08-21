@@ -38,9 +38,10 @@ class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
         BilibiliLoginManager.startQrLogin()
         refreshQrMatrix()
         BilibiliLoginManager.onLoginSuccess = {
-            Minecraft.getInstance().execute {
-                Minecraft.getInstance().setScreen(null)
-            }
+            //? if >=26.2 {
+            Minecraft.getInstance().setScreenAndShow(null)
+            //?} else
+            /*Minecraft.getInstance().setScreen(null)*/
         }
     }
 

@@ -16,6 +16,10 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 - QR login screen auto-closes on successful login.
 - Danmaku display area selector now uses fixed presets: 25 / 50 / 75 / 100 %.
 - Danmaku font size selector now uses fixed presets: small (0.5x) / medium (1x) / large (1.5x).
+- Suggestions panel now searches Bilibili exclusively (video, bangumi, movie).
+- Bilibili search results are ranked: bangumi/movies first, then uploader-name matches, then title matches.
+- Bilibili media-type filter added to the suggestions panel: all / video / bangumi / movie.
+- Bilibili search loads in pages of 20 results on scroll.
 
 ### Fixes
 
