@@ -63,7 +63,7 @@ class DanmakuOverlay(
     private data class Line(
         val text: String, val color: Int, val x: Float, val y: Int,
         val speed: Float, val kind: Kind, val bornAtMillis: Long,
-        val width: Int,
+        val width: Int, val fontPx: Int,
     )
 
     private val lines = CopyOnWriteArrayList<Line>()
@@ -109,6 +109,7 @@ class DanmakuOverlay(
             else -> Kind.SCROLL
         }
         val font = fontForScale(s.danmakuFontSize)
+        val fontPx = font.size
         val metrics = metricsFor(font)
         val textWidth = metrics.stringWidth(msg.text)
         val x = when (kind) {
@@ -127,7 +128,7 @@ class DanmakuOverlay(
         lines += Line(
             text = msg.text, color = msg.color, x = x, y = y,
             speed = speed, kind = kind, bornAtMillis = System.currentTimeMillis(),
-            width = textWidth,
+            width = textWidth, fontPx = fontPx,
         )
         if (lines.size > 40) lines.removeAt(0)
         dirty = true
@@ -294,8 +295,6 @@ class DanmakuOverlay(
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             val s = settings()
-            val font = fontForScale(s.danmakuFontSize)
-            g.font = font
             g.color = Color(0, 0, 0, 0)
             g.fillRect(0, 0, texW, texH)
 
@@ -303,6 +302,10 @@ class DanmakuOverlay(
             val outlineAlpha = (180 * opacity / 255).coerceIn(0, 255)
 
             for (line in lines) {
+                // Each line uses its own font size (captured at creation time), so changing the
+                // font setting only affects new danmaku — existing ones keep their original size.
+                val lineFont = fontCache.getOrPut(line.fontPx) { Font("Microsoft YaHei", Font.BOLD, line.fontPx) }
+                g.font = lineFont
                 val argb = line.color
                 val r = (argb shr 16) and 0xFF
                 val gg = (argb shr 8) and 0xFF

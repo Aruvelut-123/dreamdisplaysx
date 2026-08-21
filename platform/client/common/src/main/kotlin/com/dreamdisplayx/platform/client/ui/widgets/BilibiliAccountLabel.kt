@@ -30,6 +30,8 @@ data class BilibiliAccountInfo(
     /** 1 = active VIP. */
     val vipStatus: Int,
     val level: Int,
+    /** VIP badge image URL from the API (e.g. img_label_uri_hans_static), or null. */
+    val vipBadgeUrl: String?,
 ) {
     val isVip: Boolean get() = vipType > 0 && vipStatus == 1
 }
@@ -69,6 +71,7 @@ object BilibiliAccountLabel {
                 vipType = data.obj("vip")?.optInt("type") ?: 0,
                 vipStatus = data.obj("vip")?.optInt("status") ?: 0,
                 level = data.obj("level_info")?.optInt("current_level") ?: 0,
+                vipBadgeUrl = data.obj("vip")?.obj("label")?.optString("img_label_uri_hans_static"),
             )
             this.cachedInfo = info
             lastFetch = now
@@ -111,15 +114,35 @@ object BilibiliAccountLabel {
         val nameX = x + avatarSize + gap
         g.drawText(font, Component.literal(name), nameX, y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
 
-        // VIP badge
+        // VIP badge — use the official Bilibili image when available, fall back to coloured text
         if (info.isVip) {
             val badgeX = nameX + nameWidth + gap
-            val badgeColor = if (info.vipType >= 2) 0xFFFFD700.toInt() else 0xFFFB7299.toInt()
-            g.fill(badgeX, y, badgeX + badgeWidth, y + avatarSize, badgeColor)
-            val vipLabel = if (info.vipType >= 2) "大" else "V"
-            val labelW = font.width(vipLabel)
-            g.drawText(font, Component.literal(vipLabel), badgeX + (badgeWidth - labelW) / 2,
-                y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
+            val badgeUrl = info.vipBadgeUrl
+            if (badgeUrl != null) {
+                val tex = Thumbnails.get(badgeUrl)
+                if (tex != null) {
+                    //? if >=1.21.11 {
+                    g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, tex, badgeX, y, 0f, 0f, badgeWidth, avatarSize, badgeWidth, avatarSize)
+                    //?} else
+                    /*g.blit(tex, badgeX, y, 0f, 0f, badgeWidth, avatarSize, badgeWidth, avatarSize)*/
+                } else {
+                    Thumbnails.request(badgeUrl, badgeUrl)
+                    // Draw fallback text while loading
+                    val badgeColor = if (info.vipType >= 2) 0xFFFFD700.toInt() else 0xFFFB7299.toInt()
+                    g.fill(badgeX, y, badgeX + badgeWidth, y + avatarSize, badgeColor)
+                    val vipLabel = if (info.vipType >= 2) "大" else "V"
+                    val labelW = font.width(vipLabel)
+                    g.drawText(font, Component.literal(vipLabel), badgeX + (badgeWidth - labelW) / 2,
+                        y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
+                }
+            } else {
+                val badgeColor = if (info.vipType >= 2) 0xFFFFD700.toInt() else 0xFFFB7299.toInt()
+                g.fill(badgeX, y, badgeX + badgeWidth, y + avatarSize, badgeColor)
+                val vipLabel = if (info.vipType >= 2) "大" else "V"
+                val labelW = font.width(vipLabel)
+                g.drawText(font, Component.literal(vipLabel), badgeX + (badgeWidth - labelW) / 2,
+                    y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
+            }
         }
     }
 
