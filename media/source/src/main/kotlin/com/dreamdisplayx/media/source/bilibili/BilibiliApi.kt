@@ -319,11 +319,14 @@ object BilibiliApi {
             val mode = item.optInt("media_mode")
             val label = accessLabelFor(mode ?: 0, item.optString("index_show"), item.optString("badge"))
             BilibiliSearchItem(
-                // Prefer the real series title: org_title > media_name > title (stripped of highlight markup).
+                // Use the highlighted `title` (Chinese, full series name) first; fall back to the
+                // English `org_title` only when `title` is missing. `media_name` is a legacy alias.
                 title = stripHighlightTags(
-                    item.optString("org_title")
-                        ?: item.optString("media_name")
-                        ?: item.optString("title").orEmpty()
+                    item.optString("title")
+                        ?.takeIf { it.isNotBlank() }
+                        ?: item.optString("org_title")
+                        ?.takeIf { it.isNotBlank() }
+                        ?: item.optString("media_name").orEmpty()
                 ),
                 uploader = null,
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),

@@ -21,6 +21,9 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 - Bilibili media-type filter added to the suggestions panel: all / video / bangumi / movie.
 - Bilibili search loads in pages of 20 results on scroll.
 - Search result cards now show a pink **大会员** tag for VIP-only content and a yellow **付费** tag for pay-per-view; free Bilibili results drop the redundant platform tag.
+- Removed the view-count popularity floor so bangumi/movie results (which carry no `play` count) always show up.
+- Scrolling right / down to the end of the loaded cards now correctly pages in the next 20 Bilibili results, with id + title deduplication so nothing repeats.
+- Debug logs added to the Bilibili search, filter-change, pagination, and card-append paths.
 
 ### Fixes
 

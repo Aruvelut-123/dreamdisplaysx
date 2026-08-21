@@ -280,8 +280,9 @@ class SuggestionsPanel(
         g.disableScissor()
         // Fires once the user has scrolled within one viewport of the end of the loaded cards; cheap
         // to call every frame since loadMoreIfNeeded() no-ops while a page is already in flight or the
-        // list is exhausted.
-        if (cards.isNotEmpty() && scrollOffset >= maxOff - viewportH) {
+        // list is exhausted. Horizontal strips scroll along the width axis, vertical ones along height.
+        val reach = if (vertical) viewportH else viewportW
+        if (cards.isNotEmpty() && scrollOffset >= maxOff - reach) {
             controller.loadMoreIfNeeded()
         }
         //? if >=1.21.11 {

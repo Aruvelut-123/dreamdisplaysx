@@ -172,13 +172,16 @@ class SuggestionsController {
                     val bangumi = BilibiliApi.searchBangumi(q)
                     val media = BilibiliApi.searchMedia(q)
                     val all = videos + bangumi + media
-                    all.filter { (it.viewCount ?: 0L) >= BILIBILI_MIN_VIEWS }
-                        .filter { bilibiliFilter.matches(it) }
+                    logger.info(
+                        "Bilibili search '{}': {} video(s), {} bangumi, {} movie (filter={})",
+                        q, videos.size, bangumi.size, media.size, bilibiliFilter.apiName,
+                    )
+                    all.filter { bilibiliFilter.matches(it) }
                         .map(::bilibiliSearchResult)
                         .sortedWith(bilibiliRank(q))
                         .also { pendingResults = it }
-                        .also { pendingOffset = 0 }
                         .take(BILIBILI_PAGE_SIZE)
+                        .also { pendingOffset = it.size }
                 }
             }.onFailure { e ->
                 if (e is CancellationException) throw e
@@ -196,6 +199,7 @@ class SuggestionsController {
     /** Switches the Bilibili media-type filter and re-runs the current search when one is active. */
     fun setBilibiliFilter(type: BilibiliSearchType) {
         if (type == bilibiliFilter) return
+        logger.info("Bilibili filter changed: {} -> {}", bilibiliFilter.apiName, type.apiName)
         bilibiliFilter = type
         onResults()
         lastQuery?.let { runSearch(it) }
@@ -437,9 +441,16 @@ class SuggestionsController {
         if (mode is MoreMode.Search) {
             // Bilibili search: serve more from the already-fetched ranked list.
             val remaining = pendingResults.size - pendingOffset
-            if (remaining <= 0) return
+            if (remaining <= 0) {
+                logger.debug("Load-more: search list exhausted (offset={}, total={})", pendingOffset, pendingResults.size)
+                return
+            }
             val next = pendingResults.subList(pendingOffset, minOf(pendingOffset + BILIBILI_PAGE_SIZE, pendingResults.size))
             pendingOffset += next.size
+            logger.info(
+                "Load-more: exposing {} more result(s) (offset now {}/{}), cards before {}",
+                next.size, pendingOffset, pendingResults.size, cards.size,
+            )
             Minecraft.getInstance().execute {
                 loadingMore = false
                 appendCards(next)
@@ -496,6 +507,7 @@ class SuggestionsController {
     ) {
         Minecraft.getInstance().execute {
             if (seq != requestSeq.value) return@execute
+            logger.debug("publish: mode={}, results={}, error={}", mode, results?.size, error)
             cards.clear()
             moreMode = mode
             continuationToken = nextToken
@@ -520,8 +532,25 @@ class SuggestionsController {
      */
     private fun appendCards(results: List<MediaSearchResult>) {
         val startIndex = cards.size
-        val seen = HashSet<String>(cards.size).apply { cards.mapTo(this) { it.id } }
-        for (info in results) if (seen.add(info.id)) cards.add(info)
+        // Dedupe by id first, then by a normalised (lowercased, trimmed) title+watch-url pair so that
+        // two Bilibili entries for the same series (e.g. one keyed by season id and one by episode id)
+        // don't both show as separate cards. Log any skips so duplicate-search bugs stay visible.
+        val seenIds = HashSet<String>(cards.size).apply { cards.mapTo(this) { it.id } }
+        val seenTitles = HashSet<String>(cards.size)
+        cards.forEach { dedupeKey(it)?.let(seenTitles::add) }
+        for (info in results) {
+            val titleKey = dedupeKey(info)
+            if (!seenIds.add(info.id)) {
+                logger.debug("Dedupe skip (duplicate id {}): '{}'", info.id, info.title)
+                continue
+            }
+            if (titleKey != null && !seenTitles.add(titleKey)) {
+                logger.debug("Dedupe skip (duplicate title {}): '{}'", titleKey, info.title)
+                continue
+            }
+            cards.add(info)
+        }
+        logger.debug("appendCards: added {}/{} result(s), total cards now {}", cards.size - startIndex, results.size, cards.size)
         for (i in startIndex until cards.size) {
             val info = cards[i]
             val thumbUrl = info.thumbnailUrlOverride
@@ -533,6 +562,13 @@ class SuggestionsController {
                 info.isYouTubeResult -> Thumbnails.request(info.id, Thumbnails.Quality.LOW)
             }
         }
+    }
+
+    /** A stable key for detecting near-duplicate cards: lowercased title + watch URL when both exist. */
+    private fun dedupeKey(info: MediaSearchResult): String? {
+        val title = info.title.trim()
+        if (title.isEmpty()) return null
+        return title.lowercase() + "|" + info.getWatchUrl().lowercase()
     }
 
     /**
@@ -640,13 +676,6 @@ class SuggestionsController {
 
         /** Items exposed per scroll-triggered "load more" for Bilibili searches. */
         private const val BILIBILI_PAGE_SIZE = 20
-
-        /** Max BIlibili search hits mixed into a single results page — generous, since BIlibili only ever
-         *  competes at all on a Chinese query ([looksChinese]), where it should show up strongly. */
-        private const val BILIBILI_RESULT_CAP = 10
-
-        /** Only BIlibili hits with at least this many views survive the popularity filter in [runSearch]. */
-        private const val BILIBILI_MIN_VIEWS = 50_000L
 
         /** Max Twitch channel hits mixed in; channel cards are heavier (whole-channel, not a single video) than a VOD card. */
         private const val TWITCH_RESULT_CAP = 4
