@@ -20,11 +20,13 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 - Bilibili search results are ranked: bangumi/movies first, then uploader-name matches, then title matches.
 - Bilibili media-type filter added to the suggestions panel: all / video / bangumi / movie.
 - Bilibili search loads in pages of 20 results on scroll.
+- Search result cards now show a pink **大会员** tag for VIP-only content and a yellow **付费** tag for pay-per-view; free Bilibili results drop the redundant platform tag.
 
 ### Fixes
 
 - `/dlogoff` now sends the server logout command on all supported versions; singleplayer worlds no longer re-remember the Bilibili account after logout.
 - Disabling danmaku on a single display now immediately clears any visible overlay instead of leaving stale lines on screen.
+- Bangumi and movie/TV search now return results: movie/TV uses the correct `media_ft` search type (as PiliPlus does), and results show the real series title.
 
 Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 
