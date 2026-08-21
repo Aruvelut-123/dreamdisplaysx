@@ -38,6 +38,15 @@ class SuggestionsController {
     val cards = ArrayList<MediaSearchResult>()
 
     /**
+     * Starts with the Bilibili home recommendation feed loaded, so an open menu is never a blank
+     * panel. A search or a related-videos request (once a video is playing) supersedes it via the
+     * request sequence number.
+     */
+    init {
+        loadRecommend()
+    }
+
+    /**
      * [cards] after applying [sortOption]'s client-side effect: [SortOption.POPULARITY] / [SortOption.NEWEST] re-sort,
      * [SortOption.STREAMS] filters to live.
      */
@@ -109,8 +118,9 @@ class SuggestionsController {
         if (videoId.isNullOrEmpty()) {
             currentVideoId = null
             lastQuery = null
-            cards.clear()
-            loadStatusKey = null
+            // No video to derive "related" from — fall back to the Bilibili home recommendation feed
+            // instead of leaving the panel blank.
+            loadRecommend()
             return
         }
         if (videoId == currentVideoId && cards.isNotEmpty()) return
@@ -153,7 +163,12 @@ class SuggestionsController {
 
         if (q.isEmpty()) {
             lastQuery = null
-            currentVideoId?.let { loadRelated(it) }
+            val currentId = currentVideoId
+            if (currentId != null) {
+                loadRelated(currentId)
+            } else {
+                loadRecommend()
+            }
             return
         }
 
@@ -428,6 +443,29 @@ class SuggestionsController {
     }
 
     /**
+     * Loads Bilibili's Web home recommendation feed in the background (the "for you" list shown when
+     * there is neither a search query nor a playing video to derive related content from). Uses the
+     * logged-in SESSDATA cookie when present for personalized results; published with no pagination
+     * mode so scroll never pages past the one feed.
+     */
+    private fun loadRecommend() {
+        startLoad()
+        val seq = requestSeq.incrementAndGet()
+        launchLoad {
+            val results = runCatching {
+                withContext(Dispatchers.IO) {
+                    BilibiliApi.recommendVideos(RECOMMEND_PAGE_SIZE).map(::bilibiliSearchResult)
+                }
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                logger.warn("Bilibili recommendation failed: ${e.message}")
+            }.getOrNull()
+
+            results?.let { publish(seq, it, null) }
+        }
+    }
+
+    /**
      * Appends the next page of results if the current list came from a paginable search / related load,
      * a page isn't already in flight, and the list isn't already exhausted. Bilibili searches page
      * locally from the fully-loaded sorted set, exposing [BILIBILI_PAGE_SIZE] more items per scroll.
@@ -676,6 +714,9 @@ class SuggestionsController {
 
         /** Items exposed per scroll-triggered "load more" for Bilibili searches. */
         private const val BILIBILI_PAGE_SIZE = 20
+
+        /** Cards requested from the Bilibili home recommendation feed when the panel has no search or related context. */
+        private const val RECOMMEND_PAGE_SIZE = 20
 
         /** Max Twitch channel hits mixed in; channel cards are heavier (whole-channel, not a single video) than a VOD card. */
         private const val TWITCH_RESULT_CAP = 4

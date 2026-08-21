@@ -183,6 +183,47 @@ object BilibiliApi {
         }
     }
 
+    /**
+     * Fetches Bilibili's Web home-page recommendation feed (the same `web/top/feed` list the website
+     * shows when the user has not searched), parsing the cards into [BilibiliSearchItem]s. Ad cards and
+     * entries missing the fields a card needs (owner / stat / title) are dropped, mirroring how the
+     * official feed client filters its stream. Returns an empty list on any failure so callers can
+     * fall back to an empty panel rather than an error.
+     */
+    fun recommendVideos(pageSize: Int = 20): List<BilibiliSearchItem> {
+        val params = mapOf(
+            "fresh_idx" to "1",
+            "ps" to pageSize.toString(),
+            "web_location" to "1430650",
+        )
+        val root = getJson("https://api.bilibili.com/x/web-interface/wbi/index/web/top/feed?${signedQuery(params)}")
+        val items = root?.obj("data")?.array("item")?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
+        return items.mapNotNull { item ->
+            // Drop ads and any card missing the fields a display card needs (same rule as the official feed).
+            if (item.optString("goto") == "ad") return@mapNotNull null
+            if (item.optString("title").isNullOrEmpty()) return@mapNotNull null
+
+            val bvid = item.optString("bvid")
+            val seasonId = item.optLong("season_id")
+            val epId = item.optLong("ep_id")
+            val isBangumi = seasonId != null || epId != null
+            val title = item.optString("title") ?: return@mapNotNull null
+
+            BilibiliSearchItem(
+                bvid = bvid,
+                title = title,
+                uploader = item.obj("owner")?.optString("name"),
+                thumbnailUrl = normalizeThumbnailUrl(item.optString("pic")),
+                durationSec = item.optLong("duration")?.takeIf { it > 0 },
+                viewCount = item.obj("stat")?.optLong("view"),
+                epId = if (isBangumi) epId else null,
+                seasonId = if (isBangumi) seasonId else null,
+                mediaType = if (isBangumi) "pgc" else "video",
+                accessLabel = item.obj("badge")?.optString("text"),
+            )
+        }
+    }
+
     /** Strips the `<em class="keyword">...</em>` highlight markup BIlibili's search API wraps matches in. */
     private fun stripHighlightTags(title: String): String = title.replace(Regex("</?em[^>]*>"), "")
 
