@@ -21,6 +21,8 @@ import java.awt.Graphics2D
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -52,6 +54,8 @@ class DanmakuOverlay(
     /** Cached AWT fonts keyed by pixel size (derived from base 20px x danmakuFontSize). */
     private val fontCache = HashMap<Int, Font>()
     private val metricsCache = HashMap<Int, java.awt.FontMetrics>()
+    /** Tracks the last used font pixel size so we can prune stale cache entries. */
+    private var lastFontPx = 20
 
     /** Active danmaku lines: (text, color, x position in px, y track, speed px/tick, mode kind, pixel width). */
     private enum class Kind { SCROLL, TOP, BOTTOM }
@@ -65,9 +69,10 @@ class DanmakuOverlay(
     private val lines = CopyOnWriteArrayList<Line>()
     private var lastTrackAssign = 0
     private var dirty = false
-    private val trackCount = 8
-    private val topTrack = LongArray(4) { -1L }
-    private val bottomTrack = LongArray(4) { -1L }
+    /** Scroll-danmaku tracks: maps track index to the last placement time (ms). Tracks are created on demand. */
+    private val scrollTracks = mutableMapOf<Int, Long>()
+    /** TOP/BOTTOM danmaku tracks: maps track index to the last placement time (ms). */
+    private val topBottomTracks = mutableMapOf<Int, Long>()
 
     init {
         ensureTexture()
@@ -169,47 +174,69 @@ class DanmakuOverlay(
 
     // ── Display area helpers ──────────────────────────────────────────────────────────────────────
 
-    /** Top pixel of the danmaku band for the given [displayArea] fraction [0,1]. */
+    /** Top padding of the danmaku band. */
     private fun areaTop(displayArea: Float): Int = 24
 
     /** Bottom pixel of the danmaku band for the given [displayArea] fraction [0,1]. */
     private fun areaBottom(displayArea: Float): Int =
         ((texH - 48) * displayArea.coerceIn(0f, 1f)).toInt().coerceIn(24, texH - 48) + 24
 
-    /** Picks a scroll track evenly distributed within the [displayArea] band. */
+    /** Track height (line spacing) in pixels for the current font [scale]. */
+    private fun trackHeight(scale: Float): Int {
+        val px = (20 * scale.coerceIn(0.5f, 2f)).roundToInt().coerceIn(8, 48)
+        // Line height = font pixel size + padding (4px top + 2px bottom = 6px)
+        return px + 6
+    }
+
+    /** Returns how many scroll tracks fit in the [displayArea] band given the current font [scale]. */
+    private fun scrollTrackCount(scale: Float, displayArea: Float): Int {
+        val th = trackHeight(scale)
+        val usable = areaBottom(displayArea) - 24
+        return max(1, usable / th)
+    }
+
+    /** Picks a scroll track evenly distributed within the [displayArea] band, based on current font size. */
     private fun pickTrack(displayArea: Float): Int {
-        lastTrackAssign = (lastTrackAssign + 1) % trackCount
+        val s = settings()
+        val scale = s.danmakuFontSize.coerceIn(0.5f, 2f)
+        val th = trackHeight(scale)
+        val count = scrollTrackCount(scale, displayArea)
         val bottom = areaBottom(displayArea)
-        val usable = (bottom - 24).coerceAtLeast(26)
-        val step = usable / trackCount
+        val usable = (bottom - 24).coerceAtLeast(th)
+        val step = usable / count
+        lastTrackAssign = (lastTrackAssign + 1) % count
+        // Prune stale tracks to avoid unbounded map growth
+        if (scrollTracks.size > count * 2) {
+            scrollTracks.keys.removeAll { it >= count }
+        }
+        scrollTracks[lastTrackAssign] = System.currentTimeMillis()
         return 24 + lastTrackAssign * step
     }
 
+    /** Picks a TOP or BOTTOM track, sized by the current font [scale], with 1.5× line spacing. */
     private fun pickVerticalTrack(kind: Kind): Int {
-        val tracks = when (kind) {
-            Kind.TOP -> topTrack
-            Kind.BOTTOM -> bottomTrack
-            else -> return 0
-        }
-        // Find the lowest track (for top) or highest (for bottom) that's stale
+        val s = settings()
+        val scale = s.danmakuFontSize.coerceIn(0.5f, 2f)
+        val th = trackHeight(scale)
+        val spacing = (th * 1.5f).roundToInt()
         val now = System.currentTimeMillis()
+        // Find a free track or the oldest one
         var best = 0
         var bestTime = Long.MAX_VALUE
-        for (i in tracks.indices) {
-            val t = tracks[i]
-            // A track is free if its last line was placed > 3 seconds ago, or if this is the first line
+        val maxTracks = 6
+        for (i in 0 until maxTracks) {
+            val t = topBottomTracks[i] ?: -1L
             if (t < 0 || now - t > 3000) {
-                tracks[i] = now
-                return i * 26
+                topBottomTracks[i] = now
+                return i * spacing
             }
-            // Track the oldest line to pile on top of it
             if (t < bestTime) {
                 bestTime = t
                 best = i
             }
         }
-        tracks[best] = now
-        return best * 26
+        topBottomTracks[best] = now
+        return best * spacing
     }
 
     // ── Font helpers ──────────────────────────────────────────────────────────────────────────────
@@ -217,6 +244,15 @@ class DanmakuOverlay(
     /** Returns an AWT [Font] whose pixel size reflects [scale] (1.0 = 20px base). */
     private fun fontForScale(scale: Float): Font {
         val px = (20 * scale.coerceIn(0.5f, 2f)).roundToInt().coerceIn(8, 48)
+        // Prune stale cache entries when the font size changes, keeping only the current size
+        // to prevent unbounded growth when the user rapidly scrolls through font sizes.
+        if (px != lastFontPx) {
+            if (fontCache.size > 3) {
+                fontCache.keys.removeAll { it != px }
+                metricsCache.keys.removeAll { it != px }
+            }
+            lastFontPx = px
+        }
         return fontCache.getOrPut(px) { Font("Microsoft YaHei", Font.BOLD, px) }
     }
 
