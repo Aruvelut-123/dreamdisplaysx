@@ -20,9 +20,11 @@ object MediaStreamSelector {
     @JvmStatic
     /**
      * Whether to prefer 60 fps streams (e.g. Bilibili 1080p60) for the current quality when available.
-     * Universally disabled; the 60fps feature was removed for stability.
+     * Defaults to true; the client sets `dreamdisplayx.stream.preferFps60` from its `prefer-fps60`
+     * config toggle. When a video has no 60 fps variant, selection naturally falls back to its native
+     * framerate, so this is a preference, not a hard cap.
      */
-    var prefer60fps: Boolean = false
+    var prefer60fps: Boolean = System.getProperty("dreamdisplayx.stream.preferFps60", "true").toBoolean()
 
     /** Default 60 fps penalty. Can be overridden by system property. */
     private val defaultFps60Penalty: Int =

@@ -465,6 +465,8 @@ class MediaPlayer(
 
     /** Returns the list of available video quality levels (in pixels) for the current stream. */
     fun getAvailableQualities(): List<Int> {
+        // Premium members unlock 4K; non-premium tops out at 1080p (Bilibili's platform cap for
+        // free accounts). 60fps is gated the same way via preferFps60 below.
         val cap = if (env.config.isPremium) 2160 else 1080
         return streams?.availableVideo.orEmpty().asSequence()
             .mapNotNull { it.height }
