@@ -25,6 +25,7 @@ luckperms = "5.5"
 velocityApi = "3.1.1"
 bungeecordApi = "1.21-R0.4"
 zxing = "3.5.3"
+checkerQual = "3.42.0"
 
 [libraries]
 jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
@@ -38,6 +39,7 @@ kotlinxIoCore = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref 
 commonsCompress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
 tukaaniXz = { module = "org.tukaani:xz", version.ref = "tukaaniXz" }
 tomlj = { module = "org.tomlj:tomlj", version.ref = "tomlj" }
+checkerQual = { module = "org.checkerframework:checker-qual", version.ref = "checkerQual" }
 semver4j = { module = "org.semver4j:semver4j", version.ref = "semver4j" }
 sqliteJdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
 exposedCore = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }

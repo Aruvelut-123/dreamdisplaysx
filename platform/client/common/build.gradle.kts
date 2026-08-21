@@ -29,6 +29,7 @@ dependencies {
     api(libs.okhttp)
     api(libs.okio)
     api(libs.tomlj)
+    compileOnly(libs.checkerQual)
     compileOnly(libs.kotlinStdlib)
 }
 

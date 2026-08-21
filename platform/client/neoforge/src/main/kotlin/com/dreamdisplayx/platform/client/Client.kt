@@ -37,6 +37,9 @@ class Client(modEventBus: IEventBus) : DreamMod {
         // can host the ClientApplication on top of it during bootstrap.
         DreamServices.registry.register(PlatformServices.PLATFORM, NeoForgePlatformIntegrationProvider.create())
         Initializer.onModInit(this)
+        // Register a standard NeoForge client config so Configured can discover and edit these values.
+        com.dreamdisplayx.platform.client.config.NeoForgeConfig.register()
+        com.dreamdisplayx.platform.client.config.NeoForgeConfig.listen(modEventBus)
 
         // Payload registration lives entirely in NeoForgeServer.registerPayloads (see
         // platform/server/.../Main.kt): that class loads unconditionally on every dist, unlike this
