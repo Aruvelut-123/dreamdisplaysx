@@ -1,208 +1,211 @@
 {
-  "noDisplayTerritories": "&7D |&f ¡Aún no has seleccionado territorios de pantalla! Selecciona dos puntos con {0} en {1}",
-  "createDisplayCommand": "&7D |&f Ahora escribe /display create para crear una pantalla",
-  "secondPointNotSelected": "&7D |&f ¡Aún no has seleccionado el segundo punto!",
-  "displayOverlap": "&7D |&f ¡Ya hay una pantalla en esta zona!",
-  "displayLimitReached": "&7D |&f ¡Has alcanzado el límite de %d pantalla(s) por jugador!",
-  "structureTooLarge": "&7D |&f No puedes crear una pantalla mayor de %d × %d bloques",
-  "structureTooSmall": "&7D |&f No puedes crear una pantalla menor de %d × %d bloques",
-  "firstPointSelected": "&7D |&f ¡Primer punto seleccionado! Ahora selecciona el segundo punto",
-  "secondPointSelected": "&7D |&f ¡Segundo punto seleccionado!",
-  "structureWrongDepth": "&7D |&f La selección debe tener al menos 1 bloque de profundidad",
-  "wrongStructure": "&7D |&f Solo se puede usar {0} para las pantallas",
-  "displayTooHigh": "&7D |&f La altura de la pantalla es demasiado alta (máx. %d)",
-  "displayTooLow": "&7D |&f La pantalla está demasiado baja (mín. %d)",
-  "selectionClear": "&7D |&f ¡La selección ha sido limpiada!",
-  "displayWrongCommand": "&7D |&f ¡Has introducido algo incorrecto!",
-  "displayCommandMissingPermission": "&7D |&f ¡No tienes permiso para usar este comando!",
-  "commandPlayersOnly": "&7D |&f Este comando solo puede ser usado por un jugador dentro del juego",
-  "successfulCreation": "&7D |&f ¡La pantalla ha sido creada! Ahora mírala y escribe /display video <video_url> [lang] para establecer un video",
-  "noDisplay": "&7D |&f ¡No se encontró la pantalla!",
-  "settedURL": "&7D |&f ¡El video ha sido cargado!",
-  "invalidURL": "&7D |&f ¡Tu URL no es válida! Usa un enlace de vídeo válido (YouTube, Twitch, etc.)",
-  "settedName": "&7D |&f ¡El nombre de la pantalla ha sido establecido!",
-  "currentName": "&7D |&f Nombre de esta pantalla: %s",
-  "noNameSet": "&7D |&f Esta pantalla no tiene nombre",
-  "invalidName": "&7D |&f ¡Nombre inválido! Usa hasta 32 letras, dígitos, - o _, sin espacios",
-  "nameTaken": "&7D |&f ¡Ese nombre ya lo usa otra pantalla!",
-  "scheduleSet": "&7D |&f Ahora son las {0} para ti. La pantalla {1} {2} a las {3} ({4})",
-  "scheduleCurrentSet": "&7D |&f Esta pantalla está programada: {0} a las {1}",
-  "scheduleNoneSet": "&7D |&f Esta pantalla no tiene ninguna acción programada",
-  "scheduleCancelled": "&7D |&f Acción programada cancelada",
-  "scheduleInvalidTime": "&7D |&f ¡Hora inválida! Usa HH:mm o HH:mm:ss (formato 24h), por ejemplo 23:51 o 23:51:30",
-  "scheduleNeedsTime": "&7D |&f Ahora son las {0} para ti. Escribe una hora (HH:mm) para programar esto",
-  "scheduleActionPlay": "se reproducirá",
-  "scheduleActionPause": "se pausará",
-  "scheduleCountdownSeconds": "en {0}s",
-  "scheduleCountdownMinutes": "en {0}m {1}s",
-  "scheduleCountdownHours": "en {0}h {1}m",
-  "displayVideoWrongTargetBlock": "&7D |&f ¡Debes mirar un bloque de pantalla para usar este comando!",
-  "displayVideoNotOwner": "&7D |&f ¡No eres el propietario de esta pantalla!",
-  "reportTooQuickly": "&7D |&f ¡Estás enviando reportes demasiado rápido! Espera antes de enviar otro reporte",
-  "reportSent": "&7D |&f ¡El reporte ha sido enviado!",
-  "reportFailed": "&7D |&f No se pudo enviar el reporte. Inténtalo de nuevo más tarde",
-  "displayDeleted": "&7D |&f ¡La pantalla ha sido eliminada!",
-  "displayReported": "&7D |&f ¡La pantalla ha sido reportada!",
-  "reportNotConfigured": "&7D |&f ¡El sistema de reportes está desactivado en este servidor!",
-  "newVersion": {
-    "text": "",
-    "extra": [
-      {
-        "text": "D | ",
-        "color": "#9D9D97"
-      },
-      {
-        "text": "¡Hay disponible una nueva versión %s de Dream DisplaysX! Por favor ",
-        "color": "#FFFFFF"
-      },
-      {
-        "text": "actualiza tu mod",
-        "color": "#023EB6",
-        "underlined": true,
-        "clickEvent": {
-          "action": "open_url",
-          "value": "https://github.com/Aruvelut-123/dreamdisplaysx/releases"
-        },
-        "hoverEvent": {
-          "action": "show_text",
-          "value": "Haz clic para descargar la nueva versión"
-        }
-      },
-      {
-        "text": "",
-        "color": "#FFFFFF"
-      }
-    ]
-  },
-  "newPluginVersion": "&7D |&f ¡Hay disponible una nueva versión del plugin Dream DisplaysX (%s)! ¡Actualiza el plugin del servidor!",
-  "configReloaded": "&7D | &f¡Dream DisplaysX se ha recargado!",
-  "configReloadFailed": "&7D |&f No se pudo recargar Dream DisplaysX. Revisa la consola para ver errores",
-  "configReloadSummary": "&7D |&f Recargado: configuración, mensajes de idioma, permisos de comandos",
-  "noDisplaysFound": "&7D |&f No se encontraron pantallas",
-  "displayListHeader": "&7D |&f Pantallas:",
-  "displayListEntry": "&7D |&f {0}. Propietario: {1}, Ubicación: [{2}, {3}, {4}], URL: {5}",
-  "displayListPageLine": "&7D |&7 página=&f{0}/{1} &8| &7total=&f{2}",
-  "displayListDetails": " &8| &7mundo=&f{0} &8| &7tamaño=&f{1}x{2} &8| &7sync=&f{3} &8| &7id=&f{4}",
-  "displayListUnknownOwner": "Desconocido",
-  "displayListUnknownWorld": "desconocido",
-  "displayListUnavailableUrl": "N/D",
-  "displayListTpButton": " [TP]",
-  "displayListUrlButton": " [URL]",
-  "displayBlockBreak": {
-    "text": "",
-    "extra": [
-      {
-        "text": "D | ",
-        "color": "#9D9D97"
-      },
-      {
-        "text": "Este es un bloque de pantalla. Instala el mod ",
-        "color": "#FFFFFF"
-      },
-      {
-        "text": "Dream DisplaysX",
-        "color": "#5555FF",
-        "underlined": true,
-        "clickEvent": {
-          "action": "open_url",
-          "value": "https://github.com/Aruvelut-123/dreamdisplaysx"
-        },
-        "hoverEvent": {
-          "action": "show_text",
-          "value": "Haz clic para descargar Dream DisplaysX"
-        }
-      },
-      {
-        "text": " para interactuar con él!",
-        "color": "#FFFFFF"
-      }
-    ]
-  },
-  "modRequired": {
-    "text": "",
-    "extra": [
-      {
-        "text": "D | ",
-        "color": "#9D9D97"
-      },
-      {
-        "text": "Este servidor usa pantallas dentro del juego. ",
-        "color": "#FFFFFF"
-      },
-      {
-        "text": "Descarga Dream DisplaysX",
-        "color": "#5555FF",
-        "underlined": true,
-        "clickEvent": {
-          "action": "open_url",
-          "value": "https://github.com/Aruvelut-123/dreamdisplaysx"
-        },
-        "hoverEvent": {
-          "action": "show_text",
-          "value": "Haz clic para descargar Dream DisplaysX"
-        }
-      },
-      {
-        "text": " para verlas!",
-        "color": "#FFFFFF"
-      }
-    ]
-  },
-  "display.enabled": "&7D |&f Pantallas activadas. Espera un momento...",
-  "display.disabled": "&7D |&f Pantallas desactivadas",
-  "display.already-disabled": "&7D |&f Las pantallas ya están desactivadas",
-  "display.already-enabled": "&7D |&f Las pantallas ya están activadas",
-  "displayTargetNotFound": "&7D |&f ¡El jugador '%s' no está conectado!",
-  "display.enabled.target": "&7D |&f Pantallas activadas para %s",
-  "display.disabled.target": "&7D |&f Pantallas desactivadas para %s",
-  "display.already-enabled.target": "&7D |&f Las pantallas ya están activadas para %s",
-  "display.already-disabled.target": "&7D |&f Las pantallas ya están desactivadas para %s",
-  "displayStatsHeader": "&7D |&f Estadísticas de uso del mod:",
-  "displayStatsEntry": "&7D |&f Versión %s: %d jugadores",
-  "displayStatsTotal": "&7D |&f Total de jugadores con el mod: %d",
-  "displayHelpHeader": "Comandos disponibles:",
-  "displayHelpCreate": "– /display create: crear una nueva pantalla",
-  "displayHelpVideo": "– /display video <url>: establecer video para tu pantalla",
-  "displayHelpName": "– /display name this|<id> <name>: dar a una pantalla un alias sin espacios usable como su id",
-  "displayHelpInfo": "– /display info: mostrar detalles de la pantalla que estás mirando",
-  "displayHelpDelete": "– /display delete: eliminar la pantalla que estás mirando",
-  "displayHelpList": "– /display list: listar todas las pantallas",
-  "displayHelpStats": "– /display stats: mostrar estadísticas de uso del mod",
-  "displayHelpReload": "– /display reload: recargar la configuración",
-  "displayHelpOn": "– /display on [jugador]: activar pantallas para ti o un jugador objetivo",
-  "displayHelpOff": "– /display off [jugador]: desactivar pantallas para ti o un jugador objetivo",
-  "displayHelpFullscreen": "– /display fullscreen start <id|url> [flags]: fuerza una transmisión a pantalla completa a los jugadores",
-  "displayHelpHelp": "– /display help: mostrar esta ayuda",
-  "displayInfoHeader": "&7D |&f Información de la pantalla:",
-  "displayInfoOwnerLine": "&7D |&7 propietario=&f{0} &8| &7uuid=&f{1}",
-  "displayInfoUuidLine": "&7D |&7 id-pantalla=&f{0}",
-  "displayInfoPositionLine": "&7D |&7 mundo=&f{0} &8| &7pos1=&f[{1}, {2}, {3}] &8| &7pos2=&f[{4}, {5}, {6}]",
-  "displayInfoStateLine": "&7D |&7 tamaño=&f{0}x{1} &8| &7frente=&f{2} &8| &7sync=&f{3}",
-  "displayInfoMediaLine": "&7D |&7 idioma=&f{0} &8| &7duración=&f{1} &8| &7url=&f{2}",
-  "displayInfoScheduleLine": "&7D |&7 programado={0} a las &f{1}",
-  "displayInfoUnknownOwner": "Desconocido",
-  "displayInfoUnknownWorld": "Desconocido",
-  "displayInfoUnknownDuration": "desconocido",
-  "displayInfoAutoLang": "auto",
-  "displayInfoUnavailableUrl": "N/D",
-  "fullscreenStarted": "&7D |&f Transmisión a pantalla completa &b{0}&f iniciada (alcanzó {1} jugador(es))",
-  "fullscreenStopped": "&7D |&f Se detuvieron {0} transmisión(es) a pantalla completa",
-  "fullscreenStopFailed": "&7D |&f No se encontró ninguna transmisión a pantalla completa coincidente",
-  "fullscreenNoTargets": "&7D |&f Especifica al menos target <jugadores> o radius <bloques>",
-  "fullscreenAlreadyRunning": "&7D |&f Esa pantalla ya tiene una transmisión a pantalla completa, o el ID de sesión ya está en uso",
-  "fullscreenForcedDisallowed": "&7D |&f Las transmisiones a pantalla completa forzadas están desactivadas en la configuración",
-  "fullscreenNoDisplay": "&7D |&f No se encontró ninguna pantalla ni hay un mundo cargado para transmitir una URL",
-  "fullscreenNetworkNoProxy": "&7D |&f Este servidor no está conectado a un proxy de Dream DisplaysX, comprueba [proxy] en config.toml.",
-  "fullscreenNetworkNotYetSupported": "&7D |&f La pantalla completa en red (server <nombre>/<global>) aún no está implementada.",
-  "fullscreenNetworkUrlOnly": "&7D |&f La pantalla completa en red solo admite una URL de vídeo, no un id de pantalla existente",
-  "fullscreenNetworkRadiusUnsupported": "&7D |&f radius no es compatible con server — solo se aplica a este servidor, inícialo localmente aquí en su lugar",
-  "fullscreenNetworkQueued": "&7D |&f Transmisión de pantalla completa en red en cola. Comenzará en breve en todos los servidores coincidentes",
-  "fullscreenNetworkStopQueued": "&7D |&f Solicitud de detención en red enviada para esa sesión",
-  "fullscreenListEmpty": "&7D |&f No hay transmisiones a pantalla completa activas",
-  "fullscreenListEntry": "&7D |&7 {0} &8| &7display=&f{1} &8| &7virtual=&f{2} &8| &7reach=&f{3}",
-  "fullscreenListNetworkEntry": "&7D |&7 {0} &8| &7scope=&f{1} &8| &7network-reach=&f{2}",
-  "customMediaDisabled": "&7D |&f Los enlaces de vídeo personalizados están desactivados en este servidor",
-  "customMediaHostBlocked": "&7D |&f Los vídeos de este sitio no están permitidos en este servidor",
-  "customMediaNoPermission": "&7D |&f No tienes permiso para reproducir tus propios enlaces de vídeo",
-  "customMediaTooFast": "&7D |&f Estás cambiando de enlace de vídeo demasiado rápido. Espera un momento"
+    "noDisplayTerritories":  "\u00267D |\u0026f ¡Aún no has seleccionado territorios de pantalla! Selecciona dos puntos con {0} en {1}",
+    "createDisplayCommand":  "\u00267D |\u0026f Ahora escribe /display create para crear una pantalla",
+    "secondPointNotSelected":  "\u00267D |\u0026f ¡Aún no has seleccionado el segundo punto!",
+    "displayOverlap":  "\u00267D |\u0026f ¡Ya hay una pantalla en esta zona!",
+    "displayLimitReached":  "\u00267D |\u0026f ¡Has alcanzado el límite de %d pantalla(s) por jugador!",
+    "structureTooLarge":  "\u00267D |\u0026f No puedes crear una pantalla mayor de %d × %d bloques",
+    "structureTooSmall":  "\u00267D |\u0026f No puedes crear una pantalla menor de %d × %d bloques",
+    "firstPointSelected":  "\u00267D |\u0026f ¡Primer punto seleccionado! Ahora selecciona el segundo punto",
+    "secondPointSelected":  "\u00267D |\u0026f ¡Segundo punto seleccionado!",
+    "structureWrongDepth":  "\u00267D |\u0026f La selección debe tener al menos 1 bloque de profundidad",
+    "wrongStructure":  "\u00267D |\u0026f Solo se puede usar {0} para las pantallas",
+    "displayTooHigh":  "\u00267D |\u0026f La altura de la pantalla es demasiado alta (máx. %d)",
+    "displayTooLow":  "\u00267D |\u0026f La pantalla está demasiado baja (mín. %d)",
+    "selectionClear":  "\u00267D |\u0026f ¡La selección ha sido limpiada!",
+    "displayWrongCommand":  "\u00267D |\u0026f ¡Has introducido algo incorrecto!",
+    "displayCommandMissingPermission":  "\u00267D |\u0026f ¡No tienes permiso para usar este comando!",
+    "commandPlayersOnly":  "\u00267D |\u0026f Este comando solo puede ser usado por un jugador dentro del juego",
+    "successfulCreation":  "\u00267D |\u0026f ¡La pantalla ha sido creada! Ahora mírala y escribe /display video \u003cvideo_url\u003e [lang] para establecer un video",
+    "noDisplay":  "\u00267D |\u0026f ¡No se encontró la pantalla!",
+    "settedURL":  "\u00267D |\u0026f ¡El video ha sido cargado!",
+    "invalidURL":  "\u00267D |\u0026f ¡Tu URL no es válida! Usa un enlace de vídeo válido (YouTube, Twitch, etc.)",
+    "settedName":  "\u00267D |\u0026f ¡El nombre de la pantalla ha sido establecido!",
+    "currentName":  "\u00267D |\u0026f Nombre de esta pantalla: %s",
+    "noNameSet":  "\u00267D |\u0026f Esta pantalla no tiene nombre",
+    "invalidName":  "\u00267D |\u0026f Invalid name! Use up to 64 readable characters, no control characters, and it must not look like a bare UUID",
+    "nameTaken":  "\u00267D |\u0026f ¡Ese nombre ya lo usa otra pantalla!",
+    "scheduleSet":  "\u00267D |\u0026f Ahora son las {0} para ti. La pantalla {1} {2} a las {3} ({4})",
+    "scheduleCurrentSet":  "\u00267D |\u0026f Esta pantalla está programada: {0} a las {1}",
+    "scheduleNoneSet":  "\u00267D |\u0026f Esta pantalla no tiene ninguna acción programada",
+    "scheduleCancelled":  "\u00267D |\u0026f Acción programada cancelada",
+    "scheduleInvalidTime":  "\u00267D |\u0026f ¡Hora inválida! Usa HH:mm o HH:mm:ss (formato 24h), por ejemplo 23:51 o 23:51:30",
+    "scheduleNeedsTime":  "\u00267D |\u0026f Ahora son las {0} para ti. Escribe una hora (HH:mm) para programar esto",
+    "scheduleActionPlay":  "se reproducirá",
+    "scheduleActionPause":  "se pausará",
+    "scheduleCountdownSeconds":  "en {0}s",
+    "scheduleCountdownMinutes":  "en {0}m {1}s",
+    "scheduleCountdownHours":  "en {0}h {1}m",
+    "displayVideoWrongTargetBlock":  "\u00267D |\u0026f ¡Debes mirar un bloque de pantalla para usar este comando!",
+    "displayVideoNotOwner":  "\u00267D |\u0026f ¡No eres el propietario de esta pantalla!",
+    "reportTooQuickly":  "\u00267D |\u0026f ¡Estás enviando reportes demasiado rápido! Espera antes de enviar otro reporte",
+    "reportSent":  "\u00267D |\u0026f ¡El reporte ha sido enviado!",
+    "reportFailed":  "\u00267D |\u0026f No se pudo enviar el reporte. Inténtalo de nuevo más tarde",
+    "displayDeleted":  "\u00267D |\u0026f ¡La pantalla ha sido eliminada!",
+    "displayReported":  "\u00267D |\u0026f ¡La pantalla ha sido reportada!",
+    "reportNotConfigured":  "\u00267D |\u0026f ¡El sistema de reportes está desactivado en este servidor!",
+    "newVersion":  {
+                       "text":  "",
+                       "extra":  [
+                                     {
+                                         "text":  "D | ",
+                                         "color":  "#9D9D97"
+                                     },
+                                     {
+                                         "text":  "¡Hay disponible una nueva versión %s de Dream DisplaysX! Por favor ",
+                                         "color":  "#FFFFFF"
+                                     },
+                                     {
+                                         "text":  "actualiza tu mod",
+                                         "color":  "#023EB6",
+                                         "underlined":  true,
+                                         "clickEvent":  {
+                                                            "action":  "open_url",
+                                                            "value":  "https://github.com/Aruvelut-123/dreamdisplaysx/releases"
+                                                        },
+                                         "hoverEvent":  {
+                                                            "action":  "show_text",
+                                                            "value":  "Haz clic para descargar la nueva versión"
+                                                        }
+                                     },
+                                     {
+                                         "text":  "",
+                                         "color":  "#FFFFFF"
+                                     }
+                                 ]
+                   },
+    "newPluginVersion":  "\u00267D |\u0026f ¡Hay disponible una nueva versión del plugin Dream DisplaysX (%s)! ¡Actualiza el plugin del servidor!",
+    "configReloaded":  "\u00267D | \u0026f¡Dream DisplaysX se ha recargado!",
+    "configReloadFailed":  "\u00267D |\u0026f No se pudo recargar Dream DisplaysX. Revisa la consola para ver errores",
+    "configReloadSummary":  "\u00267D |\u0026f Recargado: configuración, mensajes de idioma, permisos de comandos",
+    "noDisplaysFound":  "\u00267D |\u0026f No se encontraron pantallas",
+    "displayListHeader":  "\u00267D |\u0026f Pantallas:",
+    "displayListEntry":  "\u00267D |\u0026f {0}. Propietario: {1}, Ubicación: [{2}, {3}, {4}], URL: {5}",
+    "displayListPageLine":  "\u00267D |\u00267 página=\u0026f{0}/{1} \u00268| \u00267total=\u0026f{2}",
+    "displayListDetails":  " \u00268| \u00267mundo=\u0026f{0} \u00268| \u00267tamaño=\u0026f{1}x{2} \u00268| \u00267sync=\u0026f{3} \u00268| \u00267id=\u0026f{4} \u00268| \u00267name=\u0026f{5}",
+    "displayListUnknownOwner":  "Desconocido",
+    "displayListUnknownWorld":  "desconocido",
+    "displayListUnavailableUrl":  "N/D",
+    "displayListTpButton":  " [TP]",
+    "displayListUrlButton":  " [URL]",
+    "displayBlockBreak":  {
+                              "text":  "",
+                              "extra":  [
+                                            {
+                                                "text":  "D | ",
+                                                "color":  "#9D9D97"
+                                            },
+                                            {
+                                                "text":  "Este es un bloque de pantalla. Instala el mod ",
+                                                "color":  "#FFFFFF"
+                                            },
+                                            {
+                                                "text":  "Dream DisplaysX",
+                                                "color":  "#5555FF",
+                                                "underlined":  true,
+                                                "clickEvent":  {
+                                                                   "action":  "open_url",
+                                                                   "value":  "https://github.com/Aruvelut-123/dreamdisplaysx"
+                                                               },
+                                                "hoverEvent":  {
+                                                                   "action":  "show_text",
+                                                                   "value":  "Haz clic para descargar Dream DisplaysX"
+                                                               }
+                                            },
+                                            {
+                                                "text":  " para interactuar con él!",
+                                                "color":  "#FFFFFF"
+                                            }
+                                        ]
+                          },
+    "modRequired":  {
+                        "text":  "",
+                        "extra":  [
+                                      {
+                                          "text":  "D | ",
+                                          "color":  "#9D9D97"
+                                      },
+                                      {
+                                          "text":  "Este servidor usa pantallas dentro del juego. ",
+                                          "color":  "#FFFFFF"
+                                      },
+                                      {
+                                          "text":  "Descarga Dream DisplaysX",
+                                          "color":  "#5555FF",
+                                          "underlined":  true,
+                                          "clickEvent":  {
+                                                             "action":  "open_url",
+                                                             "value":  "https://github.com/Aruvelut-123/dreamdisplaysx"
+                                                         },
+                                          "hoverEvent":  {
+                                                             "action":  "show_text",
+                                                             "value":  "Haz clic para descargar Dream DisplaysX"
+                                                         }
+                                      },
+                                      {
+                                          "text":  " para verlas!",
+                                          "color":  "#FFFFFF"
+                                      }
+                                  ]
+                    },
+    "display.enabled":  "\u00267D |\u0026f Pantallas activadas. Espera un momento...",
+    "display.disabled":  "\u00267D |\u0026f Pantallas desactivadas",
+    "display.already-disabled":  "\u00267D |\u0026f Las pantallas ya están desactivadas",
+    "display.already-enabled":  "\u00267D |\u0026f Las pantallas ya están activadas",
+    "displayTargetNotFound":  "\u00267D |\u0026f ¡El jugador \u0027%s\u0027 no está conectado!",
+    "display.enabled.target":  "\u00267D |\u0026f Pantallas activadas para %s",
+    "display.disabled.target":  "\u00267D |\u0026f Pantallas desactivadas para %s",
+    "display.already-enabled.target":  "\u00267D |\u0026f Las pantallas ya están activadas para %s",
+    "display.already-disabled.target":  "\u00267D |\u0026f Las pantallas ya están desactivadas para %s",
+    "displayStatsHeader":  "\u00267D |\u0026f Estadísticas de uso del mod:",
+    "displayStatsEntry":  "\u00267D |\u0026f Versión %s: %d jugadores",
+    "displayStatsTotal":  "\u00267D |\u0026f Total de jugadores con el mod: %d",
+    "displayHelpHeader":  "Comandos disponibles:",
+    "displayHelpCreate":  "– /display create: crear una nueva pantalla",
+    "displayHelpVideo":  "– /display video \u003curl\u003e: establecer video para tu pantalla",
+    "displayHelpName":  "– /display name this|\u003cid\u003e \u003cname\u003e: dar a una pantalla un alias sin espacios usable como su id",
+    "displayHelpInfo":  "– /display info: mostrar detalles de la pantalla que estás mirando",
+    "displayHelpDelete":  "– /display delete: eliminar la pantalla que estás mirando",
+    "displayHelpList":  "– /display list: listar todas las pantallas",
+    "displayHelpStats":  "– /display stats: mostrar estadísticas de uso del mod",
+    "displayHelpReload":  "– /display reload: recargar la configuración",
+    "displayHelpOn":  "– /display on [jugador]: activar pantallas para ti o un jugador objetivo",
+    "displayHelpOff":  "– /display off [jugador]: desactivar pantallas para ti o un jugador objetivo",
+    "displayHelpFullscreen":  "– /display fullscreen start \u003cid|url\u003e [flags]: fuerza una transmisión a pantalla completa a los jugadores",
+    "displayHelpHelp":  "– /display help: mostrar esta ayuda",
+    "displayInfoHeader":  "\u00267D |\u0026f Información de la pantalla:",
+    "displayInfoOwnerLine":  "\u00267D |\u00267 propietario=\u0026f{0} \u00268| \u00267uuid=\u0026f{1}",
+    "displayInfoUuidLine":  "\u00267D |\u00267 id-pantalla=\u0026f{0}",
+    "displayInfoPositionLine":  "\u00267D |\u00267 mundo=\u0026f{0} \u00268| \u00267pos1=\u0026f[{1}, {2}, {3}] \u00268| \u00267pos2=\u0026f[{4}, {5}, {6}]",
+    "displayInfoStateLine":  "\u00267D |\u00267 tamaño=\u0026f{0}x{1} \u00268| \u00267frente=\u0026f{2} \u00268| \u00267sync=\u0026f{3}",
+    "displayInfoMediaLine":  "\u00267D |\u00267 idioma=\u0026f{0} \u00268| \u00267duración=\u0026f{1} \u00268| \u00267url=\u0026f{2}",
+    "displayInfoScheduleLine":  "\u00267D |\u00267 programado={0} a las \u0026f{1}",
+    "displayInfoUnknownOwner":  "Desconocido",
+    "displayInfoUnknownWorld":  "Desconocido",
+    "displayInfoUnknownDuration":  "desconocido",
+    "displayInfoAutoLang":  "auto",
+    "displayInfoUnavailableUrl":  "N/D",
+    "fullscreenStarted":  "\u00267D |\u0026f Transmisión a pantalla completa \u0026b{0}\u0026f iniciada (alcanzó {1} jugador(es))",
+    "fullscreenStopped":  "\u00267D |\u0026f Se detuvieron {0} transmisión(es) a pantalla completa",
+    "fullscreenStopFailed":  "\u00267D |\u0026f No se encontró ninguna transmisión a pantalla completa coincidente",
+    "fullscreenNoTargets":  "\u00267D |\u0026f Especifica al menos target \u003cjugadores\u003e o radius \u003cbloques\u003e",
+    "fullscreenAlreadyRunning":  "\u00267D |\u0026f Esa pantalla ya tiene una transmisión a pantalla completa, o el ID de sesión ya está en uso",
+    "fullscreenForcedDisallowed":  "\u00267D |\u0026f Las transmisiones a pantalla completa forzadas están desactivadas en la configuración",
+    "fullscreenNoDisplay":  "\u00267D |\u0026f No se encontró ninguna pantalla ni hay un mundo cargado para transmitir una URL",
+    "fullscreenNetworkNoProxy":  "\u00267D |\u0026f Este servidor no está conectado a un proxy de Dream DisplaysX, comprueba [proxy] en config.toml.",
+    "fullscreenNetworkNotYetSupported":  "\u00267D |\u0026f La pantalla completa en red (server \u003cnombre\u003e/\u003cglobal\u003e) aún no está implementada.",
+    "fullscreenNetworkUrlOnly":  "\u00267D |\u0026f La pantalla completa en red solo admite una URL de vídeo, no un id de pantalla existente",
+    "fullscreenNetworkRadiusUnsupported":  "\u00267D |\u0026f radius no es compatible con server — solo se aplica a este servidor, inícialo localmente aquí en su lugar",
+    "fullscreenNetworkQueued":  "\u00267D |\u0026f Transmisión de pantalla completa en red en cola. Comenzará en breve en todos los servidores coincidentes",
+    "fullscreenNetworkStopQueued":  "\u00267D |\u0026f Solicitud de detención en red enviada para esa sesión",
+    "fullscreenListEmpty":  "\u00267D |\u0026f No hay transmisiones a pantalla completa activas",
+    "fullscreenListEntry":  "\u00267D |\u00267 {0} \u00268| \u00267display=\u0026f{1} \u00268| \u00267virtual=\u0026f{2} \u00268| \u00267reach=\u0026f{3}",
+    "fullscreenListNetworkEntry":  "\u00267D |\u00267 {0} \u00268| \u00267scope=\u0026f{1} \u00268| \u00267network-reach=\u0026f{2}",
+    "customMediaDisabled":  "\u00267D |\u0026f Los enlaces de vídeo personalizados están desactivados en este servidor",
+    "customMediaHostBlocked":  "\u00267D |\u0026f Los vídeos de este sitio no están permitidos en este servidor",
+    "customMediaNoPermission":  "\u00267D |\u0026f No tienes permiso para reproducir tus propios enlaces de vídeo",
+    "customMediaTooFast":  "\u00267D |\u0026f Estás cambiando de enlace de vídeo demasiado rápido. Espera un momento",
+    "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
+    "displayListNoName":  "(none)",
+    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)"
 }

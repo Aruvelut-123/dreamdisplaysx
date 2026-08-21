@@ -1,208 +1,211 @@
 {
-  "noDisplayTerritories": "&7D |&f You haven't selected any display territories yet! Please select two points using {0} on {1}",
-  "createDisplayCommand": "&7D |&f Now type /display create to create a display",
-  "secondPointNotSelected": "&7D |&f You haven't selected the second point yet!",
-  "displayOverlap": "&7D |&f There is already a display in this area!",
-  "displayLimitReached": "&7D |&f You've reached the limit of %d display(s) per player!",
-  "structureTooLarge": "&7D |&f You can't create a display larger than %d × %d blocks",
-  "structureTooSmall": "&7D |&f You can't create a display smaller than %d × %d blocks",
-  "firstPointSelected": "&7D |&f First point selected! Now select the second point",
-  "secondPointSelected": "&7D |&f Second point selected!",
-  "structureWrongDepth": "&7D |&f Selection must be at least 1 block long",
-  "wrongStructure": "&7D |&f Only {0} blocks can be used for displays",
-  "displayTooHigh": "&7D |&f Display height is too high (max. %d)",
-  "displayTooLow": "&7D |&f Display is too low (min. %d)",
-  "selectionClear": "&7D |&f Selection has been cleared!",
-  "displayWrongCommand": "&7D |&f You entered something wrong!",
-  "displayCommandMissingPermission": "&7D |&f You don't have permission to use this command!",
-  "commandPlayersOnly": "&7D |&f This command can only be used by a player in-game",
-  "successfulCreation": "&7D |&f Display has been created! Now focus on it and type /display video <video_url> [lang] to set a video",
-  "noDisplay": "&7D |&f Display has not been found!",
-  "settedURL": "&7D |&f Video has been loaded!",
-  "invalidURL": "&7D |&f Your URL is invalid! Please use a valid video link (YouTube, Twitch, etc.)",
-  "settedName": "&7D |&f Display name has been set!",
-  "currentName": "&7D |&f This display's name: %s",
-  "noNameSet": "&7D |&f This display has no name set",
-  "invalidName": "&7D |&f Invalid name! Use up to 32 letters, digits, - or _, with no spaces",
-  "nameTaken": "&7D |&f That name is already used by another display!",
-  "scheduleSet": "&7D |&f It's {0} now. Display {1} will {2} at {3} ({4})",
-  "scheduleCurrentSet": "&7D |&f This display is scheduled to {0} at {1}",
-  "scheduleNoneSet": "&7D |&f This display has no scheduled action",
-  "scheduleCancelled": "&7D |&f Scheduled action cancelled",
-  "scheduleInvalidTime": "&7D |&f Invalid time! Use HH:mm or HH:mm:ss (24-hour), e.g. 23:51 or 23:51:30",
-  "scheduleNeedsTime": "&7D |&f It's {0} now. Type a time (HH:mm) to schedule this",
-  "scheduleActionPlay": "start playing",
-  "scheduleActionPause": "pause",
-  "scheduleCountdownSeconds": "in {0}s",
-  "scheduleCountdownMinutes": "in {0}m {1}s",
-  "scheduleCountdownHours": "in {0}h {1}m",
-  "displayVideoWrongTargetBlock": "&7D |&f You must look at a display block to use this command!",
-  "displayVideoNotOwner": "&7D |&f You are not the owner of this display!",
-  "reportTooQuickly": "&7D |&f You are sending reports too quickly! Please wait before sending another report",
-  "reportSent": "&7D |&f Report has been sent!",
-  "reportFailed": "&7D |&f Failed to send report. Please try again later",
-  "displayDeleted": "&7D |&f Display has been deleted!",
-  "displayReported": "&7D |&f Display has been reported!",
-  "reportNotConfigured": "&7D |&f Report system is disabled on this server!",
-  "newVersion": {
-    "text": "",
-    "extra": [
-      {
-        "text": "D | ",
-        "color": "#9D9D97"
-      },
-      {
-        "text": "New version %s of Dream DisplaysX is available! Please ",
-        "color": "#FFFFFF"
-      },
-      {
-        "text": "update your mod",
-        "color": "#023EB6",
-        "underlined": true,
-        "clickEvent": {
-          "action": "open_url",
-          "value": "https://github.com/Aruvelut-123/dreamdisplaysx/releases"
-        },
-        "hoverEvent": {
-          "action": "show_text",
-          "value": "Click to download new version"
-        }
-      },
-      {
-        "text": "",
-        "color": "#FFFFFF"
-      }
-    ]
-  },
-  "newPluginVersion": "&7D |&f New version of Dream DisplaysX plugin (%s) is available! Please update the server plugin!",
-  "configReloaded": "&7D | &fDream DisplaysX has been reloaded!",
-  "configReloadFailed": "&7D |&f Failed to reload Dream DisplaysX. Please check the console for errors",
-  "configReloadSummary": "&7D |&f Reloaded: config, language messages, command permissions",
-  "noDisplaysFound": "&7D |&f No displays found",
-  "displayListHeader": "&7D |&f Displays:",
-  "displayListEntry": "&7D |&f {0}. Owner: {1}, Location: [{2}, {3}, {4}], URL: {5}",
-  "displayListPageLine": "&7D |&7 page=&f{0}/{1} &8| &7total=&f{2}",
-  "displayListDetails": " &8| &7world=&f{0} &8| &7size=&f{1}x{2} &8| &7sync=&f{3} &8| &7id=&f{4}",
-  "displayListUnknownOwner": "Unknown",
-  "displayListUnknownWorld": "unknown",
-  "displayListUnavailableUrl": "N/A",
-  "displayListTpButton": " [TP]",
-  "displayListUrlButton": " [URL]",
-  "displayBlockBreak": {
-    "text": "",
-    "extra": [
-      {
-        "text": "D | ",
-        "color": "#9D9D97"
-      },
-      {
-        "text": "This is a display block. ",
-        "color": "#FFFFFF"
-      },
-      {
-        "text": "Download Dream DisplaysX",
-        "color": "#5555FF",
-        "underlined": true,
-        "clickEvent": {
-          "action": "open_url",
-          "value": "https://github.com/Aruvelut-123/dreamdisplaysx"
-        },
-        "hoverEvent": {
-          "action": "show_text",
-          "value": "Click to download Dream DisplaysX"
-        }
-      },
-      {
-        "text": " mod to interact with it!",
-        "color": "#FFFFFF"
-      }
-    ]
-  },
-  "modRequired": {
-    "text": "",
-    "extra": [
-      {
-        "text": "D | ",
-        "color": "#9D9D97"
-      },
-      {
-        "text": "This server uses in-game displays. ",
-        "color": "#FFFFFF"
-      },
-      {
-        "text": "Download Dream DisplaysX",
-        "color": "#5555FF",
-        "underlined": true,
-        "clickEvent": {
-          "action": "open_url",
-          "value": "https://github.com/Aruvelut-123/dreamdisplaysx"
-        },
-        "hoverEvent": {
-          "action": "show_text",
-          "value": "Click to download Dream DisplaysX"
-        }
-      },
-      {
-        "text": " to see them!",
-        "color": "#FFFFFF"
-      }
-    ]
-  },
-  "display.enabled": "&7D |&f Displays enabled. Please wait for a moment...",
-  "display.disabled": "&7D |&f Displays disabled",
-  "display.already-disabled": "&7D |&f Displays are already disabled",
-  "display.already-enabled": "&7D |&f Displays are already enabled",
-  "displayTargetNotFound": "&7D |&f Player '%s' was not found online!",
-  "display.enabled.target": "&7D |&f Displays enabled for %s",
-  "display.disabled.target": "&7D |&f Displays disabled for %s",
-  "display.already-enabled.target": "&7D |&f Displays are already enabled for %s",
-  "display.already-disabled.target": "&7D |&f Displays are already disabled for %s",
-  "displayStatsHeader": "&7D |&f Mod usage statistics:",
-  "displayStatsEntry": "&7D |&f Version %s: %d players",
-  "displayStatsTotal": "&7D |&f Total players with mod: %d",
-  "displayHelpHeader": "Available commands:",
-  "displayHelpCreate": "– /display create: create a new display",
-  "displayHelpVideo": "– /display video <url>: set video for your display",
-  "displayHelpName": "– /display name this|<id> <name>: give a display a space-free alias usable as its id",
-  "displayHelpInfo": "– /display info: show details of the display you're looking at",
-  "displayHelpDelete": "– /display delete: delete the display you're looking at",
-  "displayHelpList": "– /display list: list all displays",
-  "displayHelpStats": "– /display stats: show mod usage statistics",
-  "displayHelpReload": "– /display reload: reload the configuration",
-  "displayHelpOn": "– /display on [player]: enable displays for yourself or a target player",
-  "displayHelpOff": "– /display off [player]: disable displays for yourself or a target player",
-  "displayHelpFullscreen": "– /display fullscreen start <id|url> [flags]: force a fullscreen broadcast to players",
-  "displayHelpHelp": "– /display help: show this help",
-  "displayInfoHeader": "&7D |&f Display info:",
-  "displayInfoOwnerLine": "&7D |&7 owner=&f{0} &8| &7uuid=&f{1}",
-  "displayInfoUuidLine": "&7D |&7 display-id=&f{0}",
-  "displayInfoPositionLine": "&7D |&7 world=&f{0} &8| &7pos1=&f[{1}, {2}, {3}] &8| &7pos2=&f[{4}, {5}, {6}]",
-  "displayInfoStateLine": "&7D |&7 size=&f{0}x{1} &8| &7facing=&f{2} &8| &7sync=&f{3}",
-  "displayInfoMediaLine": "&7D |&7 lang=&f{0} &8| &7duration=&f{1} &8| &7url=&f{2}",
-  "displayInfoScheduleLine": "&7D |&7 scheduled={0} at &f{1}",
-  "displayInfoUnknownOwner": "Unknown",
-  "displayInfoUnknownWorld": "Unknown",
-  "displayInfoUnknownDuration": "unknown",
-  "displayInfoAutoLang": "auto",
-  "displayInfoUnavailableUrl": "N/A",
-  "fullscreenStarted": "&7D |&f Fullscreen broadcast &b{0}&f started (reached {1} player(s))",
-  "fullscreenStopped": "&7D |&f Stopped {0} fullscreen broadcast(s)",
-  "fullscreenStopFailed": "&7D |&f No matching fullscreen broadcast found",
-  "fullscreenNoTargets": "&7D |&f Specify at least one of target <players> or radius <blocks>",
-  "fullscreenAlreadyRunning": "&7D |&f That display already hosts a fullscreen broadcast, or the session ID is taken",
-  "fullscreenForcedDisallowed": "&7D |&f Forced fullscreen broadcasts are disabled in the config",
-  "fullscreenNoDisplay": "&7D |&f No display found and no world is loaded to host a URL broadcast",
-  "fullscreenNetworkNoProxy": "&7D |&f This backend is not connected to a Dream DisplaysX proxy, check [proxy] in config.toml.",
-  "fullscreenNetworkNotYetSupported": "&7D |&f Network-wide fullscreen (server <name>/<global>) is not wired up.",
-  "fullscreenNetworkUrlOnly": "&7D |&f Network-wide fullscreen only supports a video URL, not an existing display id",
-  "fullscreenNetworkRadiusUnsupported": "&7D |&f radius is not supported with server — it applies only to this server, so start it locally there instead",
-  "fullscreenNetworkQueued": "&7D |&f Network fullscreen broadcast queued. It will start on every matching server shortly",
-  "fullscreenNetworkStopQueued": "&7D |&f Sent a network-wide stop request for that session",
-  "fullscreenListEmpty": "&7D |&f No fullscreen broadcasts are running",
-  "fullscreenListEntry": "&7D |&7 {0} &8| &7display=&f{1} &8| &7virtual=&f{2} &8| &7reach=&f{3}",
-  "fullscreenListNetworkEntry": "&7D |&7 {0} &8| &7scope=&f{1} &8| &7network-reach=&f{2}",
-  "customMediaDisabled": "&7D |&f Custom video links are disabled on this server",
-  "customMediaHostBlocked": "&7D |&f Videos from this site are not allowed on this server",
-  "customMediaNoPermission": "&7D |&f You don't have permission to play your own video links",
-  "customMediaTooFast": "&7D |&f You're switching video links too fast. Wait a moment"
+    "noDisplayTerritories":  "\u00267D |\u0026f You haven\u0027t selected any display territories yet! Please select two points using {0} on {1}",
+    "createDisplayCommand":  "\u00267D |\u0026f Now type /display create to create a display",
+    "secondPointNotSelected":  "\u00267D |\u0026f You haven\u0027t selected the second point yet!",
+    "displayOverlap":  "\u00267D |\u0026f There is already a display in this area!",
+    "displayLimitReached":  "\u00267D |\u0026f You\u0027ve reached the limit of %d display(s) per player!",
+    "structureTooLarge":  "\u00267D |\u0026f You can\u0027t create a display larger than %d × %d blocks",
+    "structureTooSmall":  "\u00267D |\u0026f You can\u0027t create a display smaller than %d × %d blocks",
+    "firstPointSelected":  "\u00267D |\u0026f First point selected! Now select the second point",
+    "secondPointSelected":  "\u00267D |\u0026f Second point selected!",
+    "structureWrongDepth":  "\u00267D |\u0026f Selection must be at least 1 block long",
+    "wrongStructure":  "\u00267D |\u0026f Only {0} blocks can be used for displays",
+    "displayTooHigh":  "\u00267D |\u0026f Display height is too high (max. %d)",
+    "displayTooLow":  "\u00267D |\u0026f Display is too low (min. %d)",
+    "selectionClear":  "\u00267D |\u0026f Selection has been cleared!",
+    "displayWrongCommand":  "\u00267D |\u0026f You entered something wrong!",
+    "displayCommandMissingPermission":  "\u00267D |\u0026f You don\u0027t have permission to use this command!",
+    "commandPlayersOnly":  "\u00267D |\u0026f This command can only be used by a player in-game",
+    "successfulCreation":  "\u00267D |\u0026f Display has been created! Now focus on it and type /display video \u003cvideo_url\u003e [lang] to set a video",
+    "noDisplay":  "\u00267D |\u0026f Display has not been found!",
+    "settedURL":  "\u00267D |\u0026f Video has been loaded!",
+    "invalidURL":  "\u00267D |\u0026f Your URL is invalid! Please use a valid video link (YouTube, Twitch, etc.)",
+    "settedName":  "\u00267D |\u0026f Display name has been set!",
+    "currentName":  "\u00267D |\u0026f This display\u0027s name: %s",
+    "noNameSet":  "\u00267D |\u0026f This display has no name set",
+    "invalidName":  "\u00267D |\u0026f Invalid name! Use up to 64 readable characters, no control characters, and it must not look like a bare UUID",
+    "nameTaken":  "\u00267D |\u0026f That name is already used by another display!",
+    "scheduleSet":  "\u00267D |\u0026f It\u0027s {0} now. Display {1} will {2} at {3} ({4})",
+    "scheduleCurrentSet":  "\u00267D |\u0026f This display is scheduled to {0} at {1}",
+    "scheduleNoneSet":  "\u00267D |\u0026f This display has no scheduled action",
+    "scheduleCancelled":  "\u00267D |\u0026f Scheduled action cancelled",
+    "scheduleInvalidTime":  "\u00267D |\u0026f Invalid time! Use HH:mm or HH:mm:ss (24-hour), e.g. 23:51 or 23:51:30",
+    "scheduleNeedsTime":  "\u00267D |\u0026f It\u0027s {0} now. Type a time (HH:mm) to schedule this",
+    "scheduleActionPlay":  "start playing",
+    "scheduleActionPause":  "pause",
+    "scheduleCountdownSeconds":  "in {0}s",
+    "scheduleCountdownMinutes":  "in {0}m {1}s",
+    "scheduleCountdownHours":  "in {0}h {1}m",
+    "displayVideoWrongTargetBlock":  "\u00267D |\u0026f You must look at a display block to use this command!",
+    "displayVideoNotOwner":  "\u00267D |\u0026f You are not the owner of this display!",
+    "reportTooQuickly":  "\u00267D |\u0026f You are sending reports too quickly! Please wait before sending another report",
+    "reportSent":  "\u00267D |\u0026f Report has been sent!",
+    "reportFailed":  "\u00267D |\u0026f Failed to send report. Please try again later",
+    "displayDeleted":  "\u00267D |\u0026f Display has been deleted!",
+    "displayReported":  "\u00267D |\u0026f Display has been reported!",
+    "reportNotConfigured":  "\u00267D |\u0026f Report system is disabled on this server!",
+    "newVersion":  {
+                       "text":  "",
+                       "extra":  [
+                                     {
+                                         "text":  "D | ",
+                                         "color":  "#9D9D97"
+                                     },
+                                     {
+                                         "text":  "New version %s of Dream DisplaysX is available! Please ",
+                                         "color":  "#FFFFFF"
+                                     },
+                                     {
+                                         "text":  "update your mod",
+                                         "color":  "#023EB6",
+                                         "underlined":  true,
+                                         "clickEvent":  {
+                                                            "action":  "open_url",
+                                                            "value":  "https://github.com/Aruvelut-123/dreamdisplaysx/releases"
+                                                        },
+                                         "hoverEvent":  {
+                                                            "action":  "show_text",
+                                                            "value":  "Click to download new version"
+                                                        }
+                                     },
+                                     {
+                                         "text":  "",
+                                         "color":  "#FFFFFF"
+                                     }
+                                 ]
+                   },
+    "newPluginVersion":  "\u00267D |\u0026f New version of Dream DisplaysX plugin (%s) is available! Please update the server plugin!",
+    "configReloaded":  "\u00267D | \u0026fDream DisplaysX has been reloaded!",
+    "configReloadFailed":  "\u00267D |\u0026f Failed to reload Dream DisplaysX. Please check the console for errors",
+    "configReloadSummary":  "\u00267D |\u0026f Reloaded: config, language messages, command permissions",
+    "noDisplaysFound":  "\u00267D |\u0026f No displays found",
+    "displayListHeader":  "\u00267D |\u0026f Displays:",
+    "displayListEntry":  "\u00267D |\u0026f {0}. Owner: {1}, Location: [{2}, {3}, {4}], URL: {5}",
+    "displayListPageLine":  "\u00267D |\u00267 page=\u0026f{0}/{1} \u00268| \u00267total=\u0026f{2}",
+    "displayListDetails":  " \u00268| \u00267world=\u0026f{0} \u00268| \u00267size=\u0026f{1}x{2} \u00268| \u00267sync=\u0026f{3} \u00268| \u00267id=\u0026f{4} \u00268| \u00267name=\u0026f{5}",
+    "displayListUnknownOwner":  "Unknown",
+    "displayListUnknownWorld":  "unknown",
+    "displayListUnavailableUrl":  "N/A",
+    "displayListNoName":  "(none)",
+    "renamedDisplay":  "\u00267D |\u0026f Display {0} has been renamed to \u0027{1}\u0027",
+    "displayListTpButton":  " [TP]",
+    "displayListUrlButton":  " [URL]",
+    "displayBlockBreak":  {
+                              "text":  "",
+                              "extra":  [
+                                            {
+                                                "text":  "D | ",
+                                                "color":  "#9D9D97"
+                                            },
+                                            {
+                                                "text":  "This is a display block. ",
+                                                "color":  "#FFFFFF"
+                                            },
+                                            {
+                                                "text":  "Download Dream DisplaysX",
+                                                "color":  "#5555FF",
+                                                "underlined":  true,
+                                                "clickEvent":  {
+                                                                   "action":  "open_url",
+                                                                   "value":  "https://github.com/Aruvelut-123/dreamdisplaysx"
+                                                               },
+                                                "hoverEvent":  {
+                                                                   "action":  "show_text",
+                                                                   "value":  "Click to download Dream DisplaysX"
+                                                               }
+                                            },
+                                            {
+                                                "text":  " mod to interact with it!",
+                                                "color":  "#FFFFFF"
+                                            }
+                                        ]
+                          },
+    "modRequired":  {
+                        "text":  "",
+                        "extra":  [
+                                      {
+                                          "text":  "D | ",
+                                          "color":  "#9D9D97"
+                                      },
+                                      {
+                                          "text":  "This server uses in-game displays. ",
+                                          "color":  "#FFFFFF"
+                                      },
+                                      {
+                                          "text":  "Download Dream DisplaysX",
+                                          "color":  "#5555FF",
+                                          "underlined":  true,
+                                          "clickEvent":  {
+                                                             "action":  "open_url",
+                                                             "value":  "https://github.com/Aruvelut-123/dreamdisplaysx"
+                                                         },
+                                          "hoverEvent":  {
+                                                             "action":  "show_text",
+                                                             "value":  "Click to download Dream DisplaysX"
+                                                         }
+                                      },
+                                      {
+                                          "text":  " to see them!",
+                                          "color":  "#FFFFFF"
+                                      }
+                                  ]
+                    },
+    "display.enabled":  "\u00267D |\u0026f Displays enabled. Please wait for a moment...",
+    "display.disabled":  "\u00267D |\u0026f Displays disabled",
+    "display.already-disabled":  "\u00267D |\u0026f Displays are already disabled",
+    "display.already-enabled":  "\u00267D |\u0026f Displays are already enabled",
+    "displayTargetNotFound":  "\u00267D |\u0026f Player \u0027%s\u0027 was not found online!",
+    "display.enabled.target":  "\u00267D |\u0026f Displays enabled for %s",
+    "display.disabled.target":  "\u00267D |\u0026f Displays disabled for %s",
+    "display.already-enabled.target":  "\u00267D |\u0026f Displays are already enabled for %s",
+    "display.already-disabled.target":  "\u00267D |\u0026f Displays are already disabled for %s",
+    "displayStatsHeader":  "\u00267D |\u0026f Mod usage statistics:",
+    "displayStatsEntry":  "\u00267D |\u0026f Version %s: %d players",
+    "displayStatsTotal":  "\u00267D |\u0026f Total players with mod: %d",
+    "displayHelpHeader":  "Available commands:",
+    "displayHelpCreate":  "– /display create [name]: create a new display, optionally naming it",
+    "displayHelpVideo":  "– /display video \u003curl\u003e: set video for your display",
+    "displayHelpName":  "– /display name this|\u003cid\u003e \u003cname\u003e: set a display\u0027s name",
+    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "displayHelpInfo":  "– /display info: show details of the display you\u0027re looking at",
+    "displayHelpDelete":  "– /display delete: delete the display you\u0027re looking at",
+    "displayHelpList":  "– /display list: list all displays",
+    "displayHelpStats":  "– /display stats: show mod usage statistics",
+    "displayHelpReload":  "– /display reload: reload the configuration",
+    "displayHelpOn":  "– /display on [player]: enable displays for yourself or a target player",
+    "displayHelpOff":  "– /display off [player]: disable displays for yourself or a target player",
+    "displayHelpFullscreen":  "– /display fullscreen start \u003cid|url\u003e [flags]: force a fullscreen broadcast to players",
+    "displayHelpHelp":  "– /display help: show this help",
+    "displayInfoHeader":  "\u00267D |\u0026f Display info:",
+    "displayInfoOwnerLine":  "\u00267D |\u00267 owner=\u0026f{0} \u00268| \u00267uuid=\u0026f{1}",
+    "displayInfoUuidLine":  "\u00267D |\u00267 display-id=\u0026f{0}",
+    "displayInfoPositionLine":  "\u00267D |\u00267 world=\u0026f{0} \u00268| \u00267pos1=\u0026f[{1}, {2}, {3}] \u00268| \u00267pos2=\u0026f[{4}, {5}, {6}]",
+    "displayInfoStateLine":  "\u00267D |\u00267 size=\u0026f{0}x{1} \u00268| \u00267facing=\u0026f{2} \u00268| \u00267sync=\u0026f{3}",
+    "displayInfoMediaLine":  "\u00267D |\u00267 lang=\u0026f{0} \u00268| \u00267duration=\u0026f{1} \u00268| \u00267url=\u0026f{2}",
+    "displayInfoScheduleLine":  "\u00267D |\u00267 scheduled={0} at \u0026f{1}",
+    "displayInfoUnknownOwner":  "Unknown",
+    "displayInfoUnknownWorld":  "Unknown",
+    "displayInfoUnknownDuration":  "unknown",
+    "displayInfoAutoLang":  "auto",
+    "displayInfoUnavailableUrl":  "N/A",
+    "fullscreenStarted":  "\u00267D |\u0026f Fullscreen broadcast \u0026b{0}\u0026f started (reached {1} player(s))",
+    "fullscreenStopped":  "\u00267D |\u0026f Stopped {0} fullscreen broadcast(s)",
+    "fullscreenStopFailed":  "\u00267D |\u0026f No matching fullscreen broadcast found",
+    "fullscreenNoTargets":  "\u00267D |\u0026f Specify at least one of target \u003cplayers\u003e or radius \u003cblocks\u003e",
+    "fullscreenAlreadyRunning":  "\u00267D |\u0026f That display already hosts a fullscreen broadcast, or the session ID is taken",
+    "fullscreenForcedDisallowed":  "\u00267D |\u0026f Forced fullscreen broadcasts are disabled in the config",
+    "fullscreenNoDisplay":  "\u00267D |\u0026f No display found and no world is loaded to host a URL broadcast",
+    "fullscreenNetworkNoProxy":  "\u00267D |\u0026f This backend is not connected to a Dream DisplaysX proxy, check [proxy] in config.toml.",
+    "fullscreenNetworkNotYetSupported":  "\u00267D |\u0026f Network-wide fullscreen (server \u003cname\u003e/\u003cglobal\u003e) is not wired up.",
+    "fullscreenNetworkUrlOnly":  "\u00267D |\u0026f Network-wide fullscreen only supports a video URL, not an existing display id",
+    "fullscreenNetworkRadiusUnsupported":  "\u00267D |\u0026f radius is not supported with server — it applies only to this server, so start it locally there instead",
+    "fullscreenNetworkQueued":  "\u00267D |\u0026f Network fullscreen broadcast queued. It will start on every matching server shortly",
+    "fullscreenNetworkStopQueued":  "\u00267D |\u0026f Sent a network-wide stop request for that session",
+    "fullscreenListEmpty":  "\u00267D |\u0026f No fullscreen broadcasts are running",
+    "fullscreenListEntry":  "\u00267D |\u00267 {0} \u00268| \u00267display=\u0026f{1} \u00268| \u00267virtual=\u0026f{2} \u00268| \u00267reach=\u0026f{3}",
+    "fullscreenListNetworkEntry":  "\u00267D |\u00267 {0} \u00268| \u00267scope=\u0026f{1} \u00268| \u00267network-reach=\u0026f{2}",
+    "customMediaDisabled":  "\u00267D |\u0026f Custom video links are disabled on this server",
+    "customMediaHostBlocked":  "\u00267D |\u0026f Videos from this site are not allowed on this server",
+    "customMediaNoPermission":  "\u00267D |\u0026f You don\u0027t have permission to play your own video links",
+    "customMediaTooFast":  "\u00267D |\u0026f You\u0027re switching video links too fast. Wait a moment"
 }

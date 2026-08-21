@@ -39,7 +39,7 @@ class HelpCommand : SubCommand {
 
         line("displayHelpCreate")
         line("displayHelpVideo")
-        line("displayHelpName")
+        line("displayHelpRename")
         line("displayHelpInfo")
         line("displayHelpDelete")
         line("displayHelpList")
@@ -76,7 +76,7 @@ object VanillaHelpCommand {
 
         line("displayHelpCreate")
         line("displayHelpVideo")
-        line("displayHelpName")
+        line("displayHelpRename")
         line("displayHelpInfo")
         line("displayHelpDelete")
         line("displayHelpList")

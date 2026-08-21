@@ -58,7 +58,7 @@ object VanillaCommandTree {
             .then(statsNode())
             .then(reloadNode())
             .then(videoNode())
-            .then(nameNode())
+            .then(renameNode())
             .then(scheduleNode())
             .then(toggleNode("on"))
             .then(toggleNode("off"))
@@ -129,12 +129,39 @@ object VanillaCommandTree {
             Command.SINGLE_SUCCESS
         }
 
-    /** Builds the `/display create` subcommand. */
+    /** Builds `/display create [name]` — the optional name sets the display's human-readable label. */
     private fun createNode() = Commands.literal("create")
         .requires { requiresNode(it, { p -> p.create }, VanillaPermissions.Fallback.EVERYONE) }
         .executes { ctx ->
-            VanillaCreateCommand.execute(ctx)
+            VanillaCreateCommand.execute(ctx, null)
         }
+        .then(
+            Commands.argument("name", StringArgumentType.greedyString())
+                .executes { ctx ->
+                    VanillaCreateCommand.execute(ctx, StringArgumentType.getString(ctx, "name"))
+                }
+        )
+
+    /** Builds `/display rename <id> <new_name>` — renames a display addressed by its unique id / prefix. */
+    private fun renameNode() = Commands.literal("rename")
+        .requires { requiresNode(it, { p -> p.name }, VanillaPermissions.Fallback.EVERYONE) }
+        .then(
+            Commands.argument("id", BareTokenArgumentType)
+                .suggests { _, b ->
+                    FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
+                    b.buildFuture()
+                }
+                .then(
+                    Commands.argument("new_name", StringArgumentType.greedyString())
+                        .executes { ctx ->
+                            RenameCommand.execute(
+                                ctx,
+                                StringArgumentType.getString(ctx, "id"),
+                                StringArgumentType.getString(ctx, "new_name"),
+                            )
+                        }
+                )
+        )
 
     /**
      * Builds the `/display delete this|<id>` subcommand. `this` resolves via raycast, matching every other
@@ -225,34 +252,6 @@ object VanillaCommandTree {
                 val urlAndLang = StringArgumentType.getString(ctx, "url_and_lang")
                 VanillaVideoCommand.execute(ctx, token(ctx), urlAndLang)
                 Command.SINGLE_SUCCESS
-            }
-
-    /**
-     * Builds the `/display name this|<id> [name]` subcommand — see [deleteNode] for `this` / id semantics.
-     * `name` is optional; omitting it clears the display's name.
-     */
-    private fun nameNode() = Commands.literal("name")
-        .requires { requiresNode(it, { p -> p.name }, VanillaPermissions.Fallback.EVERYONE) }
-        .then(
-            Commands.literal("this")
-                .executes { ctx -> VanillaNameCommand.execute(ctx, "this", null) }
-                .then(nameArgument { "this" })
-        )
-        .then(
-            Commands.argument("id", BareTokenArgumentType)
-                .suggests { _, b ->
-                    FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
-                    b.buildFuture()
-                }
-                .executes { ctx -> VanillaNameCommand.execute(ctx, StringArgumentType.getString(ctx, "id"), null) }
-                .then(nameArgument { ctx -> StringArgumentType.getString(ctx, "id") })
-        )
-
-    /** The `<name>` argument under `name this|<id> <name>`. */
-    private fun nameArgument(token: (CommandContext<CommandSourceStack>) -> String) =
-        Commands.argument("name", StringArgumentType.word())
-            .executes { ctx ->
-                VanillaNameCommand.execute(ctx, token(ctx), StringArgumentType.getString(ctx, "name"))
             }
 
     /**
@@ -347,7 +346,9 @@ object VanillaCommandTree {
     /** Builds the `/display list [filter] [value] [page]` subcommand. */
     private fun listNode(): LiteralArgumentBuilder<CommandSourceStack> {
         return Commands.literal("list")
-            .requires { requiresNode(it, { p -> p.list }, VanillaPermissions.Fallback.OP) }
+            // Everyone may run `/display list`; non-privileged players see only their own displays
+            // (enforced inside VanillaListCommand), OP / `list` permission holders see the full list.
+            .requires { requiresNode(it, { p -> p.list }, VanillaPermissions.Fallback.EVERYONE) }
             .executes { ctx ->
                 VanillaListCommand.execute(ctx)
                 Command.SINGLE_SUCCESS

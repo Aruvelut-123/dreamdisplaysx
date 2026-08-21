@@ -2,11 +2,13 @@ package com.dreamdisplayx.platform.server.commands.subcommands
 
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.PaperServer
+import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.shortLabel
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.utils.MessageUtil
+import com.dreamdisplayx.platform.server.utils.VanillaPermissions
 import com.mojang.brigadier.context.CommandContext
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.kyori.adventure.text.Component.text
@@ -79,7 +81,8 @@ class ListCommand : SubCommand {
             val owner =
                 getOwnerName(d.ownerId, ownerNameCache) ?: MessageUtil.messageFor(sender, "displayListUnknownOwner")
             val worldName = d.pos1.world?.name ?: MessageUtil.messageFor(sender, "displayListUnknownWorld")
-            val idShort = d.shortLabel
+            val idShort = d.id.toString().take(8)
+            val displayName = d.name ?: MessageUtil.messageFor(sender, "displayListNoName")
             val url = d.url.ifBlank { MessageUtil.messageFor(sender, "displayListUnavailableUrl") }
             val baseLine = MessageUtil.formatIndexed(
                 sender,
@@ -98,7 +101,8 @@ class ListCommand : SubCommand {
                 d.width.toString(),
                 d.height.toString(),
                 d.isSync.toString(),
-                idShort
+                idShort,
+                displayName
             )
             val fullLine = baseLine + details
 
@@ -305,7 +309,13 @@ object VanillaListCommand {
         val player = ctx.source.entity as? ServerPlayer
         val server = ctx.source.server
 
-        val displays = sortedDisplays()
+        // OP / `list` permission holders see every display; everyone else only their own.
+        val canSeeAll = player == null || VanillaPermissions.has(
+            player,
+            VanillaServerState.config.permissions.list,
+            VanillaPermissions.Fallback.OP,
+        )
+        val displays = if (canSeeAll) sortedDisplays() else sortedDisplays().filter { it.ownerId == player?.uuid }
         if (displays.isEmpty()) {
             sendMsg(ctx, player, "noDisplaysFound")
             return 1
@@ -391,7 +401,8 @@ object VanillaListCommand {
             val index = startIndex + localIndex + 1
             val owner = getOwnerName(d.ownerId) ?: MessageUtil.messageFor(player, "displayListUnknownOwner")
             val worldName = d.worldKey.substringAfterLast(':')
-            val idShort = d.shortLabel
+            val idShort = d.id.toString().take(8)
+            val displayName = d.name ?: MessageUtil.messageFor(player, "displayListNoName")
             val url = d.url.ifBlank { MessageUtil.messageFor(player, "displayListUnavailableUrl") }
             val baseLine = MessageUtil.formatIndexed(
                 player,
@@ -410,7 +421,8 @@ object VanillaListCommand {
                 d.width.toString(),
                 d.height.toString(),
                 d.isSync.toString(),
-                idShort
+                idShort,
+                displayName
             )
             sendColoredMsg(ctx, player, baseLine + details)
         }

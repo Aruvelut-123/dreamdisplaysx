@@ -153,7 +153,7 @@ class CreateCommand : SubCommand {
 @ModLoaderOnly
 object VanillaCreateCommand {
     /** Command execution logic. */
-    fun execute(ctx: CommandContext<CommandSourceStack>): Int {
+    fun execute(ctx: CommandContext<CommandSourceStack>, requestedName: String?): Int {
         val player = ctx.source.entity as? ServerPlayer
             ?: return ctx.source.sendFailure(Component.literal("This command can only be used by a player.")).let { 0 }
 
@@ -206,6 +206,21 @@ object VanillaCreateCommand {
         }
 
         val displayData = sel.generateDisplayData(player.uuid)
+
+        // Optional `<name>` alias on creation — same shape / uniqueness rules as `/display name`.
+        if (requestedName != null) {
+            val normalized = normalizeDisplayName(requestedName)
+            if (normalized == null) {
+                MessageUtil.sendMessage(player, "invalidName")
+                return 0
+            }
+            if (DisplayManager.isNameTaken(normalized, displayData.id)) {
+                MessageUtil.sendMessage(player, "nameTaken")
+                return 0
+            }
+            displayData.name = normalized
+        }
+
         SelectionManager.selectionPoints.remove(player.uuid)
 
         DisplayManager.register(displayData)
