@@ -518,7 +518,10 @@ class DisplayScreen(
         val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
         val roomId = source?.roomId
         if (roomId != null) {
-            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.subscribeLive(did, roomId)
+            // Live streams: disable danmaku entirely. Live danmaku is hard to get right,
+            // so we unsubscribe any previous subscription and clear the overlay instead.
+            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(did)
+            danmakuOverlay?.clear()
             return
         }
         if (source != null && (source.bvid != null || source.avid != null || source.epId != null || source.seasonId != null)) {
@@ -1117,17 +1120,18 @@ class DisplayScreen(
             lastDanmakuPositionSec = -1.0
             return
         }
+        // Live streams: clear any lingering overlay and skip danmaku entirely.
+        if (isLive) {
+            danmakuOverlay?.clear()
+            return
+        }
         val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
         // VOD / bangumi: consume timed danmaku as playback advances.
         // When paused, positionSec is frozen so consumeTimed naturally returns nothing — safe.
         val positionSec = currentTimeNanos / 1_000_000_000.0
         val due = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec)
-        // Live: skip draining when paused so messages accumulate in the queue (bounded at 80).
-        // Otherwise they would pile into the overlay while tick is frozen, causing a burst on resume.
-        val live = if (isPaused) emptyList()
-            else com.dreamdisplayx.platform.client.danmaku.DanmakuManager.drainLive(did)
         val overlay = danmakuOverlay
-        if (due.isNotEmpty() || live.isNotEmpty() || overlay != null) {
+        if (due.isNotEmpty() || overlay != null) {
             val o = overlay ?: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(
                 width, height,
                 settings = { savedSettings },
@@ -1143,7 +1147,6 @@ class DisplayScreen(
             }
             lastDanmakuPositionSec = positionSec
             due.forEach { o.add(it) }
-            live.forEach { o.add(it) }
             // Always tick expired/expiry logic so TOP/BOTTOM danmaku still disappear after 5s
             // even when paused. Only SCROLL position is frozen during pause.
             o.tick(isPaused)
