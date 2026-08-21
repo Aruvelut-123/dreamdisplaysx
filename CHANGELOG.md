@@ -38,10 +38,6 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
 - Fixed VIP field names (`vipType` → `type`, `vipStatus` → `status`).
 - Downgraded noisy "Seek can't go in place" log to debug.
 
-### Removed
-
-None — this is the first fork release; no removals from a prior release.
-
 ## Server
 
 ### Features
@@ -50,10 +46,6 @@ None — this is the first fork release; no removals from a prior release.
   broadcasts `PlatformCredentials` to all online v2 clients.
 - **Cross-server credential sync**: SQLite/MySQL via `SqlCredentialSyncBackend`.
 - **LuckPerms support**: `dreamdisplayx.login` and `dreamdisplayx.logout` nodes (default OP).
-
-### Removed
-
-None.
 
 # 1.9.2 Release
 
