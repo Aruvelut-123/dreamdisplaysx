@@ -317,17 +317,9 @@ object BilibiliApi {
         return results.mapNotNull { item ->
             val seasonId = item.optLong("season_id") ?: return@mapNotNull null
             val mode = item.optInt("media_mode")
-            val label = accessLabelFor(mode ?: 0, item.optString("index_show"), item.optString("badge"))
+            val label = accessLabelFor(item)
             BilibiliSearchItem(
-                // Use the highlighted `title` (Chinese, full series name) first; fall back to the
-                // English `org_title` only when `title` is missing. `media_name` is a legacy alias.
-                title = stripHighlightTags(
-                    item.optString("title")
-                        ?.takeIf { it.isNotBlank() }
-                        ?: item.optString("org_title")
-                        ?.takeIf { it.isNotBlank() }
-                        ?: item.optString("media_name").orEmpty()
-                ),
+                title = seriesTitle(item),
                 uploader = null,
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),
                 durationSec = null,
@@ -356,13 +348,9 @@ object BilibiliApi {
         return results.mapNotNull { item ->
             val seasonId = item.optLong("season_id") ?: return@mapNotNull null
             val mode = item.optInt("media_mode")
-            val label = accessLabelFor(mode ?: 0, item.optString("index_show"), item.optString("badge"))
+            val label = accessLabelFor(item)
             BilibiliSearchItem(
-                title = stripHighlightTags(
-                    item.optString("org_title")
-                        ?: item.optString("media_name")
-                        ?: item.optString("title").orEmpty()
-                ),
+                title = seriesTitle(item),
                 uploader = null,
                 thumbnailUrl = normalizeThumbnailUrl(item.optString("cover")),
                 durationSec = null,
@@ -379,16 +367,48 @@ object BilibiliApi {
     /** Strips the `<em class="keyword">...</em>` highlight markup BIlibili's search API wraps matches in. */
     private fun stripHighlightTags(title: String): String = title.replace(Regex("</?em[^>]*>"), "")
 
+    /** Any Han (Chinese-script) character, used to pick the localised title below. */
+    private val HAN_CHAR_RE = Regex("[一-鿿]")
+
     /**
-     * Derives a user-facing access label for a bangumi / movie search result from the API's
-     * `media_mode` field: 0 = free (null), 1 = VIP (大会员), 2 = pay-per-view (付费), else falls
-     * back to the `index_show` / `badge` strings Bilibili often provides.
+     * Chooses the localised series/movie title for a bangumi or movie search result. Bilibili returns
+     * two fields that may carry different languages — `title` (the search-highlighted name) and
+     * `org_title` (the original/alternate name). The field holding the query match is often the
+     * English name (e.g. searching "WALL-E" puts "WALL·E" in `title` while `org_title` is
+     * "机器人总动员"), so prefer whichever candidate contains Chinese characters to keep titles in the
+     * user's language.
      */
-    private fun accessLabelFor(mode: Int, indexShow: String?, badge: String?): String? = when (mode) {
-        0 -> null
-        1 -> "vip"
-        2 -> "paid"
-        else -> indexShow?.takeIf { it.isNotBlank() } ?: badge?.takeIf { it.isNotBlank() }
+    private fun seriesTitle(item: JsonObject): String {
+        val candidates = listOf(
+            item.optString("title"),
+            item.optString("org_title"),
+            item.optString("media_name"),
+        ).mapNotNull { it?.let(::stripHighlightTags)?.takeIf { s -> s.isNotBlank() } }
+        return candidates.firstOrNull { HAN_CHAR_RE.containsMatchIn(it) }
+            ?: candidates.firstOrNull()
+            ?: ""
+    }
+
+    /**
+     * Derives a user-facing access marker for a bangumi / movie search result from the API's `badges`
+     * / `display_info` arrays (each entry carries a `text` like "大会员" / "会员特价"). Only returns
+     * a marker for genuinely restricted content:
+     *  - "vip"  for pink "大会员" / "VIP" badges (watchable with a Big Membership),
+     *  - "paid" for yellow pay-per-view badges ("付费" / "会员特价" / "单片购买"),
+     *  - null   otherwise (free, or other badge kinds like "独家" which aren't paywalled here).
+     * `media_mode` is deliberately not used — Bilibili sets it to 2 for both VIP and pay-per-view.
+     */
+    private fun accessLabelFor(item: JsonObject): String? {
+        val badgeTexts = buildList {
+            item.array("badges")?.forEach { e -> (e as? JsonObject)?.optString("text")?.let { add(it) } }
+            item.array("display_info")?.forEach { e -> (e as? JsonObject)?.optString("text")?.let { add(it) } }
+        }
+        val joined = badgeTexts.joinToString(" ")
+        return when {
+            joined.contains("大会员") || joined.contains("VIP") -> "vip"
+            joined.contains("付费") || joined.contains("特价") || joined.contains("购买") || joined.contains("单片") -> "paid"
+            else -> null
+        }
     }
 
     /** BIlibili's search API returns protocol-relative thumbnail URLs (`//i0.hdslb.com/...`). */

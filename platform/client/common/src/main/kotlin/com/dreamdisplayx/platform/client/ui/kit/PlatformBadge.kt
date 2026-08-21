@@ -43,23 +43,23 @@ object PlatformBadge {
     /**
      * The badge for a search-result card, honoring the legacy `isTwitch` / `isCustom` flags too.
      * Bilibili results show a "大会员" (VIP) or "付费" tag instead of the generic platform tag when
-     * they aren't free to watch; free Bilibili videos render with no badge at all.
+     * they aren't free to watch; free Bilibili videos render with no badge at all since this search
+     * is Bilibili-only.
      */
     fun forResult(info: MediaSearchResult): Badge? = when {
         info.isCustom -> CUSTOM
         info.isTwitch -> TWITCH
-        info.platform == MediaPlatform.BILIBILI && info.bilibiliAccess != null -> bilibiliAccessBadge(info.bilibiliAccess)
+        info.platform == MediaPlatform.BILIBILI -> bilibiliAccessBadge(info.bilibiliAccess)
         else -> forPlatform(info.platform)
     }
 
     /**
-     * Maps a Bilibili access marker to a badge: null / unknown → the generic [BILIBILI] tag,
-     * else the VIP or paid plate. Returns null for free results so they show no tag.
+     * Maps a Bilibili access marker to a badge: "vip" → pink plate, "paid" → yellow plate, anything
+     * else (free, or a non-paywalled marker like "独家") → null so no badge is drawn.
      */
     private fun bilibiliAccessBadge(access: String?): Badge? = when (access) {
-        null -> BILIBILI
         "vip" -> VIP
         "paid" -> PAID
-        else -> BILIBILI
+        else -> null
     }
 }
