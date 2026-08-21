@@ -10,6 +10,7 @@ import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonArray
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.security.MessageDigest
@@ -142,11 +143,28 @@ object BilibiliApi {
      * sorted ascending for timed playback.
      */
     fun fetchDanmaku(cid: Long): List<DanmakuEntry> {
+        val all = ArrayList<DanmakuEntry>()
+        // Try the primary V2 API first, which supports multiple segments
+        for (seg in 1..7) {
+            val url = "https://api.bilibili.com/x/v2/dm/list/segment?oid=$cid&segment_index=$seg&type=1"
+            val json = fetchDanmakuJson(url)
+            if (json != null) {
+                val segEntries = parseDanmakuJson(json)
+                if (segEntries.isEmpty()) break // no more segments
+                all += segEntries
+            } else {
+                break
+            }
+        }
+        if (all.isNotEmpty()) {
+            all.sortBy { it.timeSec }
+            logger.info("Danmaku V2 fetched segments={} total={}", all.size)
+            return all
+        }
+        // Fallback: legacy XML endpoint
         val primary = fetchDanmakuXml("https://api.bilibili.com/x/v1/dm/list.so?oid=$cid")
         val entries = primary?.let { parseDanmakuXml(it) }
         if (entries.isNullOrEmpty()) {
-            // The primary endpoint can return an unexpected body (e.g. non-danmaku XML) or an empty
-            // pool; retry the legacy CDN endpoint before reporting no danmaku.
             val fallback = fetchDanmakuXml("https://comment.bilibili.com/$cid.xml")
             return fallback?.let { parseDanmakuXml(it) } ?: emptyList()
         }
@@ -168,6 +186,39 @@ object BilibiliApi {
     }.onFailure { e ->
         logger.warn("Danmaku XML fetch FAILED url={} error={}", url, e.message ?: e::class.java.simpleName)
     }.getOrNull()
+
+    /** Fetches the danmaku JSON segment for [url], or null on failure. */
+    private fun fetchDanmakuJson(url: String): JsonObject? = runCatching {
+        val body = DreamHttpClient.readBytes(
+            url,
+            DreamHttpClient.RequestOptions(
+                headers = headers(),
+                connectTimeoutMs = 10_000,
+                readTimeoutMs = 15_000,
+            ),
+        )
+        DreamJson.compact.parseToJsonElement(body.decodeToString()) as? JsonObject
+    }.onFailure { e ->
+        logger.warn("Danmaku JSON fetch FAILED url={} error={}", url, e.message ?: e::class.java.simpleName)
+    }.getOrNull()
+
+    /** Parses a Bilibili V2 segment JSON response into [DanmakuEntry]s. */
+    private fun parseDanmakuJson(json: JsonObject): List<DanmakuEntry> {
+        if (json.optInt("code") != 0) return emptyList()
+        val data = json.obj("data") ?: return emptyList()
+        val dms = data.array("dms") ?: return emptyList()
+        val entries = ArrayList<DanmakuEntry>()
+        for (dm in dms) {
+            val arr = dm.asJsonArrayOrNull() ?: continue
+            val time = runCatching { (arr[0] as? JsonPrimitive)?.content?.toDouble() }.getOrNull() ?: continue
+            val mode = runCatching { (arr[1] as? JsonPrimitive)?.content?.toInt() }.getOrNull() ?: 1
+            val color = runCatching { (arr[3] as? JsonPrimitive)?.content?.toLong()?.toInt() }.getOrNull() ?: 0xFFFFFF
+            val text = runCatching { (arr[8] as? JsonPrimitive)?.content?.trim() }.getOrNull() ?: continue
+            if (text.isEmpty() || text.length > 200) continue
+            entries += DanmakuEntry(time, text, color, mode)
+        }
+        return entries
+    }
 
     /** Parses a Bilibili danmaku XML document into sorted [DanmakuEntry]s. */
     internal fun parseDanmakuXml(xml: String): List<DanmakuEntry> {
