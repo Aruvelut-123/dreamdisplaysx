@@ -633,11 +633,12 @@ class DisplayMenu private constructor(
         }
         refreshRelatedVideos()
 
-        // When the settings rows overflow, clip their child widgets to the row area so scrolled
-        // controls never draw outside the panel.
-        settings.beginChildClip(g)
+        // Children are drawn first without a scissor so the preview controls (mute, volume, pause,
+        // popout) and the suggestions panel are never clipped. The settings panel's own render()
+        // method already clips its row backgrounds with its own scissor, and renderRow() places
+        // every child widget at the correct scroll position every frame, so off-screen controls
+        // are simply placed outside the visible area rather than leaking.
         drawChildren(g, mouseX, mouseY, partialTick)
-        settings.endChildClip(g)
         //? if <1.21.11 {
         suggestions.redrawSortDropdownOnTop(g, mouseX, mouseY)
         //?}
@@ -800,7 +801,7 @@ class DisplayMenu private constructor(
                     Component.literal(""),
                     tooltipValue(
                         "dreamdisplayx.button.danmaku.tooltip.3",
-                        if (saved.danmakuEnabled) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled",
+                        Component.translatable(if (saved.danmakuEnabled) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled"),
                     ),
                 )
             },

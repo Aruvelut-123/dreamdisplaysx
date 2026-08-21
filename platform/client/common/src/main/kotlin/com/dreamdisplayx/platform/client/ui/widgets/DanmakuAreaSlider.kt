@@ -72,13 +72,6 @@ class DanmakuAreaSlider(
     }
 
     override fun draw(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, partialTick: Float) {
-        // Draw the area indicator: a shaded rectangle proportional to the value
-        val indicatorW = (value * (width - 8)).toInt().coerceAtLeast(0)
-        if (indicatorW > 0) {
-            val indicatorColor = 0x604A90E2.toInt() // translucent accent
-            g.fill(x, y, x + indicatorW, y + height, indicatorColor)
-        }
-
         //? if >=1.21.11 {
         g.blitSprite(RenderPipelines.GUI_TEXTURED, trackSprite(), x, y, width, height)
         g.blitSprite(

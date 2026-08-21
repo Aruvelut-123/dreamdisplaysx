@@ -121,10 +121,10 @@ class DanmakuFilterBar(
         Component.translatable("dreamdisplayx.button.danmaku.filter.tooltip.1"),
         Component.translatable(
             "dreamdisplayx.button.danmaku.filter.tooltip.2",
-            if (states[0]) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled",
-            if (states[1]) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled",
-            if (states[2]) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled",
-            if (states[3]) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled",
+            Component.translatable(if (states[0]) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled"),
+            Component.translatable(if (states[1]) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled"),
+            Component.translatable(if (states[2]) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled"),
+            Component.translatable(if (states[3]) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled"),
         ),
     )
 }
