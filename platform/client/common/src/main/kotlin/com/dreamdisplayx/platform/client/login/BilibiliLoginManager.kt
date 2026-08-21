@@ -60,7 +60,8 @@ object BilibiliLoginManager {
             }
 
             is PollResult.Expired -> {
-                status = "二维码已过期，请点击刷新"
+                status = "二维码已过期，正在自动刷新..."
+                startQrLogin()
                 false
             }
 
