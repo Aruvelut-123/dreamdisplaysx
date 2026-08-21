@@ -118,8 +118,8 @@ class DanmakuOverlay(
         }
         val y = when (kind) {
             Kind.SCROLL -> pickTrack(s.danmakuDisplayArea)
-            Kind.TOP -> areaTop(s.danmakuDisplayArea) + fontPx + pickVerticalTrack(Kind.TOP)
-            Kind.BOTTOM -> areaBottom(s.danmakuDisplayArea) - fontPx - pickVerticalTrack(Kind.BOTTOM)
+            Kind.TOP -> 24 + fontPx + pickVerticalTrack(Kind.TOP)
+            Kind.BOTTOM -> areaBottom(s.danmakuDisplayArea) - 24 - fontPx - pickVerticalTrack(Kind.BOTTOM)
         }
         val speed = when (kind) {
             Kind.SCROLL -> (3f + Math.random().toFloat() * 2f) * s.danmakuSpeed.coerceIn(0.5f, 2f)
@@ -140,6 +140,15 @@ class DanmakuOverlay(
 
     /** Advances scrolling; uploads the frame to GPU. Call once per client tick (main thread). */
     fun tick(paused: Boolean = false) {
+        // If danmaku is globally or per-display disabled, clear any lingering overlay entries.
+        val s = settings()
+        if (!ClientStateManager.config.danmakuEnabled || !s.danmakuEnabled) {
+            if (lines.isNotEmpty()) {
+                lines.clear()
+                dirty = true
+            }
+            return
+        }
         if (lines.isEmpty()) return
         val now = System.currentTimeMillis()
         // Build a new list instead of calling iterator.remove() on a CopyOnWriteArrayList,
