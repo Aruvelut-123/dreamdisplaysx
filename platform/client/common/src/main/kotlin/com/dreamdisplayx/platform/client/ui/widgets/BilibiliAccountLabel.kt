@@ -89,7 +89,7 @@ object BilibiliAccountLabel {
         val avatarSize = fontHeight + 2
         val name = info.nickname
         val nameWidth = font.width(name)
-        val badgeWidth = if (info.isVip) fontHeight else 0
+        val badgeWidth = if (info.isVip) avatarSize else 0
         val gap = 4
         val totalW = avatarSize + gap + nameWidth + (if (badgeWidth > 0) gap + badgeWidth else 0)
         val x = screenWidth - UiTheme.SCREEN_PADDING - totalW
@@ -121,23 +121,24 @@ object BilibiliAccountLabel {
             if (badgeUrl != null) {
                 val tex = Thumbnails.get(badgeUrl)
                 if (tex != null) {
+                    // Scale the badge to match the avatar height, preserving its aspect ratio
                     //? if >=1.21.11 {
-                    g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, tex, badgeX, y, 0f, 0f, badgeWidth, avatarSize, badgeWidth, avatarSize)
+                    g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, tex, badgeX, y, 0f, 0f, avatarSize, avatarSize, avatarSize, avatarSize)
                     //?} else
-                    /*g.blit(tex, badgeX, y, 0f, 0f, badgeWidth, avatarSize, badgeWidth, avatarSize)*/
+                    /*g.blit(tex, badgeX, y, 0f, 0f, avatarSize, avatarSize, avatarSize, avatarSize)*/
                 } else {
                     Thumbnails.request(badgeUrl, badgeUrl)
                     // Draw fallback text while loading
                     val badgeColor = if (info.vipType >= 2) 0xFFFFD700.toInt() else 0xFFFB7299.toInt()
-                    g.fill(badgeX, y, badgeX + badgeWidth, y + avatarSize, badgeColor)
+                    g.fill(badgeX, y, badgeX + avatarSize, y + avatarSize, badgeColor)
                     val vipLabel = if (info.vipType >= 2) "大" else "V"
                     val labelW = font.width(vipLabel)
-                    g.drawText(font, Component.literal(vipLabel), badgeX + (badgeWidth - labelW) / 2,
+                    g.drawText(font, Component.literal(vipLabel), badgeX + (avatarSize - labelW) / 2,
                         y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
                 }
             } else {
                 val badgeColor = if (info.vipType >= 2) 0xFFFFD700.toInt() else 0xFFFB7299.toInt()
-                g.fill(badgeX, y, badgeX + badgeWidth, y + avatarSize, badgeColor)
+                g.fill(badgeX, y, badgeX + avatarSize, y + avatarSize, badgeColor)
                 val vipLabel = if (info.vipType >= 2) "大" else "V"
                 val labelW = font.width(vipLabel)
                 g.drawText(font, Component.literal(vipLabel), badgeX + (badgeWidth - labelW) / 2,

@@ -130,7 +130,10 @@ class DanmakuOverlay(
             speed = speed, kind = kind, bornAtMillis = System.currentTimeMillis(),
             width = textWidth, fontPx = fontPx,
         )
-        if (lines.size > 40) lines.removeAt(0)
+        // Keep the buffer healthy: remove the oldest line when we exceed the cap.
+        // The cap is generous (120) so scroll danmaku have time to cross the screen
+        // before being evicted, and TOP/BOTTOM danmaku can finish their 5-second display.
+        if (lines.size > 120) lines.removeAt(0)
         dirty = true
         if (lines.size == 1) logger.info("Danmaku overlay first line added: {}", msg.text.take(30))
     }

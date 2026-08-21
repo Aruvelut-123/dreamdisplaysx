@@ -90,17 +90,12 @@ class SettingsSection(
         clipLeft = panel.x + UiTheme.PANEL_PADDING_X
         clipRight = panel.right - UiTheme.PANEL_PADDING_X
 
-        // Clip the row drawing to the scrollable area.
-        g.enableScissor(clipLeft, areaTop, clipRight, areaBottom)
-
         var rowY = titleH - scrollOffset
         for (row in rows) {
             rowY += row.extraGapBefore
             renderRow(g, row, innerX, rowY, innerW, labelColW, areaTop, areaBottom)
             rowY += UiTheme.ROW_H + UiTheme.ROW_GAP
         }
-
-        g.disableScissor()
 
         drawScrollbar(g, panel, areaTop, areaBottom, areaH, mouseY)
         placeOwnerActions(panel)
@@ -120,8 +115,7 @@ class SettingsSection(
         val font = Minecraft.getInstance().font
 
         // Always place the control and reset at the correct scroll position so they are never
-        // left at a stale visible position when the row scrolls off-screen. The scissor clip
-        // (applied by the caller) prevents them from leaking outside the row area.
+        // left at a stale visible position when the row scrolls off-screen.
         var rightEdge = x + w
         row.reset.place(UiRect(rightEdge - UiTheme.RESET_W, y, UiTheme.RESET_W, UiTheme.ROW_H))
         rightEdge -= UiTheme.RESET_W + 4
@@ -129,7 +123,7 @@ class SettingsSection(
         row.control.place(UiRect(rightEdge - controlW, y, controlW, UiTheme.ROW_H))
 
         // Rows fully outside the visible area are skipped entirely (their controls are placed above
-        // but clipped by the scissor, so nothing leaks).
+        // but remain outside the visible area, so nothing leaks).
         val visible = y + UiTheme.ROW_H > clipTop && y < clipBottom
         if (!visible) {
             row.labelHover = null
