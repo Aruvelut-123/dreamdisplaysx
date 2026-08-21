@@ -4,103 +4,59 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
 
 ## Highlights
 
-- **Merged upstream 1.9.2**: pull in all upstream changes from Dream Displays 1.9.2
-  (upstream commit `09b19b91`, merged as a second parent; upstream history preserved).
-- **Per-display danmaku settings UI** — new Bilibili-style danmaku controls in the display config menu:
-  opacity, font size, speed, display area (with visual indicator), and type filters (scroll/top/bottom/color).
-  Global on/off toggle in `config.yml` (`danmaku-enabled`), per-display overrides in the settings UI.
+- **Merged upstream 1.9.2**: pull in all upstream changes (upstream commit `09b19b91`).
+- **Per-display danmaku settings** — opacity, font size, speed, display area, type filters.
 - **Global Bilibili login** — single account per server/network, broadcast to all players, OP-only,
   with LuckPerms support and cross-server credential sync (SQLite/MySQL).
-- **Bilibili account info displayed** — avatar, nickname, and VIP badge at display config top-right.
-- **Pause reliability improved** — warm park now works with external-process FFmpeg.
-- **Fork**: renamed mod / plugin to **Dream DisplaysX** (`dreamdisplayx`);
-  built-in Simplified Chinese translations (`zh_cn.json`); Crowdin integration removed.
-- **Bilibili bangumi / movie** URL support (`/bangumi/play/ep<id>` and `/bangumi/play/ss<id>`),
-  plus Bilibili movie / bangumi search results merged into the suggestion grid.
-- **Android support removed** — all Android native builds, CI jobs, and code paths removed.
-- **Screenshare removed** — all screenshare packets, CastManager, and code removed.
+- **Bilibili account info** — avatar, nickname, and VIP badge at display config top-right.
+- **Bilibili bangumi / movie** URL support (`/bangumi/play/ep<id>` and `/ss<id>`).
+- **Pause reliability improved** — warm park works with external-process FFmpeg.
+- **Fork**: renamed mod/plugin to **Dream DisplaysX**; built-in `zh_cn.json`.
 
 ## Client
 
 ### Features
 
-- Added `zh_cn.json` with a full Simplified Chinese translation of the interface.
-- Added Bilibili bangumi / movie playback for `ep` / `ss` URLs.
-- **Bilibili search now covers movies and bangumi** (`media_bangumi` / `pgc` endpoints) in
-  addition to regular videos; results open the matching `ep` / `ss` URL automatically.
-- Added per-display **danmaku settings** (opacity, font size, speed, display area, type filters)
-  in the display config menu, with reset buttons, overriding server defaults per display.
-- Added **Bilibili account label** (avatar, nickname, VIP badge) at the top-right of the display config screen.
-- Added `/dlogoff` command (OP-only, only when logged in) to log out of Bilibili.
-- `/dlogin` is now OP-only and only usable when not logged in.
-- **Android compatibility hardening**:
-  - The FFmpeg download is cached in app-internal storage (`java.io.tmpdir`) instead of the
-    game directory, which sits on `noexec` emulated storage on most launchers.
-  - Android is detected robustly even though `os.name` reads "Linux" under
-    PojavLauncher / FCL / Zalith (env vars, `/system/build.prop`, path fingerprints).
-  - Android 10+ forbids executing arbitrary binaries, so the bundled download is skipped there;
-    the mod falls back to a system `ffmpeg` (PATH / Termux), or accepts a manual override via
-    `-Ddreamdisplayx.ffmpeg.path=<path>` / `DREAMDISPLAYX_FFMPEG_PATH`. Downloaded binaries are
-    verified executable before use, and the CI jar works through the bundled native libav
-    (`dreamdisplayx_lav.so` + FFmpeg shared libs, loaded via dlopen — no exec needed).
-  - Added a **MEDIACODEC** hardware-acceleration backend, used by default on Android.
-- **Quality settings**: removed the 60fps toggle; maximum quality is now capped at 1080p
-  (2160p / 1440p were dropped from the quality ladder). The faster 60fps CDN variants also
-  avoid the previous 403s because their domains are allowed for Referer forwarding now.
+- Per-display danmaku settings (opacity, font size, speed, display area, type filters).
+- Bilibili account label (avatar, nickname, VIP badge with official image).
+- `/dlogoff` command (OP-only); `/dlogin` is now OP-only.
+- `zh_cn.json` with full Simplified Chinese translation.
+- Bilibili bangumi / movie playback (`ep` / `ss` URLs).
+- Bilibili search now covers movies and bangumi in the suggestion grid.
+- Quality capped at 1080p; 60fps toggle and 2160p/1440p tiers removed.
 
 ### Fixes
 
-- **Pause reliability**: `PlaybackSessionManager.suspend()` now always uses `canHoldWarm()` instead of
-  requiring `canPark()` (in-process libav), so pausing works with external-process FFmpeg too.
-- **Bilibili 60fps / CDN streams no longer 403**: the Referer allow-list now covers
-  `mcdn.bilivideo.cn`, `mountaintoys.cn`, `bilivideo.cn` and `szbdyd.com` (was `bilivideo.com`
-  / `hdslb.com` only), so high-quality CDN fetches keep the Referer header.
-- **Danmaku text is HTML-unescaped** (`&lt;` / `&gt;` / `&amp;` … show as `<` `>` `&`) for both
-  live WebSocket messages and timed comments.
-- **Danmaku unsubscribes when the video fails to start**, instead of continuing to load comment
-  data against a dead player.
-- Danmaku overlay stops scrolling while the video is paused, and single-character / short
-  danmaku are measured with the real font metrics (no more oversized pills).
-- Danmaku font size setting now only affects new danmaku — existing messages keep their original size,
-  matching Bilibili's behaviour.
-- Danmaku track spacing now scales dynamically with font size instead of using hardcoded values.
-- SettingsSection scissor clip no longer leaks into the preview panel and suggestions area,
-  fixing the pause button and recommendations being invisible while still clickable.
-- DanmakuFilterBar and danmaku toggle tooltips now properly translate enabled/disabled labels.
-- DanmakuAreaSlider blue indicator fill removed (the slider track sprite already shows state).
-- BilibiliAccountLabel VIP badge now uses the official Bilibili API image URL
-  (`vip.label.img_label_uri_hans_static`) when available, falling back to coloured text.
-- Fixed BilibiliAccountLabel VIP field names (`vipType` → `type`, `vipStatus` → `status`).
-- Downgraded "Seek can't go in place" log from `warn` to `debug` to reduce console noise.
+- Pause reliability: `canHoldWarm()` instead of `canPark()` — works with external FFmpeg.
+- Bilibili 60fps / CDN streams no longer 403 (expanded Referer allow-list).
+- Danmaku text HTML-unescaped (`&lt;` → `<`, etc.).
+- Danmaku font size only affects new messages (like Bilibili).
+- Danmaku track spacing scales with font size.
+- SettingsSection scissor no longer clips preview buttons and suggestions.
+- DanmakuFilterBar and toggle tooltips now properly translate enabled/disabled.
+- VIP badge uses official Bilibili image (`img_label_uri_hans_static`).
+- Fixed VIP field names (`vipType` → `type`, `vipStatus` → `status`).
+- Downgraded noisy "Seek can't go in place" log to debug.
 
-### Removed
+### Removed (from upstream)
 
-- **Android support**: removed all Android native builds, CI jobs (`build-android-natives`), and code
-  paths (OsInfo.isAndroid checks, Termux fallback, androidCacheRoot, etc.).
-- **Client-side screenshare**: removed `/share start` / `/share stop` commands and all related code.
+- **Android support**: all Android native builds, CI jobs, and code paths.
+- **Client-side screenshare**: `/share` commands and all related code.
+- **Crowdin integration**: replaced by built-in `zh_cn.json`.
 
 ## Server
 
 ### Features
 
-- **Global Bilibili login**: single credential per server/network — OP-only `/display login` and
-  `/display logout` commands; Broadcasts `PlatformCredentials` to all online v2 clients.
-- **Cross-server credential sync**: `SqlCredentialSyncBackend` stores encrypted credentials in
-  SQLite/MySQL via Exposed; `CredentialSyncBackend` interface for custom backends.
-- **LuckPerms support**: `dreamdisplayx.login` and `dreamdisplayx.logout` permission nodes,
-  defaulting to OP-only.
-- Android native builds now compile FFmpeg 8.1.x from source with the NDK instead of relying on
-  dead prebuilt artifacts.
+- **Global Bilibili login**: OP-only `/display login` / `/display logout` commands;
+  broadcasts `PlatformCredentials` to all online v2 clients.
+- **Cross-server credential sync**: SQLite/MySQL via `SqlCredentialSyncBackend`.
+- **LuckPerms support**: `dreamdisplayx.login` and `dreamdisplayx.logout` nodes (default OP).
 
-### Improvements
+### Removed (from upstream)
 
-- **Screenshare removed**: all screenshare packets (`ScreenShareStart`, `ScreenShareData`,
-  `ScreenShareStop`, `ScreenShareAck`), `CastManager`, and `CastBuffer` deleted.
-
-### Fixes
-
-- Fixed the CI `required_native_plats` -> `required_native_platforms` output name that would break
-  the "Verify jar native bundle" step.
+- **Screenshare protocol**: all packets (`ScreenShareStart`, `ScreenShareData`,
+  `ScreenShareStop`, `ScreenShareAck`), `CastManager`, and `CastBuffer`.
 
 # 1.9.2 Release
 
