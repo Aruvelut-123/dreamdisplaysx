@@ -3,6 +3,7 @@ package com.dreamdisplayx.platform.client.login
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
 import com.dreamdisplayx.platform.client.ui.kit.UiScreenBase
+import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
@@ -38,10 +39,9 @@ class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
         BilibiliLoginManager.startQrLogin()
         refreshQrMatrix()
         BilibiliLoginManager.onLoginSuccess = {
-            //? if >=26.2 {
-            Minecraft.getInstance().setScreenAndShow(null)
-            //?} else
-            /*Minecraft.getInstance().setScreen(null)*/
+            Minecraft.getInstance().execute {
+                MinecraftScreenUtil.setScreen(Minecraft.getInstance(), null)
+            }
         }
     }
 
