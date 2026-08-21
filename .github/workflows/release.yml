@@ -1,12 +1,22 @@
-# Publishing pipeline. Runs only for explicit release tags or a manual maintainer dispatch.
+# Publishing pipeline. Runs only on a manual workflow_dispatch; the publish
+# type (release / preview / dev) is chosen directly from the `build_type` input.
 
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: >-
+          Publish type. release = stable public release, preview = alpha
+          pre-release, dev = build artifacts only (never published).
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - preview
+          - dev
 
 concurrency:
   group: release-${{ github.ref }}
@@ -20,6 +30,7 @@ jobs:
     uses: ./.github/workflows/_build.yml
     with:
       pull_request: false
+      build_type: ${{ inputs.build_type }}
 
   github-prerelease:
     name: Publish GitHub pre-release
@@ -55,8 +66,8 @@ jobs:
           path: build/libs
           merge-multiple: true
 
-      - name: Extract preview changelog
-        if: needs.build.outputs.is_preview == 'true'
+      - name: Extract changelog for pre-release
+        if: needs.build.outputs.is_dev == 'true' || needs.build.outputs.is_preview == 'true'
         run: |
           python3 - <<'EOF'
           import re
@@ -65,8 +76,12 @@ jobs:
           with open("CHANGELOG.md") as f:
               content = f.read()
 
-          pretty_version = "${{ needs.build.outputs.pretty_version }}"
-          pattern = rf"^# {re.escape(pretty_version)}\s*\n(.*?)(?=\n# \S|\Z)"
+          # Match by the version's numeric trunk (e.g. "1.9.3.1"), so the same CHANGELOG entry is
+          # used whether this dispatch is a dev, preview, or release build of that version, and a
+          # "-dev" / "-preview.N" suffix in gradle.properties still finds the matching heading.
+          # The (?![\d.]) guard stops "1.9.3" from matching the "1.9.3.1" heading.
+          version = "${{ needs.build.outputs.version }}".split("-")[0]
+          pattern = rf"^# {re.escape(version)}(?![\d.])\s+(?:[^\n]*)\n(.*?)(?=\n# \S|\Z)"
           match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
 
           if not match:
@@ -101,7 +116,7 @@ jobs:
         run: |
           TAG="v${{ needs.build.outputs.version }}"
           gh release delete "$TAG" --repo "${{ github.repository }}" --yes 2>/dev/null || true
-          gh release create "$TAG" --repo "${{ github.repository }}" --title "${{ needs.build.outputs.pretty_version }}" --prerelease --notes "" build/libs/dreamdisplayx-*.jar
+          gh release create "$TAG" --repo "${{ github.repository }}" --title "${{ needs.build.outputs.pretty_version }}" --prerelease --notes-file changelog.md build/libs/dreamdisplayx-*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -173,11 +188,15 @@ jobs:
           with open("CHANGELOG.md") as f:
               content = f.read()
 
-          version = "${{ needs.build.outputs.version }}"
-          pretty_version = "${{ needs.build.outputs.pretty_version }}"
+          # Use the numeric trunk (strip any -dev / -preview.N suffix) so the CHANGELOG heading
+          # for that version is found regardless of the chosen build type.
+          version = "${{ needs.build.outputs.version }}".split("-")[0]
           is_preview = "${{ needs.build.outputs.is_preview }}" == "true"
 
-          pattern = rf"^# {re.escape(pretty_version)}\s*\n(.*?)(?=\n# \S|\Z)"
+          # Match by the version number alone (e.g. "1.9.3.1"), so the same CHANGELOG entry is used
+          # regardless of whether this dispatch is a dev, preview, or release build. The (?![\d.])
+          # guard stops "1.9.3" from matching the "1.9.3.1" heading.
+          pattern = rf"^# {re.escape(version)}(?![\d.])\s+(?:[^\n]*)\n(.*?)(?=\n# \S|\Z)"
           match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
 
           if not match:
