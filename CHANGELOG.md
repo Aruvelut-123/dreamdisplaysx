@@ -4,6 +4,28 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 
 ## Highlights
 
+- **QR login auto-close** — the login screen now closes itself once the QR scan completes.
+- **QR logout reliability** — `/dlogoff` now reliably deletes the saved server-side credential, even when the integrated server is on 1.21.1.
+- **Danmaku overlay cleanup** — disabling a display's danmaku toggle now clears the overlay immediately so stale lines don't stay stuck on screen.
+- **Danmaku UI tuning** — danmaku display area is now fixed to 25 / 50 / 75 / 100 %, and font size is now small / medium / large (0.5x / 1x / 1.5x).
+
+## Client
+
+### Features
+
+- QR login screen auto-closes on successful login.
+- Danmaku display area selector now uses fixed presets: 25 / 50 / 75 / 100 %.
+- Danmaku font size selector now uses fixed presets: small (0.5x) / medium (1x) / large (1.5x).
+
+### Fixes
+
+- `/dlogoff` now sends the server logout command on all supported versions; singleplayer worlds no longer re-remember the Bilibili account after logout.
+- Disabling danmaku on a single display now immediately clears any visible overlay instead of leaving stale lines on screen.
+
+Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
+
+## Highlights
+
 - **Merged upstream 1.9.3**: pull in all upstream changes (upstream commit `622e4278`).
 - **Per-display danmaku settings** — opacity, font size, speed, display area, type filters.
 - **Global Bilibili login** — single account per server/network, broadcast to all players, OP-only,

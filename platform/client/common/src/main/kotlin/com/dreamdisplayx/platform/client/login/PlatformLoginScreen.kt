@@ -17,7 +17,7 @@ import kotlin.math.min
  * Client-side Bilibili login screen: QR-code login (scan with the mobile app).
  * Auto-scales to fit the window. No refresh button; QR auto-refreshes on expiry.
  * On success the `SESSDATA` is handed to [BilibiliLoginManager], which sends it to the
- * server for encrypted storage and playback use.
+ * server for encrypted storage and playback use, and this screen closes itself.
  */
 class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
     private var qrMatrix: BitMatrix? = null
@@ -37,6 +37,11 @@ class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
     init {
         BilibiliLoginManager.startQrLogin()
         refreshQrMatrix()
+        BilibiliLoginManager.onLoginSuccess = {
+            Minecraft.getInstance().execute {
+                Minecraft.getInstance().setScreen(null)
+            }
+        }
     }
 
     override fun minContentSize(): Pair<Int, Int>? = 340 to 320

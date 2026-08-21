@@ -85,9 +85,9 @@ class DisplayMenu private constructor(
     // ── Danmaku settings widgets ──────────────────────────────────────────────────────────────────
     private lateinit var danmakuToggle: ModeSlider<Boolean>
     private lateinit var danmakuOpacity: ValueSlider
-    private lateinit var danmakuFontSize: ValueSlider
+    private lateinit var danmakuFontSize: ModeSlider<Float>
     private lateinit var danmakuSpeed: ValueSlider
-    private lateinit var danmakuArea: DanmakuAreaSlider
+    private lateinit var danmakuArea: ModeSlider<Float>
     private lateinit var danmakuFilters: DanmakuFilterBar
 
     private var lastSuggestedVideoId: String? = null
@@ -385,13 +385,17 @@ class DisplayMenu private constructor(
             })
         danmakuOpacity.visibleWhen = notErrored
 
+        // Danmaku font size — three fixed presets: small (0.5x), medium (1x), large (1.5x).
+        // Danmaku font size — three fixed presets: small (0.5x), medium (1x), large (1.5x).
         danmakuFontSize = addUi(
-            ValueSlider(
-                initial = fontFraction(saved.danmakuFontSize),
-                label = { Component.literal("${((0.5 + it * 1.5) * 10).roundToInt() / 10.0}x") },
-                step = 1.0 / 30, // 0.05 of the 0.5–2.0 range
+            ModeSlider(
+                modes = DANMAKU_FONT_SIZES,
+                initial = snapTo(DANMAKU_FONT_SIZES, saved.danmakuFontSize, 1.0f),
+                current = { snapTo(DANMAKU_FONT_SIZES, saved.danmakuFontSize, 1.0f) },
+                enabledFor = { true },
+                label = { v -> Component.literal(danmakuSizeLabel(v)) },
             ) { v ->
-                saved.danmakuFontSize = (0.5f + v.toFloat() * 1.5f)
+                saved.danmakuFontSize = v
                 ds.saveDanmakuSettings()
             })
         danmakuFontSize.visibleWhen = notErrored
@@ -407,13 +411,16 @@ class DisplayMenu private constructor(
             })
         danmakuSpeed.visibleWhen = notErrored
 
+        // Danmaku display area — step through fixed presets only: 25 / 50 / 75 / 100 (%).
         danmakuArea = addUi(
-            DanmakuAreaSlider(
-                initial = saved.danmakuDisplayArea.toDouble().coerceIn(0.0, 1.0),
-                label = { Component.literal("${floor(it * 100).toInt()}%") },
-                step = 0.05,
+            ModeSlider(
+                modes = DANMAKU_AREAS,
+                initial = snapTo(DANMAKU_AREAS, saved.danmakuDisplayArea, 0.5f),
+                current = { snapTo(DANMAKU_AREAS, saved.danmakuDisplayArea, 0.5f) },
+                enabledFor = { true },
+                label = { v -> Component.literal("${(v * 100).roundToInt()}%") },
             ) { v ->
-                saved.danmakuDisplayArea = v.toFloat()
+                saved.danmakuDisplayArea = v
                 ds.saveDanmakuSettings()
             })
         danmakuArea.visibleWhen = notErrored
@@ -745,7 +752,7 @@ class DisplayMenu private constructor(
 
         val fontSizeReset = addUi(IconButton("refresh") {
             saved.danmakuFontSize = 1.0f
-            danmakuFontSize.value = fontFraction(1.0f)
+            danmakuFontSize.syncToCurrent()
             ds.saveDanmakuSettings()
         })
         fontSizeReset.enabledWhen = { abs(saved.danmakuFontSize - 1.0f) > 0.01f }
@@ -761,7 +768,7 @@ class DisplayMenu private constructor(
 
         val areaReset = addUi(IconButton("refresh") {
             saved.danmakuDisplayArea = 0.5f
-            danmakuArea.value = 0.5
+            danmakuArea.syncToCurrent()
             ds.saveDanmakuSettings()
         })
         areaReset.enabledWhen = { abs(saved.danmakuDisplayArea - 0.5f) > 0.01f }
@@ -907,6 +914,23 @@ class DisplayMenu private constructor(
 
         /** The three tiers exposed by the 3D audio slider; BASIC stays an internal-only engine step. */
         private val AUDIO_3D_MODES = listOf(AcousticQuality.OFF, AcousticQuality.ADVANCED, AcousticQuality.ULTRA)
+
+        /** Fixed danmaku font-size presets (as display multipliers): small / medium / large. */
+        private val DANMAKU_FONT_SIZES = listOf(0.5f, 1.0f, 1.5f)
+
+        /** Fixed danmaku display-area presets as fractions of the display height: 25 / 50 / 75 / 100 %. */
+        private val DANMAKU_AREAS = listOf(0.25f, 0.5f, 0.75f, 1.0f)
+
+        /** Human label for a danmaku font-size preset. */
+        private fun danmakuSizeLabel(size: Float): String = when (size) {
+            0.5f -> "小 (0.5x)"
+            1.5f -> "大 (1.5x)"
+            else -> "中 (1x)"
+        }
+
+        /** Snaps [value] to the nearest entry in [presets]; falls back to [defaultV] if empty. */
+        private fun snapTo(presets: List<Float>, value: Float, defaultV: Float): Float =
+            presets.minByOrNull { kotlin.math.abs(it - value) } ?: defaultV
 
         /** Factory default the 3D audio row's reset button restores. */
         private val AUDIO_3D_DEFAULT = AcousticQuality.ADVANCED

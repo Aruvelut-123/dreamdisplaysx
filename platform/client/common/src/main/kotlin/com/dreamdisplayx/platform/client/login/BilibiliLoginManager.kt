@@ -35,6 +35,10 @@ object BilibiliLoginManager {
     @Volatile
     private var _qrKey: String? = null
 
+    /** Called on the client thread when login completes successfully; the screen can close itself. */
+    @Volatile
+    var onLoginSuccess: (() -> Unit)? = null
+
     /** Starts a QR-code login session. */
     fun startQrLogin() {
         loggedIn = false
@@ -87,8 +91,12 @@ object BilibiliLoginManager {
         loggedIn = false
         _qrKey = null
         qrContent = null
+        // Clear local session state so the account is fully forgotten on this client too,
+        // even if the server command is somehow not delivered.
+        com.dreamdisplayx.media.source.bilibili.BilibiliAuth.refreshToken = ""
+        com.dreamdisplayx.platform.client.managers.ClientStateManager.bilibiliSessdata = ""
         sendServerCommand("display logout bilibili")
-        status = "已退出登录"
+        status = "正在退出登录..." // overwritten by the server response / client clear
     }
 
     private fun completeLogin(sessdata: String, refreshToken: String = "") {
@@ -102,13 +110,15 @@ object BilibiliLoginManager {
         // which echoes back the credential and sets BilibiliApi.cookie locally.
         status = "登录成功！凭据已加密保存到服务器"
         logger.info("Bilibili login succeeded; SESSDATA sent to the server (refresh token included={}).", refreshToken.isNotEmpty())
+        // Close the login screen on the client thread.
+        onLoginSuccess?.invoke()
     }
 
     private fun sendServerCommand(command: String) {
+        // All supported versions expose `connection.sendCommand(String)` for issuing a server
+        // command from the client, including on a singleplayer integrated server. Guard on the
+        // connection being non-null.
         val connection = Minecraft.getInstance().connection ?: return
-        //? if >=26 {
         connection.sendCommand(command)
-        //?} else
-        /*connection.sendCommand(command)*/
     }
 }

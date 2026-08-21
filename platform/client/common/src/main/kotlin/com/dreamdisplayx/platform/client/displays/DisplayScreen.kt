@@ -1113,14 +1113,17 @@ class DisplayScreen(
 
     /** Advances the Bilibili danmaku overlay (client tick, main thread). */
     private fun advanceDanmaku() {
-        // Global client toggle: when disabled, skip danmaku entirely
-        if (!com.dreamdisplayx.platform.client.managers.ClientStateManager.config.danmakuEnabled) {
+        // Global client toggle OR per-display toggle: when either is disabled, clear any lingering
+        // overlay and skip danmaku entirely so stale lines don't stay stuck on screen.
+        if (!com.dreamdisplayx.platform.client.managers.ClientStateManager.config.danmakuEnabled ||
+            !savedSettings.danmakuEnabled
+        ) {
             danmakuOverlay?.dispose()
             danmakuOverlay = null
             lastDanmakuPositionSec = -1.0
             return
         }
-        // Live streams: clear any lingering overlay and skip danmaku entirely.
+        // Live screens: clear any lingering overlay and skip over danmaku entirely.
         if (isLive) {
             danmakuOverlay?.clear()
             return
