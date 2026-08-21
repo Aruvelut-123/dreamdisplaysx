@@ -1,10 +1,10 @@
-# 1.9.2.1 Release
+# 1.9.3.1 Release
 
-Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
+Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 
 ## Highlights
 
-- **Merged upstream 1.9.2**: pull in all upstream changes (upstream commit `09b19b91`).
+- **Merged upstream 1.9.3**: pull in all upstream changes (upstream commit `622e4278`).
 - **Per-display danmaku settings** — opacity, font size, speed, display area, type filters.
 - **Global Bilibili login** — single account per server/network, broadcast to all players, OP-only,
   with LuckPerms support and cross-server credential sync (SQLite/MySQL).
@@ -39,6 +39,10 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
 - Downgraded noisy "Seek can't go in place" log to debug.
 - Bilibili VOD danmaku now uses V2 segment API (`/x/v2/dm/list/segment`) for more complete danmaku coverage.
 - Fixed Bilibili danmaku JSON parsing compilation errors in segment API implementation.
+- TOP/BOTTOM danmaku padding now aligns with SCROLL padding (uses 24px top margin).
+- Danmaku overlay clears when toggled off or when a live stream is loaded.
+- Restored recommendations panel size (was compressed by danmaku settings rows).
+- Fixed SettingsSection areaBottom and owner-action Y placement using wrong padding constant.
 
 ## Server
 
@@ -48,6 +52,37 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
   broadcasts `PlatformCredentials` to all online v2 clients.
 - **Cross-server credential sync**: SQLite/MySQL via `SqlCredentialSyncBackend`.
 - **LuckPerms support**: `dreamdisplayx.login` and `dreamdisplayx.logout` nodes (default OP).
+
+# 1.9.3 Release
+
+## Highlights
+
+- Hotfix: fixed displays being visible through blocks and losing their fog
+- Fixed "Couldn't place player in world" error on some `Fabric` / `NeoForge` servers
+- Live streams fixes
+
+## Client
+
+### Improvements
+
+- Enlarged default Picture-in-Picture mode from 25% to 33% of screen width
+- Improved shader support (now displays use shader's fog)
+- Update `yt-dlp` binary every day instead of once per weak
+- Shortened the drop-out when a live stream stops serving segments
+- Bumped `NewPipeExtractor` version
+
+### Fixes
+
+- Fixed displays being visible through blocks and losing their fog
+- Fixed live streams jittering in `Synced` / `Broadcast` playback mode ([#191](https://github.com/arnodoelinger/dreamdisplays/issues/191))
+- Keep live streams playing past the first manifest and stop timeline drift correction on them ([#191](https://github.com/arnodoelinger/dreamdisplays/issues/191))
+
+## Server
+
+### Fixes
+
+- Fixed "Couldn't place player in world" error on some `Fabric` / `NeoForge` servers
+>>>>>>> upstream/main
 
 # 1.9.2 Release
 

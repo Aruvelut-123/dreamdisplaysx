@@ -138,23 +138,23 @@ Every code change MUST be followed by ALL of the below before the task is consid
 - `release.yml` — Release pipeline (dev/preview/release)
 
 ### Version Format
-- **Version in `gradle.properties`** always has `-dev` suffix (e.g. `1.9.2.1-dev`), matching upstream convention
+- **Version in `gradle.properties`** always has `-dev` suffix (e.g. `1.9.3.1-dev`), matching upstream convention
 - CI workflow auto-detects version type from the version string:
-  - `1.9.2.1-dev` → **Developer** (pre-release)
-  - `1.9.2.1-preview.1` → **Preview 1** (pre-release)
-  - `1.9.2.1` → **Release** (full release)
-- `pretty_version` output: `1.9.2.1 Developer` / `1.9.2.1 Preview 1` / `1.9.2.1 Release`
-- GitHub Release tag: `v1.9.2.1` (no `-dev` suffix in tag)
+  - `1.9.3.1-dev` → **Developer** (pre-release)
+  - `1.9.3.1-preview.1` → **Preview 1** (pre-release)
+  - `1.9.3.1` → **Release** (full release)
+- `pretty_version` output: `1.9.3.1 Developer` / `1.9.3.1 Preview 1` / `1.9.3.1 Release`
+- GitHub Release tag: `v1.9.3.1` (no `-dev` suffix in tag)
 
 ### CHANGELOG Rules
-- **Title** must include "Release" suffix: `# 1.9.2.1 Release` (even for dev/preview entries)
+- **Title** must include "Release" suffix: `# 1.9.3.1 Release` (even for dev/preview entries)
 - Never split a version into multiple sections — all entries for one version go under one `#`
 - When based on an upstream version, upstream's original changelog goes in a **separate section below**:
   ```
-  # 1.9.2.1 Release
+  # 1.9.3.1 Release
   ...our fork's changes...
 
-  # 1.9.2 Release
+  # 1.9.3 Release
   ...upstream's original changelog...
   ```
 - Never merge upstream changelog into our version's section
