@@ -633,12 +633,13 @@ class DisplayMenu private constructor(
         }
         refreshRelatedVideos()
 
-        // Children are drawn first without a scissor so the preview controls (mute, volume, pause,
-        // popout) and the suggestions panel are never clipped. The settings panel's own render()
-        // method already clips its row backgrounds with its own scissor, and renderRow() places
-        // every child widget at the correct scroll position every frame, so off-screen controls
-        // are simply placed outside the visible area rather than leaking.
+        // Clip the settings child widgets (sliders, buttons) to the settings row area so scrolled
+        // controls are cut off at the panel edge as intended. The scissor covers only the settings
+        // panel's row band (x: clipLeft..clipRight, y: areaTop..areaBottom); the preview controls
+        // sit above it and the suggestions panel sits to the right, so neither is affected.
+        settings.beginChildClip(g)
         drawChildren(g, mouseX, mouseY, partialTick)
+        settings.endChildClip(g)
         //? if <1.21.11 {
         suggestions.redrawSortDropdownOnTop(g, mouseX, mouseY)
         //?}

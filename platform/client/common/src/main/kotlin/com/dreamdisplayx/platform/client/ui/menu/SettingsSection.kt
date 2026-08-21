@@ -74,8 +74,7 @@ class SettingsSection(
         val titleH = panel.y + UiTheme.PANEL_PADDING_Y + font.lineHeight + 6
 
         // Reserve a shared label column as wide as the widest label so every control gets the same
-        // width and left edge, instead of each being squeezed by its own label length (which made
-        // the sliders visibly different widths from row to row).
+        // width and left edge, instead of each being squeezed by its own label length.
         val labelColW = rows.maxOf { font.width(Component.translatable(it.labelKey)) }
 
         // Row area spans from below the title up to the owner-action row at the bottom.
