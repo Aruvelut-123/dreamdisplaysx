@@ -38,11 +38,9 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
 - Fixed VIP field names (`vipType` → `type`, `vipStatus` → `status`).
 - Downgraded noisy "Seek can't go in place" log to debug.
 
-### Removed (from upstream)
+### Removed
 
-- **Android support**: all Android native builds, CI jobs, and code paths.
-- **Client-side screenshare**: `/share` commands and all related code.
-- **Crowdin integration**: replaced by built-in `zh_cn.json`.
+None — this is the first fork release; no removals from a prior release.
 
 ## Server
 
@@ -53,10 +51,9 @@ Based on Dream Displays 1.9.2 (https://github.com/arnodoelinger/dreamdisplays).
 - **Cross-server credential sync**: SQLite/MySQL via `SqlCredentialSyncBackend`.
 - **LuckPerms support**: `dreamdisplayx.login` and `dreamdisplayx.logout` nodes (default OP).
 
-### Removed (from upstream)
+### Removed
 
-- **Screenshare protocol**: all packets (`ScreenShareStart`, `ScreenShareData`,
-  `ScreenShareStop`, `ScreenShareAck`), `CastManager`, and `CastBuffer`.
+None.
 
 # 1.9.2 Release
 
