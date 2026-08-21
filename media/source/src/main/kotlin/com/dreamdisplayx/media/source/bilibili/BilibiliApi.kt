@@ -143,26 +143,8 @@ object BilibiliApi {
      * sorted ascending for timed playback.
      */
     fun fetchDanmaku(cid: Long): List<DanmakuEntry> {
-        // Try segmented XML first, which is the same format the legacy endpoint uses
-        // but fetched in chunks; this avoids the V2 JSON 404s we saw for some cids.
-        val segAll = ArrayList<DanmakuEntry>()
-        for (seg in 1..7) {
-            val url = "https://api.bilibili.com/x/v2/dm/list/seg.so?oid=$cid&type=1&segment_index=$seg"
-            val xml = fetchDanmakuXml(url)
-            if (xml != null) {
-                val segEntries = parseDanmakuXml(xml)
-                if (segEntries.isEmpty()) break // no more segments
-                segAll += segEntries
-            } else {
-                break
-            }
-        }
-        if (segAll.isNotEmpty()) {
-            segAll.sortBy { it.timeSec }
-            logger.info("Danmaku XML segments fetched segments={} total={}", segAll.size)
-            return segAll
-        }
-        // Fallback: legacy full XML endpoint
+        // Note: /x/v2/dm/list/seg.so returns a binary-protocol payload, not XML/JSON,
+        // so we skip it here and fall back to the legacy XML endpoints which we can parse.
         val primary = fetchDanmakuXml("https://api.bilibili.com/x/v1/dm/list.so?oid=$cid")
         val entries = primary?.let { parseDanmakuXml(it) }
         if (entries.isNullOrEmpty()) {
@@ -224,7 +206,7 @@ object BilibiliApi {
     /** Parses a Bilibili danmaku XML document into sorted [DanmakuEntry]s. */
     internal fun parseDanmakuXml(xml: String): List<DanmakuEntry> {
         if (xml.isBlank() || !xml.contains("<d ")) {
-            logger.warn("Danmaku XML parse skipped: blank={} hasDTag={}", xml.isBlank(), xml.contains("<d "))
+            logger.warn("Danmaku XML parse skipped: blank={} hasDTag={} preview={}", xml.isBlank(), xml.contains("<d "), xml.take(200))
             return emptyList()
         }
         val entries = ArrayList<DanmakuEntry>()
