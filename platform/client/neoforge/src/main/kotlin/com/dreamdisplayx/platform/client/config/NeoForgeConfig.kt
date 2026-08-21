@@ -22,7 +22,6 @@ object NeoForgeConfig {
     lateinit var defaultDistance: ModConfigSpec.IntValue
     lateinit var defaultDisplayVolume: ModConfigSpec.DoubleValue
     lateinit var displaysEnabled: ModConfigSpec.BooleanValue
-    lateinit var danmakuEnabled: ModConfigSpec.BooleanValue
     lateinit var ytdlpCookieSource: ModConfigSpec.ConfigValue<String>
     lateinit var ytdlpProxy: ModConfigSpec.ConfigValue<String>
     lateinit var useHwAccel: ModConfigSpec.BooleanValue
@@ -40,8 +39,6 @@ object NeoForgeConfig {
             .defineInRange("default_display_volume", 0.5, 0.0, 1.0)
         displaysEnabled = builder.comment("Whether displays are enabled at all.")
             .define("displays_enabled", true)
-        danmakuEnabled = builder.comment("Global master toggle for Bilibili danmaku.")
-            .define("danmaku_enabled", true)
         ytdlpCookieSource = builder.comment("Browser to import yt-dlp cookies from, or NONE.")
             .define("ytdlp_cookies_from_browser", "NONE")
         ytdlpProxy = builder.comment("Proxy URL passed to yt-dlp, or empty for a direct connection.")
@@ -72,7 +69,6 @@ object NeoForgeConfig {
         config.defaultDistance = defaultDistance.get()
         config.defaultDisplayVolume = defaultDisplayVolume.get()
         config.displaysEnabled = displaysEnabled.get()
-        config.danmakuEnabled = danmakuEnabled.get()
         ytdlpCookieSource.get().let { config.ytdlpCookieSource = com.dreamdisplayx.media.source.youtube.cookie.CookieSource.fromConfig(it) ?: config.ytdlpCookieSource }
         config.ytdlpProxy = ytdlpProxy.get()
         config.useHwAccel = useHwAccel.get()

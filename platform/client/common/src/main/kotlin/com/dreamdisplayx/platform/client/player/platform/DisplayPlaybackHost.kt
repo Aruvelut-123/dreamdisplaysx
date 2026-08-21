@@ -42,14 +42,6 @@ class DisplayPlaybackHost(private val screen: DisplayScreen) : PlaybackHost {
         get() = screen.mediaError
         set(value) {
             screen.mediaError = value
-            // A playback failure (e.g. FFmpeg cannot start) breaks the danmaku timeline too: detach
-            // the danmaku subscription so the room/list does not keep loading without a video. It is
-            // re-subscribed on the next successful video swap via `syncDanmaku`.
-            if (value != null) {
-                com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(
-                    com.dreamdisplayx.api.display.model.property.DisplayId(screen.uuid)
-                )
-            }
         }
 
     /** Notifies the screen that a user seek completed (emits the intent upstream). */

@@ -35,9 +35,6 @@ class Config(private val baseDir: File) {
     /** Whether displays are enabled at all. */
     var displaysEnabled: Boolean = true
 
-    /** Global master toggle for Bilibili danmaku rendering; when false, no danmaku is drawn anywhere. */
-    var danmakuEnabled: Boolean = true
-
     /** Browser to import `yt-dlp` cookies from, or [CookieSource.NONE] to disable. */
     var ytdlpCookieSource: CookieSource = CookieSource.NONE
 
@@ -119,7 +116,6 @@ class Config(private val baseDir: File) {
         data["default-render-distance"]?.toIntOrNull()?.let { defaultDistance = ((it / 16.0).roundToInt().coerceIn(2, 12)) * 16 }
         data["default-default-display-volume"]?.toDoubleOrNull()?.let { defaultDisplayVolume = it }
         data["displays-enabled"]?.toBooleanStrictOrNull()?.let { displaysEnabled = it }
-        data["danmaku-enabled"]?.toBooleanStrictOrNull()?.let { danmakuEnabled = it }
         data["ytdlp-cookies-from-browser"]?.let { CookieSource.fromConfig(it)?.let { c -> ytdlpCookieSource = c } }
         data["ytdlp-proxy"]?.let { ytdlpProxy = it }
         data["use-hw-accel"]?.toBooleanStrictOrNull()?.let { useHwAccel = it }
@@ -141,7 +137,6 @@ class Config(private val baseDir: File) {
         }
         t?.getDouble("default-display-volume")?.let { defaultDisplayVolume = it }
         displaysEnabled = t?.getBoolean("displays-enabled") ?: displaysEnabled
-        danmakuEnabled = t?.getBoolean("danmaku-enabled") ?: danmakuEnabled
         t?.getString("ytdlp-cookies-from-browser")?.let { CookieSource.fromConfig(it)?.let { c -> ytdlpCookieSource = c } }
         t?.getString("ytdlp-proxy")?.let { ytdlpProxy = it }
         useHwAccel = t?.getBoolean("use-hw-accel") ?: useHwAccel
@@ -168,13 +163,6 @@ class Config(private val baseDir: File) {
             ConfigEntryType.BOOLEAN,
             get = { displaysEnabled },
             apply = { displaysEnabled = it; save() },
-        ),
-        ConfigEntry(
-            "danmaku-enabled", "Danmaku enabled",
-            "Global master toggle for Bilibili danmaku rendering; when false, no danmaku is drawn anywhere.",
-            ConfigEntryType.BOOLEAN,
-            get = { danmakuEnabled },
-            apply = { danmakuEnabled = it; save() },
         ),
         ConfigEntry(
             "prefer-fps60", "Prefer 60fps",
@@ -252,7 +240,6 @@ class Config(private val baseDir: File) {
             appendLine("default-render-distance = $defaultDistance")
             appendLine("default-display-volume = $defaultDisplayVolume")
             appendLine("displays-enabled = $displaysEnabled")
-            appendLine("danmaku-enabled = $danmakuEnabled")
             appendLine("ytdlp-cookies-from-browser = \"${tomlQuote(ytdlpCookieSource.configToken)}\"")
             appendLine("ytdlp-proxy = \"${tomlQuote(ytdlpProxy)}\"")
             appendLine("use-hw-accel = $useHwAccel")

@@ -49,35 +49,6 @@ data class ClientDisplaySettings(
 
     /** Whether the 3D acoustics engine applies to this display; false forces the legacy distance-gain-only path. */
     var acousticsEnabled: Boolean = true,
-
-    // ── Danmaku settings ──────────────────────────────────────────────────────────────────────────
-
-    /** Whether danmaku (bullet comments) is enabled for this display. */
-    var danmakuEnabled: Boolean = true,
-
-    /** Danmaku opacity in the range [0.0, 1.0]. 0.0 = fully transparent, 1.0 = fully opaque. */
-    var danmakuOpacity: Float = 0.8f,
-
-    /** Danmaku font size multiplier in the range [0.5, 2.0]. 1.0 = default. */
-    var danmakuFontSize: Float = 1.0f,
-
-    /** Danmaku scroll speed multiplier in the range [0.5, 2.0]. 1.0 = default. */
-    var danmakuSpeed: Float = 1.0f,
-
-    /** Fraction of the display height used for danmaku, in the range [0.0, 1.0]. 0.5 = bottom half. */
-    var danmakuDisplayArea: Float = 0.5f,
-
-    /** Whether scrolling danmaku (mode 1/2/3) is shown. */
-    var danmakuFilterScroll: Boolean = true,
-
-    /** Whether top-fixed danmaku (mode 5) is shown. */
-    var danmakuFilterTop: Boolean = true,
-
-    /** Whether bottom-fixed danmaku (mode 4) is shown. */
-    var danmakuFilterBottom: Boolean = true,
-
-    /** Whether coloured danmaku is shown. */
-    var danmakuFilterColor: Boolean = true,
 ) {
 
     companion object {

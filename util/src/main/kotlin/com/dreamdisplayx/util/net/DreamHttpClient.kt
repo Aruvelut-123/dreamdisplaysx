@@ -361,7 +361,7 @@ object DreamHttpClient {
 
     /**
      * Opens an RFC 1951 raw-deflate stream (the format most servers mean by "deflate", including
-     * Bilibili's danmaku endpoint), falling back to the zlib-wrapped variant (RFC 1950) when the
+     * several Bilibili endpoints), falling back to the zlib-wrapped variant (RFC 1950) when the
      * payload carries a zlib header. HTTP clients disagree over which one `Content-Encoding: deflate`
      * identifies, so sniff the first bytes instead of guessing.
      */

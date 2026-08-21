@@ -138,15 +138,6 @@ class DisplayScreen(
     /** 3D acoustics engine (directivity, occlusion, reverb); false = legacy distance-gain only. */
     var acousticsEnabled: Boolean = savedSettings.acousticsEnabled
 
-    /** Whether danmaku (bullet comments) is enabled for this display. */
-    var danmakuEnabled: Boolean = savedSettings.danmakuEnabled
-        set(value) {
-            field = value
-            savedSettings.danmakuEnabled = value
-            ClientSettingsStore.save()
-            DisplayRegistry.recordScreen(this)
-        }
-
     /** Legacy mirror of [mode]; true only for [PlaybackMode.SYNCED]. */
     val isSync: Boolean get() = mode == PlaybackMode.SYNCED
 
@@ -505,38 +496,7 @@ class DisplayScreen(
         this.lang = lang
         waitingForInitialTimeline = requiresServerTimeline()
         waitingSinceNanos = if (waitingForInitialTimeline) System.nanoTime() else 0L
-        syncDanmaku(videoUrl)
     }
-
-    /**
-     * Subscribes / unsubscribes Bilibili danmaku for this display based on the current [videoUrl].
-     * A `live.bilibili.com/<roomId>` URL starts a live WebSocket channel; a VOD / bangumi URL
-     * resolves its `cid` and fetches the timed danmaku list.
-     */
-    private fun syncDanmaku(videoUrl: String) {
-        val source = com.dreamdisplayx.api.media.source.url.BilibiliUrls.parse(videoUrl)
-        val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
-        val roomId = source?.roomId
-        if (roomId != null) {
-            // Live streams: disable danmaku entirely. Live danmaku is hard to get right,
-            // so we unsubscribe any previous subscription and clear the overlay instead.
-            com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(did)
-            danmakuOverlay?.clear()
-            return
-        }
-        if (source != null && (source.bvid != null || source.avid != null || source.epId != null || source.seasonId != null)) {
-            // Resolve the cid on an IO thread, then subscribe the timed danmaku list.
-            Thread {
-                val cid = com.dreamdisplayx.media.source.bilibili.BilibiliApi.resolveCid(source)
-                if (cid != null) {
-                    com.dreamdisplayx.platform.client.danmaku.DanmakuManager.subscribeVideo(did, cid)
-                }
-            }.apply { isDaemon = true }.start()
-            return
-        }
-        com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(did)
-    }
-
     /** True while the screen is holding back the picture until the server's first timeline arrives. */
     internal val isWaitingForInitialTimeline: Boolean get() = stillWaitingForInitialTimeline()
 
@@ -894,11 +854,6 @@ class DisplayScreen(
     /** Stops the media player, releases GPU texture, closes any popout, and closes the display menu if open. */
     fun unregister() {
         captureReplayCache()
-        com.dreamdisplayx.platform.client.danmaku.DanmakuManager.unsubscribe(
-            com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
-        )
-        danmakuOverlay?.dispose()
-        danmakuOverlay = null
         val currentPlayer = media.shutdown()
         popoutManager.unregister(currentPlayer)
         currentPlayer?.stop()
@@ -932,23 +887,6 @@ class DisplayScreen(
             "%.1f".format(position / 1_000_000.0),
             "%.1f".format(elapsedMs)
         )
-    }
-
-    /** Saves the current danmaku settings from [savedSettings] to the persistent store. */
-    internal fun saveDanmakuSettings() {
-        ClientSettingsStore.updateDanmakuSettings(
-            uuid,
-            savedSettings.danmakuEnabled,
-            savedSettings.danmakuOpacity,
-            savedSettings.danmakuFontSize,
-            savedSettings.danmakuSpeed,
-            savedSettings.danmakuDisplayArea,
-            savedSettings.danmakuFilterScroll,
-            savedSettings.danmakuFilterTop,
-            savedSettings.danmakuFilterBottom,
-            savedSettings.danmakuFilterColor,
-        )
-        DisplayRegistry.recordScreen(this)
     }
 
     /** Mutes or unmutes the screen; no-op if already in the requested state. */
@@ -1087,7 +1025,6 @@ class DisplayScreen(
         val maxRadius = if (isPopoutActive) Double.MAX_VALUE else ClientStateManager.config.defaultDistance.toDouble()
         val distance = getDistanceToScreen(pos)
         mediaPlayer?.tick(distance, maxRadius)
-        advanceDanmaku()
         if (isPopoutActive) {
             if (distanceQualitySteps != 0) {
                 distanceQualitySteps = 0
@@ -1111,61 +1048,6 @@ class DisplayScreen(
         )
     }
 
-    /** Advances the Bilibili danmaku overlay (client tick, main thread). */
-    private fun advanceDanmaku() {
-        // Global client toggle OR per-display toggle: when either is disabled, clear any lingering
-        // overlay and skip danmaku entirely so stale lines don't stay stuck on screen.
-        if (!com.dreamdisplayx.platform.client.managers.ClientStateManager.config.danmakuEnabled ||
-            !savedSettings.danmakuEnabled
-        ) {
-            danmakuOverlay?.dispose()
-            danmakuOverlay = null
-            lastDanmakuPositionSec = -1.0
-            return
-        }
-        // Live screens: clear any lingering overlay and skip over danmaku entirely.
-        if (isLive) {
-            danmakuOverlay?.clear()
-            return
-        }
-        val did = com.dreamdisplayx.api.display.model.property.DisplayId(uuid)
-        // VOD / bangumi: consume timed danmaku as playback advances.
-        // When paused, positionSec is frozen so consumeTimed naturally returns nothing — safe.
-        val positionSec = currentTimeNanos / 1_000_000_000.0
-        val due = com.dreamdisplayx.platform.client.danmaku.DanmakuManager.consumeTimed(did, positionSec)
-        val overlay = danmakuOverlay
-        if (due.isNotEmpty() || overlay != null) {
-            val o = overlay ?: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay(
-                width, height,
-                settings = { savedSettings },
-            ).also {
-                danmakuOverlay = it
-            }
-            // Detect replay / backward seek: if position jumps back by more than 2s, clear stale
-            // overlay lines so the new playback starts fresh. Also resets the timed index so
-            // consumeTimed rewinds to the correct window.
-            if (lastDanmakuPositionSec > 0 && positionSec < lastDanmakuPositionSec - 2.0) {
-                o.clear()
-                com.dreamdisplayx.platform.client.danmaku.DanmakuManager.rewindTimed(did, positionSec)
-            }
-            lastDanmakuPositionSec = positionSec
-            due.forEach { o.add(it) }
-            // Always tick expired/expiry logic so TOP/BOTTOM danmaku still disappear after 5s
-            // even when paused. Only SCROLL position is frozen during pause.
-            o.tick(isPaused)
-        } else {
-            overlay?.dispose()
-            danmakuOverlay = null
-            lastDanmakuPositionSec = -1.0
-        }
-    }
-
-    /** The danmaku overlay texture, or null when no Bilibili live room is playing. */
-    var danmakuOverlay: com.dreamdisplayx.platform.client.danmaku.DanmakuOverlay? = null
-        private set
-
-    /** Previous playback position (seconds) used to detect replay / backward seeks for danmaku. */
-    private var lastDanmakuPositionSec: Double = -1.0
 
     /** Acoustic environment (voxel raytrace cached every [ENV_PROBE_INTERVAL_TICKS] ticks). */
     private fun probeEnvironment(plane: SourcePlane): AcousticEnvironment {

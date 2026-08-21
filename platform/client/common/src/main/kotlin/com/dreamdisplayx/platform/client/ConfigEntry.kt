@@ -5,7 +5,7 @@ package com.dreamdisplayx.platform.client
  * renders a control matching [type] and reads/writes the value through [get]/[apply], so new fields
  * surface in the UI automatically without hand-writing a screen per field.
  *
- * @param key TOML key / config name (e.g. `danmaku-enabled`).
+ * @param key TOML key / config name (e.g. `use-hw-accel`).
  * @param label User-facing short label for the row.
  * @param comment Human-readable explanation shown under the control (like a Configured tooltip).
  * @param type The control kind to render.

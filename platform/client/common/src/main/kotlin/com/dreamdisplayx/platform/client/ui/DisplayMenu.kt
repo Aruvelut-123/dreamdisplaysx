@@ -82,14 +82,6 @@ class DisplayMenu private constructor(
     private lateinit var popoutButton: IconButton
     private lateinit var audioTrackButton: IconButton
 
-    // ── Danmaku settings widgets ──────────────────────────────────────────────────────────────────
-    private lateinit var danmakuToggle: ModeSlider<Boolean>
-    private lateinit var danmakuOpacity: ValueSlider
-    private lateinit var danmakuFontSize: ModeSlider<Float>
-    private lateinit var danmakuSpeed: ValueSlider
-    private lateinit var danmakuArea: ModeSlider<Float>
-    private lateinit var danmakuFilters: DanmakuFilterBar
-
     private var lastSuggestedVideoId: String? = null
     private var prevQualityListSize = 0
     private var suggestionsRect: UiRect? = null
@@ -356,91 +348,6 @@ class DisplayMenu private constructor(
         // the panel shows an "unavailable" notice to everyone else instead of pickable suggestions.
         suggestions.available = { ds.canSetVideoHere }
 
-        // ── Danmaku settings ──────────────────────────────────────────────────────────────────────
-        val saved = ds.savedSettings
-
-        danmakuToggle = addUi(
-            ModeSlider(
-                modes = listOf(true, false),
-                initial = saved.danmakuEnabled,
-                current = { saved.danmakuEnabled },
-                enabledFor = { true },
-                label = { enabled ->
-                    Component.translatable(if (enabled) "dreamdisplayx.mode.danmaku_on" else "dreamdisplayx.mode.danmaku_off")
-                },
-            ) { enabled ->
-                saved.danmakuEnabled = enabled
-                ds.saveDanmakuSettings()
-            })
-        danmakuToggle.visibleWhen = notErrored
-
-        danmakuOpacity = addUi(
-            ValueSlider(
-                initial = saved.danmakuOpacity.toDouble().coerceIn(0.0, 1.0),
-                label = { Component.literal("${floor(it * 100).toInt()}%") },
-                step = 0.05,
-            ) { v ->
-                saved.danmakuOpacity = v.toFloat()
-                ds.saveDanmakuSettings()
-            })
-        danmakuOpacity.visibleWhen = notErrored
-
-        // Danmaku font size — three fixed presets: small (0.5x), medium (1x), large (1.5x).
-        // Danmaku font size — three fixed presets: small (0.5x), medium (1x), large (1.5x).
-        danmakuFontSize = addUi(
-            ModeSlider(
-                modes = DANMAKU_FONT_SIZES,
-                initial = snapTo(DANMAKU_FONT_SIZES, saved.danmakuFontSize, 1.0f),
-                current = { snapTo(DANMAKU_FONT_SIZES, saved.danmakuFontSize, 1.0f) },
-                enabledFor = { true },
-                label = { v -> Component.literal(danmakuSizeLabel(v)) },
-            ) { v ->
-                saved.danmakuFontSize = v
-                ds.saveDanmakuSettings()
-            })
-        danmakuFontSize.visibleWhen = notErrored
-
-        danmakuSpeed = addUi(
-            ValueSlider(
-                initial = fontFraction(saved.danmakuSpeed),
-                label = { Component.literal("${((0.5 + it * 1.5) * 10).roundToInt() / 10.0}x") },
-                step = 1.0 / 30,
-            ) { v ->
-                saved.danmakuSpeed = (0.5f + v.toFloat() * 1.5f)
-                ds.saveDanmakuSettings()
-            })
-        danmakuSpeed.visibleWhen = notErrored
-
-        // Danmaku display area — step through fixed presets only: 25 / 50 / 75 / 100 (%).
-        danmakuArea = addUi(
-            ModeSlider(
-                modes = DANMAKU_AREAS,
-                initial = snapTo(DANMAKU_AREAS, saved.danmakuDisplayArea, 0.5f),
-                current = { snapTo(DANMAKU_AREAS, saved.danmakuDisplayArea, 0.5f) },
-                enabledFor = { true },
-                label = { v -> Component.literal("${(v * 100).roundToInt()}%") },
-            ) { v ->
-                saved.danmakuDisplayArea = v
-                ds.saveDanmakuSettings()
-            })
-        danmakuArea.visibleWhen = notErrored
-
-        danmakuFilters = addUi(
-            DanmakuFilterBar(
-                initialScroll = saved.danmakuFilterScroll,
-                initialTop = saved.danmakuFilterTop,
-                initialBottom = saved.danmakuFilterBottom,
-                initialColor = saved.danmakuFilterColor,
-            ) { _, _ ->
-                saved.danmakuFilterScroll = danmakuFilters.filterScroll
-                saved.danmakuFilterTop = danmakuFilters.filterTop
-                saved.danmakuFilterBottom = danmakuFilters.filterBottom
-                saved.danmakuFilterColor = danmakuFilters.filterColor
-                ds.saveDanmakuSettings()
-            })
-        danmakuFilters.visibleWhen = notErrored
-
-        val danmakuResetButtons = danmakuResetButtons()
 
         preview =
             PreviewSection(
@@ -448,8 +355,7 @@ class DisplayMenu private constructor(
                 dropdown, audioTrackDropdown,
             )
         settings = SettingsSection(
-            rows = settingsRows(renderDReset, qualityReset, brightnessReset, audio3dReset, syncReset) +
-                danmakuSettingsRows(danmakuResetButtons),
+            rows = settingsRows(renderDReset, qualityReset, brightnessReset, audio3dReset, syncReset),
             ownerActions = listOf(reportButton, deleteButton, lockButton),
             buttonTooltips = listOf(
                 lockButton to {
@@ -611,7 +517,6 @@ class DisplayMenu private constructor(
         resyncQualitySlider()
         resyncModeSlider()
         audio3d.syncToCurrent()
-        danmakuToggle.syncToCurrent()
 
         if (ds.errored) {
             dropdown.hide()
@@ -727,123 +632,6 @@ class DisplayMenu private constructor(
             audioTrackDropdown.handleRelease() ||
             progress.commitDragIfActive()*/
 
-    /** Converts a 0.5–2.0 font/speed value to a 0.0–1.0 slider fraction. */
-    private fun fontFraction(value: Float): Double = ((value - 0.5f) / 1.5f).toDouble().coerceIn(0.0, 1.0)
-
-    /** Creates reset buttons for each danmaku setting row. */
-    private fun danmakuResetButtons(): List<IconButton> {
-        val ds = displayScreen
-        val saved = ds.savedSettings
-        val toggleReset = addUi(IconButton("refresh") {
-            saved.danmakuEnabled = true
-            danmakuToggle.syncToCurrent()
-            ds.saveDanmakuSettings()
-        })
-        toggleReset.enabledWhen = { !saved.danmakuEnabled }
-        toggleReset.visibleWhen = { !ds.errored }
-
-        val opacityReset = addUi(IconButton("refresh") {
-            saved.danmakuOpacity = 0.8f
-            danmakuOpacity.value = 0.8
-            ds.saveDanmakuSettings()
-        })
-        opacityReset.enabledWhen = { abs(saved.danmakuOpacity - 0.8f) > 0.01f }
-        opacityReset.visibleWhen = { !ds.errored }
-
-        val fontSizeReset = addUi(IconButton("refresh") {
-            saved.danmakuFontSize = 1.0f
-            danmakuFontSize.syncToCurrent()
-            ds.saveDanmakuSettings()
-        })
-        fontSizeReset.enabledWhen = { abs(saved.danmakuFontSize - 1.0f) > 0.01f }
-        fontSizeReset.visibleWhen = { !ds.errored }
-
-        val speedReset = addUi(IconButton("refresh") {
-            saved.danmakuSpeed = 1.0f
-            danmakuSpeed.value = fontFraction(1.0f)
-            ds.saveDanmakuSettings()
-        })
-        speedReset.enabledWhen = { abs(saved.danmakuSpeed - 1.0f) > 0.01f }
-        speedReset.visibleWhen = { !ds.errored }
-
-        val areaReset = addUi(IconButton("refresh") {
-            saved.danmakuDisplayArea = 0.5f
-            danmakuArea.syncToCurrent()
-            ds.saveDanmakuSettings()
-        })
-        areaReset.enabledWhen = { abs(saved.danmakuDisplayArea - 0.5f) > 0.01f }
-        areaReset.visibleWhen = { !ds.errored }
-
-        val filterReset = addUi(IconButton("refresh") {
-            saved.danmakuFilterScroll = true
-            saved.danmakuFilterTop = true
-            saved.danmakuFilterBottom = true
-            saved.danmakuFilterColor = true
-            danmakuFilters.setStates(true, true, true, true)
-            ds.saveDanmakuSettings()
-        })
-        filterReset.enabledWhen = {
-            !saved.danmakuFilterScroll || !saved.danmakuFilterTop ||
-                !saved.danmakuFilterBottom || !saved.danmakuFilterColor
-        }
-        filterReset.visibleWhen = { !ds.errored }
-
-        return listOf(toggleReset, opacityReset, fontSizeReset, speedReset, areaReset, filterReset)
-    }
-
-    /** Builds the danmaku settings rows. */
-    private fun danmakuSettingsRows(resetButtons: List<IconButton>): List<SettingsSection.Row> {
-        val ds = displayScreen
-        val saved = ds.savedSettings
-        return listOf(
-            SettingsSection.Row("dreamdisplayx.button.danmaku", danmakuToggle, resetButtons[0]) {
-                listOf(
-                    tooltipTitle("dreamdisplayx.button.danmaku.tooltip.1"),
-                    tooltipBody("dreamdisplayx.button.danmaku.tooltip.2"),
-                    Component.literal(""),
-                    tooltipValue(
-                        "dreamdisplayx.button.danmaku.tooltip.3",
-                        Component.translatable(if (saved.danmakuEnabled) "dreamdisplayx.button.enabled" else "dreamdisplayx.button.disabled"),
-                    ),
-                )
-            },
-            SettingsSection.Row("dreamdisplayx.button.danmaku.opacity", danmakuOpacity, resetButtons[1]) {
-                listOf(
-                    tooltipTitle("dreamdisplayx.button.danmaku.opacity.tooltip.1"),
-                    tooltipBody("dreamdisplayx.button.danmaku.opacity.tooltip.2"),
-                    Component.literal(""),
-                    tooltipValue("dreamdisplayx.button.danmaku.opacity.tooltip.3", floor(saved.danmakuOpacity * 100).toInt()),
-                )
-            },
-            SettingsSection.Row("dreamdisplayx.button.danmaku.fontsize", danmakuFontSize, resetButtons[2]) {
-                listOf(
-                    tooltipTitle("dreamdisplayx.button.danmaku.fontsize.tooltip.1"),
-                    tooltipBody("dreamdisplayx.button.danmaku.fontsize.tooltip.2"),
-                    Component.literal(""),
-                    tooltipValue("dreamdisplayx.button.danmaku.fontsize.tooltip.3", "%.1f".format(saved.danmakuFontSize)),
-                )
-            },
-            SettingsSection.Row("dreamdisplayx.button.danmaku.speed", danmakuSpeed, resetButtons[3]) {
-                listOf(
-                    tooltipTitle("dreamdisplayx.button.danmaku.speed.tooltip.1"),
-                    tooltipBody("dreamdisplayx.button.danmaku.speed.tooltip.2"),
-                    Component.literal(""),
-                    tooltipValue("dreamdisplayx.button.danmaku.speed.tooltip.3", "%.1f".format(saved.danmakuSpeed)),
-                )
-            },
-            SettingsSection.Row("dreamdisplayx.button.danmaku.area", danmakuArea, resetButtons[4]) {
-                listOf(
-                    tooltipTitle("dreamdisplayx.button.danmaku.area.tooltip.1"),
-                    tooltipBody("dreamdisplayx.button.danmaku.area.tooltip.2"),
-                    Component.literal(""),
-                    tooltipValue("dreamdisplayx.button.danmaku.area.tooltip.3", floor(saved.danmakuDisplayArea * 100).toInt()),
-                )
-            },
-            SettingsSection.Row("dreamdisplayx.button.danmaku.filter", danmakuFilters, resetButtons[5], extraGapBefore = 6) {
-                danmakuFilters.stateTooltip()
-            },
-        )
-    }
 
     override fun isPauseScreen(): Boolean = false
 
@@ -914,19 +702,6 @@ class DisplayMenu private constructor(
 
         /** The three tiers exposed by the 3D audio slider; BASIC stays an internal-only engine step. */
         private val AUDIO_3D_MODES = listOf(AcousticQuality.OFF, AcousticQuality.ADVANCED, AcousticQuality.ULTRA)
-
-        /** Fixed danmaku font-size presets (as display multipliers): small / medium / large. */
-        private val DANMAKU_FONT_SIZES = listOf(0.5f, 1.0f, 1.5f)
-
-        /** Fixed danmaku display-area presets as fractions of the display height: 25 / 50 / 75 / 100 %. */
-        private val DANMAKU_AREAS = listOf(0.25f, 0.5f, 0.75f, 1.0f)
-
-        /** Human label for a danmaku font-size preset. */
-        private fun danmakuSizeLabel(size: Float): String = when (size) {
-            0.5f -> "小 (0.5x)"
-            1.5f -> "大 (1.5x)"
-            else -> "中 (1x)"
-        }
 
         /** Snaps [value] to the nearest entry in [presets]; falls back to [defaultV] if empty. */
         private fun snapTo(presets: List<Float>, value: Float, defaultV: Float): Float =

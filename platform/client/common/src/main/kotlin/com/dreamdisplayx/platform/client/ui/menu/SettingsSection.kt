@@ -14,7 +14,7 @@ import kotlin.math.roundToInt
 
 /**
  * The settings panel of the display menu: labeled rows (volume, render distance, quality, brightness, sync,
- * danmaku, ...), each with a control and a reset button.
+ * ...), each with a control and a reset button.
  *
  * When the rows do not fit in the panel height, the row area becomes vertically scrollable (mouse wheel
  * and a draggable scrollbar). The panel title and the owner action buttons stay pinned.
