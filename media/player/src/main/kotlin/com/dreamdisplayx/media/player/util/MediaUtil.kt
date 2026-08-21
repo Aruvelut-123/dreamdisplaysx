@@ -13,6 +13,11 @@ object MediaUtil {
         "Error closing file",
         "Terminating thread with return code",
         "Task finished with error code",
+        // FFmpeg reports EINVAL ("Invalid argument") when the JVM side closes the output pipe (e.g. on
+        // video stop / switch / warm park) while it is still trying to write a frame. That is a benign
+        // teardown marker, not a decode failure, so it must not spam the WARN log as a real error.
+        "Task finished with error: Invalid argument",
+        "Terminating thread with error: Invalid argument",
         "Last message repeated",
     )
 

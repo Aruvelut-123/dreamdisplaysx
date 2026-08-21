@@ -94,10 +94,9 @@ object CredentialActions {
     }
 
     /**
-     * Refreshes every stored Bilibili session using its refresh token; [pushToPlayer] receives
-     * `(playerUuid, freshCredentials)` for each online player whose session was renewed.
-     * Also refreshes the global credential and broadcasts to all online players.
-     */
+     * Refreshes the single global Bilibili session using its refresh token. On success the new
+     * SESSDATA and refresh token are stored and broadcast to every online player via
+     * [broadcastToAll]. Per-player refresh has been removed.     */
     fun refreshAllBilibili(
         pushToPlayer: (playerUuid: String, credentials: PlatformCredentials) -> Unit,
         broadcastToAll: ((PlatformCredentials) -> Unit)? = null,
@@ -126,28 +125,5 @@ object CredentialActions {
             }
         }
 
-        // Refresh per-player credentials (legacy path)
-        CredentialStore.forEachBilibili { playerUuid, sessdata, refreshToken ->
-            if (refreshToken.isEmpty()) return@forEachBilibili
-            val result = BilibiliSessionRefresher.refresh(refreshToken, sessdata)
-            if (result.success) {
-                if (result.cookie != null && result.cookie != sessdata) {
-                    CredentialStore.set(playerUuid, "bilibili", result.cookie)
-                }
-                val newRefresh = result.refreshToken
-                if (newRefresh != null && newRefresh != refreshToken) {
-                    CredentialStore.set(playerUuid, "bilibili_refresh", newRefresh)
-                }
-                pushToPlayer(
-                    playerUuid,
-                    PlatformCredentials(
-                        bilibiliSessdata = result.cookie ?: sessdata,
-                        bilibiliRefreshToken = newRefresh ?: refreshToken,
-                    ),
-                )
-            } else {
-                logger.warn("Bilibili session refresh failed for {}: {}", playerUuid, result.message)
-            }
-        }
     }
 }

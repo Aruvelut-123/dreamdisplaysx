@@ -56,7 +56,7 @@ object BilibiliSessionRefresher {
         }
 
         val form = "csrf=$csrf&refresh_token=$refreshToken"
-        val refreshResult = postForm("https://passport.bilibili.com/x/passport-login/web/cookie/refresh", form)
+        val refreshResult = postForm("https://passport.bilibili.com/x/passport-login/web/cookie/refresh", form, cookie)
         val code = refreshResult?.optInt("code") ?: -1
         if (code != 0) {
             val msg = refreshResult?.optString("message") ?: "Unknown error (code=$code)"
@@ -73,7 +73,7 @@ object BilibiliSessionRefresher {
             DreamHttpClient.execute(
                 confirmUrl,
                 DreamHttpClient.RequestOptions(
-                    headers = HEADERS,
+                    headers = HEADERS + (if (cookie.isEmpty()) emptyMap() else DreamHttpClient.headersOf("Cookie" to cookie)),
                     connectTimeoutMs = 10_000,
                     readTimeoutMs = 10_000,
                     followRedirects = false,
@@ -116,12 +116,14 @@ object BilibiliSessionRefresher {
         return parts.joinToString("; ").ifEmpty { null }
     }
 
-    private fun postForm(url: String, form: String): JsonObject? = runCatching {
+    private fun postForm(url: String, form: String, cookie: String? = null): JsonObject? = runCatching {
+        val headers = mutableListOf("Content-Type" to "application/x-www-form-urlencoded")
+        if (!cookie.isNullOrEmpty()) headers += "Cookie" to cookie
         val response = DreamHttpClient.execute(
             url,
             DreamHttpClient.RequestOptions(
                 method = "POST",
-                headers = HEADERS + DreamHttpClient.headersOf("Content-Type" to "application/x-www-form-urlencoded"),
+                headers = HEADERS + DreamHttpClient.headersOf(*headers.toTypedArray()),
                 body = form.toByteArray(Charsets.UTF_8),
                 connectTimeoutMs = 10_000,
                 readTimeoutMs = 10_000,
