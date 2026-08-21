@@ -79,7 +79,7 @@ class SettingsSection(
 
         // Row area spans from below the title up to the owner-action row at the bottom.
         areaTop = titleH
-        areaBottom = panel.bottom - UiTheme.PANEL_PADDING_X - UiTheme.CONTROL_BUTTON - 6
+        areaBottom = panel.bottom - UiTheme.PANEL_PADDING_Y - UiTheme.CONTROL_BUTTON - 6
         val areaH = max(0, areaBottom - areaTop)
 
         val contentH = rows.sumOf { it.extraGapBefore + UiTheme.ROW_H } +
@@ -223,7 +223,7 @@ class SettingsSection(
     private fun placeOwnerActions(panel: UiRect) {
         val btn = UiTheme.CONTROL_BUTTON
         var rightEdge = panel.right - UiTheme.PANEL_PADDING_X
-        val yEdge = panel.bottom - UiTheme.PANEL_PADDING_X - btn
+        val yEdge = panel.bottom - UiTheme.PANEL_PADDING_Y - btn
         for (b in ownerActions) {
             if (b == null || !b.visible) continue
             b.place(UiRect(rightEdge - btn, yEdge, btn, btn))

@@ -38,7 +38,7 @@ class MenuLayout private constructor(
                 // is almost always its limiting dimension here; give it as much as the settings
                 // panel below can spare instead of a flat 60/40 split, so it isn't left tiny inside
                 // a much wider column.
-                val settingsMinH = 360
+                val settingsMinH = 220
                 var previewSlice = (totalH * 8) / 10
                 if (totalH - previewSlice - gap < settingsMinH) {
                     previewSlice = totalH - settingsMinH - gap
@@ -59,7 +59,7 @@ class MenuLayout private constructor(
             // that still shows an un-clipped, if smaller, card; below that it's dropped entirely.
             val idealSuggestionsH = SuggestionsPanel.STRIP_CHROME_H + SuggestionsPanel.FULL_CARD_VIEWPORT_H
             val minSuggestionsH = SuggestionsPanel.STRIP_CHROME_H + SuggestionsPanel.MIN_CARD_VIEWPORT_H
-            val topRowFloor = 380 // enough for 5 existing rows (settings panel scrolls when rows overflow)
+            val topRowFloor = 230
             var suggestionsH = idealSuggestionsH
                 .coerceAtMost(max(minSuggestionsH, totalH - topRowFloor - gap))
                 .coerceAtLeast(minSuggestionsH)
