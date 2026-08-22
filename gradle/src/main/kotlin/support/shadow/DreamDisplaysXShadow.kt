@@ -104,7 +104,18 @@ fun ShadowJar.includeDreamDisplaysXSharedContents() {
 
 /** Relocates the shared third-party packages under `com.dreamdisplayx.libs` in a fat loader jar. */
 fun ShadowJar.relocateDreamDisplaysXSharedPackages(prefix: String = "com.dreamdisplayx.libs") {
-    dreamDisplaysShadedPackages.forEach { relocate(it, "$prefix.$it") }
+    dreamDisplaysShadedPackages.forEach { pack ->
+        // The sqlite-jdbc native binaries (org/sqlite/native/**) keep their original path so
+        // SQLiteJDBCLoader's hard-coded "org/sqlite/native/..." resource lookup still resolves them.
+        // They are rebuilt in CI with relocated JNI symbols to match the relocated NativeDB class.
+        if (pack == "org.sqlite") {
+            relocate(pack, "$prefix.$pack") {
+                exclude("org/sqlite/native/**")
+            }
+        } else {
+            relocate(pack, "$prefix.$pack")
+        }
+    }
 }
 
 /** Excludes sqlite-jdbc's native binaries for platforms this project never runs on. */

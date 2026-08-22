@@ -1,5 +1,6 @@
 import support.shadow.excludeDreamDisplaysXSqliteNativeExtras
 import support.shadow.includeDreamDisplaysXSharedContents
+import support.shadow.includeRebuiltSqliteNatives
 import support.shadow.relocateDreamDisplaysXSharedPackages
 import support.stonecutter.StonecutterVersions
 
@@ -217,6 +218,7 @@ tasks.shadowJar {
     includeDreamDisplaysXSharedContents()
     relocateDreamDisplaysXSharedPackages()
     excludeDreamDisplaysXSqliteNativeExtras()
+    includeRebuiltSqliteNatives(rootProject.file("native/build/ci-bundle/dreamdisplayx-natives"))
 }
 
 // If it's a legacy version (like 1.21.11 where the shadow jar is obfuscated), we need to remap the shadow jar with
