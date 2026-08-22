@@ -91,7 +91,6 @@ val dreamDisplaysSqliteNativeExcludes = listOf(
     "org/sqlite/native/Linux/x86/**",
     "org/sqlite/native/Windows/x86/**",
     "org/sqlite/native/Windows/armv7/**",
-    "org/sqlite/native/Windows/aarch64/**",
 )
 
 /** Includes the shared `:core`/`:api`/`:util`/`:media:*` modules and third-party dependencies in a fat loader jar. */

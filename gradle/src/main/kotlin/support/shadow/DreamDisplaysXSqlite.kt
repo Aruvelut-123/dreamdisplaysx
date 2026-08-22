@@ -46,6 +46,7 @@ fun ShadowJar.includeRebuiltSqliteNatives(nativeBundleDir: File) {
         val tmp = File(jar.parentFile, jar.name + ".sqlitetmp")
         ZipFile(jar).use { zin ->
             ZipOutputStream(tmp.outputStream().buffered()).use { zout ->
+                // Copy every existing entry, replacing any sqlite native with the rebuilt lib.
                 zin.entries().asSequence().forEach { entry ->
                     val name = entry.name
                     val replacement = replacements[name]
@@ -56,6 +57,16 @@ fun ShadowJar.includeRebuiltSqliteNatives(nativeBundleDir: File) {
                         zin.getInputStream(entry).use { it.copyTo(zout) }
                     }
                     zout.closeEntry()
+                }
+                // Add rebuilt sqlite native libs that the stock sqlite-jdbc never shipped
+                // (e.g. Windows/aarch64), which would otherwise be missing from the jar.
+                val existing = zin.entries().asSequence().map { it.name }.toMutableSet()
+                replacements.forEach { (name, lib) ->
+                    if (name !in existing) {
+                        zout.putNextEntry(ZipEntry(name))
+                        lib.inputStream().use { it.copyTo(zout) }
+                        zout.closeEntry()
+                    }
                 }
             }
         }
