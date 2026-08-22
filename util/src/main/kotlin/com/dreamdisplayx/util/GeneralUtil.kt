@@ -26,6 +26,21 @@ object GeneralUtil {
         runCatching { readResource("/assets/dreamdisplayx/version.txt").trim() }
             .getOrDefault("unknown")
 
+    /**
+     * Returns the exact source commit the dev build was made from (written into
+     * `git.properties` at build time), or null when the resource is absent (e.g. a release jar).
+     */
+    fun getGitCommit(): String? =
+        runCatching { readResource("/assets/dreamdisplayx/git.properties").trim() }
+            .getOrNull()?.takeIf { it.isNotBlank() }
+
+    /** Combines version and (for dev builds) the source commit into one identity string. */
+    fun getBuildIdentity(): String {
+        val version = getModVersion()
+        val commit = getGitCommit()
+        return if (commit != null) "$version+$commit" else version
+    }
+
     /** Formats version to human-readable label: `1.8.5-dev` -> `1.8.5 Developer`, `1.9.0-preview` -> `1.9.0 Preview`. */
     fun getPrettyModVersion(): String {
         val version = getModVersion()

@@ -49,6 +49,7 @@ object Initializer {
         ClientPacketManager.bind(dreamDisplaysMod)
 
         logger.info("Starting Dream DisplaysX...")
+        logger.info("Dream DisplaysX build: {}", com.dreamdisplayx.util.GeneralUtil.getBuildIdentity())
         ClientStartupManager.start()
     }
 

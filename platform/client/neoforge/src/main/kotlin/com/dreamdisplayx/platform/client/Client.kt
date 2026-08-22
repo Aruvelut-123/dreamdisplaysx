@@ -70,7 +70,11 @@ class Client(modEventBus: IEventBus) : DreamMod {
                         return@executes 1
                     }
                     //? if >=26.2 {
-                    Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
+                    // Defer opening the screen one tick so the client command dispatch (which
+                    // may close any screen it opened synchronously) has fully finished first.
+                    Minecraft.getInstance().execute {
+                        Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
+                    }
                     //?} else
                     /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
                     1

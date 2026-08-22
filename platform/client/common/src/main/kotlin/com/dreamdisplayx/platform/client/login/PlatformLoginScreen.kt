@@ -39,6 +39,7 @@ class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
         BilibiliLoginManager.startQrLogin()
         refreshQrMatrix()
         BilibiliLoginManager.onLoginSuccess = {
+            org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LoginScreen").info("onLoginSuccess invoked; closing login screen")
             Minecraft.getInstance().execute {
                 MinecraftScreenUtil.setScreen(Minecraft.getInstance(), null)
             }
@@ -50,11 +51,21 @@ class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
     override fun tick() {
         super.tick()
         tickCount++
+        if (tickCount == 1) {
+            org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LoginScreen").info(
+                "PlatformLoginScreen first tick; qrContent=${BilibiliLoginManager.qrContent != null} status=${BilibiliLoginManager.status}"
+            )
+        }
         if (tickCount % 40 == 0) {
             // Poll the QR login every two seconds; expired QR auto-refreshes in the manager.
             BilibiliLoginManager.pollQr()
             refreshQrMatrix()
         }
+    }
+
+    override fun onClose() {
+        org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LoginScreen").info("PlatformLoginScreen.onClose called")
+        super.onClose()
     }
 
     private fun refreshQrMatrix() {

@@ -203,6 +203,19 @@ tasks.processResources {
     filesMatching("assets/dreamdisplayx/version.txt") {
         expand(mapOf("version" to projectVersion))
     }
+    // Record the exact source commit so a dev build's identity can be confirmed from the log.
+    val gitCommit = providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+    }.standardOutput.asText.getOrElse("unknown").trim()
+    inputs.property("gitCommit", gitCommit)
+    doFirst {
+        val dir = layout.buildDirectory.dir("generatedResources/assets/dreamdisplayx").get().asFile
+        dir.mkdirs()
+        File(dir, "git.properties").writeText(gitCommit)
+    }
+    from(layout.buildDirectory.dir("generatedResources")) {
+        into("")
+    }
 }
 
 java {
