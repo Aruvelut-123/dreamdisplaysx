@@ -1,17 +1,13 @@
 # 1.9.3.2 Release
 
-Merged upstream Dream Displays changes on top of 1.9.3.1.
+Based on Dream Displays [`86ba1b61`](https://github.com/arnodoelinger/dreamdisplays/commit/86ba1b61).
 
-> **Upstream commits merged** (parent of this release):
-> - [`fea80abe`](https://github.com/arnodoelinger/dreamdisplays/commit/fea80abe) — feat(media): support bilibili bangumi episode / season URLs
-> - [`34757733`](https://github.com/arnodoelinger/dreamdisplays/commit/34757733) — fix(client): scope cached displays to their creation dimension
->
-> Bilibili playurl / metadata requests keep sending the login cookie, so VIP movies, bangumi, and videos still play at their allowed quality when logged in.
+Bilibili playurl / metadata requests keep sending the login cookie, so VIP movies, bangumi, and videos still play at their allowed quality when logged in.
 
 ## Highlights
 
-- **Bilibili bangumi / movie playback** — paste `https://www.bilibili.com/bangumi/play/ep<id>` (episode) or `.../ss<id>` (season) and it resolves the season's episode, pulls its DASH stream, and shows the episode title / cover. Merged from [`fea80abe`](https://github.com/arnodoelinger/dreamdisplays/commit/fea80abe).
-- **Cached displays are scoped to their creation dimension** — softly-unloaded displays only restore when you're in the same dimension, so displays don't leak across nether / end / overworld. Merged from [`34757733`](https://github.com/arnodoelinger/dreamdisplays/commit/34757733).
+- **Bilibili bangumi / movie playback** — paste `https://www.bilibili.com/bangumi/play/ep<id>` (episode) or `.../ss<id>` (season) and it resolves the season's episode, pulls its DASH stream, and shows the episode title / cover.
+- **Cached displays are scoped to their creation dimension** — softly-unloaded displays only restore when you're in the same dimension, so displays don't leak across nether / end / overworld.
 
 ## Client
 
