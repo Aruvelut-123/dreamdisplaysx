@@ -1,8 +1,8 @@
 package com.dreamdisplayx.platform.server
 
-import com.dreamdisplayx.platform.server.credential.CredentialActions
-import com.dreamdisplayx.platform.server.credential.CredentialStore
-import com.dreamdisplayx.platform.server.credential.SqlCredentialSyncBackend
+import com.dreamdisplayx.platform.server.credentials.CredentialActions
+import com.dreamdisplayx.platform.server.credentials.CredentialStore
+import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StateManager
