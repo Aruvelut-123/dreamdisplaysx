@@ -91,8 +91,8 @@ object BilibiliApi {
     /** Resolves [source] (a VOD, live room, bangumi episode/season, or unresolved short link), or null when nothing is playable. */
     fun resolve(source: MediaSource.Bilibili): BilibiliPlayback? = when {
         source.bvid != null || source.avid != null -> resolveVod(source.bvid, source.avid, source.part ?: 1)
-        source.roomId != null -> resolveLive(source.roomId!!)
         source.epId != null || source.seasonId != null -> resolveBangumi(source.epId, source.seasonId)
+        source.roomId != null -> resolveLive(source.roomId!!)
         else -> resolveShortlink(source.url)?.let { resolve(it) }
     }
 
@@ -362,33 +362,29 @@ object BilibiliApi {
         val seasonRoot = getJson("https://api.bilibili.com/pgc/view/web/season?${plainQuery(seasonParams)}")
         val result = seasonRoot?.obj("result") ?: return null
 
-        val episodes = result.array("episodes")?.mapNotNull { it.asJsonObjectOrNull() } ?: emptyList()
-        val episode = when {
-            epId != null -> episodes.firstOrNull { it.optLong("id") == epId } ?: episodes.firstOrNull()
-            else -> episodes.firstOrNull()
-        }
-        val resolvedEpId = episode?.optLong("id") ?: epId ?: return null
-        val cid = episode?.optLong("cid") ?: result.optLong("cid") ?: return null
+        val episodes = result.array("episodes")?.mapNotNull { it.asJsonObjectOrNull() } ?: return null
+        val episode = epId?.let { id -> episodes.firstOrNull { it.optLong("ep_id") == id } }
+            ?: episodes.firstOrNull()
+            ?: return null
+        val resolvedEpId = episode.optLong("ep_id") ?: return null
 
-        val playurlParams = buildMap {
-            put("ep_id", resolvedEpId.toString())
-            put("cid", cid.toString())
-            put("qn", "80")
-            put("fnval", "4048")
-            put("fourk", "1")
-        }
-        val playurlRoot = getJson("https://api.bilibili.com/pgc/player/web/playurl?${signedQuery(playurlParams)}")
-        val streams = buildStreams(playurlRoot?.obj("result"))
+        val playurlRoot =
+            getJson("https://api.bilibili.com/pgc/player/web/v2/playurl?fnval=12240&fourk=1&ep_id=$resolvedEpId")
+        val streams = buildStreams(playurlRoot?.obj("result")?.obj("video_info"))
         if (streams.isEmpty()) return null
 
-        val episodeTitle = episode?.optString("long_title") ?: episode?.optString("title")
+        val seasonTitle = result.optString("title")
+        val episodeTitle = episode.optString("long_title")?.takeIf { it.isNotBlank() }
+            ?: episode.optString("show_title")
+        val title = listOfNotNull(seasonTitle, episodeTitle).joinToString(" · ").ifBlank { null }
+
         val metadata = PlatformVideoMetadata(
-            title = episodeTitle ?: result.optString("title"),
+            title = title,
             uploader = null,
-            thumbnailUrl = result.optString("cover"),
+            thumbnailUrl = episode.optString("cover") ?: result.optString("cover"),
             uploaderAvatarUrl = null,
             viewCount = null,
-            durationSec = episode?.optLong("duration")?.takeIf { it > 0 }?.let { if (it > 1000) it / 1000 else it },
+            durationSec = episode.optLong("duration")?.let { it / 1000 },
             isLive = false,
         )
         return BilibiliPlayback(streams = streams, metadata = metadata, isSeekable = true)
@@ -464,8 +460,10 @@ object BilibiliApi {
             if (streams.isNotEmpty()) return streams
         }
 
-        // Very low quality / old videos have no DASH manifest, only a single progressive URL
-        val durl = playurlData.array("durl")?.firstOrNull()?.asJsonObjectOrNull() ?: return emptyList()
+        // Very low quality / old videos have no DASH manifest, only a single progressive URL.
+        // Regular VODs key this "durl"; bangumi's `video_info` keys the same shape "durls".
+        val durl = (playurlData.array("durl") ?: playurlData.array("durls"))
+            ?.firstOrNull()?.asJsonObjectOrNull() ?: return emptyList()
         val durlUrl = durl.optString("url") ?: return emptyList()
         return listOf(
             MediaStream(

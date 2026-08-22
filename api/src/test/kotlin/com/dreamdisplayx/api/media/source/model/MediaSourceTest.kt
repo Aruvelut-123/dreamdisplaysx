@@ -96,4 +96,13 @@ class MediaSourceTest {
         assertEquals(CustomMediaKind.PROGRESSIVE, source.kind)
         assertEquals(url, source.toResolvableUrl())
     }
+
+    @Test
+    fun bilibiliVodUrlStillParsesBvid() {
+        val url = "https://www.bilibili.com/video/BV1Lx411w76a"
+        val source = assertIs<MediaSource.Bilibili>(MediaSource.from(url))
+        assertEquals("BV1Lx411w76a", source.bvid)
+        assertNull(source.epId)
+        assertNull(source.seasonId)
+    }
 }

@@ -6,7 +6,7 @@ import com.dreamdisplayx.api.security.model.MediaHttpUrl
 import java.util.*
 
 /**
- * Recognizes and dissects Bilibili URLs (VODs, live rooms, `b23.tv` short links).
+ * Recognizes and dissects Bilibili URLs (VODs, bangumi episodes / seasons, live rooms, `b23.tv` short links).
  *
  * @since 1.9.x
  */
@@ -77,7 +77,7 @@ object BilibiliUrls {
         return null
     }
 
-    /** Returns the value of the `p` (part index) query parameter in [rawQuery], or null when absent. */
+    /** Returns the value of th`p`p` (part index) query parameter in [rawQuery], or null when absent. */
     private fun partQueryParam(rawQuery: String?): String? =
         rawQuery?.split('&')?.firstNotNullOfOrNull { pair ->
             val idx = pair.indexOf('=')
