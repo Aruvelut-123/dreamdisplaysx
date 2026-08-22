@@ -7,6 +7,7 @@ Based on Dream Displays [`86ba1b61`](https://github.com/arnodoelinger/dreamdispl
 - **`/display create` and `/display rename` on Paper** — create a display by name, and rename an existing display by id / prefix from the console, matching the UI-driven workflow on other platforms.
 - **QR login poll fix** — Bilibili QR login now correctly recognizes `expired` / `scanned` states from the poll response's top-level `code`, so the login screen no longer lingers or mis-handles the QR lifecycle.
 - **SQLite storage fix** — the bundled SQLite JDBC driver is relocated for mod isolation and its native library is rebuilt with matching JNI symbols, so singleplayer / integrated servers that force SQLite start without crashing.
+- **Flashback replay compat** — a Flashback replay server is detected (by world path) and skips opening its SQLite database, so replaying / exporting no longer leaves `dreamdisplayx.db` locked and Flashback can clean up its temp folder without errors.
 
 ## Server
 
@@ -18,6 +19,7 @@ Based on Dream Displays [`86ba1b61`](https://github.com/arnodoelinger/dreamdispl
 ### Fixes
 
 - Bilibili QR poll now reads the result `code` from the top level of the response, so `86038` (expired) and `86090` (scanned) are classified correctly instead of being treated as pending.
+- Flashback replay servers now skip the SQLite / credential init entirely, so no `dreamdisplayx.db` is ever opened on a replay world.
 
 # 1.9.3.2 Release
 
