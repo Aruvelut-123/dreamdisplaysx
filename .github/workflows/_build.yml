@@ -622,6 +622,17 @@ jobs:
       - name: Select Stonecutter version
         run: echo "${{ matrix.mc }}" > versions/active.txt
 
+      # The metadata job computed the publish version from the build_type input and wrote it back to
+      # its own gradle.properties, but this build job re-checks out the repo, which resets that file.
+      # Write the computed version here too so the loader jars are named with the publish version
+      # (e.g. release -> 1.9.3.2, not the checked-in 1.9.3.2-dev).
+      - name: Persist publish version for jar naming
+        if: inputs.build_type == 'release' || inputs.build_type == 'preview' || inputs.build_type == 'dev'
+        run: |
+          VERSION="${{ needs.metadata.outputs.version }}"
+          sed -i "s/^version=.*/version=$VERSION/" gradle.properties
+          grep '^version' gradle.properties
+
       - name: Download native archives
         uses: actions/download-artifact@v8.0.1
         with:
