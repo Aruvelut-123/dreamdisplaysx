@@ -20,6 +20,7 @@ Bilibili playurl / metadata requests keep sending the login cookie, so VIP movie
 ### Fixes
 
 - Metadata cache keys now cover bangumi episodes (`ep:<id>`) and seasons (`season:<id>`), so their titles / thumbnails persist in the metadata cache.
+- Removed the automatic "load Bilibili home recommendations when the panel is empty" behavior — an empty suggestions panel now stays blank until you search or play a video, since the recommendation feed did not work reliably.
 
 # 1.9.3.1 Release
 

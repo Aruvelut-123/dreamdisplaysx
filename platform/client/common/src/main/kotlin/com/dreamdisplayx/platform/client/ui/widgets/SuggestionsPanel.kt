@@ -38,10 +38,6 @@ class SuggestionsPanel(
 
     init {
         controller.onResults = { scrollOffset = 0 }
-        // Kick off the Bilibili home recommendation feed now that [onResults] is wired up, so an open
-        // menu is never a blank panel. Searches / related-video loads later supersede it via the
-        // controller's request sequence number.
-        controller.loadRecommendations()
     }
 
     private val searchBox: EditBox
