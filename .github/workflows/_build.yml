@@ -794,6 +794,29 @@ jobs:
                   return "libdreamdisplayx_lav.dylib"
               return "libdreamdisplayx_lav.so"
 
+          def sqlite_lib(platform: str) -> str:
+              if platform.startswith("windows-"):
+                  return "sqlitejdbc.dll"
+              if platform.startswith("macos-"):
+                  return "libsqlitejdbc.dylib"
+              return "libsqlitejdbc.so"
+
+          def sqlite_os_arch(platform: str) -> str:
+              mapping = {
+                  "linux-x64": "Linux/x86_64",
+                  "linux-aarch64": "Linux/aarch64",
+                  "macos-x64": "Mac/x86_64",
+                  "macos-aarch64": "Mac/aarch64",
+                  "windows-x64": "Windows/x86_64",
+                  "windows-aarch64": "Windows/aarch64",
+              }
+              return mapping.get(platform, "")
+
+          # The relocated sqlite native library must expose JNI symbols for the relocated
+          # com.dreamdisplayx.libs.org.sqlite.core.NativeDB class, or Fabric/NeoForge would crash
+          # when opening SQLite.
+          REBUILT_SQLITE_SYMBOL = b"Java_com_dreamdisplayx_libs_org_sqlite_core_NativeDB_"
+
           expected = [
               f"{platform}/{name}"
               for platform in platforms
@@ -807,6 +830,7 @@ jobs:
 
               with ZipFile(jar) as zip_file:
                   names = set(zip_file.namelist())
+                  contents = {name: zip_file.read(name) for name in names}
 
               missing = [
                   f"dreamdisplayx-natives/{entry}"
@@ -815,6 +839,15 @@ jobs:
               ]
               if missing:
                   raise SystemExit(f"{jar} is missing native entries: {missing}.")
+
+              # Verify each required platform ships the rebuilt sqlite native with relocated symbols.
+              for platform in platforms:
+                  osarch = sqlite_os_arch(platform)
+                  entry = f"org/sqlite/native/{osarch}/{sqlite_lib(platform)}"
+                  if entry not in names:
+                      raise SystemExit(f"{jar} is missing rebuilt sqlite native {entry}.")
+                  if REBUILT_SQLITE_SYMBOL not in contents[entry]:
+                      raise SystemExit(f"{jar} sqlite native {entry} lacks relocated JNI symbol.")
 
               bundled_ffmpeg = [
                   name for name in names
