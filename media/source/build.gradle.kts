@@ -9,7 +9,6 @@ dependencies {
     api(project(":util"))
     api(libs.caffeine)
     api(project(":media:player"))
-    api(libs.newpipeExtractor)
     api(libs.commonsCompress)
     api(libs.tukaaniXz)
     api(libs.kotlinxCoroutinesCore)

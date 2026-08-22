@@ -1,7 +1,6 @@
 package com.dreamdisplayx.platform.client
 
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
-import com.dreamdisplayx.media.source.youtube.cookie.CookieSource
 import org.tomlj.Toml
 import org.tomlj.TomlParseResult
 import org.tomlj.TomlTable
@@ -34,12 +33,6 @@ class Config(private val baseDir: File) {
 
     /** Whether displays are enabled at all. */
     var displaysEnabled: Boolean = true
-
-    /** Browser to import `yt-dlp` cookies from, or [CookieSource.NONE] to disable. */
-    var ytdlpCookieSource: CookieSource = CookieSource.NONE
-
-    /** Proxy URL passed to `yt-dlp`, or empty for a direct connection. */
-    var ytdlpProxy: String = ""
 
     /** Whether to use hardware-accelerated video decoding. */
     var useHwAccel: Boolean = true
@@ -116,8 +109,6 @@ class Config(private val baseDir: File) {
         data["default-render-distance"]?.toIntOrNull()?.let { defaultDistance = ((it / 16.0).roundToInt().coerceIn(2, 12)) * 16 }
         data["default-default-display-volume"]?.toDoubleOrNull()?.let { defaultDisplayVolume = it }
         data["displays-enabled"]?.toBooleanStrictOrNull()?.let { displaysEnabled = it }
-        data["ytdlp-cookies-from-browser"]?.let { CookieSource.fromConfig(it)?.let { c -> ytdlpCookieSource = c } }
-        data["ytdlp-proxy"]?.let { ytdlpProxy = it }
         data["use-hw-accel"]?.toBooleanStrictOrNull()?.let { useHwAccel = it }
         data["prefer-fps60"]?.toBooleanStrictOrNull()?.let { preferFps60 = it }
         data["audio-acoustics"]?.let { token ->
@@ -137,8 +128,6 @@ class Config(private val baseDir: File) {
         }
         t?.getDouble("default-display-volume")?.let { defaultDisplayVolume = it }
         displaysEnabled = t?.getBoolean("displays-enabled") ?: displaysEnabled
-        t?.getString("ytdlp-cookies-from-browser")?.let { CookieSource.fromConfig(it)?.let { c -> ytdlpCookieSource = c } }
-        t?.getString("ytdlp-proxy")?.let { ytdlpProxy = it }
         useHwAccel = t?.getBoolean("use-hw-accel") ?: useHwAccel
         preferFps60 = t?.getBoolean("prefer-fps60") ?: preferFps60
         t?.getString("audio-acoustics")?.let { token ->
@@ -214,21 +203,6 @@ class Config(private val baseDir: File) {
             get = { audioAcoustics },
             apply = { audioAcoustics = it; save() },
         ),
-        ConfigEntry(
-            "ytdlp-cookies-from-browser", "yt-dlp cookies",
-            "Browser to import yt-dlp cookies from, or NONE to disable.",
-            ConfigEntryType.ENUM,
-            values = CookieSource.entries.toList(),
-            get = { ytdlpCookieSource },
-            apply = { ytdlpCookieSource = it; save() },
-        ),
-        ConfigEntry(
-            "ytdlp-proxy", "yt-dlp proxy",
-            "Proxy URL passed to yt-dlp, or empty for a direct connection.",
-            ConfigEntryType.STRING,
-            get = { ytdlpProxy },
-            apply = { ytdlpProxy = it; save() },
-        ),
     )
 
     /** Persists the current configuration values to disk as standard TOML. */
@@ -240,8 +214,6 @@ class Config(private val baseDir: File) {
             appendLine("default-render-distance = $defaultDistance")
             appendLine("default-display-volume = $defaultDisplayVolume")
             appendLine("displays-enabled = $displaysEnabled")
-            appendLine("ytdlp-cookies-from-browser = \"${tomlQuote(ytdlpCookieSource.configToken)}\"")
-            appendLine("ytdlp-proxy = \"${tomlQuote(ytdlpProxy)}\"")
             appendLine("use-hw-accel = $useHwAccel")
             appendLine("prefer-fps60 = $preferFps60")
             appendLine("audio-acoustics = \"${audioAcoustics.name.lowercase()}\"")

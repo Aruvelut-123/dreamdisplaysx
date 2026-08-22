@@ -244,8 +244,10 @@ internal class FramePrebuffer(
                     getAudioClock,
                     { flushRequested || !alive() || parked().also { if (it) abortedByPark = true } },
                     dropStaleTimeline = false,
-                    // Only worth skipping a late frame while a fresher one is already decoded behind it
-                    dropWhenBehind = { !tolerateLateness || queue.isNotEmpty() },
+                    // Only worth skipping a late frame while a fresher one is already decoded behind it,
+                    // or when the A/V drift has grown so large that the player must resync (like online
+                    // video players do — drop frames to catch up with the audio clock).
+                    dropWhenBehind = { !tolerateLateness || queue.isNotEmpty() || (getAudioClock() - tf.pts) > AV_DRIFT_RESYNC_NS },
                 )
                 if (abortedByPark && !flushRequested && alive()) {
                     pending.set(tf)
@@ -341,6 +343,13 @@ internal class FramePrebuffer(
 
         /** Floor for the prefill deadline, so a slow source still starts within a bounded time. */
         private const val DEFAULT_PRIME_DEADLINE_MS = 800L
+
+        /**
+         * When the video is this far behind the audio clock, always drop the frame to let the decoder
+         * catch up (like online video players do). Without this, a slow decoder would keep presenting
+         * frames later and later, and the A/V gap would grow unboundedly.
+         */
+        private const val AV_DRIFT_RESYNC_NS = 5_000_000_000L
 
         /** Prebuffer depth in ms. On by default; set `-Ddreamdisplayx.playback.prebufferMs=0` to disable. */
         val prebufferMs: Long =

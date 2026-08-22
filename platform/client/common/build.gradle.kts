@@ -23,7 +23,6 @@ dependencies {
     api(libs.caffeine)
     api(libs.tukaaniXz)
     api(libs.semver4j)
-    api(libs.newpipeExtractor)
     api(libs.kotlinxCoroutinesCore)
     api(libs.zxingCore)
     api(libs.okhttp)

@@ -1,7 +1,6 @@
 package com.dreamdisplayx.media.source.twitch
 
 import com.dreamdisplayx.api.media.source.model.MediaSource
-import com.dreamdisplayx.media.source.youtube.YtDlp
 import com.dreamdisplayx.util.*
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
@@ -70,16 +69,16 @@ object TwitchApi {
     /** GQL URL. */
     private const val GQL_URL = "https://gql.twitch.tv/gql"
 
-    /** Twitch's public web-player client id (also hardcoded in `yt-dlp`); not a user credential. */
+    /** Twitch's public web-player client id; not a user credential. */
     private const val WEB_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 
     /** The token params Twitch's own web player sends; usher rejects tokens minted for other player types. */
     private const val TOKEN_PARAMS =
         """params:{platform:"web",playerBackend:"mediaplayer",playerType:"site"}"""
 
-    /** Resolves metadata for [source], preferring the GQL fast path over the yt-dlp fallback. */
+    /** Resolves metadata for [source] via the GQL API. */
     fun resolve(source: MediaSource.Twitch): TwitchMetadata? =
-        resolveViaGql(source) ?: resolveViaStreams(source)
+        resolveViaGql(source)
 
     /**
      * Fetches live-channel metadata and the stream playback access token in one GQL round trip.
@@ -278,20 +277,4 @@ object TwitchApi {
 
     /** Escapes a URL-derived value for safe embedding inside a GQL string literal. */
     private fun escape(value: String): String = value.replace("\\", "\\\\").replace("\"", "\\\"")
-
-    /** Fallback: derives metadata from the yt-dlp stream list's generic info-dict fields. */
-    private fun resolveViaStreams(source: MediaSource.Twitch): TwitchMetadata? =
-        runCatching {
-            YtDlp.fetch(source.url).firstOrNull()?.let { first ->
-                TwitchMetadata(
-                    title = first.title,
-                    channelName = first.uploaderName,
-                    thumbnailUrl = first.thumbnailUrl,
-                    viewCount = first.viewCount,
-                    isLive = first.isLive,
-                )
-            }
-        }.onFailure { e ->
-            logger.debug("Twitch metadata fetch failed for {}: {}.", source.url, e.message)
-        }.getOrNull()
 }

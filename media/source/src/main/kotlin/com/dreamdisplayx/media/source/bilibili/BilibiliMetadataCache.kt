@@ -3,7 +3,6 @@ package com.dreamdisplayx.media.source.bilibili
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.media.source.platform.PlatformMetadataCache
 import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
-import com.dreamdisplayx.media.source.platform.YtDlpMetadataFallback
 
 /**
  * Metadata cache for Bilibili VODs and live rooms, so a pasted BIlibili link shows a real title /
@@ -17,7 +16,7 @@ object BilibiliMetadataCache {
         name = "Bilibili",
         liveTtlSeconds = 60,
         staticTtlMinutes = 30,
-        fetch = { key -> sourceFor(key)?.let { BilibiliApi.metadata(it) ?: YtDlpMetadataFallback.fetch(it.url) } },
+        fetch = { key -> sourceFor(key)?.let { BilibiliApi.metadata(it) } },
     )
 
     /** The cache key for [source]: `video:<bvid|av<avid>>:<part>` for a VOD, `room:<id>` for a live room, `ep:<id>` / `season:<id>` for bangumi. */

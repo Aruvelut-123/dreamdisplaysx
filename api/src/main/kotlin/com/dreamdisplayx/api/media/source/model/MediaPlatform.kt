@@ -28,6 +28,6 @@ enum class MediaPlatform {
     /** A direct media file or streaming manifest the player opens itself. */
     DIRECT,
 
-    /** Any other pasted link, left to the extractor chain (the long tail `yt-dlp` covers). */
+    /** Any other pasted link, resolved by the fallback resolver chain. */
     OTHER;
 }

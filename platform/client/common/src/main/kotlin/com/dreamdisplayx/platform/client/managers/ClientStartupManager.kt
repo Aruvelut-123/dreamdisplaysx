@@ -5,8 +5,6 @@ import com.dreamdisplayx.api.runtime.module.DreamDisplaysXModule
 import com.dreamdisplayx.api.runtime.registry.service.register
 import com.dreamdisplayx.media.player.nativebridge.NativeMedia
 import com.dreamdisplayx.media.player.process.FFmpegBinary
-import com.dreamdisplayx.media.source.youtube.cache.FormatDiskCache
-import com.dreamdisplayx.media.source.youtube.YtDlp
 import com.dreamdisplayx.platform.client.Config
 import com.dreamdisplayx.platform.client.Focuser
 import com.dreamdisplayx.platform.client.Initializer
@@ -70,14 +68,9 @@ object ClientStartupManager {
         defaultModules.forEach(application::registerModule)
         application.start()
 
-        YtDlp.prewarmAsync()
         FFmpegBinary.prewarmAsync()
         NativeMedia.prewarmAsync()
 
-        scope.launch {
-            runCatching { FormatDiskCache.sweepExpired() }
-                .onFailure { e -> logger.warn("Cache sweep failed.", e) }
-        }
         Focuser().start()
         scope.launch {
             while (isActive) {

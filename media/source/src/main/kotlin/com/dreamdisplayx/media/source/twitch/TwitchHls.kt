@@ -35,7 +35,7 @@ internal object TwitchHls {
     fun vodUrl(id: String, token: TwitchAccessToken): String =
         usherUrl("$USHER_BASE/vod/$id.m3u8", token)
 
-    /** Appends the query parameters Twitch's web player sends usher (mirrors `yt-dlp`'s set). */
+    /** Appends the query parameters Twitch's web player sends usher. */
     private fun usherUrl(base: String, token: TwitchAccessToken): String {
         val params = listOf(
             "allow_source" to "true",

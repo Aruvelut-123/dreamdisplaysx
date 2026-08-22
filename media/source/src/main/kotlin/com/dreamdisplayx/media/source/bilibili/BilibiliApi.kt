@@ -389,9 +389,9 @@ object BilibiliApi {
         if (dash != null) {
             val streams = ArrayList<MediaStream>()
             dash.array("video")?.mapNotNull { it.asJsonObjectOrNull() }?.forEach { v ->
-                val url = dashUrl(v) ?: return@forEach
+                val urls = dashUrls(v) ?: return@forEach
                 streams += MediaStream(
-                    url = url,
+                    url = urls.first(), backupUrls = urls.drop(1),
                     type = MediaStreamType.VIDEO,
                     codec = null,
                     width = v.optInt("width"),
@@ -403,9 +403,9 @@ object BilibiliApi {
                 )
             }
             dash.array("audio")?.mapNotNull { it.asJsonObjectOrNull() }?.forEach { a ->
-                val url = dashUrl(a) ?: return@forEach
+                val urls = dashUrls(a) ?: return@forEach
                 streams += MediaStream(
-                    url = url,
+                    url = urls.first(), backupUrls = urls.drop(1),
                     type = MediaStreamType.AUDIO,
                     codec = null,
                     width = null,
@@ -419,15 +419,25 @@ object BilibiliApi {
             if (streams.isNotEmpty()) return streams
         }
 
-        // Very low quality / old videos have no DASH manifest, only a single progressive URL.
+        // Very low quality / old videos have no DASH manifest, only progressive URLs.
         // Regular VODs key this "durl"; bangumi's `video_info` keys the same shape "durls".
-        val durl = (playurlData.array("durl") ?: playurlData.array("durls"))
-            ?.firstOrNull()?.asJsonObjectOrNull() ?: return emptyList()
-        val durlUrl = durl.optString("url") ?: return emptyList()
+        // Each durl entry may carry its own `url` and `backup_url` array.
+        val durls = (playurlData.array("durl") ?: playurlData.array("durls"))
+            ?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
+        val allUrls = durls.flatMap { d ->
+            buildList {
+                d.optString("url")?.let { add(it) }
+                d.array("backup_url")?.forEach { e -> (e as? JsonPrimitive)?.content?.let { add(it) } }
+                d.array("backupUrl")?.forEach { e -> (e as? JsonPrimitive)?.content?.let { add(it) } }
+            }
+        }.distinct()
+        val primary = allUrls.firstOrNull() ?: return emptyList()
         return listOf(
             MediaStream(
-                url = durlUrl, type = MediaStreamType.VIDEO_AUDIO,
-                codec = null, width = null, height = null, fps = null, bitrate = durl.optInt("bandwidth"),
+                url = primary, backupUrls = allUrls.drop(1),
+                type = MediaStreamType.VIDEO_AUDIO,
+                codec = null, width = null, height = null, fps = null,
+                bitrate = durls.firstOrNull()?.optInt("bandwidth"),
                 audioTrackName = null, audioTrackLang = null,
             ),
         )
@@ -444,11 +454,17 @@ object BilibiliApi {
                 val codecList = format.array("codec")?.mapNotNull { it.asJsonObjectOrNull() } ?: continue
                 for (codec in codecList) {
                     val baseUrl = codec.optString("base_url") ?: continue
-                    val urlInfo = codec.array("url_info")?.firstOrNull()?.asJsonObjectOrNull() ?: continue
-                    val host = urlInfo.optString("host") ?: continue
-                    val extra = urlInfo.optString("extra").orEmpty()
+                    val urlInfo = codec.array("url_info")?.mapNotNull { it.asJsonObjectOrNull() }.orEmpty()
+                    if (urlInfo.isEmpty()) continue
+                    // Collect all CDN hosts from url_info, first is primary, rest are backups
+                    val urls = urlInfo.mapNotNull { ui ->
+                        val host = ui.optString("host") ?: return@mapNotNull null
+                        "$host$baseUrl${ui.optString("extra").orEmpty()}"
+                    }.distinct()
+                    val first = urls.firstOrNull() ?: continue
                     streams += MediaStream(
-                        url = "$host$baseUrl$extra", type = MediaStreamType.VIDEO_AUDIO,
+                        url = first, backupUrls = urls.drop(1),
+                        type = MediaStreamType.VIDEO_AUDIO,
                         codec = codec.optString("codec_name"), width = null, height = null, fps = null,
                         bitrate = codec.optInt("current_qn"), audioTrackName = null, audioTrackLang = null,
                     )
@@ -458,11 +474,13 @@ object BilibiliApi {
         return streams
     }
 
-    /** Reads a DASH representation's playable URL, preferring `baseUrl` over its backup list. */
-    private fun dashUrl(rep: JsonObject): String? =
-        rep.optString("baseUrl") ?: rep.optString("base_url")
-            ?: rep.array("backupUrl")?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
-            ?: rep.array("backup_url")?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
+    /** Reads a DASH representation's playable URLs: primary + all backup CDNs. */
+    private fun dashUrls(rep: JsonObject): List<String>? = buildList {
+        rep.optString("baseUrl")?.let { add(it) }
+        rep.optString("base_url")?.let { if (it !in this) add(it) }
+        rep.array("backupUrl")?.forEach { e -> (e as? JsonPrimitive)?.content?.let { if (it !in this) add(it) } }
+        rep.array("backup_url")?.forEach { e -> (e as? JsonPrimitive)?.content?.let { if (it !in this) add(it) } }
+    }.takeIf { it.isNotEmpty() }
 
     /** Fetches (and caches) the WBI `img_key` / `sub_key` pair used to sign gated endpoints. */
     private fun wbiKeys(): WbiKeys? {

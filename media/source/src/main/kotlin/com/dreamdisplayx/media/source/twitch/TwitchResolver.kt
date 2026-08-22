@@ -8,7 +8,6 @@ import com.dreamdisplayx.api.media.source.model.ResolvedMedia
 import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.api.media.stream.model.MediaStreamType
 import com.dreamdisplayx.media.source.platform.LiveAwareResolvedMediaCache
-import com.dreamdisplayx.media.source.youtube.YtDlpResolver
 import com.dreamdisplayx.util.net.DreamHttpClient
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
@@ -16,14 +15,11 @@ import java.nio.charset.StandardCharsets
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-/**
- * In-process Twitch stream resolver: one GQL round trip for the playback access token (plus metadata), then a direct
- * usher request for the stream URLs, no `yt-dlp` subprocess.
- */
+/** In-process Twitch stream resolver: one GQL round trip for the playback access token (plus metadata), then a direct
+ * usher request for the stream URLs. */
 object TwitchResolver : MediaResolverService {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/TwitchResolver")
 
-    /** Above [YtDlpResolver] (0) so the subprocess is only reached when this path fails. */
     override val priority: Int = 10
 
     /**
@@ -41,8 +37,7 @@ object TwitchResolver : MediaResolverService {
     }
 
     /**
-     * Resolves [source] via GQL + usher. Throws on any failure so the registry falls through to
-     * the `yt-dlp` resolver.
+     * Resolves [source] via GQL + usher. Throws on any failure.
      */
     override fun resolve(source: MediaSource): ResolvedMedia {
         val twitch = source as? MediaSource.Twitch

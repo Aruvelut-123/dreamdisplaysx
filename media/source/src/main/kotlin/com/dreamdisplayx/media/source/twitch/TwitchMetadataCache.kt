@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 /**
  * In-memory cache of [TwitchMetadata], keyed by [cacheKey] (channel / VOD-id / clip-slug, so the
  * three kinds never collide). Live lookups expire quickly since viewer count and title change
- * continuously; VOD / clip lookups are static and share [VideoMetadataCache]'s longer TTL.
+ * continuously; VOD / clip lookups are static with a longer TTL.
  */
 object TwitchMetadataCache {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/TwitchMetadataCache")

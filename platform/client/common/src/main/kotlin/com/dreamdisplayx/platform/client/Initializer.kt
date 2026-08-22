@@ -2,7 +2,6 @@ package com.dreamdisplayx.platform.client
 
 import com.dreamdisplayx.api.runtime.registry.service.getOrNull
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
-import com.dreamdisplayx.media.source.youtube.NewPipeResolver
 import com.dreamdisplayx.platform.client.core.ClientApplication
 import com.dreamdisplayx.platform.client.core.ClientLifecycleEvent
 import com.dreamdisplayx.platform.client.core.DreamServices
@@ -32,7 +31,7 @@ object Initializer {
     /** Logger for startup and lifecycle messages. */
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/Initializer")
 
-    /** Called once during mod startup; initializes config, `yt-dlp`, `FFmpeg`, disk cache, and the focuser thread. */
+    /** Called once during mod startup; initializes config, `FFmpeg`, disk cache, and the focuser thread. */
     fun onModInit(dreamDisplaysMod: Mod) {
         // Android is not supported — the mod relies on native libraries (dlopen/JNI) and
         // subprocess execution that SELinux and noexec policies prevent on stock Android.
@@ -59,7 +58,6 @@ object Initializer {
     fun onServerJoined(serverId: String) {
         ClientStateManager.connectedServerId = serverId
         DisplayRegistry.loadScreensForServer(serverId)
-        NewPipeResolver.warmConnection()
         DreamServices.registry.getOrNull<ClientApplication>()
             ?.emit(ClientLifecycleEvent.ServerJoined(serverId))
     }

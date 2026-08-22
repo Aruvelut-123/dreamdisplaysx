@@ -16,8 +16,6 @@ import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.playback.service.keys.PlaybackServices
 import com.dreamdisplayx.api.runtime.registry.service.get
 import com.dreamdisplayx.api.watchparty.service.keys.WatchPartyServices
-import com.dreamdisplayx.media.source.youtube.cache.VideoMetadataCache
-import com.dreamdisplayx.media.source.youtube.cache.VideoTitleCache
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
@@ -82,7 +80,6 @@ class DisplayMenu private constructor(
     private lateinit var popoutButton: IconButton
     private lateinit var audioTrackButton: IconButton
 
-    private var lastSuggestedVideoId: String? = null
     private var prevQualityListSize = 0
     private var suggestionsRect: UiRect? = null
 
@@ -296,7 +293,6 @@ class DisplayMenu private constructor(
                     { Component.translatable("dreamdisplayx.ui.quality_applying").string.takeIf { ds.isApplyingQuality } },
                     { Component.translatable("dreamdisplayx.ui.audio_track_loading").string.takeIf { ds.isSwitchingAudioTrack } },
                 ),
-                chapters = { DisplayChapters.of(ds) },
             ) { nanos ->
                 if (ds.canSeek() && !ds.isLive && ds.canSeekHere) {
                     playback.seek(displayId, (nanos / 1_000_000L).milliseconds)
@@ -494,18 +490,7 @@ class DisplayMenu private constructor(
         // A pasted link exists nowhere else, so remember it locally the moment it is used
         if (info.isCustom) {
             CustomVideoStore.remember(info.getWatchUrl(), info.title)
-            return
         }
-
-        // Related videos, the title cache, and the metadata cache are all keyed by a YouTube video
-        // id. A Twitch / Vimeo / Kick card has none — its id is a URL or a platform key — so feeding
-        // those here would fire a bogus YouTube "related" lookup. Only real YouTube picks continue.
-        val videoId = DreamServices.registry.getOrNull(MediaServices.SEARCH)?.extractVideoId(info.getWatchUrl())
-            ?: return
-        VideoTitleCache.put(videoId, info.title)
-        VideoMetadataCache.put(videoId, info)
-        lastSuggestedVideoId = videoId
-        suggestions.setRelatedTo(videoId)
     }
 
     override fun drawScreen(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, partialTick: Float) {
@@ -543,7 +528,6 @@ class DisplayMenu private constructor(
         } else {
             suggestions.visible = false
         }
-        refreshRelatedVideos()
 
         drawChildren(g, mouseX, mouseY, partialTick)
         //? if <1.21.11 {
@@ -571,16 +555,6 @@ class DisplayMenu private constructor(
     /** Keeps the synchronization mode slider aligned with server echoes and watch-party state. */
     private fun resyncModeSlider() {
         sync.syncToCurrent()
-    }
-
-    /** Points the suggestions panel at the currently playing video when it changes. */
-    private fun refreshRelatedVideos() {
-        val ds = displayScreen
-        val currentId = DreamServices.registry.getOrNull(MediaServices.SEARCH)?.extractVideoId(ds.videoUrl ?: "")
-        if (currentId != null && currentId != lastSuggestedVideoId) {
-            lastSuggestedVideoId = currentId
-            suggestions.setRelatedTo(currentId)
-        }
     }
 
     override fun onMouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean =

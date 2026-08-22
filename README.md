@@ -77,7 +77,6 @@ Create a display, paste a link with `/display video <link>` — Dream DisplaysX 
 
 |                                                                                                                                                                                                                                                                           | Source                        | What works                                                                     |
 |---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|--------------------------------------------------------------------------------|
-| <img src="https://cdn.simpleicons.org/youtube" width="32" height="32" alt="YouTube">                                                                                                                                                                                      | **YouTube**                   | Videos and livestreams, ad-free, up to 4K, with multiple audio languages       |
 | <img src="https://cdn.simpleicons.org/twitch" width="32" height="32" alt="Twitch">                                                                                                                                                                                        | **Twitch**                    | Live channels, VODs, and clips                                                 |
 | <img src="https://cdn.simpleicons.org/kick" width="32" height="32" alt="Kick">                                                                                                                                                                                            | **Kick**                      | Live channels and VODs                                                         |
 | <img src="https://cdn.simpleicons.org/vimeo" width="32" height="32" alt="Vimeo">                                                                                                                                                                                          | **Vimeo**                     | Public videos and live events                                                  |
@@ -89,7 +88,6 @@ Create a display, paste a link with `/display video <link>` — Dream DisplaysX 
 ### Playback
 
 - **Seamless multiplayer synchronization: local, synced, and broadcast**
-- **Ad-free YouTube video playback, so you can enjoy uninterrupted viewing**
 - Direct search and suggestions
 - Picture-in-Picture mode
 - Adjustable resolutions from 144p up to 4K
@@ -153,13 +151,6 @@ cd dreamdisplaysx
 
 The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; the active version is
 selected in `versions/active.txt`. Native libraries (FFmpeg) are downloaded at runtime or bundled by the CI workflow.
-
-## Support this project
-
-If you enjoy Dream DisplaysX, consider [buying me a coffee](https://ko-fi.com/arnodoelinger). Every contribution helps
-keep the project alive!
-
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/arnodoelinger)
 
 ## Disclaimer
 

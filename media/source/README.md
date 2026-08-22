@@ -7,13 +7,13 @@ can play.
 
 - `DefaultMediaResolverChain`
 - `DefaultStreamSelector`
-- YouTube / `yt-dlp` / `NewPipeExtractor` integration
+- Twitch, Vimeo, Kick, Bilibili resolvers
 - Metadata / title / cache helpers for source resolution
 
 ## Boundaries
 
 - No rendering, playback loop, or Minecraft shit
-- Resolver tooling such as `yt-dlp` is allowed here, but display state management is not
+- Resolver tooling is allowed here, but display state management is not
 - Results should leave through `com.dreamdisplayx.media.api`
 
 ## Dependencies

@@ -7,7 +7,6 @@ import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
-import com.dreamdisplayx.api.media.service.keys.MediaServices
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
 import com.dreamdisplayx.api.media.source.model.MediaPlatform
 import com.dreamdisplayx.api.media.source.model.MediaSource
@@ -16,10 +15,7 @@ import com.dreamdisplayx.media.source.kick.KickMetadataCache
 import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
 import com.dreamdisplayx.media.source.twitch.TwitchMetadataCache
 import com.dreamdisplayx.media.source.vimeo.VimeoMetadataCache
-import com.dreamdisplayx.media.source.youtube.cache.VideoMetadataCache
-import com.dreamdisplayx.media.source.youtube.cache.VideoTitleCache
 import com.dreamdisplayx.platform.client.Initializer
-import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.render.*
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
@@ -306,7 +302,7 @@ class PreviewSection(
     )
 
     /**
-     * Resolves [OverlayInfo] for the current display URL: YouTube via [VideoMetadataCache], Twitch
+     * Resolves [OverlayInfo] for the current display URL: Twitch
      * via [TwitchMetadataCache], Vimeo / Kick via their platform caches, and a bare file / long-tail
      * link from the URL alone.
      */
@@ -352,24 +348,29 @@ class PreviewSection(
             is MediaSource.DirectStream -> return customOverlayInfo(source.streamUrl)
             is MediaSource.Remote -> return customOverlayInfo(source.url)
 
-            else -> {
-                val videoId = DreamServices.registry.getOrNull(MediaServices.SEARCH)?.extractVideoId(ds.videoUrl ?: "")
-                val meta = if (videoId != null) VideoMetadataCache.get(videoId) else null
-                if (videoId != null && meta == null) VideoMetadataCache.requestAsync(videoId)
-                var title = meta?.title
-                if (title.isNullOrEmpty() && videoId != null) title = VideoTitleCache.get(videoId)
-                return OverlayInfo(
-                    title = title,
-                    uploader = meta?.uploader,
-                    uploaderAvatarUrl = meta?.channelAvatarUrl,
-                    isVerified = meta?.isVerified == true,
-                    views = meta?.formatViews() ?: "",
-                    likes = meta?.formatLikes() ?: "",
-                    published = meta?.publishedText,
-                    isNew = meta?.isRecent(7) == true,
-                    platform = MediaPlatform.YOUTUBE,
-                )
-            }
+            is MediaSource.YouTube -> return OverlayInfo(
+                title = source.videoId,
+                uploader = null,
+                uploaderAvatarUrl = null,
+                isVerified = false,
+                views = "",
+                likes = "",
+                published = null,
+                isNew = false,
+                platform = MediaPlatform.YOUTUBE,
+            )
+
+            is MediaSource.Ingest -> return OverlayInfo(
+                title = "Live Ingest",
+                uploader = null,
+                uploaderAvatarUrl = null,
+                isVerified = false,
+                views = "",
+                likes = "",
+                published = null,
+                isNew = false,
+                platform = MediaPlatform.OTHER,
+            )
         }
     }
 
@@ -479,13 +480,6 @@ class PreviewSection(
             metaX += badgeSize + 3
             metaW -= badgeSize + 3
         }
-        val chapter = DisplayChapters.activeTitle(ds)
-        if (chapter != null) {
-            val shownChapter = UiText.trim(font, chapter, metaW * 2 / 5)
-            val chapterW = font.width(shownChapter)
-            g.drawText(font, shownChapter, x + w - padX - chapterW, metaY, UiTheme.ACCENT, false)
-            metaW -= chapterW + 6
-        }
         g.drawText(
             font, UiText.trim(font, parts.toString(), metaW),
             metaX, metaY, UiTheme.TEXT_SECONDARY, false,
@@ -521,7 +515,7 @@ class PreviewSection(
         is MediaSource.Vimeo -> VimeoMetadataCache.cacheKey(source)
         is MediaSource.Kick -> KickMetadataCache.cacheKey(source)
         is MediaSource.Bilibili -> BilibiliMetadataCache.cacheKey(source)
-        is MediaSource.YouTube -> source.videoId
+        is MediaSource.YouTube -> null
         else -> null
     }
 
@@ -559,7 +553,7 @@ class PreviewSection(
                 else meta.thumbnailUrl?.let { Thumbnails.request(key, it) }
             }
 
-            is MediaSource.YouTube -> Thumbnails.request(source.videoId)
+            is MediaSource.YouTube -> {} // no thumbnail support
             else -> {}
         }
     }

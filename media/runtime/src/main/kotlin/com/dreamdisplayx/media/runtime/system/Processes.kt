@@ -12,9 +12,9 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.TimeUnit
 
 /**
- * Shared subprocess plumbing for the external binaries the mod drives (`yt-dlp`, `ffmpeg`, `xattr`):
+ * Shared subprocess plumbing for the external binaries the mod drives (`ffmpeg`, `xattr`):
  * draining output without deadlocking, killing whole process trees, and post-download fixups for
- * executables. Replaces private near-identical copies in YtDlp and FFmpegBinary.
+ * executables. Replaces private near-identical copies in FFmpegBinary.
  */
 object Processes {
     /**

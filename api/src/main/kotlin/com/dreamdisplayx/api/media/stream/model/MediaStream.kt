@@ -12,6 +12,9 @@ data class MediaStream(
     /** Direct URL the player can open. */
     val url: String,
 
+    /** Alternate CDN URLs for the same stream, tried in order when the current one fails. */
+    val backupUrls: List<String> = emptyList(),
+
     /** Whether this stream contains video, audio, or both. */
     val type: MediaStreamType,
 

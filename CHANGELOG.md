@@ -1,3 +1,27 @@
+# 1.9.3.4 Release
+
+## Highlights
+
+- **yt-dlp removed** — the `yt-dlp` subprocess, binary downloader/updater, and all YouTube resolution (NewPipeExtractor) are gone. No external Python/toolchain dependency remains; Twitch, Vimeo, Kick, and Bilibili all keep their in-process resolvers.
+- **Direct search service** — pasting a URL into search now shows its info card directly, and Bilibili `BV` / `av` IDs resolve straight to the video.
+- **Bilibili multi-CDN smart switching** — stream resolution now collects every CDN backup URL from the Bilibili API; when a CDN keeps failing, the player automatically switches to the next backup before re-resolving.
+- **Seek-jump fix** — watching a video, then loading a new one, no longer restores the previous video's old saved position (which could jump to a stale ~8s timestamp).
+- **A/V drift auto-resync** — if the video drifts more than 5s behind the audio clock, frames are dropped to let the decoder catch up (like online players), instead of drifting unboundedly.
+
+## Sources
+
+- Removed `yt-dlp` orchestrator, binary bootstrap/self-update, client race, output parser, format & search caches, and cookie manager.
+- Removed YouTube resolver chain (`NewPipeExtractor`) and YouTube-specific UI paths (chapters, related videos, title/metadata caches).
+- Removed `newpipeExtractor` (and its transitive `nanojson` / `jsoup` / `rhino`) dependencies and shadow relocations.
+- `MediaSearchService` is now backed by `DirectSearchService`: URL paste → info card, `BV`/`av` → Bilibili video, no text search or related videos.
+- Removed `ytdlp-proxy` / `ytdlp-cookies-from-browser` client & NeoForge config entries.
+
+## Media player
+
+- Bilibili DASH / durl / live streams keep every backup CDN URL; on repeated session stalls the player tries the next CDN before invalidating caches and re-resolving.
+- Fixed stale `savedTimeNanos` reuse on video swap that caused the first-second reload-and-seek jump.
+- `FramePrebuffer` drops frames more than 5s behind the audio clock so a slow decoder resyncs instead of drifting forever.
+
 # 1.9.3.3 Release
 
 Based on Dream Displays [`86ba1b61`](https://github.com/arnodoelinger/dreamdisplays/commit/86ba1b61).

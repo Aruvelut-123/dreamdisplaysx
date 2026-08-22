@@ -48,7 +48,7 @@ object DirectStreamResolver : MediaResolverService {
      * URLs a probe already proved are not direct media, so the speculative attempt on a page URL is
      * paid once rather than on every re-entry. Without it a normal extractor video would probe
      * again on every quality switch and stall recovery, adding a round trip each time to a path
-     * that was always going to end up at `yt-dlp`.
+     * that was always going to end up at a URL probe.
      */
     private val notDirect: Cache<String, Boolean> = Caffeine.newBuilder()
         .maximumSize(256)

@@ -87,7 +87,7 @@ sealed interface MediaSource {
             is Remote -> MediaPlatform.OTHER
         }
 
-    /** Returns the HTTP(S) URL a resolver can feed to `yt-dlp` / `NewPipeExtractor`. */
+    /** Returns the HTTP(S) URL a resolver can feed to the platform API or direct stream. */
     fun toResolvableUrl(): String? = when (this) {
         is YouTube -> YouTubeUrls.watchUrl(videoId)
         is Remote -> url

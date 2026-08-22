@@ -8,14 +8,14 @@ import com.dreamdisplayx.media.source.platform.LiveAwareResolvedMediaCache
 import org.slf4j.LoggerFactory
 
 /**
- * In-process Bilibili resolver: one site-API call (see [BilibiliApi]) instead of a `yt-dlp` subprocess, mirroring the
- * other first-party resolvers.
+ * In-process Bilibili resolver: one site-API call (see [BilibiliApi]), mirroring the other
+ * first-party resolvers.
  */
 object BilibiliResolver : MediaResolverService {
     /** Logger. */
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliResolver")
 
-    /** Alongside the other first-party in-process resolvers, above the `yt-dlp` fallback. */
+    /** Alongside the other first-party in-process resolvers. */
     override val priority: Int = 10
 
     /** Live playurl URLs are session-bound, so live entries expire fast; VODs are stable. */

@@ -21,7 +21,7 @@ enum class CustomMediaKind {
     /** An audio container (`.mp3`, `.flac`, ...): recognizable media, but a display needs a picture. */
     AUDIO_ONLY,
 
-    /** Not recognizably direct media; the extractor chain (`NewPipe` / `yt-dlp`) decides. */
+    /** Not recognizably direct media; the resolver chain decides. */
     UNKNOWN;
 
     /** True when the URL can be handed straight to the player without an extractor. */

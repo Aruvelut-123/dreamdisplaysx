@@ -3,7 +3,6 @@ package com.dreamdisplayx.media.source.kick
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.media.source.platform.PlatformMetadataCache
 import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
-import com.dreamdisplayx.media.source.platform.YtDlpMetadataFallback
 
 /**
  * Metadata cache for Kick channels and VODs, so a pasted Kick link shows a real title / thumbnail /
@@ -17,10 +16,7 @@ object KickMetadataCache {
         // Live viewer counts and titles change constantly; VODs are static
         liveTtlSeconds = 60,
         staticTtlMinutes = 30,
-        // Falls back to yt-dlp when Cloudflare turns away the direct site-API call (see KickApi's
-        // datacenter-IP note) — playback already relies on the same fallback, this just borrows it
-        // for the card / preview metadata, so those aren't left blank.
-        fetch = { key -> sourceFor(key).let { KickApi.metadata(it) ?: YtDlpMetadataFallback.fetch(it.url) } },
+        fetch = { key -> sourceFor(key).let { KickApi.metadata(it) } },
     )
 
     /** The cache key for [source]: `video:<uuid>` for a VOD, `channel:<slug>` for a live channel. */

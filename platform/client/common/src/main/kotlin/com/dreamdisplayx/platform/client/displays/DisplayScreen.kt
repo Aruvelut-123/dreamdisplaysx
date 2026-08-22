@@ -499,6 +499,7 @@ class DisplayScreen(
     internal fun onVideoSwapped(videoUrl: String, lang: String) {
         this.videoUrl = videoUrl
         this.lang = lang
+        savedTimeNanos = 0L
         waitingForInitialTimeline = requiresServerTimeline()
         waitingSinceNanos = if (waitingForInitialTimeline) System.nanoTime() else 0L
     }

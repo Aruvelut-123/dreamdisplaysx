@@ -110,7 +110,7 @@ class MediaPlayer(
 
         /**
          * Resolve executor. Sized above the core count on purpose: this work is almost entirely
-         * spent blocked on the network and on `yt-dlp`, so a pool capped at 4 made the fifth display
+         * spent blocked on the network, so a pool capped at 4 made the fifth display
          * in a room wait out an earlier resolve before its own could even start.
          */
         private val INIT_EXECUTOR: ExecutorService = Executors.newFixedThreadPool(
@@ -193,6 +193,14 @@ class MediaPlayer(
     /** Timestamp of last stall recovery (0 = none yet). */
     @Volatile
     private var lastStallNanos = 0L
+
+    /** Current CDN backup index for the video stream (-1 = primary URL, 0 = first backup, etc.). */
+    @Volatile
+    private var cdnVideoIndex = -1
+
+    /** Current CDN backup index for the audio stream. */
+    @Volatile
+    private var cdnAudioIndex = -1
 
     /** In-place audio restarts used by the current session (see [handleAudioFailure]); reset per session. */
     private val audioRestartAttempts = AtomicInteger(0)
@@ -374,7 +382,7 @@ class MediaPlayer(
 
     /**
      * Returns true if the stream is a live stream. Livestreams start playing immediately
-     * and may not support seeking. Based on `yt-dlp` metadata; not always perfectly reliable.
+     * and may not support seeking. Not always perfectly reliable.
      */
     fun isLive(): Boolean = liveStream
 
@@ -683,7 +691,11 @@ class MediaPlayer(
             lastQuality,
             currentHwAccel(),
             live = liveStream,
-            onFirstFrame = retryPolicy::reset
+            onFirstFrame = {
+                retryPolicy.reset()
+                cdnVideoIndex = -1
+                cdnAudioIndex = -1
+            }
         )
         if (sessionManager.isPlaying) {
             state.set(PlaybackState.PLAYING)
@@ -873,7 +885,8 @@ class MediaPlayer(
     }
 
     /**
-     * Recovers from stalled session: first stall retries same streams, second escalates to re-resolve (live immediately).
+     * Recovers from stalled session: first stall retries same streams, second escalates to CDN backup URLs,
+     * then to re-resolve (live immediately escalates to CDN backups).
      */
     private fun handleSessionStall(reason: String) {
         if (terminated.get()) return
@@ -882,6 +895,9 @@ class MediaPlayer(
         val repeated = lastStallNanos != 0L && now - lastStallNanos < REPEATED_STALL_WINDOW_NS
         lastStallNanos = now
         if (repeated || liveStream) {
+            // Try the next CDN backup URL first (Bilibili and live streams usually expose several).
+            // Only when every CDN has failed do we fall through to a full re-resolve.
+            if (tryNextCdn(ss)) return
             val kind = if (liveStream) "Live stall" else "Repeated stall"
             logger.warn("$debugLabel $kind ($reason); invalidating cached URLs and re-resolving.")
             env.cacheInvalidator.invalidate(youtubeUrl)
@@ -904,6 +920,48 @@ class MediaPlayer(
                 }
             }
         }
+    }
+
+    /**
+     * Switches to the next backup CDN URL for the stalled video (then audio) stream, if any remain.
+     * Returns true when a switch was made (playback restarted with the new URL).
+     */
+    private fun tryNextCdn(ss: ActiveStreams): Boolean {
+        val video = ss.currentVideo
+        val videoBackups = video.backupUrls
+        if (cdnVideoIndex < videoBackups.size - 1) {
+            cdnVideoIndex++
+            val newUrl = videoBackups[cdnVideoIndex]
+            logger.warn("$debugLabel CDN failover: switching video stream to backup CDN #${cdnVideoIndex + 1}.")
+            streams = ss.copy(currentVideo = video.copy(url = newUrl))
+            safeExecute {
+                val pos = clock.currentTime()
+                if (sessionManager.beginSeek(ss.copy(currentVideo = video.copy(url = newUrl)), pos, lastQuality, currentHwAccel())) {
+                    watchdog.start()
+                } else {
+                    startStreams(ss.copy(currentVideo = video.copy(url = newUrl)), pos)
+                }
+            }
+            return true
+        }
+        val audio = ss.currentAudio
+        val audioBackups = audio.backupUrls
+        if (cdnAudioIndex < audioBackups.size - 1) {
+            cdnAudioIndex++
+            val newUrl = audioBackups[cdnAudioIndex]
+            logger.warn("$debugLabel CDN failover: switching audio stream to backup CDN #${cdnAudioIndex + 1}.")
+            streams = ss.copy(currentAudio = audio.copy(url = newUrl))
+            safeExecute {
+                val pos = clock.currentTime()
+                if (sessionManager.beginSeek(ss.copy(currentAudio = audio.copy(url = newUrl)), pos, lastQuality, currentHwAccel())) {
+                    watchdog.start()
+                } else {
+                    startStreams(ss.copy(currentAudio = audio.copy(url = newUrl)), pos)
+                }
+            }
+            return true
+        }
+        return false
     }
 
     /**

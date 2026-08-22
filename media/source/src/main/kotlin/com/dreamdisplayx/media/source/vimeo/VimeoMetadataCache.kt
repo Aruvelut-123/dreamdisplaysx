@@ -3,7 +3,6 @@ package com.dreamdisplayx.media.source.vimeo
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.media.source.platform.PlatformMetadataCache
 import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
-import com.dreamdisplayx.media.source.platform.YtDlpMetadataFallback
 
 /** Metadata cache for Vimeo videos, so the menu can show a real title / uploader / thumbnail for a pasted Vimeo link. */
 object VimeoMetadataCache {
@@ -12,10 +11,7 @@ object VimeoMetadataCache {
         // Vimeo has live events, but they are rare; a short TTL still keeps a live title current
         liveTtlSeconds = 60,
         staticTtlMinutes = 30,
-        // Falls back to yt-dlp when the player-config endpoint refuses the video (e.g. embedding
-        // disabled by the owner) - playback already relies on the same fallback, this just borrows
-        // it for the card / preview metadata so those aren't left blank.
-        fetch = { key -> sourceFor(key).let { VimeoApi.metadata(it) ?: YtDlpMetadataFallback.fetch(it.url) } },
+        fetch = { key -> sourceFor(key).let { VimeoApi.metadata(it) } },
     )
 
     /** The cache key for [source]: `<videoId>` or `<videoId>/<hash>` for an unlisted video. */

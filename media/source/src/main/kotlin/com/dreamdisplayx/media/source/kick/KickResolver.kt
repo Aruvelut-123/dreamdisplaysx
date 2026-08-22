@@ -8,14 +8,14 @@ import com.dreamdisplayx.media.source.platform.LiveAwareResolvedMediaCache
 import org.slf4j.LoggerFactory
 
 /**
- * In-process Kick resolver: one site-API call (see [KickApi]) instead of a `yt-dlp` subprocess, mirroring the other
+ * In-process Kick resolver: one site-API call (see [KickApi]), mirroring the other
  * first-party resolvers.
  */
 object KickResolver : MediaResolverService {
     /** Logger. */
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/KickResolver")
 
-    /** Alongside the other first-party in-process resolvers, above the `yt-dlp` fallback. */
+    /** Alongside the other first-party in-process resolvers. */
     override val priority: Int = 10
 
     /** Live playlist URLs are session-bound, so live entries expire fast; VODs are stable. */

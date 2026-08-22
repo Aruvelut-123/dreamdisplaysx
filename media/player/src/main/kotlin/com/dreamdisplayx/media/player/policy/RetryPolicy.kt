@@ -4,7 +4,7 @@ import com.dreamdisplayx.media.player.util.MediaUtil
 
 /**
  * Encapsulates retry logic for stream failures: decides whether to retry, whether to invalidate
- * the `yt-dlp` URL cache, and provides the exponential back-off delay for the next attempt.
+ * the resolved-URL cache, and provides the exponential back-off delay for the next attempt.
  */
 internal class RetryPolicy(private val maxRetries: Int = 3) {
     private val backoffMs = longArrayOf(1000, 3000, 8000)
@@ -43,7 +43,7 @@ internal class RetryPolicy(private val maxRetries: Int = 3) {
 
     /** Describes how a retry should be performed. */
     data class Decision(
-        /** If `true`, the `yt-dlp` cache must be purged before re-fetching stream URLs. */
+        /** If `true`, the resolved-URL cache must be purged before re-fetching stream URLs. */
         val invalidateCache: Boolean,
     )
 }

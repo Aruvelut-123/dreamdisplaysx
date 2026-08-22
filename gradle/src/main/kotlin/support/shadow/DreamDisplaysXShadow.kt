@@ -43,12 +43,7 @@ val dreamDisplaysShadedDependencies = listOf(
     "org.jetbrains.exposed:exposed-migration-core",
     "org.jetbrains.exposed:exposed-migration-jdbc",
     "com.zaxxer:HikariCP",
-    "com.github.TeamNewPipe:NewPipeExtractor",
-    "com.github.TeamNewPipe:nanojson",
-    "org.jsoup:jsoup",
     "com.google.protobuf:protobuf-javalite",
-    "org.mozilla:rhino",
-    "org.mozilla:rhino-engine",
     "com.google.zxing:core",
 )
 
@@ -68,8 +63,6 @@ val dreamDisplaysShadedPackages = listOf(
     "okio",
     "org.jetbrains.exposed",
     "com.zaxxer.hikari",
-    "org.schabi.newpipe",
-    "com.grack.nanojson",
     "org.jsoup",
     "com.google.protobuf",
     "org.mozilla.javascript",

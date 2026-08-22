@@ -58,7 +58,7 @@ class DefaultMediaResolverRegistryTest {
         assertEquals(
             0, fallback.calls.get(),
             "The universal fallback must not be warmed once a dedicated resolver already has been — " +
-                    "that is what used to spawn a doomed yt-dlp for every Twitch / Vimeo / direct link.",
+                    "that is what used to spawn a doomed subprocess for every Twitch / Vimeo / direct link.",
         )
     }
 

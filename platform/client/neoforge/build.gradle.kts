@@ -118,7 +118,6 @@ dependencies {
     vendoredLibraries(libs.exposedJdbc)
     vendoredLibraries(libs.exposedMigrationJdbc)
     vendoredLibraries(libs.hikari)
-    vendoredLibraries(libs.newpipeExtractor)
     shadow(project(":core"))
     shadow(project(":api"))
     shadow(project(":util"))
@@ -140,7 +139,6 @@ dependencies {
     shadow(libs.exposedJdbc)
     shadow(libs.exposedMigrationJdbc)
     shadow(libs.hikari)
-    shadow(libs.newpipeExtractor)
     shadow(libs.zxingCore)
 }
 

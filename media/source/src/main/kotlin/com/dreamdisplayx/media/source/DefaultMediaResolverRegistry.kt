@@ -121,7 +121,7 @@ class DefaultMediaResolverRegistry : MediaResolverRegistry {
     private companion object {
         /**
          * Hints warmed at once. Enough to cover a room of screens, few enough not to flood the
-         * network (or the `yt-dlp` subprocess budget) with speculative work.
+         * network with speculative work.
          */
         const val PREFETCH_CONCURRENCY = 3
 

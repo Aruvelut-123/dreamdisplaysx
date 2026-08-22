@@ -20,7 +20,6 @@ kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
 kotlinxIo = "0.9.1"
 paperweight = "2.0.0-beta.21"
-newpipeExtractor = "93eb70b4e6ab3be9bc6f0b1b381e371ec6bcd3d9"
 slf4j = "2.0.18"
 luckperms = "5.5"
 velocityApi = "3.1.1"
@@ -52,7 +51,6 @@ bstats = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
-newpipeExtractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipeExtractor" }
 zxingCore = { module = "com.google.zxing:core", version.ref = "zxing" }
 slf4jApi = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 luckpermsApi = { module = "net.luckperms:api", version.ref = "luckperms" }

@@ -13,7 +13,7 @@ Client playback engine. It prepares, starts, and controls playback of media stre
 
 - This module must not know Minecraft UI, blocks, screens, or loader-specific APIs
 - The platform layer provides `PlaybackHost`, renderer/upload callbacks, and environment through `api`
-- Video search and `yt-dlp` discovery belong in `media:source`, not here
+- Video search and stream discovery belong in `media:source`, not here
 - Public contracts belong in `api`, not here
 
 ## Dependencies

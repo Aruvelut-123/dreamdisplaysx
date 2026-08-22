@@ -9,12 +9,12 @@ import com.github.benmanes.caffeine.cache.Caffeine
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
-/** In-process Vimeo resolver: one call to the player config endpoint (see [VimeoApi]) instead of a `yt-dlp` subprocess spawn. */
+/** In-process Vimeo resolver: one call to the player config endpoint (see [VimeoApi]). */
 object VimeoResolver : MediaResolverService {
     /** Logger. */
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/VimeoResolver")
 
-    /** Above the `yt-dlp` fallback (0), alongside the other first-party in-process resolvers. */
+    /** Alongside the other first-party in-process resolvers. */
     override val priority: Int = 10
 
     /** Progressive/HLS URLs are signed but stable for a while; the cache mostly absorbs prefetch->resolve. */
