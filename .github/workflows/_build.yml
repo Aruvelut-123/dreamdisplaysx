@@ -177,29 +177,60 @@ jobs:
         env:
           BUILD_TYPE: ${{ inputs.build_type }}
         run: |
+          set -euo pipefail
           VERSION=$(grep '^version' gradle.properties | cut -d'=' -f2 | tr -d ' ')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Numeric trunk (strip any -dev / -preview.N suffix), e.g. 1.9.3.1-dev -> 1.9.3.1.
+          TRUNK="${VERSION%%-*}"
+          echo "source_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_trunk=$TRUNK" >> $GITHUB_OUTPUT
 
           # The publish channel is set entirely by the workflow_dispatch `build_type` input.
           # An empty BUILD_TYPE (e.g. the CI workflow) means "build only, never publish".
           case "$BUILD_TYPE" in
             dev)
               channel="dev"
+              PUBLISH="$VERSION"
               pretty="$VERSION Developer"
               ;;
             preview)
               channel="preview"
-              pretty="$VERSION Preview"
+              # Compute the next preview ordinal from existing v$TRUNK-preview.N tags.
+              TRUNK_ESC="${TRUNK//./\.}"
+              MAX_N=$(
+                git ls-remote --tags origin "refs/tags/v${TRUNK}-preview.*" 2>/dev/null \
+                  | grep -oE "v${TRUNK_ESC}-preview\.[0-9]+$" \
+                  | grep -oE "[0-9]+$" \
+                  | sort -n \
+                  | tail -1
+              )
+              # No existing preview tag for this version -> preview.0, else latest + 1.
+              if [[ -z "$MAX_N" ]]; then
+                NEXT=0
+              else
+                NEXT=$(( MAX_N + 1 ))
+              fi
+              PUBLISH="${TRUNK}-preview.${NEXT}"
+              pretty="${TRUNK} Preview ${NEXT}"
               ;;
             release)
               channel="release"
-              pretty="$VERSION Release"
+              PUBLISH="$TRUNK"
+              pretty="${TRUNK} Release"
               ;;
             *)
               channel=""
+              PUBLISH="$VERSION"
               pretty="$VERSION"
               ;;
           esac
+
+          echo "version=$PUBLISH" >> $GITHUB_OUTPUT
+
+          # Persist the computed publish version so the loader builds use it (jar naming).
+          if [[ "$BUILD_TYPE" == "release" || "$BUILD_TYPE" == "preview" || "$BUILD_TYPE" == "dev" ]]; then
+            sed -i "s/^version=.*/version=$PUBLISH/" gradle.properties
+            echo "Persisted version=$PUBLISH to gradle.properties."
+          fi
 
           case "$channel" in
             dev)
