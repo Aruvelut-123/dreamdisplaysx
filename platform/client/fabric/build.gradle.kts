@@ -197,17 +197,28 @@ tasks.processResources {
         expand(mapOf("version" to projectVersion))
     }
     // Record the exact source commit so a dev build's identity can be confirmed from the log.
-    val gitCommit = providers.exec {
-        commandLine("git", "rev-parse", "--short", "HEAD")
-    }.standardOutput.asText.getOrElse("unknown").trim()
-    inputs.property("gitCommit", gitCommit)
-    doFirst {
-        val dir = layout.buildDirectory.dir("generatedResources/assets/dreamdisplayx").get().asFile
-        dir.mkdirs()
-        File(dir, "git.properties").writeText(gitCommit)
-    }
-    from(layout.buildDirectory.dir("generatedResources")) {
+    // Generated defensively: if git is unavailable the resource is simply omitted.
+    val generatedRes = layout.buildDirectory.dir("generatedResources")
+    from(generatedRes) {
         into("")
+    }
+    doFirst {
+        var commit: String? = null
+        try {
+            val proc = ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+                .redirectErrorStream(true)
+                .start()
+            commit = proc.inputStream.bufferedReader().use { it.readText() }.trim().takeIf { it.isNotBlank() }
+            proc.waitFor()
+        } catch (e: Exception) {
+            project.logger.warn("Could not determine git commit for build identity: ${e.message}")
+            commit = null
+        }
+        if (commit != null) {
+            val dir = generatedRes.get().asFile.resolve("assets/dreamdisplayx")
+            dir.mkdirs()
+            File(dir, "git.properties").writeText(commit)
+        }
     }
 }
 
