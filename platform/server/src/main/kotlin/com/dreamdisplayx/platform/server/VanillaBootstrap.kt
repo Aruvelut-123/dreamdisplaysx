@@ -35,10 +35,10 @@ object VanillaBootstrap {
         val configuredBackend = StorageBackend.fromConfig(s.type)
         val effectiveBackend = if (dedicated) configuredBackend else StorageBackend.SQLITE
         val effectiveJdbcUrl = if (dedicated) s.jdbcUrl else ""
-        // A Flashback replay server runs against a temporary world copy that Flashback deletes when
-        // playback stops. Never open a database there: the open SQLite file would block that cleanup,
-        // and persistence is meaningless on a transient replay. Skip storage entirely.
-        val replayServer = isFlashbackReplayServer(server)
+        // A Flashback replay server runs against a temporary world copy under flashback/temp/.../saves/replay/
+        // that Flashback deletes when playback starts/stops. Never open a database there: the open SQLite
+        // file would block that cleanup, and persistence is meaningless on a transient replay. Skip storage.
+        val replayServer = isFlashbackReplayServer(server, dataDir)
         if (!replayServer) {
             val storage = StorageManager(
                 backend = effectiveBackend, dataDir = dataDir,
@@ -94,9 +94,15 @@ object VanillaBootstrap {
     }
 
     /** True when [server] is a Flashback replay server (a transient world copy used for playback). */
-    private fun isFlashbackReplayServer(server: MinecraftServer): Boolean =
-        server.javaClass.name.contains("flashback", ignoreCase = true) ||
-        server.javaClass.name.contains("ReplayServer")
+    private fun isFlashbackReplayServer(server: MinecraftServer, dataDir: File): Boolean {
+        // Flashback's ReplayServer is a real IntegratedServer, but the strongest signal is the world
+        // path: replay worlds live under flashback/temp/server/<uuid>/saves/replay/. Check both.
+        val byClass = server.javaClass.name.contains("flashback", ignoreCase = true) ||
+            server.javaClass.name.contains("ReplayServer")
+        if (byClass) return true
+        val path = dataDir.path.replace('\\', '/').lowercase()
+        return path.contains("flashback/temp/") || path.contains("/replay/")
+    }
 
     /** Starts repeating coroutines for display updates and update checking on [ServerCoroutines.io]. */
     private fun startRepeatingTasks(server: MinecraftServer) {
