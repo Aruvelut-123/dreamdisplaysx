@@ -72,14 +72,15 @@ fi
 # Rename to a neutral name and rewrite the JNI function-name prefix to the relocated package.
 JNI_H="$WORK/NativeDB.h"
 cp "$GENERATED_H" "$JNI_H"
-sed -i 's/Java_org_sqlite_core_NativeDB_/Java_com_dreamdisplayx_libs_org_sqlite_core_NativeDB_/g' "$JNI_H"
+# .bak suffix keeps the invocation valid on both GNU (Linux) and BSD (macOS) sed.
+sed -i.bak 's/Java_org_sqlite_core_NativeDB_/Java_com_dreamdisplayx_libs_org_sqlite_core_NativeDB_/g' "$JNI_H" && rm -f "$JNI_H.bak"
 
 # ---- 3. Prepare NativeDB.c with relocated class names ---------------------------------------
 C_FILE="$WORK/NativeDB.c"
 cp "$SRC_DIR/src/main/java/org/sqlite/core/NativeDB.c" "$C_FILE"
 # FindClass strings use slashes; JNI function names use underscores.
-sed -i "s#org/sqlite#${RELOC_SLASH}#g" "$C_FILE"
-sed -i 's/Java_org_sqlite_core_NativeDB_/Java_com_dreamdisplayx_libs_org_sqlite_core_NativeDB_/g' "$C_FILE"
+sed -i.bak "s#org/sqlite#${RELOC_SLASH}#g" "$C_FILE" && rm -f "$C_FILE.bak"
+sed -i.bak 's/Java_org_sqlite_core_NativeDB_/Java_com_dreamdisplayx_libs_org_sqlite_core_NativeDB_/g' "$C_FILE" && rm -f "$C_FILE.bak"
 
 # ---- 4. Obtain sqlite3 amalgamation ----------------------------------------------------------
 AMALG="sqlite-amalgamation-$SQLITE_VER"
@@ -103,7 +104,13 @@ if [[ ! -f "$AMALG_DIR/sqlite3.c" ]]; then
     exit 1
   fi
   # The zip contains a top-level sqlite-amalgamation-<digits>/ dir; move its sqlite3*.c/h up.
-  (cd "$AMALG_DIR" && unzip -oq "$ZIP")
+  if command -v unzip >/dev/null 2>&1; then
+    (cd "$AMALG_DIR" && unzip -oq "$ZIP")
+  else
+    # Windows runners have no unzip; python is always present.
+    (cd "$AMALG_DIR" && python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall('.')" "$ZIP" \
+      || python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall('.')" "$ZIP")
+  fi
   for f in sqlite3.c sqlite3.h sqlite3ext.h; do
     FOUND="$(find "$AMALG_DIR" -name "$f" | head -n1)"
     if [[ -n "$FOUND" && "$FOUND" != "$AMALG_DIR/$f" ]]; then cp "$FOUND" "$AMALG_DIR/$f"; fi
