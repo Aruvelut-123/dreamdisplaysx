@@ -167,8 +167,8 @@ case "$OS_NAME" in
     ;;
   Windows)
     LIBNAME="sqlitejdbc.dll"
-    # zig cc (gcc-style) drives Windows linking; -static-libgcc is not meaningful for it.
-    LINK_FLAGS=(-shared -pthread -lws2_32)
+    # MinGW gcc drives Windows linking; -static-libgcc avoids a runtime libgcc dependency.
+    LINK_FLAGS=(-shared -static-libgcc -lws2_32)
     ;;
   *)
     echo "ERROR: unsupported os $OS_NAME" >&2

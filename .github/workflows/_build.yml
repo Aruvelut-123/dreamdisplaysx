@@ -488,6 +488,15 @@ jobs:
             sqlite-${{ matrix.native.platform }}-
             sqlite-
 
+      - name: Install MinGW gcc on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # choco installs mingw and puts gcc on PATH for the rest of the job.
+          choco install mingw --no-progress -y
+          echo "$PATH" >> /dev/null
+          gcc --version
+
       - name: Build sqlite native library
         shell: bash
         run: |
@@ -504,9 +513,8 @@ jobs:
           esac
           export OUT_DIR="$PWD/native-artifact/dreamdisplayx-natives/$platform"
           if [[ "$platform" == windows-* ]]; then
-            # Windows native runners lack gcc; zig cc provides a drop-in cross-capable C compiler.
-            export CC="zig cc"
-            command -v zig >/dev/null 2>&1 || echo "zig not found; ensure it is installed" >&2
+            # MinGW gcc (installed above) drives the Windows build; zig cc is only for cross-compiling Rust.
+            export CC="gcc"
           elif [[ "$platform" == macos-* ]]; then
             export CC="clang"
           else
