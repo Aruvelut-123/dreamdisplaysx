@@ -85,6 +85,21 @@ class CreateCommand : SubCommand {
         val displayData = sel.generateDisplayData()
         SelectionManager.selectionPoints.remove(player.uniqueId)
 
+        // Optional /display create <name> - same shape / uniqueness rules as /display rename.
+        val requestedName = args.getOrNull(0)
+        if (requestedName != null) {
+            val normalized = normalizeDisplayName(requestedName)
+            if (normalized == null) {
+                MessageUtil.sendMessage(player, "invalidName")
+                return
+            }
+            if (DisplayManager.isNameTaken(normalized, displayData.id)) {
+                MessageUtil.sendMessage(player, "nameTaken")
+                return
+            }
+            displayData.name = normalized
+        }
+
         DisplayManager.register(displayData)
         MessageUtil.sendMessage(player, "successfulCreation")
     }

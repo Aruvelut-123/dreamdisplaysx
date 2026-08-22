@@ -1,17 +1,22 @@
 package com.dreamdisplayx.platform.server.commands.subcommands
 
+import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
+import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.utils.MessageUtil
 import com.dreamdisplayx.platform.server.utils.VanillaPermissions
+import io.github.arnodoelinger.platformweaver.PaperOnly
 import com.mojang.brigadier.context.CommandContext
 import kotlinx.coroutines.launch
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerPlayer
+import org.bukkit.command.CommandSender
+import org.bukkit.entity.Player
 
 /**
  * Handles the `/display rename <id> <new_name>` command. Addresses a display by its unique id (or a
@@ -70,5 +75,51 @@ object RenameCommand {
         if (idToken.length < 4) return null
         val matches = DisplayManager.getDisplays().filter { it.id.toString().startsWith(idToken, ignoreCase = true) }
         return matches.singleOrNull()
+    }
+}
+
+/**
+ * Paper plugin version of the `/display rename <id> <new_name>` command. Addresses a display by its
+ * unique id (or a unique id prefix), then assigns it a new human-readable display name. The owner may
+ * rename their own displays; players holding the `nameOthers` permission may rename anyone's.
+ */
+@PaperOnly
+class PaperRenameCommand : SubCommand {
+    override val name = "rename"
+    override val permission = PaperServer.config.permissions.name
+    override val playerOnly = true
+
+    /** Renames the display addressed by [args[0]] (id / `this`) to [args[1]]. */
+    override fun execute(sender: CommandSender, args: Array<String?>) {
+        val player = (sender as? Player) ?: return
+        val token = args.getOrNull(0) ?: return MessageUtil.sendMessage(player, "noDisplay")
+        val newName = args.getOrNull(1) ?: return MessageUtil.sendMessage(player, "invalidName")
+
+        val data = resolvePaperDisplayTarget(sender, player, token) as? PaperDisplayData ?: return
+
+        // The owner may rename their own display; everyone else needs the nameOthers permission.
+        val isOwner = data.ownerId == player.uniqueId
+        if (!isOwner && !player.hasPermission(PaperServer.config.permissions.nameOthers)) {
+            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            return
+        }
+
+        val normalized = normalizeDisplayName(newName)
+        if (normalized == null) {
+            MessageUtil.sendMessage(player, "invalidName")
+            return
+        }
+        if (DisplayManager.isNameTaken(normalized, data.id)) {
+            MessageUtil.sendMessage(player, "nameTaken")
+            return
+        }
+
+        data.name = normalized
+        PaperServer.getInstance().storage.saveDisplay(data)
+
+        val receivers = DisplayManager.getReceivers(data)
+        if (receivers.isNotEmpty()) DisplayManager.sendUpdate(data, receivers)
+
+        MessageUtil.sendMessage(player, "renamedDisplay", data.id.toString().take(8), normalized)
     }
 }

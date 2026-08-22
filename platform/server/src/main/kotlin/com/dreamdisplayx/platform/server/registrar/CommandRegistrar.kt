@@ -61,10 +61,48 @@ object CommandRegistrar {
         }
         .then(simple("help", HelpCommand()))
         .then(
-            simple(
-                "create",
-                CreateCommand()
-            ) { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.create) })
+            Commands.literal("create")
+                .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.create) }
+                .executes { ctx ->
+                    CreateCommand().execute(ctx.source.sender, emptyArray())
+                    Command.SINGLE_SUCCESS
+                }
+                .then(
+                    Commands.argument("name", StringArgumentType.greedyString())
+                        .executes { ctx ->
+                            CreateCommand().execute(
+                                ctx.source.sender,
+                                arrayOf(StringArgumentType.getString(ctx, "name")),
+                            )
+                            Command.SINGLE_SUCCESS
+                        }
+                )
+        )
+        .then(
+            Commands.literal("rename")
+                .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.name) }
+                .then(
+                    Commands.argument("id", PaperBareTokenArgumentType)
+                        .suggests { _, b ->
+                            b.suggest("this")
+                            FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
+                            b.buildFuture()
+                        }
+                        .then(
+                            Commands.argument("new_name", StringArgumentType.greedyString())
+                                .executes { ctx ->
+                                    PaperRenameCommand().execute(
+                                        ctx.source.sender,
+                                        arrayOf(
+                                            StringArgumentType.getString(ctx, "id"),
+                                            StringArgumentType.getString(ctx, "new_name"),
+                                        ),
+                                    )
+                                    Command.SINGLE_SUCCESS
+                                }
+                        )
+                )
+        )
         .then(
             simpleWithThis(
                 "delete",

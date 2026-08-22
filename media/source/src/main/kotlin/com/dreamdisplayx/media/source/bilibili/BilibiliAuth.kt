@@ -80,7 +80,10 @@ object BilibiliAuth {
     fun pollQrCode(qrcodeKey: String): PollResult {
         val root = getJson("https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=$qrcodeKey")
         val data = root?.obj("data")
-        val code = data?.optInt("code") ?: -1
+        // The result `code` lives at the top level (0=success, 86038=expired, 86090=scanned,
+        // -1=not yet scanned). `data` is null on every non-success state, so reading it from `data`
+        // would misclassify expired / scanned as "pending".
+        val code = root?.optInt("code") ?: -1
         logger.info("QR poll response code={} hasData={} dataKeys={}", code, data != null, data?.keys?.toList())
         if (code == 0) {
             logger.info("QR poll success data={}", data?.toString()?.take(800))
