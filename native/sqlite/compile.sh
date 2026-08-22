@@ -86,16 +86,22 @@ AMALG="sqlite-amalgamation-$SQLITE_VER"
 AMALG_DIR="${SQLITE_AMALGAMATION_DIR:-$ROOT/amalgamation}/$AMALG"
 if [[ ! -f "$AMALG_DIR/sqlite3.c" ]]; then
   mkdir -p "$AMALG_DIR"
-  # sqlite.org names the file with the version digits concatenated (e.g. 3.53.2 -> 3530200).
-  AMALG_NUMERIC="$(printf '%s' "$SQLITE_VER" | tr -d '.')"
-  AMALG_NUMERIC="${AMALG_NUMERIC}00"
+  # sqlite.org names the file with the version digits concatenated. For 3.X.Y the pattern is
+  # MAJOR MINOR(2) PATCH(2) 00, e.g. 3.53.2 -> 3530200.
+  AMALG_NUMERIC="$(printf '%s' "$SQLITE_VER" | awk -F. '{ printf "%s%02d%02d00", $1, $2, $3 }')"
   echo ">> Downloading sqlite-amalgamation-${AMALG_NUMERIC}"
   ZIP="$TMP/$AMALG.zip"
-  curl -fL --retry 3 --retry-all-errors -o "$ZIP" "https://www.sqlite.org/2026/sqlite-amalgamation-$AMALG_NUMERIC.zip" \
-    || curl -fL --retry 3 --retry-all-errors -o "$ZIP" "https://www.sqlite.org/2025/sqlite-amalgamation-$AMALG_NUMERIC.zip" \
-    || curl -fL --retry 3 --retry-all-errors -o "$ZIP" "https://www.sqlite.org/2024/sqlite-amalgamation-$AMALG_NUMERIC.zip" \
-    || curl -fL --retry 3 --retry-all-errors -o "$ZIP" "https://www.sqlite.org/2023/sqlite-amalgamation-$AMALG_NUMERIC.zip" \
-    || { echo "ERROR: could not download sqlite3 amalgamation $AMALG" >&2; exit 1; }
+  YEAR_OK=0
+  for year in 2026 2025 2024 2023 2022; do
+    if curl -fL --retry 3 --retry-all-errors -o "$ZIP" "https://www.sqlite.org/$year/sqlite-amalgamation-$AMALG_NUMERIC.zip"; then
+      YEAR_OK=1
+      break
+    fi
+  done
+  if [[ "$YEAR_OK" != "1" ]]; then
+    echo "ERROR: could not download sqlite3 amalgamation $AMALG (digits $AMALG_NUMERIC)" >&2
+    exit 1
+  fi
   # The zip contains a top-level sqlite-amalgamation-<digits>/ dir; move its sqlite3*.c/h up.
   (cd "$AMALG_DIR" && unzip -oq "$ZIP")
   for f in sqlite3.c sqlite3.h sqlite3ext.h; do

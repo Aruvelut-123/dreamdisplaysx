@@ -292,11 +292,12 @@ jobs:
           cargo --version
 
       # Needed to generate the sqlite-jdbc JNI header (javac -h) for the relocated native build.
+      # temurin has no JDK 25 for the macos-14 runner, but zulu ships it for all native runners.
       - name: Setup JDK 25
         uses: actions/setup-java@v5.2.0
         with:
           java-version: 25
-          distribution: temurin
+          distribution: zulu
 
       - name: Setup Zig
         if: runner.os == 'Linux' || runner.os == 'Windows'
