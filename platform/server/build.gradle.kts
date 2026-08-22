@@ -142,6 +142,9 @@ dependencies {
     implementation(libs.exposedMigrationJdbc)
     implementation(libs.hikari)
     implementation(libs.sqliteJdbc)
+    // MySQL driver is compile-only: it ships inside a separate mod / plugin that provides the
+    // JDBC driver at runtime, so this jar never bundles it (and the client/singleplayer never loads it).
+    compileOnly(libs.mysqlConnector)
     implementation(libs.kotlinStdlib)
     implementation(libs.bstats)
     implementation(libs.caffeine)

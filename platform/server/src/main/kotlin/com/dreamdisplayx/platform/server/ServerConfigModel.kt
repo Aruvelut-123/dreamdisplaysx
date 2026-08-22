@@ -137,6 +137,7 @@ data class StorageSection(
     val username get() = storage.username
     val tablePrefix get() = storage.table_prefix
     val useSSL get() = storage.use_ssl
+    val jdbcUrl get() = storage.jdbc_url
 
     data class StorageConfig(
         val type: String = StorageBackend.SQLITE.configToken,
@@ -147,6 +148,7 @@ data class StorageSection(
         val username: String = "username",
         val table_prefix: String = "",
         val use_ssl: Boolean = false,
+        val jdbc_url: String = "",
     )
 }
 
@@ -289,6 +291,7 @@ fun parseServerConfig(t: TomlTable?): ParsedServerConfig = ParsedServerConfig(
             username = t?.getString("storage.username") ?: "username",
             table_prefix = t?.getString("storage.table_prefix") ?: "",
             use_ssl = t?.getBoolean("storage.use_ssl") ?: false,
+            jdbc_url = t?.getString("storage.jdbc_url") ?: "",
         )
     ),
     permissions = PermissionsSection(

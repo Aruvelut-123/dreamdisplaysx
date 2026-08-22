@@ -86,6 +86,9 @@ username = "username"
 password = "password"
 table_prefix = ""
 use_ssl = false
+# Optional: a fully custom JDBC URL that overrides host/port/database (e.g. jdbc:mysql://..., jdbc:postgresql://...).
+# Leave empty to use the split fields above. Client / singleplayer servers always use SQLite.
+jdbc_url = ""
 
 [permissions]
 # Permission nodes

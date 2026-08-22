@@ -117,14 +117,17 @@ class StorageManager(
     username: String = "",
     password: String = "",
     useSSL: Boolean = false,
+    jdbcUrl: String = "",
     private val logger: Logger = LoggerFactory.getLogger("DreamDisplaysX/Storage"),
 ) {
     private val table = DisplaysTable(tablePrefix)
 
     private val dataSource = HikariDataSource(HikariConfig().apply {
-        jdbcUrl = when (backend) {
-            StorageBackend.SQLITE -> "jdbc:sqlite:${File(dataDir, "dreamdisplayx.db").absolutePath}"
-            StorageBackend.MYSQL -> "jdbc:mysql://$host:$port/$database?autoReconnect=true&useSSL=$useSSL&useInformationSchema=false"
+        this.jdbcUrl = when {
+            // A fully custom JDBC URL wins over the split host/port/database fields.
+            jdbcUrl.isNotBlank() -> jdbcUrl
+            backend == StorageBackend.SQLITE -> "jdbc:sqlite:${File(dataDir, "dreamdisplayx.db").absolutePath}"
+            else -> "jdbc:mysql://$host:$port/$database?autoReconnect=true&useSSL=$useSSL&useInformationSchema=false"
         }
         if (backend != StorageBackend.SQLITE) {
             this.username = username

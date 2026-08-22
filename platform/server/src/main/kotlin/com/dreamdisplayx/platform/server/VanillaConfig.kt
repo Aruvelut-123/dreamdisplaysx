@@ -72,6 +72,8 @@ class VanillaConfig(private val configDir: File) {
         sb.append("password = \"password\"\n")
         sb.append("table_prefix = \"\"\n")
         sb.append("use_ssl = false\n")
+        sb.append("# Optional: a fully custom JDBC URL that overrides host/port/database. Leave empty to use the split fields.\n")
+        sb.append("jdbc_url = \"\"\n")
         try {
             configFile.appendText(sb.toString())
             logger.info("Added missing [storage] section to config.toml.")

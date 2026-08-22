@@ -29,11 +29,17 @@ object VanillaBootstrap {
     /** Connects storage, loads displays, binds playback, and starts the repeating tasks. */
     fun onServerStarted(server: MinecraftServer, dataDir: File) {
         val s = VanillaServerState.config.storage
+        // Singleplayer / integrated (client-side) servers never use MySQL: the client does not bundle
+        // the MySQL driver, so force SQLite. Dedicated Fabric/NeoForge servers still honor the config.
+        val dedicated = server.isDedicatedServer
+        val configuredBackend = StorageBackend.fromConfig(s.type)
+        val effectiveBackend = if (dedicated) configuredBackend else StorageBackend.SQLITE
+        val effectiveJdbcUrl = if (dedicated) s.jdbcUrl else ""
         val storage = StorageManager(
-            backend = StorageBackend.fromConfig(s.type), dataDir = dataDir,
+            backend = effectiveBackend, dataDir = dataDir,
             tablePrefix = s.tablePrefix,
             host = s.host, port = s.port, database = s.database,
-            username = s.username, password = s.password, useSSL = s.useSSL,
+            username = s.username, password = s.password, useSSL = s.useSSL, jdbcUrl = effectiveJdbcUrl,
         )
         VanillaServerState.storage = storage
         storage.createSchema()
@@ -56,9 +62,9 @@ object VanillaBootstrap {
         // Set up credential sync in the same database as displays (SQLite or MySQL)
         try {
             val syncBackend = SqlCredentialSyncBackend(
-                backend = StorageBackend.fromConfig(s.type), dataDir = dataDir, tablePrefix = s.tablePrefix,
+                backend = effectiveBackend, dataDir = dataDir, tablePrefix = s.tablePrefix,
                 host = s.host, port = s.port, database = s.database,
-                username = s.username, password = s.password, useSSL = s.useSSL,
+                username = s.username, password = s.password, useSSL = s.useSSL, jdbcUrl = effectiveJdbcUrl,
             )
             CredentialStore.loadFromSyncBackend(syncBackend)
             CredentialStore.setSyncBackend(syncBackend)

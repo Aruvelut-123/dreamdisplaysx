@@ -6,6 +6,7 @@ tukaaniXz = "1.12"
 tomlj = "1.1.1"
 semver4j = "6.0.0"
 sqliteJdbc = "3.53.2.1"
+mysqlConnector = "8.4.0"
 exposed = "1.4.0"
 hikari = "7.1.0"
 bstats = "3.2.1"
@@ -42,6 +43,7 @@ tomlj = { module = "org.tomlj:tomlj", version.ref = "tomlj" }
 checkerQual = { module = "org.checkerframework:checker-qual", version.ref = "checkerQual" }
 semver4j = { module = "org.semver4j:semver4j", version.ref = "semver4j" }
 sqliteJdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+mysqlConnector = { module = "com.mysql:mysql-connector-j", version.ref = "mysqlConnector" }
 exposedCore = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
 exposedJdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
 exposedMigrationJdbc = { module = "org.jetbrains.exposed:exposed-migration-jdbc", version.ref = "exposed" }

@@ -66,7 +66,7 @@ class PaperServer : JavaPlugin() {
         storage = StorageManager(
             backend = backend, dataDir = dataFolder, tablePrefix = s.tablePrefix,
             host = s.host, port = s.port, database = s.database,
-            username = s.username, password = s.password, useSSL = s.useSSL,
+            username = s.username, password = s.password, useSSL = s.useSSL, jdbcUrl = s.jdbcUrl,
         )
         storage.createSchema()
         DisplayManager.register(storage.loadAllPaperDisplays())
@@ -89,7 +89,7 @@ class PaperServer : JavaPlugin() {
             val syncBackend = SqlCredentialSyncBackend(
                 backend = backend, dataDir = dataFolder, tablePrefix = s.tablePrefix,
                 host = s.host, port = s.port, database = s.database,
-                username = s.username, password = s.password, useSSL = s.useSSL,
+                username = s.username, password = s.password, useSSL = s.useSSL, jdbcUrl = s.jdbcUrl,
             )
             CredentialStore.loadFromSyncBackend(syncBackend)
             CredentialStore.setSyncBackend(syncBackend)

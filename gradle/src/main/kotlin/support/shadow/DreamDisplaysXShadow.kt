@@ -75,6 +75,7 @@ val dreamDisplaysShadedPackages = listOf(
     "org.mozilla.javascript",
     "org.mozilla.classfile",
     "com.google.zxing",
+    "org.sqlite",
 )
 
 /** Exclude `sqlite-jdbc` native binaries for unsupported platforms. */
