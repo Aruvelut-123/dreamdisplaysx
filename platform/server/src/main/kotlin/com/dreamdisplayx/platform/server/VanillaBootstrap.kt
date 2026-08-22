@@ -1,8 +1,8 @@
 package com.dreamdisplayx.platform.server
 
-import com.dreamdisplayx.platform.server.credentials.CredentialActions
-import com.dreamdisplayx.platform.server.credentials.CredentialStore
-import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
+import com.dreamdisplayx.platform.server.credential.CredentialActions
+import com.dreamdisplayx.platform.server.credential.CredentialStore
+import com.dreamdisplayx.platform.server.credential.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StateManager
@@ -35,15 +35,24 @@ object VanillaBootstrap {
         val configuredBackend = StorageBackend.fromConfig(s.type)
         val effectiveBackend = if (dedicated) configuredBackend else StorageBackend.SQLITE
         val effectiveJdbcUrl = if (dedicated) s.jdbcUrl else ""
-        val storage = StorageManager(
-            backend = effectiveBackend, dataDir = dataDir,
-            tablePrefix = s.tablePrefix,
-            host = s.host, port = s.port, database = s.database,
-            username = s.username, password = s.password, useSSL = s.useSSL, jdbcUrl = effectiveJdbcUrl,
-        )
-        VanillaServerState.storage = storage
-        storage.createSchema()
-        DisplayManager.register(storage.loadAllVanillaDisplays())
+        // A Flashback replay server runs against a temporary world copy that Flashback deletes when
+        // playback stops. Never open a database there: the open SQLite file would block that cleanup,
+        // and persistence is meaningless on a transient replay. Skip storage entirely.
+        val replayServer = isFlashbackReplayServer(server)
+        if (!replayServer) {
+            val storage = StorageManager(
+                backend = effectiveBackend, dataDir = dataDir,
+                tablePrefix = s.tablePrefix,
+                host = s.host, port = s.port, database = s.database,
+                username = s.username, password = s.password, useSSL = s.useSSL, jdbcUrl = effectiveJdbcUrl,
+            )
+            VanillaServerState.storage = storage
+            storage.createSchema()
+            DisplayManager.register(storage.loadAllVanillaDisplays())
+        } else {
+            VanillaServerState.storage = null
+            DisplayManager.register(emptyList())
+        }
         VanillaPlaybackTransport.bind(server)
         WatchPartyManager.init(VanillaPlaybackTransport)
         TimelineManager.init(VanillaPlaybackTransport)
@@ -60,16 +69,18 @@ object VanillaBootstrap {
         CredentialStore.init(dataDir)
 
         // Set up credential sync in the same database as displays (SQLite or MySQL)
-        try {
-            val syncBackend = SqlCredentialSyncBackend(
-                backend = effectiveBackend, dataDir = dataDir, tablePrefix = s.tablePrefix,
-                host = s.host, port = s.port, database = s.database,
-                username = s.username, password = s.password, useSSL = s.useSSL, jdbcUrl = effectiveJdbcUrl,
-            )
-            CredentialStore.loadFromSyncBackend(syncBackend)
-            CredentialStore.setSyncBackend(syncBackend)
-        } catch (e: Exception) {
-            VanillaServerState.logger.warn("Failed to initialize credential sync backend.", e)
+        if (!replayServer) {
+            try {
+                val syncBackend = SqlCredentialSyncBackend(
+                    backend = effectiveBackend, dataDir = dataDir, tablePrefix = s.tablePrefix,
+                    host = s.host, port = s.port, database = s.database,
+                    username = s.username, password = s.password, useSSL = s.useSSL, jdbcUrl = effectiveJdbcUrl,
+                )
+                CredentialStore.loadFromSyncBackend(syncBackend)
+                CredentialStore.setSyncBackend(syncBackend)
+            } catch (e: Exception) {
+                VanillaServerState.logger.warn("Failed to initialize credential sync backend.", e)
+            }
         }
 
         startRepeatingTasks(server)
@@ -81,6 +92,11 @@ object VanillaBootstrap {
         ServerCoroutines.shutdown()
         VanillaServerState.storage?.disconnect()
     }
+
+    /** True when [server] is a Flashback replay server (a transient world copy used for playback). */
+    private fun isFlashbackReplayServer(server: MinecraftServer): Boolean =
+        server.javaClass.name.contains("flashback", ignoreCase = true) ||
+        server.javaClass.name.contains("ReplayServer")
 
     /** Starts repeating coroutines for display updates and update checking on [ServerCoroutines.io]. */
     private fun startRepeatingTasks(server: MinecraftServer) {
@@ -121,16 +137,16 @@ object VanillaBootstrap {
                 try {
                     // Refresh global credential and broadcast to all online players
                     CredentialActions.refreshAllBilibili(
-                        pushToPlayer = { playerUuid, credentials ->
+                        pushToPlayer = { playerUuid, credential ->
                             val player = server.playerList.getPlayer(java.util.UUID.fromString(playerUuid))
                             if (player != null) {
-                                VanillaNetworking.adapter.sendV2(listOf(player), credentials)
+                                VanillaNetworking.adapter.sendV2(listOf(player), credential)
                             }
                         },
-                        broadcastToAll = { credentials ->
+                        broadcastToAll = { credential ->
                             val online = server.playerList.players
                             if (online.isNotEmpty()) {
-                                VanillaNetworking.adapter.sendV2(online, credentials)
+                                VanillaNetworking.adapter.sendV2(online, credential)
                             }
                         },
                     )
