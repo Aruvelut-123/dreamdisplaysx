@@ -80,15 +80,16 @@ object BilibiliAuth {
     fun pollQrCode(qrcodeKey: String): PollResult {
         val root = getJson("https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=$qrcodeKey")
         val data = root?.obj("data")
-        // The result `code` lives at the top level (0=success, 86038=expired, 86090=scanned,
-        // -1=not yet scanned). `data` is null on every non-success state, so reading it from `data`
-        // would misclassify expired / scanned as "pending".
-        val code = root?.optInt("code") ?: -1
-        logger.info("QR poll response code={} hasData={} dataKeys={}", code, data != null, data?.keys?.toList())
-        if (code == 0) {
+        // The QR-login status lives in `data.code`, NOT the top-level `code` (which is the HTTP
+        // layer status and is 0 for every successful request). Reading the top-level code made us
+        // treat "not yet scanned" (86101) and "scanned, awaiting confirmation" (86090) as success.
+        // `data` is present on every state, so read the real status from it.
+        val statusCode = data?.optInt("code") ?: root?.optInt("code") ?: -1
+        logger.info("QR poll statusCode={} topCode={} hasData={} dataKeys={}", statusCode, root?.optInt("code"), data != null, data?.keys?.toList())
+        if (statusCode == 0) {
             logger.info("QR poll success data={}", data?.toString()?.take(800))
         }
-        return when (code) {
+        return when (statusCode) {
             0 -> {
                 val cookie = data?.let { extractBilibiliCookie(it) }
                     ?: data?.optString("url")?.let { url -> fetchCrossDomainCookies(url) }
@@ -101,7 +102,10 @@ object BilibiliAuth {
                     }
                     PollResult.Success(cookie, refreshTokenVal)
                 } else {
-                    PollResult.Failure("登录成功，但无法获取 SESSDATA cookie。请尝试手机+密码登录。")
+                    // Rarely, Bilibili reports code=0 before the cookies are available. Keep polling
+                    // so the next attempt picks up the real SESSDATA instead of faking a success.
+                    logger.info("QR poll code=0 but no usable cookie yet; will keep polling")
+                    PollResult.Pending
                 }
             }
 
@@ -162,7 +166,13 @@ object BilibiliAuth {
                 val value = cookies.optString(key)
                 if (!value.isNullOrEmpty()) parts += "$key=$value"
             }
-            if (parts.isNotEmpty()) return parts.joinToString("; ")
+            // A login is only useful once we actually hold the SESSDATA. If the response only carried
+            // auxiliary cookies (bili_jct, DedeUserID...) without SESSDATA, treat it as a failed
+            // extraction instead of returning a broken cookie string that would claim "login success"
+            // while the resolver has nothing to authenticate with.
+            val hasSessdata = !cookies.optString("SESSDATA").isNullOrEmpty()
+            if (hasSessdata && parts.isNotEmpty()) return parts.joinToString("; ")
+            // No usable cookies object -> fall through to the redirect-URL parser.
         }
 
         // Fallback: parse the redirect URL (older / third-party flows).
