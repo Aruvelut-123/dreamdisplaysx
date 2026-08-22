@@ -35,7 +35,11 @@ fun ShadowJar.includeRebuiltSqliteNatives(nativeBundleDir: File) {
         val subPath = sqliteNativeSubPath(platformDir.name) ?: return@forEach
         val libs = File(platformDir, subPath).listFiles()?.filter { it.isFile } ?: emptyList()
         libs.forEach { lib ->
-            replacements["org/sqlite/native/$subPath/${lib.name}"] = lib
+            // The native resources must live under the RELOCATED org.sqlite package so that the
+            // relocated SQLiteJDBCLoader's getNativeLibResourcePath() (which is derived from the
+            // SQLiteJDBCLoader class package, now com.dreamdisplayx.libs.org.sqlite) can find them:
+            //   /com/dreamdisplayx/libs/org/sqlite/native/<os>/<arch>/<lib>
+            replacements["com/dreamdisplayx/libs/org/sqlite/native/$subPath/${lib.name}"] = lib
         }
     }
     if (replacements.isEmpty()) return

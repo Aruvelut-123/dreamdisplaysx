@@ -841,9 +841,11 @@ jobs:
                   raise SystemExit(f"{jar} is missing native entries: {missing}.")
 
               # Verify each required platform ships the rebuilt sqlite native with relocated symbols.
+              # It must live under the relocated org.sqlite package (com.dreamdisplayx.libs.org.sqlite)
+              # because the relocated SQLiteJDBCLoader derives its resource path from its own package.
               for platform in platforms:
                   osarch = sqlite_os_arch(platform)
-                  entry = f"org/sqlite/native/{osarch}/{sqlite_lib(platform)}"
+                  entry = f"com/dreamdisplayx/libs/org/sqlite/native/{osarch}/{sqlite_lib(platform)}"
                   if entry not in names:
                       raise SystemExit(f"{jar} is missing rebuilt sqlite native {entry}.")
                   if REBUILT_SQLITE_SYMBOL not in contents[entry]:
