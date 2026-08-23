@@ -30,7 +30,7 @@ Compared to the original Dream Displays, this fork adds:
 - **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions.
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
-- **`gh-proxy.com` FFmpeg mirror** — China-friendly download mirror with fallback.
+- **Fully self-contained** — no external FFmpeg binary, no Rust toolchain, no Python. Native FFmpeg decode is bundled via JavaCPP Maven artifacts.
 - Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.
 
 > If you encounter any error on this version, **do not** submit issues to the original repository — open an issue
@@ -150,7 +150,7 @@ cd dreamdisplaysx
 ```
 
 The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; the active version is
-selected in `versions/active.txt`. Native libraries (FFmpeg) are downloaded at runtime or bundled by the CI workflow.
+selected in `versions/active.txt`. Native FFmpeg libraries are bundled via Maven (`org.bytedeco:ffmpeg-platform`) — no runtime download needed.
 
 ## Disclaimer
 
