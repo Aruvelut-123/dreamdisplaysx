@@ -9,7 +9,6 @@ import com.dreamdisplayx.api.media.player.RenderExecutor
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.events.PlayerEvents
 import com.dreamdisplayx.media.player.pipeline.*
-import com.dreamdisplayx.media.player.process.HwAccelBackend
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.MediaUtil
@@ -104,7 +103,7 @@ internal class PlaybackSessionManager(
          */
         fun launch(
             streamSet: ActiveStreams, w: Int, h: Int, offsetNanos: Long,
-            hwAccel: HwAccelBackend, onFirstFrame: () -> Unit, onEos: (String, Boolean) -> Unit,
+            onFirstFrame: () -> Unit, onEos: (String, Boolean) -> Unit,
             getAudioClock: () -> Long = ::pacingClockNanos, parkFlag: AtomicBoolean? = null,
             presentPreview: Boolean = true, tolerateLateness: Boolean = true,
         ) {
@@ -300,7 +299,7 @@ internal class PlaybackSessionManager(
 
     /** Stops any running session, then launches new FFmpeg processes for [streamSet] starting at [offsetNanos]. */
     fun start(
-        streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int, hwAccel: HwAccelBackend, live: Boolean = false,
+        streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int, live: Boolean = false,
         onFirstFrame: () -> Unit = {},
     ) {
         stop()
@@ -316,7 +315,7 @@ internal class PlaybackSessionManager(
         val channel = VideoChannel()
         try {
             val firstVideoFrame = CountDownLatch(1)
-            channel.launch(streamSet, w, h, offsetNanos, hwAccel, onFirstFrame = {
+            channel.launch(streamSet, w, h, offsetNanos, onFirstFrame = {
                 clock.markFirstFrame()
                 firstVideoFrame.countDown()
                 onFirstFrame()
@@ -350,7 +349,7 @@ internal class PlaybackSessionManager(
     }
 
     /** Seamless seek: silences old audio, freezes picture on last frame, warms new stream at offset. */
-    fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int, hwAccel: HwAccelBackend): Boolean {
+    fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         if (!isPlaying || terminated.get() || parkFlag.get()) return false
         audioWarmPool.invalidateAll()
         if (bridgeCeilingNanos != Long.MAX_VALUE) return false
@@ -369,7 +368,7 @@ internal class PlaybackSessionManager(
         val channel = VideoChannel()
         try {
             val firstVideoFrame = CountDownLatch(1)
-            channel.launch(streamSet, w, h, offsetNanos, hwAccel, onFirstFrame = {
+            channel.launch(streamSet, w, h, offsetNanos, onFirstFrame = {
                 clock.markFirstFrame()
                 firstVideoFrame.countDown()
             }, onEos = onStreamEnd, parkFlag = parkFlag)
@@ -605,7 +604,7 @@ internal class PlaybackSessionManager(
 
     /** Attaches live source while replay holds screen: live channel warms up as incoming channel in parallel. */
     fun attachLiveAfterReplay(
-        streamSet: ActiveStreams, liveOffsetNanos: Long, lastQuality: Int, hwAccel: HwAccelBackend,
+        streamSet: ActiveStreams, liveOffsetNanos: Long, lastQuality: Int,
     ): Boolean {
         if (active == null || !isPlaying || terminated.get()) return false
         liveSession = false
@@ -632,7 +631,6 @@ internal class PlaybackSessionManager(
                 w,
                 h,
                 liveOffsetNanos,
-                hwAccel,
                 onFirstFrame = {
                     clock.rebaseTo(liveOffsetNanos)
                     audio.onBridgeHandoff()
@@ -821,12 +819,12 @@ internal class PlaybackSessionManager(
      * Seamless quality switch: launches [streamSet]'s new-quality video as a parallel incoming channel while the
      * current one keeps playing, then swaps once it's caught up.
      */
-    fun beginQualitySwitch(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int, hwAccel: HwAccelBackend) {
+    fun beginQualitySwitch(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int) {
         if (active == null || !isPlaying || terminated.get()) {
             // Nothing to hand off from: drop the staged texture, but the target quality still takes
             // effect below via a full start on the same (new) stream set — not a real failure.
             onQualitySwitchAborted(true)
-            start(streamSet, offsetNanos, lastQuality, hwAccel)
+            start(streamSet, offsetNanos, lastQuality)
             return
         }
 
@@ -864,7 +862,6 @@ internal class PlaybackSessionManager(
                 w,
                 h,
                 offsetNanos,
-                hwAccel,
                 onFirstFrame = {
                     clock.markFirstFrame()
                     if (MediaPlayer.DEBUG) logger.debug("$debugLabel Incoming video handoff #$generation presented its first frame.")

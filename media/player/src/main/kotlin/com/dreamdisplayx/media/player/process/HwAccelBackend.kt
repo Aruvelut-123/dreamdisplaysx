@@ -3,30 +3,29 @@ package com.dreamdisplayx.media.player.process
 import com.dreamdisplayx.util.OsInfo
 
 /**
- * Hardware-accelerated video decoder backends supported by `FFmpeg`.
+ * Hardware-accelerated video decoder backends supported by the platform.
  *
- * The intent is to offload H.264 / HEVC / VP9 / AV1 decoding from the CPU to the GPU's dedicated
- * video decode block (`NVDEC` on NVIDIA, `VCE` on AMD, `QuickSync` on Intel, the Apple VT block on
- * macOS, `MediaCodec` on Android).
+ * JavaCPP / FFmpeg handles hardware acceleration internally; this enum reports
+ * what the host OS can provide for capability handshake ([ClientHello.hwAccelBackend]).
  */
-enum class HwAccelBackend(val ffmpegName: String?, val hwOutputFormat: String?, val lavCode: Int) {
-    /** Apple platforms. Handles h264, hevc, vp9, prores. */
-    VIDEOTOOLBOX("videotoolbox", "videotoolbox_vld", 2),
+enum class HwAccelBackend {
+    /** Apple platforms (VideoToolbox). */
+    VIDEOTOOLBOX,
 
     /** Windows `Direct3D 11` Video Acceleration. */
-    D3D11VA("d3d11va", "d3d11", 3),
+    D3D11VA,
 
-    /** Linux `Video Acceleration API` works on AMD / Intel; NVIDIA needs the nouveau or proprietary `VAAPI` bridge. */
-    VAAPI("vaapi", "vaapi", 4),
+    /** Linux `Video Acceleration API`. */
+    VAAPI,
 
-    /** NVIDIA CUDA / NVDEC are fastest on NVIDIA, but limited to NVIDIA cards. */
-    CUDA("cuda", "cuda", 5),
+    /** NVIDIA CUDA / NVDEC. */
+    CUDA,
 
-    /** Android `MediaCodec` — present on every Android device; BtbN's Android NDK builds ship it. */
-    MEDIACODEC("mediacodec", "mediacodec", 6),
+    /** Android `MediaCodec`. */
+    MEDIACODEC,
 
     /** Software decoding only. */
-    NONE(null, null, 0);
+    NONE;
 
     companion object {
         /**
@@ -41,34 +40,5 @@ enum class HwAccelBackend(val ffmpegName: String?, val hwOutputFormat: String?, 
             OsInfo.isLinux -> VAAPI
             else -> NONE
         }
-
-        /**
-         * Returns true if [stderr] looks like an `FFmpeg` startup failure caused specifically by the hardware decoder
-         * (as opposed to some unrelated error), so we can fall back to software.
-         */
-        fun looksLikeHwAccelFailure(stderr: String): Boolean {
-            if (stderr.isEmpty()) return false
-            val s = stderr.lowercase()
-            return HWACCEL_FAIL_MARKERS.any { s.contains(it) }
-        }
-
-        private val HWACCEL_FAIL_MARKERS = listOf(
-            "hwaccel",
-            "videotoolbox",
-            "d3d11va",
-            "vaapi",
-            "cuda",
-            "cuvid",
-            "nvdec",
-            "mediacodec",
-            "hardware acceleration",
-            "failed setup for format",
-            "no device available",
-            "device creation failed",
-            "no usable hwaccel",
-            "decoder does not support",
-            "scale_vt",
-            "no such filter",
-        )
     }
 }

@@ -4,13 +4,9 @@ package com.dreamdisplayx.platform.client.render
 import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
-import com.dreamdisplayx.media.player.process.FFmpegBinary
-import com.dreamdisplayx.media.player.process.MediaProcess
+import com.dreamdisplayx.media.player.process.JavaCppFrameExtractor
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
-import com.dreamdisplayx.platform.client.render.ScrubPreview.EXTRACT_CONCURRENCY
-import com.dreamdisplayx.platform.client.render.ScrubPreview.FRAMES
-import com.dreamdisplayx.platform.client.render.ScrubPreview.generate
 import com.dreamdisplayx.util.DreamCoroutines
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
@@ -33,7 +29,7 @@ import javax.imageio.ImageIO
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.seconds
 
-/** Generates and caches seek-bar scrub-preview thumbnails: sparse frames sampled across video duration via `FFmpeg`. */
+/** Generates and caches seek-bar scrub-preview thumbnails: sparse frames sampled across video duration via JavaCPP. */
 object ScrubPreview {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/ScrubPreview")
 
@@ -55,13 +51,13 @@ object ScrubPreview {
     /** Never sample closer together than this, so short videos don't spawn a process per second. */
     private const val MIN_SAMPLE_SPACING_NANOS = 5_000_000_000L
 
-    /** Max simultaneous FFmpeg extractions: each opens its own connection, so concurrency is capped conservatively. */
+    /** Max simultaneous extractions: each opens its own connection, so concurrency is capped conservatively. */
     private const val EXTRACT_CONCURRENCY = 2
 
     /** Extractions run one at a time against a pasted host (see [THIRD_PARTY_SAMPLE_COUNT]). */
     private const val THIRD_PARTY_CONCURRENCY = 1
 
-    /** Budget for one sample: extraction requires deep range-seek into file with unknown codec/container overhead. */
+    /** Budget for one sample. */
     private val EXTRACT_TIMEOUT = 25.seconds
 
     private class Frame(val timestampNanos: Long, val texture: Identifier)
@@ -116,20 +112,14 @@ object ScrubPreview {
         return frames[lo].texture
     }
 
-    /** Extracts sample frames via `FFmpeg` at [EXTRACT_CONCURRENCY] limit, publishing to [FRAMES] as each completes. */
+    /** Extracts sample frames via JavaCPP at [EXTRACT_CONCURRENCY] limit, publishing to [FRAMES] as each completes. */
     private suspend fun generate(key: String, sourceUrl: String, durationNanos: Long, seekByDecoding: Boolean) {
-        val ffmpeg = FFmpegBinary.getPath()
-        if (ffmpeg == null) {
-            logger.warn("Scrub preview aborted for $key: no FFmpeg binary available")
-            FRAMES.put(key, emptyList())
-            return
-        }
         val firstParty = MediaHosts.isFirstParty(sourceUrl)
         val samples = if (firstParty) SAMPLE_COUNT else THIRD_PARTY_SAMPLE_COUNT
         val concurrency = if (firstParty) EXTRACT_CONCURRENCY else THIRD_PARTY_CONCURRENCY
         val spacing = (durationNanos / samples).coerceAtLeast(MIN_SAMPLE_SPACING_NANOS)
         val timestamps = generateSequence(spacing / 2) { it + spacing }.takeWhile { it < durationNanos }.toList()
-        logger.info("Generating $key: ${timestamps.size} sample(s), concurrency=$concurrency, ffmpeg=$ffmpeg")
+        logger.info("Generating $key: ${timestamps.size} sample(s), concurrency=$concurrency")
 
         val collected = Collections.synchronizedList(ArrayList<Frame>(timestamps.size))
         val semaphore = Semaphore(concurrency)
@@ -138,7 +128,7 @@ object ScrubPreview {
             timestamps.map { ts ->
                 async {
                     semaphore.withPermit {
-                        val bytes = extractFrame(key, ffmpeg, sourceUrl, ts, seekByDecoding)
+                        val bytes = extractFrame(key, sourceUrl, ts)
                         val id = bytes?.let { registerFrame(key, ts, it) }
                         if (id != null) {
                             collected.add(Frame(ts, id))
@@ -153,54 +143,12 @@ object ScrubPreview {
         logger.info("Generated $key: ${collected.size} frame(s) ready, $failures extraction failure(s)")
     }
 
-    /** Runs a single-frame `FFmpeg` extraction at [offsetNanos] and returns the raw JPEG bytes. */
+    /** Runs a single-frame JavaCPP extraction at [offsetNanos] and returns the raw JPEG bytes. */
     private suspend fun extractFrame(
-        key: String, ffmpeg: String, sourceUrl: String, offsetNanos: Long, seekByDecoding: Boolean,
+        key: String, sourceUrl: String, offsetNanos: Long,
     ): ByteArray? =
-        coroutineScope {
-            val proc = runCatching {
-                MediaProcess.buildFrameExtract(
-                    ffmpeg, sourceUrl, offsetNanos, FRAME_WIDTH, FRAME_HEIGHT, seekByDecoding,
-                )
-            }.onFailure { e ->
-                logger.warn("Scrub frame process start failed for $key@$offsetNanos: ${e.message}")
-            }.getOrNull() ?: return@coroutineScope null
-
-            val stderrDeferred =
-                async(Dispatchers.IO) { runCatching { proc.errorStream.use { it.readBytes() } }.getOrNull() }
-            val stdoutDeferred =
-                async(Dispatchers.IO) { runCatching { proc.inputStream.use { it.readBytes() } }.getOrNull() }
-
-            val result = runCatching {
-                val exited = withTimeoutOrNull(EXTRACT_TIMEOUT) {
-                    withContext(Dispatchers.IO) { proc.waitFor() }
-                }
-
-                val bytes = stdoutDeferred.await()
-                stderrDeferred.await()
-
-                when {
-                    exited == null -> {
-                        logger.warn("Scrub frame extraction timed out for $key@$offsetNanos.")
-                        null
-                    }
-
-                    bytes == null || bytes.isEmpty() -> {
-                        logger.warn("Scrub frame extraction produced no output for $key@$offsetNanos (exit=${proc.exitValue()}).")
-                        null
-                    }
-
-                    else -> bytes
-                }
-            }.onFailure { e ->
-                if (e is CancellationException) throw e
-                logger.warn("Scrub frame extraction failed for $key@$offsetNanos: ${e.message}.")
-            }
-            try {
-                result.getOrNull()
-            } finally {
-                MediaProcess.gracefulDestroy(proc)
-            }
+        withTimeoutOrNull(EXTRACT_TIMEOUT) {
+            JavaCppFrameExtractor.extractJpeg(sourceUrl, offsetNanos, FRAME_WIDTH, FRAME_HEIGHT)
         }
 
     /**

@@ -18,8 +18,6 @@ import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.policy.RetryPolicy
 import com.dreamdisplayx.media.player.preparation.MediaPreparationService
 import com.dreamdisplayx.media.player.preparation.PreparedMedia
-import com.dreamdisplayx.media.player.process.HwAccelBackend
-import com.dreamdisplayx.media.player.process.MediaProcess
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.MediaUtil
@@ -80,9 +78,6 @@ class MediaPlayer(
         private const val MAX_AUDIO_RESTARTS = 3
 
         private const val AUDIO_RESTART_BUDGET_RESET_NS = 120_000_000_000L
-
-        /** Hwaccel failures show up within the first few seconds, past this window assume the stream is just unreliable. */
-        private const val HWACCEL_FAIL_WINDOW_NS = 5_000_000_000L
 
         /** How long the "applying quality" hint may stay up before it expires on its own. */
         private const val QUALITY_STATUS_MAX_NS = 30_000_000_000L
@@ -267,12 +262,6 @@ class MediaPlayer(
 
     @Volatile
     private var brightness = 1.0
-
-    @Volatile
-    private var hwAccelDisabled = false
-
-    @Volatile
-    private var sessionStartNanos = 0L
 
     private val volume = VolumeController(env.config.defaultDisplayVolume) {
         sessionManager.setVolume(it)
@@ -682,14 +671,12 @@ class MediaPlayer(
         // A full restart decodes at the current texture's dimensions, so any staged quality handoff
         // (which expects new dimensions) would never match and must be dropped to avoid a frozen frame.
         host.cancelQualityHandoff()
-        sessionStartNanos = System.nanoTime()
         audioRestartAttempts.set(0)
         lastAudioFailureNanos = 0L
         sessionManager.start(
             streamSet,
             offsetNanos,
             lastQuality,
-            currentHwAccel(),
             live = liveStream,
             onFirstFrame = {
                 retryPolicy.reset()
@@ -726,8 +713,7 @@ class MediaPlayer(
      */
     private fun attachLiveToReplay(streamSet: ActiveStreams, liveOffsetNanos: Long): Boolean {
         env.renderExecutor.execute { host.beginQualityHandoff() }
-        sessionStartNanos = System.nanoTime()
-        if (!sessionManager.attachLiveAfterReplay(streamSet, liveOffsetNanos, lastQuality, currentHwAccel())) {
+        if (!sessionManager.attachLiveAfterReplay(streamSet, liveOffsetNanos, lastQuality)) {
             env.renderExecutor.execute { host.cancelQualityHandoff() }
             return false
         }
@@ -743,15 +729,10 @@ class MediaPlayer(
     private fun beginQualitySwitch(
         streamSet: ActiveStreams,
         offsetNanos: Long,
-        hwAccelOverride: HwAccelBackend? = null,
     ) {
         if (terminated.get()) return
-        sessionManager.beginQualitySwitch(streamSet, offsetNanos, lastQuality, hwAccelOverride ?: currentHwAccel())
+        sessionManager.beginQualitySwitch(streamSet, offsetNanos, lastQuality)
     }
-
-    /** The hardware decode backend for new sessions, honoring config and the per-stream software fallback. */
-    private fun currentHwAccel(): HwAccelBackend =
-        if (env.config.useHwAccel && !hwAccelDisabled) HwAccelBackend.detectDefault() else HwAccelBackend.NONE
 
     /**
      * Stops watchdog and session.
@@ -766,23 +747,6 @@ class MediaPlayer(
      */
     private fun handleStreamEnd(stderr: String, normalEos: Boolean) {
         if (terminated.get()) return
-        if (!hwAccelDisabled && !normalEos && !clock.isRunning
-            && System.nanoTime() - sessionStartNanos < HWACCEL_FAIL_WINDOW_NS
-            && HwAccelBackend.looksLikeHwAccelFailure(stderr)
-        ) {
-            hwAccelDisabled = true
-            logger.warn(
-                "$debugLabel Hardware decode failed for this stream. Falling back to software. Stderr: ${
-                    MediaUtil.truncate(
-                        stderr
-                    )
-                }."
-            )
-            val ss = streams
-            if (ss != null) safeExecute { if (!terminated.get()) startStreams(ss, 0) }
-            return
-        }
-
         val decision = retryPolicy.evaluate(stderr, normalEos, liveStream)
         if (decision != null) {
             scheduleRetry(decision.invalidateCache)
@@ -811,7 +775,7 @@ class MediaPlayer(
                 val ss = streams
                 if (ss != null && !terminated.get() && !host.isPaused) {
                     endedAtEnd.set(false)
-                    if (!sessionManager.beginSeek(ss, 0, lastQuality, currentHwAccel())) {
+                    if (!sessionManager.beginSeek(ss, 0, lastQuality)) {
                         clock.reset(0)
                         startStreams(ss, 0)
                     }
@@ -841,16 +805,9 @@ class MediaPlayer(
      * Handles audio end-of-stream: defers if near VOD end, restarts audio on live, escalates to stall.
      */
     private fun handleAudioFailure(stderr: String) {
-        // A source with no audio track at all is not a failure to recover from: restarting it only
-        // produces the same empty output, which is how a silent video used to lock the player into an
-        // endless invalidate-and-re-resolve loop. Play it silently and stop spawning audio for it.
-        if (MediaProcess.indicatesNoAudioStream(stderr)) {
-            val silentUrl = streams?.currentAudio?.url
-            if (silentUrl == null || sessionManager.markSourceSilent(silentUrl)) {
-                logger.info("$debugLabel This source carries no audio track; playing it silently.")
-            }
-            return
-        }
+        // With JavaCPP in-process decoder, the stderr from the process is empty.
+        // A source with no audio track is detected by the decoder failing to produce samples.
+        // The markSourceSilent path is no longer used (it was specific to FFmpeg CLI stderr output).
         if (!liveStream && durationHintNanos > 0L && durationHintNanos - clock.currentTime() <= AUDIO_EOS_NEAR_END_GUARD_NS) {
             logger.debug("$debugLabel Audio pipe ended near VOD end (pos=${clock.currentTime()}, dur=$durationHintNanos); deferring to video EOS.")
             return
@@ -911,7 +868,7 @@ class MediaPlayer(
                 val pos = if (liveStream) 0L else clock.currentTime()
                 // Restart in place when possible: the picture holds its last frame while the new
                 // session connects, instead of blanking through a blocking teardown.
-                if (sessionManager.beginSeek(ss, pos, lastQuality, currentHwAccel())) {
+                if (sessionManager.beginSeek(ss, pos, lastQuality)) {
                     // The watchdog stops itself when it reports a stall, and this path never goes
                     // through startStreams, so nothing else would ever watch this session again.
                     watchdog.start()
@@ -936,7 +893,7 @@ class MediaPlayer(
             streams = ss.copy(currentVideo = video.copy(url = newUrl))
             safeExecute {
                 val pos = clock.currentTime()
-                if (sessionManager.beginSeek(ss.copy(currentVideo = video.copy(url = newUrl)), pos, lastQuality, currentHwAccel())) {
+                if (sessionManager.beginSeek(ss.copy(currentVideo = video.copy(url = newUrl)), pos, lastQuality)) {
                     watchdog.start()
                 } else {
                     startStreams(ss.copy(currentVideo = video.copy(url = newUrl)), pos)
@@ -953,7 +910,7 @@ class MediaPlayer(
             streams = ss.copy(currentAudio = audio.copy(url = newUrl))
             safeExecute {
                 val pos = clock.currentTime()
-                if (sessionManager.beginSeek(ss.copy(currentAudio = audio.copy(url = newUrl)), pos, lastQuality, currentHwAccel())) {
+                if (sessionManager.beginSeek(ss.copy(currentAudio = audio.copy(url = newUrl)), pos, lastQuality)) {
                     watchdog.start()
                 } else {
                     startStreams(ss.copy(currentAudio = audio.copy(url = newUrl)), pos)
@@ -1054,7 +1011,7 @@ class MediaPlayer(
         clock.reset(nanos)
         val ss = streams ?: return
         if (sessionManager.isPlaying && !sessionManager.isParked()) {
-            if (!sessionManager.beginSeek(ss, nanos, lastQuality, currentHwAccel())) {
+            if (!sessionManager.beginSeek(ss, nanos, lastQuality)) {
                 logger.warn("$debugLabel Seek to ${nanos / 1_000_000} ms fell back to a full stream restart.")
                 startStreams(ss, nanos)
             }
