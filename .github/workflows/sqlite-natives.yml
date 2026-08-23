@@ -86,15 +86,18 @@ jobs:
       - name: Package native library
         shell: bash
         run: |
-          cd native-artifact
+          # Pack only the platform content (Linux/x86_64/libsqlitejdbc.so etc.), not the
+          # intermediate dreamdisplayx-natives/<platform> wrapper dirs, so extraction into
+          # native/build/ci-bundle/dreamdisplayx-natives yields exactly what
+          # includeRebuiltSqliteNatives expects: <bundle>/<Os>/<arch>/<lib>.
           tar czf "native-${{ matrix.sqlite.platform }}.tar.gz" \
-            dreamdisplayx-natives/${{ matrix.sqlite.platform }}
+            -C native-artifact/dreamdisplayx-natives/${{ matrix.sqlite.platform }} .
 
       - name: Upload packaged native library
         uses: actions/upload-artifact@v7.0.1
         with:
           name: native-${{ matrix.sqlite.platform }}
-          path: native-artifact/native-${{ matrix.sqlite.platform }}.tar.gz
+          path: native-${{ matrix.sqlite.platform }}.tar.gz
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
