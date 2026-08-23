@@ -227,29 +227,42 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Read sqlite native release tag
+      - name: Resolve sqlite native release
         id: check_release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # First try the tag from the marker file (if set up)
           if [[ -f .github/sqlite-natives-tag.txt ]]; then
             TAG="$(cat .github/sqlite-natives-tag.txt | tr -d '[:space:]')"
-          else
-            TAG="sqlite-natives-v1"
+            if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+              echo "Found prebuilt sqlite natives release $TAG (from tag file)"
+              echo "sqlite_release=$TAG" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Tag file points to $TAG which does not exist; falling back to latest release."
           fi
-          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Found prebuilt sqlite natives release $TAG"
-            echo "sqlite_release=$TAG" >> "$GITHUB_OUTPUT"
-          else
-            echo "ERROR: sqlite natives release $TAG does not exist."
-            echo ""
-            echo "Run the 'Build SQLite Natives' workflow (.github/workflows/sqlite-natives.yml)"
-            echo "manually (Actions -> Build SQLite Natives -> Run workflow) to compile and"
-            echo "publish the 6-platform sqlite native libraries, then re-run this build."
-            echo ""
-            echo "If you intentionally changed the sqlite version / compiler flags, either update"
-            echo ".github/sqlite-natives-tag.txt to the new release tag, or temporarily restore the"
-            echo "inline build job from git history to build the natives in this workflow."
-            exit 1
+
+          # Fallback: find the most recent sqlite-natives-* release
+          LATEST="$(
+            gh release list --repo "${{ github.repository }}" --limit 50 \
+              --json tagName --jq '.[].tagName' \
+              | grep -E '^sqlite-natives-' \
+              | sort -t- -k3 -n -r \
+              | head -1
+          )"
+          if [[ -n "$LATEST" ]]; then
+            echo "Found latest sqlite natives release $LATEST"
+            echo "sqlite_release=$LATEST" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          echo "ERROR: No sqlite natives release found."
+          echo ""
+          echo "Run the 'Build SQLite Natives' workflow (.github/workflows/sqlite-natives.yml)"
+          echo "manually (Actions -> Build SQLite Natives -> Run workflow) to compile and"
+          echo "publish the 6-platform sqlite native libraries, then re-run this build."
+          exit 1
 
   # ========================================================================
   # Main build job
