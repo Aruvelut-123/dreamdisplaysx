@@ -7,6 +7,7 @@ import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.daemon
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
+import org.bytedeco.javacv.FrameGrabber
 import org.slf4j.LoggerFactory
 import java.io.InputStream
 import java.io.PipedInputStream
@@ -354,7 +355,7 @@ internal class JavaCppAudioDecoder(
         // RAW image mode prevents javacv from setting a pixel_format codec option on the
         // format context even for audio-only streams, which avformat otherwise rejects
         // with the noisy "pixel_format, value: bgr24" info log.
-        g.imageMode = FFmpegFrameGrabber.ImageMode.RAW
+        g.imageMode = FrameGrabber.ImageMode.RAW
         g.start()
         // Seek if needed
         if (seekOffsetNanos > 0) {
