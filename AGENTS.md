@@ -100,6 +100,14 @@ Every code change MUST be followed by ALL of the below before the task is consid
 3. **Documentation** — update `README.md` and `CHANGELOG.md` when the change is user-visible or affects behavior/features
 4. **AGENTS.md** — if the change affects architecture, build process, or workflow rules, update `AGENTS.md` accordingly
 
+### Task Tracking (MANDATORY)
+Every task MUST be tracked in the session's `todo` task list at all times:
+1. **Before starting** any work, create or update the `todo` list with all planned steps, each marked `pending`
+2. **While working**, mark the current step(s) as `in_progress` — only one at a time for sequential work, several for genuinely parallel work
+3. **On completion** of a step, mark it `completed` immediately (do not batch completions)
+4. **At the end** of the task, every step must be `completed`; remove any abandoned steps from the list
+5. **`todo.md`** — when the task produces a persistent artifact (config, code, docs), also update or create `todo.md` in the project root to track the broader project state. The session `todo` task list tracks the immediate session; `todo.md` tracks the project roadmap.
+
 ### Commit Message Format
 - Use clear, descriptive messages following conventional commits when possible
 - Always include the affected module/component in the message
