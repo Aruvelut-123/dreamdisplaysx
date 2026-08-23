@@ -4,6 +4,7 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 
 ## Highlights
 
+- **JavaCPP audio decode** — the FFmpeg CLI subprocess for audio is replaced by an in-process `FFmpegFrameGrabber` (JavaCPP). No more external FFmpeg binary download for audio; `HlsAudioFeeder` removed. Scrub-preview frame extraction still uses the CLI binary (to be migrated later).
 - **JavaCPP video decode** — the Rust native library (`dreamdisplayx_native` + `dreamdisplayx_lav`) and FFmpeg CLI video pipelines are replaced by an in-process `FFmpegFrameGrabber` (JavaCPP / org.bytedeco:javacv). No more Rust build toolchain, no more external FFmpeg binary for video; the decode library is bundled from Maven as `ffmpeg-platform:8.1.2`.
 - **yt-dlp removed** — the `yt-dlp` subprocess, binary downloader/updater, and all YouTube resolution (NewPipeExtractor) are gone. No external Python/toolchain dependency remains; Twitch, Vimeo, Kick, and Bilibili all keep their in-process resolvers.
 - **Direct search service** — pasting a URL into search now shows its info card directly, and Bilibili `BV` / `av` IDs resolve straight to the video.
@@ -21,7 +22,8 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 - JavaCPP (`org.bytedeco:javacv:1.5.14` + `ffmpeg-platform:8.1.2`) replaces the Rust native pipeline for video decode. The `FFmpegFrameGrabber` opens URLs in-process, supports I420 planar output for GPU YUV rendering, and provides warm park, brightness, and popout.
 - Removed Rust native crates (`native/`), `NativeMedia.kt`, `LavFfmpeg.kt`, `NativeVideoFramePipe.kt`, `LavGlSurfaceTextures.kt`.
 - `PlaybackSessionManager.VideoChannel` simplified to a single `JavaCppVideoPipe` path (no more in-process libav vs native process vs JVM process fallback).
-- Audio pipeline still uses the FFmpeg CLI binary (to be migrated to JavaCPP in a future phase).
+- Audio pipeline migrated to JavaCPP: `JavaCppAudioDecoder` (FFmpegFrameGrabber grabSamples → S16LE PCM via PipedInputStream) replaces the FFmpeg CLI subprocess. `HlsAudioFeeder` removed (FFmpegFrameGrabber opens HLS URLs directly). No more FFmpeg binary download for audio.
+- Removed `FFmpegBinary.prewarmAsync` from client startup (JavaCPP handles its own native loading).
 - Bilibili DASH / durl / live streams keep every backup CDN URL; on repeated session stalls the player tries the next CDN before invalidating caches and re-resolving.
 - Fixed stale `savedTimeNanos` reuse on video swap that caused the first-second reload-and-seek jump.
 - `FramePrebuffer` drops frames more than 5s behind the audio clock so a slow decoder resyncs instead of drifting forever.
