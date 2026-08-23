@@ -206,27 +206,20 @@ jobs:
           echo "pretty_version=$pretty" >> $GITHUB_OUTPUT
 
   # ========================================================================
-  # sqlite native rebuild: relocated JNI symbols for Fabric/NeoForge mod isolation.
-  # Rebuilt for all 6 platforms so SQLite works on any client OS.
+  # sqlite native natives: downloaded from a GitHub Release produced by the
+  # standalone "Build SQLite Natives" workflow (sqlite-natives.yml), which
+  # compiles the relocated JNI symbols for Fabric/NeoForge mod isolation.
+  # Building the 6-platform C bundle on every CI run would be wasteful since
+  # the sqlite sources never change between builds. Run that workflow
+  # (workflow_dispatch) whenever the sqlite version or compiler flags change.
   # ========================================================================
-  build-sqlite-natives:
-    name: sqlite ${{ matrix.sqlite.platform }}
-    runs-on: ${{ matrix.sqlite.runner }}
+  download-sqlite-natives:
+    name: Download sqlite natives
+    runs-on: ubuntu-latest
     needs: metadata
-    timeout-minutes: 30
-    permissions:
-      contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        sqlite:
-          - { platform: linux-x64,      os: Linux,   arch: x86_64,  runner: ubuntu-latest }
-          - { platform: linux-aarch64,  os: Linux,   arch: aarch64, runner: ubuntu-24.04-arm }
-          - { platform: macos-x64,      os: Mac,     arch: x86_64,  runner: macos-15-intel }
-          - { platform: macos-aarch64,  os: Mac,     arch: aarch64, runner: macos-14 }
-          - { platform: windows-x64,    os: Windows, arch: x86_64,  runner: windows-latest }
-          - { platform: windows-aarch64,os: Windows, arch: aarch64, runner: windows-11-arm }
+    timeout-minutes: 5
+    outputs:
+      sqlite_release: ${{ steps.check_release.outputs.sqlite_release }}
 
     steps:
       - name: Checkout repository
@@ -234,53 +227,29 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Setup JDK 25
-        uses: actions/setup-java@v5.2.0
-        with:
-          java-version: 25
-          distribution: zulu
-
-      - name: Cache sqlite native build
-        uses: actions/cache@v4.2.3
-        with:
-          path: |
-            native/sqlite/amalgamation
-            native/sqlite/sqlite-jdbc-src
-          key: sqlite-${{ matrix.sqlite.platform }}
-          restore-keys: |
-            sqlite-${{ matrix.sqlite.platform }}-
-            sqlite-
-
-      - name: Install MinGW gcc on Windows
-        if: runner.os == 'Windows'
-        shell: bash
+      - name: Read sqlite native release tag
+        id: check_release
         run: |
-          choco install mingw --no-progress -y
-          echo "$PATH" >> /dev/null
-          gcc --version
-
-      - name: Build sqlite native library
-        shell: bash
-        run: |
-          set -euo pipefail
-          export OUT_DIR="$PWD/native-artifact/dreamdisplayx-natives/${{ matrix.sqlite.platform }}"
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            export CC="gcc"
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            export CC="clang"
+          if [[ -f .github/sqlite-natives-tag.txt ]]; then
+            TAG="$(cat .github/sqlite-natives-tag.txt | tr -d '[:space:]')"
           else
-            export CC="gcc"
+            TAG="sqlite-natives-v1"
           fi
-          bash native/sqlite/compile.sh ${{ matrix.sqlite.os }} ${{ matrix.sqlite.arch }}
-
-      - name: Upload sqlite native
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: native-${{ matrix.sqlite.platform }}
-          path: native-artifact/dreamdisplayx-natives/${{ matrix.sqlite.platform }}
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Found prebuilt sqlite natives release $TAG"
+            echo "sqlite_release=$TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "ERROR: sqlite natives release $TAG does not exist."
+            echo ""
+            echo "Run the 'Build SQLite Natives' workflow (.github/workflows/sqlite-natives.yml)"
+            echo "manually (Actions -> Build SQLite Natives -> Run workflow) to compile and"
+            echo "publish the 6-platform sqlite native libraries, then re-run this build."
+            echo ""
+            echo "If you intentionally changed the sqlite version / compiler flags, either update"
+            echo ".github/sqlite-natives-tag.txt to the new release tag, or temporarily restore the"
+            echo "inline build job from git history to build the natives in this workflow."
+            exit 1
+          fi
 
   # ========================================================================
   # Main build job
@@ -290,7 +259,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - metadata
-      - build-sqlite-natives
+      - download-sqlite-natives
     timeout-minutes: 15
     permissions:
       contents: read
@@ -338,16 +307,16 @@ jobs:
           grep '^version' gradle.properties
 
       - name: Download sqlite native archives
-        uses: actions/download-artifact@v8.0.1
-        with:
-          pattern: native-*
-          path: native/build/native-archives
-          merge-multiple: true
-
-      - name: Extract sqlite native bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          TAG="${{ needs.download-sqlite-natives.outputs.sqlite_release }}"
           mkdir -p native/build/ci-bundle/dreamdisplayx-natives
-          cp -r native/build/native-archives/. native/build/ci-bundle/dreamdisplayx-natives/
+          gh release download "$TAG" --repo "${{ github.repository }}" \
+            --dir native/build/ci-bundle --pattern 'native-*.tar.gz'
+          for f in native/build/ci-bundle/native-*.tar.gz; do
+            tar xzf "$f" -C native/build/ci-bundle/dreamdisplayx-natives
+          done
           find native/build/ci-bundle/dreamdisplayx-natives -maxdepth 3 -type f -print | sort
 
       - name: Build loaders with Gradle

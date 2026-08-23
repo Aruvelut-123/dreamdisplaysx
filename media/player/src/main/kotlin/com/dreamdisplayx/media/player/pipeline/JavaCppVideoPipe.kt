@@ -288,9 +288,11 @@ internal class JavaCppVideoPipe(
                 break
             }
 
-            // Record the first frame's raw PTS for exact A/V bias anchoring
+            // Record the first frame's raw PTS for exact A/V bias anchoring. FFmpegFrameGrabber
+            // timestamps are in microseconds, while the audio clock (pacingClockNanos) is in
+            // nanoseconds, so convert here once.
             if (firstRawPtsNanos == Long.MIN_VALUE && frame.timestamp > 0) {
-                firstRawPtsNanos = frame.timestamp
+                firstRawPtsNanos = frame.timestamp * 1000L
             }
 
             spare.clear()
@@ -317,8 +319,9 @@ internal class JavaCppVideoPipe(
             val pk2 = parked
             if (pk2 != null && pk2.get()) continue
 
-            // Use the frame's timestamp if available, otherwise synthetic
-            val framePts = if (frame.timestamp > 0) frame.timestamp else videoPts
+            // Use the frame's timestamp if available, otherwise synthetic. Convert µs → ns so the
+            // prebuffer / pacing (which compare against the nanosecond audio clock) see correct drift.
+            val framePts = if (frame.timestamp > 0) frame.timestamp * 1000L else videoPts
 
             if (prebuffer != null) {
                 if (!MediaPlayer.captureSamples) {

@@ -1,0 +1,13 @@
+# SQLite native library release tag
+#
+# The main build workflow (_build.yml) downloads pre-built sqlite native
+# libraries from this GitHub Release tag instead of recompiling the C
+# sources on every CI run.
+#
+# To update the native libraries (e.g. after bumping sqlite-jdbc version,
+# changing compiler flags, or adding a new platform):
+#   1. Run the "Build SQLite Natives" workflow (sqlite-natives.yml) with a
+#      new tag (e.g. sqlite-natives-v2) to produce fresh binaries.
+#   2. Update this file to the new tag.
+#   3. Commit and push both changes together.
+sqlite-natives-v1
