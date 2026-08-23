@@ -45,6 +45,8 @@ val dreamDisplaysShadedDependencies = listOf(
     "com.zaxxer:HikariCP",
     "com.google.protobuf:protobuf-javalite",
     "com.google.zxing:core",
+    "org.bytedeco:javacv",
+    "org.bytedeco:ffmpeg-platform",
 )
 
 /** Packages relocated under `com.dreamdisplayx.libs` in every fat loader jar. */
