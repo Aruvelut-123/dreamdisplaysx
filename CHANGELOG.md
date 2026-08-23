@@ -13,6 +13,15 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 - **Bilibili multi-CDN smart switching** — stream resolution now collects every CDN backup URL from the Bilibili API; when a CDN keeps failing, the player automatically switches to the next backup before re-resolving.
 - **Seek-jump fix** — watching a video, then loading a new one, no longer restores the previous video's old saved position (which could jump to a stale ~8s timestamp).
 - **A/V drift auto-resync** — if the video drifts more than 5s behind the audio clock, frames are dropped to let the decoder catch up (like online players), instead of drifting unboundedly.
+- **F3 debug overlay** — shows mod version, FFmpeg version, display count, frame stats. Works on 1.21.1 (mixin) and 26.x (native DebugScreenEntry).
+- **Fixed A/V sync** — `Frame.timestamp` (µs) is now correctly converted to nanoseconds before comparing with the audio clock, eliminating the spurious 1s/s A/V drift that caused ~85% frame drops and video stutter.
+- **Fixed `pixel_format: bgr24` log spam** — switched to `imageMode = RAW` + `sws_scale` for all video conversion, so javacv no longer sets a pixel_format codec option on `avformat_open_input`.
+- **Fixed silent audio on S16 sources** — `JavaCppAudioDecoder` now handles both `FloatBuffer` (FLTP) and `ShortBuffer` (S16) source formats.
+
+## CI / Build
+
+- **SQLite native build separated** — the 6-platform sqlite-jdbc C compilation is moved to a standalone workflow (`sqlite-natives.yml`, `workflow_dispatch`). The main CI downloads pre-built natives from the corresponding GitHub Release, cutting ~3 minutes per CI run. The release tag is pinned in `.github/sqlite-natives-tag.txt`.
+- **CI skip on doc/workflow changes** — pushes that only touch `*.md`, `docs/`, `.github/`, `native/sqlite/`, or `.gitignore` no longer trigger a build.
 
 ## Server
 
