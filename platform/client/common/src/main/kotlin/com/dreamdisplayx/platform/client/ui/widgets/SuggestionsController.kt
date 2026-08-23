@@ -210,6 +210,9 @@ class SuggestionsController {
     /** How many items from [pendingResults] have already been exposed to [cards]. */
     private var pendingOffset: Int = 0
 
+    /** Bilibili search page already fetched (1-based). -1 = exhausted. */
+    private var pendingPage: Int = 1
+
     /** True when [query] contains a Han (Chinese-script) character, the gate for even trying a Bilibili search. */
     private fun looksChinese(query: String): Boolean = CHINESE_CHAR_RE.containsMatchIn(query)
 
@@ -434,21 +437,68 @@ class SuggestionsController {
         val mode = moreMode ?: return
 
         if (mode is MoreMode.Search) {
-            // Bilibili search: serve more from the already-fetched ranked list.
+            // Bilibili search: serve more from the already-fetched ranked list first...
             val remaining = pendingResults.size - pendingOffset
-            if (remaining <= 0) {
-                logger.debug("Load-more: search list exhausted (offset={}, total={})", pendingOffset, pendingResults.size)
+            if (remaining > 0) {
+                val next = pendingResults.subList(
+                    pendingOffset, minOf(pendingOffset + BILIBILI_PAGE_SIZE, pendingResults.size),
+                )
+                pendingOffset += next.size
+                logger.info(
+                    "Load-more: exposing {} more result(s) (offset now {}/{}), cards before {}",
+                    next.size, pendingOffset, pendingResults.size, cards.size,
+                )
+                Minecraft.getInstance().execute {
+                    loadingMore = false
+                    appendCards(next)
+                }
                 return
             }
-            val next = pendingResults.subList(pendingOffset, minOf(pendingOffset + BILIBILI_PAGE_SIZE, pendingResults.size))
-            pendingOffset += next.size
-            logger.info(
-                "Load-more: exposing {} more result(s) (offset now {}/{}), cards before {}",
-                next.size, pendingOffset, pendingResults.size, cards.size,
-            )
-            Minecraft.getInstance().execute {
-                loadingMore = false
-                appendCards(next)
+            // ...and once the local list is exhausted, fetch the next Bilibili page.
+            if (pendingPage < 0) {
+                logger.debug("Load-more: Bilibili search exhausted (page {} fetched).", -pendingPage)
+                return
+            }
+            loadingMore = true
+            val seq = requestSeq.value
+            val query = mode.query
+            val nextPage = pendingPage + 1
+            launchLoad {
+                val items = runCatching {
+                    withContext(Dispatchers.IO) {
+                        val videos = BilibiliApi.searchVideos(query, nextPage)
+                        val bangumi = BilibiliApi.searchBangumi(query, nextPage)
+                        val media = BilibiliApi.searchMedia(query, nextPage)
+                        (videos + bangumi + media)
+                            .filter { bilibiliFilter.matches(it) }
+                            .mapNotNull(::bilibiliSearchResult)
+                    }
+                }.onFailure { e ->
+                    if (e is CancellationException) throw e
+                    logger.warn("Bilibili load-more page $nextPage failed: ${e.message}")
+                }.getOrNull()
+
+                Minecraft.getInstance().execute {
+                    loadingMore = false
+                    if (seq != requestSeq.value || items == null) return@execute
+                    if (items.isEmpty()) {
+                        // Empty page — the search is truly exhausted.
+                        pendingPage = -nextPage
+                        logger.debug("Bilibili load-more page {} came back empty; search exhausted.", nextPage)
+                        return@execute
+                    }
+                    pendingPage = nextPage
+                    pendingResults = pendingResults + items
+                    val next = pendingResults.subList(
+                        pendingOffset, minOf(pendingOffset + BILIBILI_PAGE_SIZE, pendingResults.size),
+                    )
+                    pendingOffset += next.size
+                    logger.info(
+                        "Load-more: Bilibili page {} fetched {} new result(s), exposing {} more (offset {}/{}).",
+                        nextPage, items.size, next.size, pendingOffset, pendingResults.size,
+                    )
+                    appendCards(next)
+                }
             }
             return
         }
@@ -488,6 +538,7 @@ class SuggestionsController {
         cards.clear()
         moreMode = null
         continuationToken = null
+        pendingPage = 1
         onResults?.invoke()
     }
 

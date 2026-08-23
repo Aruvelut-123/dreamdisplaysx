@@ -3,6 +3,7 @@
 package com.dreamdisplayx.media.player.process
 
 import com.dreamdisplayx.api.security.policy.MediaHosts
+import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.Java2DFrameConverter
@@ -22,6 +23,12 @@ object JavaCppFrameExtractor {
 
     private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+    init {
+        // Suppress FFmpeg's av_log INFO messages ("Option: ... rejected" + full stream dumps),
+        // matching the old FFmpeg CLI's `-loglevel error`.
+        avutil.av_log_set_level(avutil.AV_LOG_ERROR)
+    }
 
     /**
      * Extracts a single frame at [offsetNanos] from [url], scales it to [w]x[h] (maintaining aspect),

@@ -5,6 +5,7 @@ package com.dreamdisplayx.media.player.pipeline
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.daemon
+import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.FrameGrabber
@@ -43,6 +44,12 @@ internal class JavaCppAudioDecoder(
         private const val PIPE_BUFFER_SIZE = 1024 * 1024 // 1 MB ring buffer
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        init {
+            // Suppress FFmpeg's av_log INFO messages (e.g. "avformat_open_input rejected some options:
+            // channels, value: 2" and full stream dumps), matching the old FFmpeg CLI's `-loglevel error`.
+            avutil.av_log_set_level(avutil.AV_LOG_ERROR)
+        }
 
         /** Converts a float sample in [-1.0, 1.0] to a signed 16-bit integer, clamped. */
         private fun floatToS16(sample: Float): Short {

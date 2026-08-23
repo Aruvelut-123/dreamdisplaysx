@@ -107,5 +107,15 @@
   "dreamdisplayx.ui.bilibili_paid": "付费",
   "dreamdisplayx.ui.custom": "链接",
   "dreamdisplayx.sort.my_links": "我的链接",
-  "dreamdisplayx.suggestions.no_links": "还没有保存的链接。粘贴上方视频链接即可播放。"
+  "dreamdisplayx.suggestions.no_links": "还没有保存的链接。粘贴上方视频链接即可播放。",
+  "dreamdisplayx.mode.letterbox": "适配",
+  "dreamdisplayx.mode.stretch": "拉伸",
+  "dreamdisplayx.mode.crop": "裁剪",
+  "dreamdisplayx.button.stretch": "拉伸模式",
+  "dreamdisplayx.button.stretch.tooltip.1": "拉伸模式",
+  "dreamdisplayx.button.stretch.tooltip.2": "当视频与显示器宽高比不同时，如何适配画面",
+  "dreamdisplayx.button.stretch.tooltip.3": "在显示器内适配视频，保持宽高比，添加黑边",
+  "dreamdisplayx.button.stretch.tooltip.4": "拉伸视频以完全填满显示器（可能变形）",
+  "dreamdisplayx.button.stretch.tooltip.5": "放大视频以填满显示器，裁剪边缘",
+  "dreamdisplayx.button.stretch.tooltip.6": "当前：%s"
 }

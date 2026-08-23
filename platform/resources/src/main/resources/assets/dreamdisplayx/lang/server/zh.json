@@ -1,0 +1,215 @@
+{
+    "noDisplayTerritories":  "\u00267D |\u0026f 你还没有选择显示器区域！请使用 {0} 在 {1} 上选择两个点",
+    "createDisplayCommand":  "\u00267D |\u0026f 现在输入 /display create 来创建一个显示器",
+    "secondPointNotSelected":  "\u00267D |\u0026f 你还没有选择第二个点！",
+    "displayOverlap":  "\u00267D |\u0026f 这个区域已经有一个显示器了！",
+    "displayLimitReached":  "\u00267D |\u0026f 你已达到每个玩家 %d 个显示器的上限！",
+    "structureTooLarge":  "\u00267D |\u0026f 你无法创建大于 %d × %d 方块区域的显示器",
+    "structureTooSmall":  "\u00267D |\u0026f 你无法创建小于 %d × %d 方块区域的显示器",
+    "firstPointSelected":  "\u00267D |\u0026f 已选择第一个点！现在请选择第二个点",
+    "secondPointSelected":  "\u00267D |\u0026f 已选择第二个点！",
+    "structureWrongDepth":  "\u00267D |\u0026f 选择区域的深度必须至少为 1 个方块",
+    "wrongStructure":  "\u00267D |\u0026f 只能使用 {0} 方块来制作显示器",
+    "displayTooHigh":  "\u00267D |\u0026f 显示器高度太高（最大 %d）",
+    "displayTooLow":  "\u00267D |\u0026f 显示器高度太低（最小 %d）",
+    "selectionClear":  "\u00267D |\u0026f 选择区域已清除！",
+    "displayWrongCommand":  "\u00267D |\u0026f 你输入的内容有误！",
+    "displayCommandMissingPermission":  "\u00267D |\u0026f 你没有权限使用此命令！",
+    "commandPlayersOnly":  "\u00267D |\u0026f 此命令只能由游戏内的玩家使用",
+    "successfulCreation":  "\u00267D |\u0026f 显示器已创建！现在注视它并输入 /display video \u003c视频链接\u003e [语言] 来设置视频",
+    "noDisplay":  "\u00267D |\u0026f 找不到显示器！",
+    "settedURL":  "\u00267D |\u0026f 视频已加载！",
+    "invalidURL":  "\u00267D |\u0026f 链接无效！请使用有效的视频链接（YouTube、Twitch 等）",
+    "settedName":  "\u00267D |\u0026f 显示器名称已设置！",
+    "currentName":  "\u00267D |\u0026f 此显示器的名称：%s",
+    "noNameSet":  "\u00267D |\u0026f 此显示器没有设置名称",
+    "invalidName":  "\u00267D |\u0026f 名称无效！最多 64 个可读字符，不能包含控制字符，且不能像裸 UUID 一样",
+    "nameTaken":  "\u00267D |\u0026f 另一个显示器已使用该名称！",
+    "scheduleSet":  "\u00267D |\u0026f 现在是 {0}。显示器 {1} 将在 {3}（{4}）时{2}",
+    "scheduleCurrentSet":  "\u00267D |\u0026f 此显示器计划在 {1} 时{0}",
+    "scheduleNoneSet":  "\u00267D |\u0026f 此显示器没有计划的操作",
+    "scheduleCancelled":  "\u00267D |\u0026f 计划操作已取消",
+    "scheduleInvalidTime":  "\u00267D |\u0026f 时间格式无效！请使用 HH:mm 或 HH:mm:ss（24小时制），例如 23:51 或 23:51:30",
+    "scheduleNeedsTime":  "\u00267D |\u0026f 现在是 {0}。输入一个时间（HH:mm）来计划此操作",
+    "scheduleActionPlay":  "开始播放",
+    "scheduleActionPause":  "暂停",
+    "scheduleCountdownSeconds":  "{0}秒后",
+    "scheduleCountdownMinutes":  "{0}分{1}秒后",
+    "scheduleCountdownHours":  "{0}时{1}分后",
+    "displayVideoWrongTargetBlock":  "\u00267D |\u0026f 你必须看着一个显示器方块才能使用此命令！",
+    "displayVideoNotOwner":  "\u00267D |\u0026f 你不是此显示器的所有者！",
+    "reportTooQuickly":  "\u00267D |\u0026f 你发送举报太频繁了！请稍等片刻再提交",
+    "reportSent":  "\u00267D |\u0026f 举报已发送！",
+    "reportFailed":  "\u00267D |\u0026f 发送举报失败。请稍后再试",
+    "displayDeleted":  "\u00267D |\u0026f 显示器已删除！",
+    "displayReported":  "\u00267D |\u0026f 显示器已被举报！",
+    "reportNotConfigured":  "\u00267D |\u0026f 此服务器的举报系统未启用！",
+    "newVersion":  {
+                       "text":  "",
+                       "extra":  [
+                                     {
+                                         "text":  "D | ",
+                                         "color":  "#9D9D97"
+                                     },
+                                     {
+                                         "text":  "Dream DisplaysX 的新版本 %s 已可用！请",
+                                         "color":  "#FFFFFF"
+                                     },
+                                     {
+                                         "text":  "更新你的模组",
+                                         "color":  "#023EB6",
+                                         "underlined":  true,
+                                         "clickEvent":  {
+                                                            "action":  "open_url",
+                                                            "value":  "https://github.com/Aruvelut-123/dreamdisplaysx/releases"
+                                                        },
+                                         "hoverEvent":  {
+                                                            "action":  "show_text",
+                                                            "value":  "点击下载新版本"
+                                                        }
+                                     },
+                                     {
+                                         "text":  "",
+                                         "color":  "#FFFFFF"
+                                     }
+                                 ]
+                   },
+    "newPluginVersion":  "\u00267D |\u0026f Dream DisplaysX 插件有新版本（%s）可用！请更新服务器插件！",
+    "configReloaded":  "\u00267D | \u0026fDream DisplaysX 已重新加载！",
+    "configReloadFailed":  "\u00267D |\u0026f 重新加载 Dream DisplaysX 失败。请检查控制台中的错误",
+    "configReloadSummary":  "\u00267D |\u0026f 已重新加载：配置、语言消息、命令权限",
+    "noDisplaysFound":  "\u00267D |\u0026f 没有找到显示器",
+    "displayListHeader":  "\u00267D |\u0026f 显示器列表：",
+    "displayListEntry":  "\u00267D |\u0026f {0}. 所有者：{1}，位置：[{2}, {3}, {4}]，链接：{5}",
+    "displayListPageLine":  "\u00267D |\u00267 页=\u0026f{0}/{1} \u00268| \u00267总数=\u0026f{2}",
+    "displayListDetails":  " \u00268| \u00267世界=\u0026f{0} \u00268| \u00267尺寸=\u0026f{1}x{2} \u00268| \u00267同步=\u0026f{3} \u00268| \u00267ID=\u0026f{4} \u00268| \u00267名称=\u0026f{5}",
+    "displayListUnknownOwner":  "未知",
+    "displayListUnknownWorld":  "未知",
+    "displayListUnavailableUrl":  "无",
+    "displayListNoName":  "（无）",
+    "renamedDisplay":  "\u00267D |\u0026f 显示器 {0} 已重命名为 \u0027{1}\u0027",
+    "displayListTpButton":  " [传送]",
+    "displayListUrlButton":  " [链接]",
+    "displayBlockBreak":  {
+                              "text":  "",
+                              "extra":  [
+                                            {
+                                                "text":  "D | ",
+                                                "color":  "#9D9D97"
+                                            },
+                                            {
+                                                "text":  "这是一个显示器方块。",
+                                                "color":  "#FFFFFF"
+                                            },
+                                            {
+                                                "text":  "下载 Dream DisplaysX",
+                                                "color":  "#5555FF",
+                                                "underlined":  true,
+                                                "clickEvent":  {
+                                                                   "action":  "open_url",
+                                                                   "value":  "https://github.com/Aruvelut-123/dreamdisplaysx"
+                                                               },
+                                                "hoverEvent":  {
+                                                                   "action":  "show_text",
+                                                                   "value":  "点击下载 Dream DisplaysX"
+                                                               }
+                                            },
+                                            {
+                                                "text":  " 模组才能与之互动！",
+                                                "color":  "#FFFFFF"
+                                            }
+                                        ]
+                          },
+    "modRequired":  {
+                        "text":  "",
+                        "extra":  [
+                                      {
+                                          "text":  "D | ",
+                                          "color":  "#9D9D97"
+                                      },
+                                      {
+                                          "text":  "此服务器使用游戏内显示器。",
+                                          "color":  "#FFFFFF"
+                                      },
+                                      {
+                                          "text":  "下载 Dream DisplaysX",
+                                          "color":  "#5555FF",
+                                          "underlined":  true,
+                                          "clickEvent":  {
+                                                             "action":  "open_url",
+                                                             "value":  "https://github.com/Aruvelut-123/dreamdisplaysx"
+                                                         },
+                                          "hoverEvent":  {
+                                                             "action":  "show_text",
+                                                             "value":  "点击下载 Dream DisplaysX"
+                                                         }
+                                      },
+                                      {
+                                          "text":  " 来查看它们！",
+                                          "color":  "#FFFFFF"
+                                      }
+                                  ]
+                    },
+    "display.enabled":  "\u00267D |\u0026f 显示器已启用。请稍等片刻……",
+    "display.disabled":  "\u00267D |\u0026f 显示器已禁用",
+    "display.already-disabled":  "\u00267D |\u0026f 显示器已经被禁用",
+    "display.already-enabled":  "\u00267D |\u0026f 显示器已经被启用",
+    "displayTargetNotFound":  "\u00267D |\u0026f 玩家 \u0027%s\u0027 不在线！",
+    "display.enabled.target":  "\u00267D |\u0026f 已为 %s 启用显示器",
+    "display.disabled.target":  "\u00267D |\u0026f 已为 %s 禁用显示器",
+    "display.already-enabled.target":  "\u00267D |\u0026f %s 的显示器已经被启用",
+    "display.already-disabled.target":  "\u00267D |\u0026f %s 的显示器已经被禁用",
+    "displayStatsHeader":  "\u00267D |\u0026f 模组使用统计：",
+    "displayStatsEntry":  "\u00267D |\u0026f 版本 %s：%d 名玩家",
+    "displayStatsTotal":  "\u00267D |\u0026f 使用模组的总玩家数：%d",
+    "displayHelpHeader":  "可用命令：",
+    "displayHelpCreate":  "– /display create [名称]：创建一个新显示器，可选为它命名",
+    "displayHelpVideo":  "– /display video \u003c链接\u003e：为你的显示器设置视频",
+    "displayHelpName":  "– /display name this|\u003cID\u003e \u003c名称\u003e：设置显示器的名称",
+    "displayHelpRename":  "– /display rename \u003cID\u003e \u003c名称\u003e：通过 ID 重命名显示器（所有者或管理员）",
+    "displayHelpInfo":  "– /display info：查看你注视的显示器的详细信息",
+    "displayHelpDelete":  "– /display delete：删除你注视的显示器",
+    "displayHelpList":  "– /display list：列出所有显示器",
+    "displayHelpStats":  "– /display stats：显示模组使用统计",
+    "displayHelpReload":  "– /display reload：重新加载配置",
+    "displayHelpOn":  "– /display on [玩家]：为自己或目标玩家启用显示器",
+    "displayHelpOff":  "– /display off [玩家]：为自己或目标玩家禁用显示器",
+    "displayHelpFullscreen":  "– /display fullscreen start \u003cID|链接\u003e [参数]：向玩家强制推送全屏广播",
+    "displayHelpHelp":  "– /display help：显示此帮助",
+    "displayInfoHeader":  "\u00267D |\u0026f 显示器信息：",
+    "displayInfoOwnerLine":  "\u00267D |\u00267 所有者=\u0026f{0} \u00268| \u00267UUID=\u0026f{1}",
+    "displayInfoUuidLine":  "\u00267D |\u00267 显示器ID=\u0026f{0}",
+    "displayInfoPositionLine":  "\u00267D |\u00267 世界=\u0026f{0} \u00268| \u00267位置1=\u0026f[{1}, {2}, {3}] \u00268| \u00267位置2=\u0026f[{4}, {5}, {6}]",
+    "displayInfoStateLine":  "\u00267D |\u00267 尺寸=\u0026f{0}x{1} \u00268| \u00267朝向=\u0026f{2} \u00268| \u00267同步=\u0026f{3}",
+    "displayInfoMediaLine":  "\u00267D |\u00267 语言=\u0026f{0} \u00268| \u00267时长=\u0026f{1} \u00268| \u00267链接=\u0026f{2}",
+    "displayInfoScheduleLine":  "\u00267D |\u00267 计划={0} 于 \u0026f{1}",
+    "displayInfoUnknownOwner":  "未知",
+    "displayInfoUnknownWorld":  "未知",
+    "displayInfoUnknownDuration":  "未知",
+    "displayInfoAutoLang":  "自动",
+    "displayInfoUnavailableUrl":  "无",
+    "fullscreenStarted":  "\u00267D |\u0026f 全屏广播 \u0026b{0}\u0026f 已开始（覆盖 {1} 名玩家）",
+    "fullscreenStopped":  "\u00267D |\u0026f 已停止 {0} 个全屏广播",
+    "fullscreenStopFailed":  "\u00267D |\u0026f 没有找到匹配的全屏广播",
+    "fullscreenNoTargets":  "\u00267D |\u0026f 请至少指定目标 \u003c玩家\u003e 或半径 \u003c方块\u003e 之一",
+    "fullscreenAlreadyRunning":  "\u00267D |\u0026f 该显示器已有一个全屏广播，或会话 ID 已被占用",
+    "fullscreenForcedDisallowed":  "\u00267D |\u0026f 配置中已禁用强制全屏广播",
+    "fullscreenNoDisplay":  "\u00267D |\u0026f 没有找到显示器，也没有加载世界来托管链接广播",
+    "fullscreenNetworkNoProxy":  "\u00267D |\u0026f 此后端未连接到 Dream DisplaysX 代理，请检查 config.toml 中的 [proxy] 配置。",
+    "fullscreenNetworkNotYetSupported":  "\u00267D |\u0026f 网络范围的全屏广播（服务器 \u003c名称\u003e/\u003c全局\u003e）尚未实现。",
+    "fullscreenNetworkUrlOnly":  "\u00267D |\u0026f 网络范围的全屏广播仅支持视频链接，不支持已有的显示器 ID",
+    "fullscreenNetworkRadiusUnsupported":  "\u00267D |\u0026f 服务器不支持 radius（半径）——它只适用于本服务器，请在该服务器上本地启动",
+    "fullscreenNetworkQueued":  "\u00267D |\u0026f 网络全屏广播已排队。稍后将在每台匹配的服务器上启动",
+    "fullscreenNetworkStopQueued":  "\u00267D |\u0026f 已为该会话发送网络范围的停止请求",
+    "fullscreenListEmpty":  "\u00267D |\u0026f 没有正在运行的全屏广播",
+    "fullscreenListEntry":  "\u00267D |\u00267 {0} \u00268| \u00267显示器=\u0026f{1} \u00268| \u00267虚拟=\u0026f{2} \u00268| \u00267范围=\u0026f{3}",
+    "fullscreenListNetworkEntry":  "\u00267D |\u00267 {0} \u00268| \u00267范围=\u0026f{1} \u00268| \u00267网络范围=\u0026f{2}",
+    "customMediaDisabled":  "\u00267D |\u0026f 此服务器已禁用自定义视频链接",
+    "customMediaHostBlocked":  "\u00267D |\u0026f 此服务器不允许播放来自该站点的视频",
+    "customMediaNoPermission":  "\u00267D |\u0026f 你没有权限播放自己的视频链接",
+    "customMediaTooFast":  "\u00267D |\u0026f 你切换视频链接太快了。请稍等一下",
+    "loginTokenEmpty":  "\u00267D |\u0026f 凭据令牌不能为空。",
+    "loginUnsupportedPlatform":  "\u00267D |\u0026f 不支持的平台：%s。支持：bilibili",
+    "loginSuccess":  "\u00267D |\u0026f 已在 %s 全局登录。凭据已广播给所有玩家。",
+    "logoutSuccess":  "\u00267D |\u0026f 已全局退出 %s。"
+}

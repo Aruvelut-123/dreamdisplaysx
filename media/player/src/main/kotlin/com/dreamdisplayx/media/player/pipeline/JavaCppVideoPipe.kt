@@ -47,6 +47,14 @@ internal class JavaCppVideoPipe(
         private const val STOP_TIMEOUT_MS = 500L
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        init {
+            // Suppress FFmpeg's av_log INFO messages ("Option: ... rejected") and full stream dumps,
+            // matching the old FFmpeg CLI's `-loglevel error`. These logs are noisy on every open
+            // (e.g. "avformat_open_input rejected some options: pixel_format, value: bgr24") and
+            // contain no actionable information.
+            avutil.av_log_set_level(avutil.AV_LOG_ERROR)
+        }
     }
 
     /** Updated by the reader thread on every frame; used by the watchdog to detect stalls. */
