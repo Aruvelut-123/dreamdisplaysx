@@ -3,6 +3,7 @@
 package com.dreamdisplayx.media.player.pipeline
 
 import com.dreamdisplayx.api.security.policy.MediaHosts
+import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.daemon
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
