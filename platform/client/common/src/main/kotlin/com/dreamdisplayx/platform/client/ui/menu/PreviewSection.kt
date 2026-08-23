@@ -308,6 +308,18 @@ class PreviewSection(
      */
     private fun overlayInfo(): OverlayInfo {
         when (val source = currentSource()) {
+            null -> return OverlayInfo(
+                title = ds.videoUrl?.let { CustomMediaUrls.displayName(it) } ?: "—",
+                uploader = null,
+                uploaderAvatarUrl = null,
+                isVerified = false,
+                views = "",
+                likes = "",
+                published = null,
+                isNew = false,
+                platform = MediaPlatform.OTHER,
+            )
+
             is MediaSource.Twitch -> {
                 val key = TwitchMetadataCache.cacheKey(source)
                 val meta = key?.let { TwitchMetadataCache.get(it) }
