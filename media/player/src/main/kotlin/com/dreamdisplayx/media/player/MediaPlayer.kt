@@ -63,10 +63,10 @@ class MediaPlayer(
         internal val samplesIn = AtomicLong()
 
         /** Frames to GPU. */
-        internal val framesToGpu = AtomicLong()
+        val framesToGpu = AtomicLong()
 
         /** Dropped frames. */
-        internal val framesDropped = AtomicLong()
+        val framesDropped = AtomicLong()
 
         /** Max fetch retries. */
         private const val MAX_FETCH_RETRIES = 3

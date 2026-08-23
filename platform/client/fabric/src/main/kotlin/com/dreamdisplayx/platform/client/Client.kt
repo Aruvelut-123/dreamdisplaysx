@@ -65,6 +65,10 @@ class Client : ClientModInitializer, Mod {
         DreamServices.registry.register(PlatformServices.PLATFORM, FabricPlatformIntegrationProvider.create())
         Initializer.onModInit(this)
 
+        //? if >=26 {
+        com.dreamdisplayx.platform.client.debug.DebugScreenEntryRegistrar.register()
+        //?}
+
         // Note: PayloadTypeRegistry registrations are done in platform/server/ (it's a main entrypoint)
         // which runs on both integrated and dedicated servers, before the client entrypoint.
 

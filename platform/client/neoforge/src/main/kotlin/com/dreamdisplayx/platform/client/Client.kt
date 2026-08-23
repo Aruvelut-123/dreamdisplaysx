@@ -41,6 +41,10 @@ class Client(modEventBus: IEventBus) : DreamMod {
         com.dreamdisplayx.platform.client.config.NeoForgeConfig.register()
         com.dreamdisplayx.platform.client.config.NeoForgeConfig.listen(modEventBus)
 
+        //? if >=26 {
+        modEventBus.addListener(::onRegisterDebugEntries)
+        //?}
+
         // Payload registration lives entirely in NeoForgeServer.registerPayloads (see
         // platform/server/.../Main.kt): that class loads unconditionally on every dist, unlike this
         // one (dist = [Dist.CLIENT]), and NeoForge rejects registering the same payload id twice,
@@ -165,6 +169,16 @@ class Client(modEventBus: IEventBus) : DreamMod {
         //?} else
         /*return mc.gameRenderer.getMainCamera()*/
     }
+
+    //? if >=26 {
+    /** Registers the Dream DisplaysX debug entry for the F3 overlay. */
+    private fun onRegisterDebugEntries(event: net.neoforged.neoforge.client.event.RegisterDebugEntriesEvent) {
+        event.register(
+            net.minecraft.resources.Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "debug"),
+            com.dreamdisplayx.platform.client.debug.DreamDisplaysDebugEntry,
+        )
+    }
+    //?}
 
     /** On tick events. */
     @SubscribeEvent
