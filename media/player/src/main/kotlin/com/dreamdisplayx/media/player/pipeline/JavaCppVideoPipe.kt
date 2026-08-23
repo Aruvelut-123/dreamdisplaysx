@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * JavaCPP (FFmpegFrameGrabber) based video frame pipe — replaces both
- * [NativeVideoFramePipe] (Rust native) and the "FFmpeg process" pipe.
+ * [JavaCppVideoPipe] replaces the earlier "FFmpeg process" pipe and the Rust native pipe.
  * Opens a media URL in-process, decodes frames via FFmpeg bindings, and
  * feeds them into the shared [FrameSurface] / [FramePrebuffer] pipeline.
  */
