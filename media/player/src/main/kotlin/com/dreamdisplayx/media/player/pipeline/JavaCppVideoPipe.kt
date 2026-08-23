@@ -7,6 +7,7 @@ import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.daemon
+import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
 import org.slf4j.LoggerFactory
@@ -32,6 +33,8 @@ internal class JavaCppVideoPipe(
         private const val PARK_POLL_MS = 2L
         /** Max time to wait for a grabber to stop on kill. */
         private const val STOP_TIMEOUT_MS = 500L
+        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
     /** Updated by the reader thread on every frame; used by the watchdog to detect stalls. */
@@ -60,9 +63,7 @@ internal class JavaCppVideoPipe(
     var firstRawPtsNanos: Long = Long.MIN_VALUE
         private set
 
-    private val outputFormat: FramePixelFormat =
-        if (planarOutput) FramePixelFormat.I420 else FramePixelFormat.RGB24
-    private val surface = FrameSurface(debugLabel, uploaderFactory, outputFormat)
+    private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGB24)
 
     @Volatile
     private var activePrebuffer: FramePrebuffer? = null
@@ -522,7 +523,7 @@ internal class JavaCppVideoPipe(
         g.imageHeight = h
         if (planarOutput) {
             // Default is YUV — keep it for the planar GPU path
-            g.pixelFormat = org.bytedeco.javacpp.avutil.AV_PIX_FMT_YUV420P
+            g.pixelFormat = avutil.AV_PIX_FMT_YUV420P
         } else {
             // Request BGR24 for RGB output (javacv's default)
         }
@@ -538,9 +539,4 @@ internal class JavaCppVideoPipe(
     /** Frame rate assumption for sources without a valid FPS. */
     private fun outputFps(sourceFps: Double): Double =
         sourceFps.takeIf { it.isFinite() && it > 1.0 && it <= 240.0 } ?: 30.0
-
-    private companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
 }

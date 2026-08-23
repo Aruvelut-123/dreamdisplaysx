@@ -28,7 +28,7 @@ zxing = "3.5.3"
 checkerQual = "3.42.0"
 javacpp = "1.5.14"
 javacv = "1.5.14"
-ffmpeg = "8.1.2"
+ffmpeg = "8.1.2-1.5.14"
 
 [libraries]
 jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
