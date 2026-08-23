@@ -5,6 +5,7 @@ package com.dreamdisplayx.media.player.pipeline
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
+import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.daemon
 import org.bytedeco.ffmpeg.global.avutil
@@ -512,6 +513,9 @@ internal class JavaCppVideoPipe(
         g.setOption("analyzeduration", "1000000")
         g.setOption("rw_timeout", "15000000")
         g.setOption("user_agent", USER_AGENT)
+        // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer;
+        // a host a player pasted gets none and stays anonymous, matching the old CLI pipeline.
+        MediaHosts.refererFor(url)?.let { g.setOption("headers", "Referer: $it\r\n") }
         g.setOption("multiple_requests", "1")
         g.setOption("reconnect", "1")
         g.setOption("reconnect_streamed", "1")

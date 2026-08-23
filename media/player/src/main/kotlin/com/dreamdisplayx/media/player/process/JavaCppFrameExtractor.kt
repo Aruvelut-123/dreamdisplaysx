@@ -2,6 +2,7 @@
 
 package com.dreamdisplayx.media.player.process
 
+import com.dreamdisplayx.api.security.policy.MediaHosts
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.Java2DFrameConverter
@@ -76,6 +77,8 @@ object JavaCppFrameExtractor {
             setOption("reconnect_delay_max", "10")
             setOption("reconnect_on_network_error", "1")
             setOption("reconnect_on_http_error", "5xx")
+            // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer.
+            MediaHosts.refererFor(url)?.let { setOption("headers", "Referer: $it\r\n") }
             start()
         }
     } catch (e: Exception) {
