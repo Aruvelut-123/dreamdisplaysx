@@ -279,7 +279,11 @@ internal class JavaCppVideoPipe(
 
             // Re-check stopped condition after blocking call
             if (terminated.get() || stopFlag.get()) break
-            if (frame.image == null || frame.image.isEmpty()) {
+            // With imageMode = RAW the frame.image field is null; actual pixel data
+            // lives in frame.opaque (AVFrame). If the AVFrame is also missing, treat
+            // it as end-of-stream.
+            val av = frame.opaque as? AVFrame
+            if (av == null) {
                 normalEos = true
                 break
             }
