@@ -107,9 +107,10 @@ internal class JavaCppVideoPipe(
     // AVFrame (frame.opaque), which works for any pixel format and handles
     // scaling + conversion in one call — exactly like `ffmpeg -vf scale`.
 
-    /** sws scaler: source format/尺寸 → 目标 YUV420P 尺寸. */
+    /** sws scaler: source format/尺寸 → 目标格式(根据输出模式) 尺寸. */
     private var swsCtx: SwsContext? = null
     private var swsSrcW = 0; private var swsSrcH = 0; private var swsSrcFmt = -1
+    private var swsDstFmt = -1
 
     // ── FramePipe interface ───────────────────────────────────────────────
 
@@ -224,7 +225,7 @@ internal class JavaCppVideoPipe(
         // Free sws scaler context
         swsCtx?.let { swscale.sws_freeContext(it) }
         swsCtx = null
-        swsSrcW = 0; swsSrcH = 0; swsSrcFmt = -1
+        swsSrcW = 0; swsSrcH = 0; swsSrcFmt = -1; swsDstFmt = -1
         i420Scratch = null
         rgbScratch = null
     }
@@ -380,18 +381,19 @@ internal class JavaCppVideoPipe(
         val srcFmt = src.format()
         if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
 
+        val dstFmt = avutil.AV_PIX_FMT_YUV420P
         // Lazy-create or update the sws scaler
-        val sws = if (swsCtx != null && swsSrcW == srcW && swsSrcH == srcH && swsSrcFmt == srcFmt) {
+        val sws = if (swsCtx != null && swsSrcW == srcW && swsSrcH == srcH && swsSrcFmt == srcFmt && swsDstFmt == dstFmt) {
             swsCtx
         } else {
             swsCtx?.let { swscale.sws_freeContext(it) }
             val ctx = swscale.sws_getCachedContext(
                 null as SwsContext?, srcW, srcH, srcFmt, expectedW, expectedH,
-                avutil.AV_PIX_FMT_YUV420P, swscale.SWS_BILINEAR,
+                dstFmt, swscale.SWS_BILINEAR,
                 null as SwsFilter?, null as SwsFilter?, null as DoublePointer?
             ) ?: return false
             swsCtx = ctx
-            swsSrcW = srcW; swsSrcH = srcH; swsSrcFmt = srcFmt
+            swsSrcW = srcW; swsSrcH = srcH; swsSrcFmt = srcFmt; swsDstFmt = dstFmt
             ctx
         }
 
@@ -406,13 +408,13 @@ internal class JavaCppVideoPipe(
         val dstV = BytePointer(dst.sliceView(ySize + uvSize, uvSize))
 
         // Source plane pointers come straight from the decoded AVFrame's native memory.
-        val srcY = src.data(0) ?: return false
-        val srcU = src.data(1) ?: return false
-        val srcV = src.data(2) ?: return false
-
-        val srcSlices = PointerPointer(srcY, srcU, srcV)
-        val srcStrides = IntPointer(src.linesize(0), src.linesize(1), src.linesize(2))
-        val dstSlices = PointerPointer(dstY, dstU, dstV)
+        // Collect every non-null plane so the scaler sees the exact layout of the source
+        // format (3 planes for YUV420P, 2 for NV12, 1 for packed RGB, …).
+        val srcPtrs = (0 until 4).mapNotNull { i -> src.data(i)?.takeIf { !it.isNull } }.toTypedArray()
+        if (srcPtrs.isEmpty()) return false
+        val srcSlices = PointerPointer<BytePointer>(*srcPtrs)
+        val srcStrides = IntPointer(*IntArray(srcPtrs.size) { src.linesize(it) })
+        val dstSlices = PointerPointer<BytePointer>(dstY, dstU, dstV)
         val dstStrides = IntPointer(expectedW, (expectedW + 1) / 2, (expectedW + 1) / 2)
 
         // One sws_scale call performs pixel format conversion + resolution scaling and
@@ -434,47 +436,64 @@ internal class JavaCppVideoPipe(
     }
 
     /**
-     * Copies a frame's BGR data into an RGB24 [dst] buffer.
-     * Returns false when dimensions don't match.
+     * Converts a grabbed frame into an RGB24 buffer packed into [dst] using sws_scale.
+     * Uses the same pattern as [frameToI420]: reads from the underlying AVFrame
+     * (frame.opaque) and writes directly into the destination buffer.
+     *
+     * This avoids relying on javacv's imageMode = COLOR, which would set the
+     * codec pixel_format option on avformat_open_input (producing the spurious
+     * "avformat_open_input rejected some options: pixel_format, value: bgr24"
+     * info log). With imageMode = RAW + sws_scale, we handle the conversion
+     * ourselves and no pixel_format option is ever set on the format context.
      */
     private fun frameToRgb24(frame: Frame, dst: ByteBuffer, expectedW: Int, expectedH: Int): Boolean {
-        val img = frame.image ?: return false
-        if (img.isEmpty()) return false
-        val src = (img[0] as? ByteBuffer) ?: return false
-        val fw = frame.imageWidth
-        val fh = frame.imageHeight
-        if (fw != expectedW || fh != expectedH) return false
+        val src = frame.opaque as? AVFrame ?: return false
+        val srcW = src.width()
+        val srcH = src.height()
+        val srcFmt = src.format()
+        if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
 
-        val stride = frame.imageStride
-        if (stride == fw * 3 || stride <= 0) {
-            // BGR to RGB24: swap R and B for each pixel
-            val limit = src.remaining()
-            var i = 0
-            while (i + 2 < limit) {
-                val b = src.get(i).toInt() and 0xFF
-                val g = src.get(i + 1).toInt() and 0xFF
-                val r = src.get(i + 2).toInt() and 0xFF
-                dst.put(r.toByte())
-                dst.put(g.toByte())
-                dst.put(b.toByte())
-                i += 3
-            }
+        val dstFmt = avutil.AV_PIX_FMT_RGB24
+        // Lazy-create or update the sws scaler for RGB24 output
+        val sws = if (swsCtx != null && swsSrcW == srcW && swsSrcH == srcH && swsSrcFmt == srcFmt && swsDstFmt == dstFmt) {
+            swsCtx
         } else {
-            // Strided: copy row by row with BGR→RGB per pixel
-            for (row in 0 until fh) {
-                val rowStart = row * stride
-                for (col in 0 until fw) {
-                    val idx = rowStart + col * 3
-                    if (idx + 2 >= src.limit()) break
-                    val b = src.get(idx).toInt() and 0xFF
-                    val g = src.get(idx + 1).toInt() and 0xFF
-                    val r = src.get(idx + 2).toInt() and 0xFF
-                    dst.put(r.toByte())
-                    dst.put(g.toByte())
-                    dst.put(b.toByte())
-                }
-            }
+            swsCtx?.let { swscale.sws_freeContext(it) }
+            val ctx = swscale.sws_getCachedContext(
+                null as SwsContext?, srcW, srcH, srcFmt, expectedW, expectedH,
+                dstFmt, swscale.SWS_BILINEAR,
+                null as SwsFilter?, null as SwsFilter?, null as DoublePointer?
+            ) ?: return false
+            swsCtx = ctx
+            swsSrcW = srcW; swsSrcH = srcH; swsSrcFmt = srcFmt; swsDstFmt = dstFmt
+            ctx
         }
+
+        val rgbSize = expectedW * expectedH * 3
+        val dstPlane = BytePointer(dst.sliceView(0, rgbSize))
+
+        // Source plane pointers from the decoded AVFrame
+        val srcY = src.data(0) ?: return false
+        val srcU = if (srcFmt == avutil.AV_PIX_FMT_YUV420P || srcFmt == avutil.AV_PIX_FMT_YUVJ420P) src.data(1) else null
+        val srcV = if (srcU != null) src.data(2) else null
+        val srcSlices = if (srcU != null && srcV != null) {
+            PointerPointer<BytePointer>(srcY, srcU, srcV)
+        } else {
+            PointerPointer<BytePointer>(srcY)
+        }
+        val srcStrides = if (srcU != null && srcV != null) {
+            IntPointer(src.linesize(0), src.linesize(1), src.linesize(2))
+        } else {
+            IntPointer(src.linesize(0))
+        }
+
+        val dstSlices = PointerPointer<BytePointer>(dstPlane)
+        val dstStrides = IntPointer(expectedW * 3)
+
+        val linesScaled = swscale.sws_scale(sws, srcSlices, srcStrides, 0, srcH, dstSlices, dstStrides)
+        if (linesScaled < 0) return false
+
+        dst.position(rgbSize)
         return true
     }
 
@@ -563,16 +582,11 @@ internal class JavaCppVideoPipe(
         // Set output dimensions
         g.imageWidth = w
         g.imageHeight = h
-        if (planarOutput) {
-            // RAW mode: javacv fills only frame.image[0] (Y plane) and leaves U/V null,
-            // so we cannot use frame.image -> frameToI420. Instead we read the underlying
-            // AVFrame from frame.opaque and use standard FFmpeg sws_scale for conversion.
-            // Keep imageWidth/imageHeight so the Frame metadata is accurate for the EOS
-            // check and diagnostic logging; the actual YUV conversion bypasses Frame.image.
-            g.imageMode = FrameGrabber.ImageMode.RAW
-        } else {
-            // Request BGR24 for RGB output (javacv's default)
-        }
+        // Always use RAW mode: javacv's COLOR mode sets the pixel_format codec option on the
+        // format context, which avformat rejects with the noisy "pixel_format, value: bgr24"
+        // info log on every open. In RAW mode javacv only fills the Y plane, so all conversion
+        // (YUV420P or RGB24) is done here with sws_scale on the underlying AVFrame.
+        g.imageMode = FrameGrabber.ImageMode.RAW
         g.start()
         // Seek after start
         if (seekOffsetNanos > 0) {

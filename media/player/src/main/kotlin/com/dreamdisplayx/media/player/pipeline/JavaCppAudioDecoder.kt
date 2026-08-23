@@ -13,6 +13,7 @@ import java.io.PipedOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import java.nio.ShortBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -245,34 +246,62 @@ internal class JavaCppAudioDecoder(
                 }
 
                 // Convert the samples to S16LE PCM
-                val src = frame.samples[0] as? FloatBuffer ?: continue
-                val srcLen = src.remaining()
-                if (srcLen <= 0) continue
-
-                val frameFrames = srcLen / CHANNELS
-                val pcmLen = frameFrames * BYTES_PER_FRAME
-
-                // Ensure the pcmBuffer is large enough
-                val pcm = if (pcmLen > pcmBuffer.size) ByteArray(pcmLen) else pcmBuffer
-
-                src.duplicate().let { s ->
-                    var i = 0
-                    while (i < frameFrames) {
-                        // L channel
-                        val l = floatToS16(s.get())
-                        pcm[i * 4] = (l.toInt() and 0xFF).toByte()
-                        pcm[i * 4 + 1] = ((l.toInt() shr 8) and 0xFF).toByte()
-                        // R channel
-                        val r = floatToS16(s.get())
-                        pcm[i * 4 + 2] = (r.toInt() and 0xFF).toByte()
-                        pcm[i * 4 + 3] = ((r.toInt() shr 8) and 0xFF).toByte()
-                        i++
+                // Support both FloatBuffer (FLTP/FLT) and ShortBuffer (S16/S16P) source formats
+                val srcLen: Int
+                val pcmLen: Int
+                val pcmTmp: ByteArray
+                when (val src = frame.samples[0]) {
+                    is FloatBuffer -> {
+                        val remaining = src.remaining()
+                        if (remaining <= 0) continue
+                        val frameFrames = remaining / CHANNELS
+                        pcmLen = frameFrames * BYTES_PER_FRAME
+                        pcmTmp = if (pcmLen > pcmBuffer.size) ByteArray(pcmLen) else pcmBuffer
+                        src.duplicate().let { s ->
+                            var i = 0
+                            while (i < frameFrames) {
+                                val l = floatToS16(s.get())
+                                pcmTmp[i * 4] = (l.toInt() and 0xFF).toByte()
+                                pcmTmp[i * 4 + 1] = ((l.toInt() shr 8) and 0xFF).toByte()
+                                val r = floatToS16(s.get())
+                                pcmTmp[i * 4 + 2] = (r.toInt() and 0xFF).toByte()
+                                pcmTmp[i * 4 + 3] = ((r.toInt() shr 8) and 0xFF).toByte()
+                                i++
+                            }
+                        }
+                        srcLen = remaining
+                    }
+                    is ShortBuffer -> {
+                        val remaining = src.remaining()
+                        if (remaining <= 0) continue
+                        val frameFrames = remaining / CHANNELS
+                        pcmLen = frameFrames * BYTES_PER_FRAME
+                        pcmTmp = if (pcmLen > pcmBuffer.size) ByteArray(pcmLen) else pcmBuffer
+                        src.duplicate().let { s ->
+                            var i = 0
+                            while (i < frameFrames) {
+                                val l = s.get()
+                                pcmTmp[i * 4] = (l.toInt() and 0xFF).toByte()
+                                pcmTmp[i * 4 + 1] = ((l.toInt() shr 8) and 0xFF).toByte()
+                                val r = s.get()
+                                pcmTmp[i * 4 + 2] = (r.toInt() and 0xFF).toByte()
+                                pcmTmp[i * 4 + 3] = ((r.toInt() shr 8) and 0xFF).toByte()
+                                i++
+                            }
+                        }
+                        srcLen = remaining
+                    }
+                    else -> {
+                        if (MediaPlayer.DEBUG) {
+                            logger.warn("$debugLabel [audio] Unsupported sample buffer type: ${src?.javaClass?.name}")
+                        }
+                        continue
                     }
                 }
 
                 // Write to the pipe
                 try {
-                    out.write(pcm, 0, pcmLen)
+                    out.write(pcmTmp, 0, pcmLen)
                     out.flush()
                     totalBytes.addAndGet(pcmLen.toLong())
                 } catch (e: Exception) {
