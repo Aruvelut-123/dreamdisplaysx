@@ -96,6 +96,13 @@ class MediaPlayer(
         private const val AUDIO_EOS_NEAR_END_GUARD_NS = 3_000_000_000L
 
         /**
+         * When the user drags the seek bar past the very end of the video, clamp the target to this
+         * many nanoseconds before the end; otherwise av_seek_frame may fail (or the first grab returns
+         * EOF) and the player stalls or restarts from the beginning instead of playing the tail.
+         */
+        private const val SEEK_END_GUARD_NANOS = 500_000_000L
+
+        /**
          * On reappearance, cached replay resumes this far before the saved position. Default 0 = zero rewind: the saved position itself is the resume point.
          */
         private val REPLAY_LEAD_NS: Long =
@@ -1018,14 +1025,18 @@ class MediaPlayer(
         if (!isReady || !seekable) return
         endedAtEnd.set(false)
         if (isPausedWarm()) freezePausedWarmSession()
+        // Clamp to just before the end of the stream: a seek past the last keyframe often makes
+        // av_seek_frame fail (or the first grab return EOF), which used to stall the player or
+        // cause it to restart the stream from the beginning. Duration above 0 is a VOD hint.
+        val target = if (durationHintNanos > 0) nanos.coerceAtMost(durationHintNanos - SEEK_END_GUARD_NANOS) else nanos
         // Park the clock at the target right away so the UI reads the seeked position, and so no
         // pipe can pace one more frame against a half-updated timeline while the seek is set up.
-        clock.reset(nanos)
+        clock.reset(target)
         val ss = streams ?: return
         if (sessionManager.isPlaying && !sessionManager.isParked()) {
-            if (!sessionManager.beginSeek(ss, nanos, lastQuality)) {
-                logger.warn("$debugLabel Seek to ${nanos / 1_000_000} ms fell back to a full stream restart.")
-                startStreams(ss, nanos)
+            if (!sessionManager.beginSeek(ss, target, lastQuality)) {
+                logger.warn("$debugLabel Seek to ${target / 1_000_000} ms fell back to a full stream restart.")
+                startStreams(ss, target)
             }
         }
         if (fire) events.onSeek()

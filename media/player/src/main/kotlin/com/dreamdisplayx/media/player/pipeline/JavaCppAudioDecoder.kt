@@ -344,8 +344,8 @@ internal class JavaCppAudioDecoder(
     @Throws(Exception::class)
     private fun createGrabber(url: String, seekOffsetNanos: Long): FFmpegFrameGrabber {
         val g = FFmpegFrameGrabber(url)
-        g.setOption("probesize", "1M")
-        g.setOption("analyzeduration", "1000000")
+        g.setOption("probesize", "256K")
+        g.setOption("analyzeduration", "200000")
         g.setOption("rw_timeout", "15000000")
         g.setOption("user_agent", USER_AGENT)
         // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer.
