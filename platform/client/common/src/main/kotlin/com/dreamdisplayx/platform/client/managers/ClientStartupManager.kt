@@ -3,7 +3,6 @@ package com.dreamdisplayx.platform.client.managers
 import com.dreamdisplayx.api.platform.service.keys.PlatformServices
 import com.dreamdisplayx.api.runtime.module.DreamDisplaysXModule
 import com.dreamdisplayx.api.runtime.registry.service.register
-import com.dreamdisplayx.media.player.process.FFmpegBinary
 import com.dreamdisplayx.platform.client.Config
 import com.dreamdisplayx.platform.client.Focuser
 import com.dreamdisplayx.platform.client.Initializer
@@ -66,8 +65,6 @@ object ClientStartupManager {
         DreamServices.registry.register<ClientApplication>(application)
         defaultModules.forEach(application::registerModule)
         application.start()
-
-        FFmpegBinary.prewarmAsync()
 
         Focuser().start()
         scope.launch {

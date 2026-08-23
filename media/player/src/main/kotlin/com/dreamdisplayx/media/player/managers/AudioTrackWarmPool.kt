@@ -1,18 +1,18 @@
 package com.dreamdisplayx.media.player.managers
 
-import com.dreamdisplayx.media.player.pipeline.AudioSink
-import com.dreamdisplayx.media.player.process.FFmpegBinary
-import com.dreamdisplayx.media.player.process.MediaProcess
+import com.dreamdisplayx.media.player.pipeline.JavaCppAudioDecoder
+import com.dreamdisplayx.media.player.pipeline.JavaCppAudioProcess
 import com.dreamdisplayx.media.player.util.daemon
 import org.slf4j.LoggerFactory
+import java.io.PipedInputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** An audio track eligible for pre-warming, and how its process has to reach a position. */
+/** An audio track eligible for pre-warming, and how its decoder has to reach a position. */
 internal data class WarmTrack(val url: String, val seekByDecoding: Boolean)
 
 /**
- * Keeps `FFmpeg` processes running for the audio tracks the viewer has not selected, so picking a
- * different dub promotes an already-decoding line.
+ * Keeps `JavaCppAudioDecoder` processes running for the audio tracks the viewer has not selected,
+ * so picking a different dub promotes an already-decoding line.
  */
 internal class AudioTrackWarmPool(
     private val debugLabel: String,
@@ -24,7 +24,7 @@ internal class AudioTrackWarmPool(
     /** True only while an ordinary, un-parked VOD session is playing. */
     private val eligible: () -> Boolean,
 ) {
-    /** A shadow process, holding PCM that begins at [contentStartNanos]. */
+    /** A shadow decoder, holding PCM that begins at [contentStartNanos]. */
     class Warm(
         val url: String,
         val process: Process,
@@ -54,7 +54,7 @@ internal class AudioTrackWarmPool(
     }
 
     /**
-     * Hands the warm line for [url] over to the caller, which takes ownership of its process and stop
+     * Hands the warm line for [url] over to the caller, which takes ownership of its decoder and stop
      * flag, or returns null when nothing usable is pooled. A shadow that died, has not produced any PCM
      * yet, or sits on the wrong side of a seek is dropped instead of returned.
      */
@@ -111,7 +111,6 @@ internal class AudioTrackWarmPool(
             dropAll()
             return
         }
-        val ffmpeg = FFmpegBinary.getPath() ?: return
         val keep = tracks.mapTo(HashSet()) { it.url }
         val now = positionNanos()
 
@@ -134,20 +133,26 @@ internal class AudioTrackWarmPool(
         for (track in tracks) {
             if (closed.get() || terminated.get() || !eligible()) return
             if (synchronized(lock) { warm.containsKey(track.url) }) continue
-            spawn(ffmpeg, track)
+            spawn(track)
         }
     }
 
     /** Starts one shadow at the current playhead and files it under its track URL. */
-    private fun spawn(ffmpeg: String, track: WarmTrack) {
+    private fun spawn(track: WarmTrack) {
         val at = positionNanos().coerceAtLeast(0L)
         val stop = AtomicBoolean()
+        val decoder = JavaCppAudioDecoder(debugLabel)
         val proc = runCatching {
-            MediaProcess.buildAudio(
-                ffmpeg, track.url, at, AudioSink.SAMPLE_RATE, seekByDecoding = track.seekByDecoding,
-            )
+            val inputStream = decoder.start(
+                url = track.url,
+                seekOffsetNanos = at,
+                stopFlag = stop,
+                terminated = terminated,
+            ) ?: throw java.io.IOException("Failed to start decoder")
+            JavaCppAudioProcess(decoder, inputStream as PipedInputStream)
         }.getOrElse {
             logger.debug("$debugLabel [audio-warm] could not pre-warm a track: ${it.message}")
+            decoder.release()
             return
         }
         val warmed = Warm(track.url, proc, stop, at)
@@ -172,7 +177,7 @@ internal class AudioTrackWarmPool(
         daemon({
             items.forEach {
                 it.stop.set(true)
-                MediaProcess.gracefulDestroy(it.process)
+                it.process.destroy()
             }
         }, "MediaPlayer-audio-warm-drop").start()
     }

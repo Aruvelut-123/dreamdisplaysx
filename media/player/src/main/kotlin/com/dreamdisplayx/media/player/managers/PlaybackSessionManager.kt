@@ -9,10 +9,7 @@ import com.dreamdisplayx.api.media.player.RenderExecutor
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.events.PlayerEvents
 import com.dreamdisplayx.media.player.pipeline.*
-import com.dreamdisplayx.media.player.process.FFmpegBinary
-import com.dreamdisplayx.media.player.process.HlsAudioFeeder
 import com.dreamdisplayx.media.player.process.HwAccelBackend
-import com.dreamdisplayx.media.player.process.MediaProcess
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.MediaUtil
@@ -141,43 +138,36 @@ internal class PlaybackSessionManager(
     @Volatile
     private var liveSession = false
 
-    /**
-     * The [HlsAudioFeeder] feeding the current audio process, or null on the direct-URL path.
-     * Its first PES PTS anchors A / V pacing exactly (see [pacingClockNanos]).
-     */
-    @Volatile
-    private var audioFeeder: HlsAudioFeeder? = null
+    private var audioDecoders = mutableListOf<JavaCppAudioDecoder>()
 
-    /** Spawns audio `FFmpeg` process (live HLS via JVM feeder, everything else via direct URL). */
+    /** Spawns audio decoder (JavaCPP) — returns a Process wrapper or null for silent sources. */
     @Throws(IOException::class)
-    private fun buildAudioProcess(
-        ffmpeg: String, streamSet: ActiveStreams, offsetNanos: Long, stopFlag: AtomicBoolean,
+    private fun buildAudioDecoder(
+        streamSet: ActiveStreams, offsetNanos: Long, stopFlag: AtomicBoolean,
     ): Process? {
         val url = streamSet.currentAudio.url
         if (url in SILENT_SOURCES) {
             silentSession = true
-            audioFeeder = null
             return null
         }
-        if (liveSession && HlsAudioFeeder.supports(url)) {
-            // Same SSRF gate the FFmpeg URL path applies in MediaProcess.baseCommand
-            val safeUrl = MediaHostGuard.resolveSafeUrl(url)
-            val proc = MediaProcess.buildAudioPiped(ffmpeg, AudioSink.SAMPLE_RATE)
-            audioFeeder = HlsAudioFeeder(safeUrl, proc.outputStream, stopFlag, terminated, debugLabel)
-                .also { it.start() }
-            return proc
-        }
-        audioFeeder = null
-        return MediaProcess.buildAudio(
-            ffmpeg, url, offsetNanos, AudioSink.SAMPLE_RATE,
-            seekByDecoding = streamSet.currentAudio.seekByDecoding,
-        )
+        val decoder = JavaCppAudioDecoder(debugLabel)
+        val inputStream = decoder.start(
+            url = url,
+            seekOffsetNanos = offsetNanos,
+            stopFlag = stopFlag,
+            terminated = terminated,
+            parkFlag = parkFlag,
+        ) ?: throw IOException("Failed to start audio decoder for $url")
+        val proc = JavaCppAudioProcess(decoder, inputStream as java.io.PipedInputStream)
+        synchronized(audioDecoders) { audioDecoders.add(decoder) }
+        return proc
     }
 
-    /** True if audio starts at known position (real -ss seek, not live HLS join). */
-    private fun audioOriginKnown(): Boolean = !liveSession && audioFeeder == null
+    /** True if audio starts at known position (always true with JavaCPP decoder). */
+    private fun audioOriginKnown(): Boolean = true
 
-    fun audioSourceGone(): Boolean = audioFeeder?.sourceGone == true
+    /** Audio source is always present with JavaCPP decoder (no HLS feed to track). */
+    fun audioSourceGone(): Boolean = false
 
     /** True once source has no audio (separate from transient gap between processes). */
     @Volatile
@@ -333,7 +323,7 @@ internal class PlaybackSessionManager(
             }, onEos = onStreamEnd, parkFlag = parkFlag)
             val aStop = AtomicBoolean()
             val ap = try {
-                buildAudioProcess(FFmpegBinary.getPath() ?: return, streamSet, offsetNanos, aStop)
+                buildAudioDecoder(streamSet, offsetNanos, aStop)
             } catch (e: IOException) {
                 // The video side is already running; tear it down before propagating
                 channel.teardownProcess()
@@ -385,7 +375,7 @@ internal class PlaybackSessionManager(
             }, onEos = onStreamEnd, parkFlag = parkFlag)
             val aStop = AtomicBoolean()
             val ap = try {
-                buildAudioProcess(FFmpegBinary.getPath() ?: return false, streamSet, offsetNanos, aStop)
+                buildAudioDecoder(streamSet, offsetNanos, aStop)
             } catch (e: IOException) {
                 channel.teardownProcess()
                 renderExecutor.execute { channel.pipe.cleanup() }
@@ -418,14 +408,13 @@ internal class PlaybackSessionManager(
         if (!isPlaying || terminated.get() || parkFlag.get()) return false
         if (bridgeCeilingNanos != Long.MAX_VALUE || bridgeAudio != null) return false
         synchronized(switchLock) { if (incoming != null) return false }
-        val ffmpeg = FFmpegBinary.getPath() ?: return false
         val oldAudio = audioHalf
         audioHalf = null
         oldAudio?.stop?.set(true)
         audio.stop()
         val aStop = AtomicBoolean()
         val ap = try {
-            buildAudioProcess(ffmpeg, streamSet, offsetNanos, aStop)
+            buildAudioDecoder(streamSet, offsetNanos, aStop)
         } catch (e: IOException) {
             logger.error("$debugLabel Failed to start replacement audio process.", e)
             discardHalvesAsync(null, oldAudio)
@@ -462,9 +451,8 @@ internal class PlaybackSessionManager(
         if (!isPlaying || terminated.get() || parkFlag.get()) return false
         if (bridgeCeilingNanos != Long.MAX_VALUE || bridgeAudio != null) return false
         synchronized(switchLock) { if (incoming != null) return false }
-        val ffmpeg = FFmpegBinary.getPath() ?: return false
         val generation = audioSwitchGeneration.incrementAndGet()
-        daemon({ runAudioTrackSwitch(ffmpeg, streamSet, generation) }, "MediaPlayer-audio-switch").start()
+        daemon({ runAudioTrackSwitch(streamSet, generation) }, "MediaPlayer-audio-switch").start()
         return true
     }
 
@@ -497,12 +485,12 @@ internal class PlaybackSessionManager(
 
     /** Spawns a replacement line at the playhead and waits for its first PCM, the un-warmed path. */
     private fun coldStartAudioLine(
-        ffmpeg: String, streamSet: ActiveStreams, generation: Long,
+        streamSet: ActiveStreams, generation: Long,
     ): PreparedAudioLine? {
         val seekNanos = clock.currentTime().coerceAtLeast(0L)
         val aStop = AtomicBoolean()
         val ap = try {
-            buildAudioProcess(ffmpeg, streamSet, seekNanos, aStop)
+            buildAudioDecoder(streamSet, seekNanos, aStop)
         } catch (e: IOException) {
             logger.error("$debugLabel Failed to start replacement audio-track process.", e)
             return null
@@ -529,7 +517,7 @@ internal class PlaybackSessionManager(
         }
         if (!ready) {
             aStop.set(true)
-            MediaProcess.gracefulDestroy(ap)
+            ap.destroy()
             if (audioSwitchGeneration.get() == generation) {
                 logger.warn("$debugLabel Audio-track switch delivered no PCM in time; keeping the current track.")
             }
@@ -539,12 +527,12 @@ internal class PlaybackSessionManager(
     }
 
     /** Background body of [beginAudioTrackSwitch]: warm up the replacement, then swap lines. */
-    private fun runAudioTrackSwitch(ffmpeg: String, streamSet: ActiveStreams, generation: Long) {
-        val line = takeWarmAudioLine(streamSet) ?: coldStartAudioLine(ffmpeg, streamSet, generation)
+    private fun runAudioTrackSwitch(streamSet: ActiveStreams, generation: Long) {
+        val line = takeWarmAudioLine(streamSet) ?: coldStartAudioLine(streamSet, generation)
         if (line == null || !audioSwitchStillCurrent(generation)) {
             line?.let {
                 it.stop.set(true)
-                MediaProcess.gracefulDestroy(it.process)
+                it.process?.destroy()
             }
             onAudioTrackSwitchSettled()
             return
@@ -576,14 +564,14 @@ internal class PlaybackSessionManager(
                 if (terminated.get() || !isPlaying) {
                     aStop.set(true)
                     audio.stop()
-                    MediaProcess.gracefulDestroy(ap)
+                    ap.destroy()
                 }
                 onAudioTrackSwitchSettled()
             },
             onAborted = {
                 // The replacement never went live; keep the current track and drop the new process
                 aStop.set(true)
-                MediaProcess.gracefulDestroy(ap)
+                ap.destroy()
                 onAudioTrackSwitchSettled()
             },
             onUnexpectedEnd = onAudioFailure,
@@ -594,7 +582,7 @@ internal class PlaybackSessionManager(
     private fun discardHalvesAsync(video: VideoChannel?, audioHalf: AudioHalf?) {
         daemon({
             audioHalf?.let {
-                MediaProcess.gracefulDestroy(it.process)
+                it.process?.destroy()
                 joinSafely(it.thread)
             }
             video?.let { ch ->
@@ -668,14 +656,26 @@ internal class PlaybackSessionManager(
             )
 
             val audioUrl = streamSet.currentAudio.url
-            val ffmpeg = FFmpegBinary.getPath() ?: return false
             val ap =
                 if (audioUrl in SILENT_SOURCES) null
-                else MediaProcess.buildAudio(
-                    ffmpeg, audioUrl, liveOffsetNanos, AudioSink.SAMPLE_RATE,
-                    seekByDecoding = streamSet.currentAudio.seekByDecoding,
-                )
-            audioFeeder = null
+                else {
+                    val decoder = JavaCppAudioDecoder(debugLabel)
+                    val inputStream = decoder.start(
+                        url = streamSet.currentAudio.url,
+                        seekOffsetNanos = liveOffsetNanos,
+                        stopFlag = AtomicBoolean(),
+                        terminated = terminated,
+                        parkFlag = parkFlag,
+                    )
+                    if (inputStream == null) {
+                        logger.error("$debugLabel [reappear] failed to start audio decoder for $audioUrl")
+                        null
+                    } else {
+                        val proc = JavaCppAudioProcess(decoder, inputStream as java.io.PipedInputStream)
+                        synchronized(audioDecoders) { audioDecoders.add(decoder) }
+                        proc
+                    }
+                }
             silentSession = ap == null
             val bridge = bridgeAudio
             if (ap == null) {
@@ -797,13 +797,11 @@ internal class PlaybackSessionManager(
     /** The position playback is actually at, for callers that need to freeze or save it. */
     fun currentPacingNanos(): Long = pacingClockNanos()
 
-    /** Exact audio-vs-video offset from shared PTS: audio feeder's first PES PTS minus video first raw PTS. */
+    /** Exact audio-vs-video offset from shared PTS: video first raw PTS, no HLS feeder with JavaCPP. */
     private fun exactAvBiasNanos(): Long? {
-        val a0 = audioFeeder?.firstPtsNanos ?: return null
-        if (a0 < 0) return null
         val r0 = active?.javaCppPipe?.firstRawPtsNanos ?: return null
         if (r0 == Long.MIN_VALUE) return null
-        return a0 - r0
+        return -r0
     }
 
     /** Resolves the decode dimensions: the current/target texture size when known, else from quality. */
@@ -963,7 +961,6 @@ internal class PlaybackSessionManager(
         isPlaying = false
         audioWarmPool.invalidateAll()
         bridgeCeilingNanos = Long.MAX_VALUE
-        audioFeeder = null
         masterClock.reset()
         parkFlag.set(false) // Release any parked readers so they observe the stop flags and exit
         // A reappearance bridge whose live process never attached: flag it; audio.stop() below releases the
@@ -979,12 +976,17 @@ internal class PlaybackSessionManager(
         active = null
         audioHalf?.stop?.set(true)
         a?.let { it.stop.set(true); it.javaCppPipe.kill() }
-        audioHalf?.let { MediaProcess.gracefulDestroy(it.process) }
+        audioHalf?.let { it.process?.destroy() }
         audio.stop()
         a?.let {
             it.thread?.let { t -> joinSafely(t) }
             it.javaCppPipe.release()
             renderExecutor.execute { it.pipe.cleanup() }
+        }
+        // Release all JavaCPP audio decoders
+        synchronized(audioDecoders) {
+            audioDecoders.forEach { it.release() }
+            audioDecoders.clear()
         }
         audioHalf?.thread?.let { joinSafely(it) }
         audioHalf = null
@@ -1004,6 +1006,11 @@ internal class PlaybackSessionManager(
             active = null
             ch.javaCppPipe.release()
             renderExecutor.execute { ch.pipe.cleanup() }
+        }
+        // Release all JavaCPP audio decoders
+        synchronized(audioDecoders) {
+            audioDecoders.forEach { it.release() }
+            audioDecoders.clear()
         }
     }
 }
