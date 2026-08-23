@@ -64,7 +64,7 @@ fi
     src/main/java/org/sqlite/core/NativeDB.java
 )
 # The generated header is org_sqlite_core_NativeDB.h (or with an arch suffix on newer JDKs).
-GENERATED_H="$(find "$WORK/jni-headers" -name 'org_sqlite_core_NativeDB.h' | head -n1)"
+GENERATED_H="$(find "$WORK/jni-headers" -name 'org_sqlite_core_NativeDB*' | head -n1)"
 if [[ -z "$GENERATED_H" ]]; then
   echo "ERROR: could not generate NativeDB.h via javac -h" >&2
   exit 1
@@ -121,7 +121,13 @@ SQLITE3_C="$AMALG_DIR/sqlite3.c"
 # ---- 5. Compile ------------------------------------------------------------------------------
 JAVA_HOME="${JAVA_HOME:-}"
 if [[ -z "$JAVA_HOME" ]]; then
-  JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)" 2>/dev/null || echo javac)")")"
+  # macOS lacks readlink -f; use realpath or fallback to dirname chain.
+  JAVAC="$(command -v javac 2>/dev/null || echo javac)"
+  if command -v realpath >/dev/null 2>&1; then
+    JAVA_HOME="$(dirname "$(dirname "$(realpath "$JAVAC")")")"
+  else
+    JAVA_HOME="$(dirname "$(dirname "$JAVAC")")"
+  fi
 fi
 JNI_INCLUDES=()
 if [[ -d "$JAVA_HOME/include" ]]; then

@@ -1,10 +1,13 @@
 package support.shadow
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.gradle.api.logging.Logging
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+
+private val sqliteLogger = Logging.getLogger("dreamdisplayx.sqlite-natives")
 
 /**
  * Maps a native platform OS name (e.g. `Windows`) to the sqlite-jdbc native resource sub-path.
@@ -40,7 +43,14 @@ private fun sqliteNativeSubPath(osName: String, arch: String): String? = when {
  * stock binaries remain.
  */
 fun ShadowJar.includeRebuiltSqliteNatives(nativeBundleDir: File) {
-    if (!nativeBundleDir.isDirectory) return
+    if (!nativeBundleDir.isDirectory) {
+        sqliteLogger.warn(
+            "SQLite native bundle not found at {}; the relocated SQLiteJDBCLoader will fail at " +
+                    "runtime. Build with CI (build-sqlite-natives) or place rebuilt natives there.",
+            nativeBundleDir.absolutePath,
+        )
+        return
+    }
     val replacements = mutableMapOf<String, File>()
     nativeBundleDir.listFiles()?.filter { it.isDirectory }?.forEach { osDir ->
         // osDir = "Windows", "Linux", "Mac"
@@ -56,7 +66,14 @@ fun ShadowJar.includeRebuiltSqliteNatives(nativeBundleDir: File) {
             }
         }
     }
-    if (replacements.isEmpty()) return
+    if (replacements.isEmpty()) {
+        sqliteLogger.warn(
+            "No supported sqlite native libraries found in {}; " +
+                    "the relocated SQLiteJDBCLoader will fail at runtime.",
+            nativeBundleDir.absolutePath,
+        )
+        return
+    }
 
     doLast {
         val jar = archiveFile.get().asFile
