@@ -238,7 +238,7 @@ jobs:
           version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
           files: build/libs/dreamdisplayx-bungeecord-${{ needs.build.outputs.version }}.jar
           changelog-file: changelog.md
-          modrinth-id: dreamdisplayx
+          modrinth-id: O9VrWVkP
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           loaders: bungeecord
           game-versions: ${{ steps.versions.outputs.paper_versions }}
@@ -253,7 +253,7 @@ jobs:
           version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
           files: build/libs/dreamdisplayx-velocity-${{ needs.build.outputs.version }}.jar
           changelog-file: changelog.md
-          modrinth-id: dreamdisplayx
+          modrinth-id: O9VrWVkP
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           loaders: velocity
           game-versions: ${{ steps.versions.outputs.paper_versions }}
@@ -268,7 +268,7 @@ jobs:
           version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
           files: build/libs/dreamdisplayx-paper-${{ needs.build.outputs.version }}.jar
           changelog-file: changelog.md
-          modrinth-id: dreamdisplayx
+          modrinth-id: O9VrWVkP
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           loaders: |
             folia
@@ -367,7 +367,6 @@ jobs:
         run: |
           python3 - <<'EOF'
           import os
-          import re
 
           mc = "${{ matrix.task.mc }}"
           props = {}
@@ -382,14 +381,9 @@ jobs:
                   props[key.strip()] = value.strip()
 
           minecraft_version = props.get("minecraft.version", mc)
-          base_mc = minecraft_version.split("-", 1)[0]
-          curseforge_publishable = (
-              re.fullmatch(r"\d+(?:\.\d+)*", minecraft_version) is not None
-          )
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"mc={mc}\n")
-              f.write(f"curseforge_publishable={str(curseforge_publishable).lower()}\n")
               f.write("mc_versions<<VERSIONS_EOF\n")
               f.write(minecraft_version + "\n")
               f.write("VERSIONS_EOF\n")
@@ -451,7 +445,7 @@ jobs:
           version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
           files: build/libs/dreamdisplayx-fabric-${{ matrix.task.mc }}-${{ needs.build.outputs.version }}.jar
           changelog-file: changelog.md
-          modrinth-id: dreamdisplayx
+          modrinth-id: O9VrWVkP
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           loaders: |
             fabric
@@ -462,25 +456,6 @@ jobs:
             fabric-api(required){modrinth:P7dR8mSH}
             luckperms(optional){modrinth:Vebnzrzj}
 
-      - name: Publish Fabric to CurseForge
-        if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'fabric' && steps.versions.outputs.curseforge_publishable == 'true'
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: 'Dream DisplaysX ${{ needs.build.outputs.pretty_version }} — Fabric ${{ matrix.task.mc }}'
-          version: ${{ needs.build.outputs.version }}
-          version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
-          files: build/libs/dreamdisplayx-fabric-${{ matrix.task.mc }}-${{ needs.build.outputs.version }}.jar
-          changelog-file: changelog.md
-          curseforge-id: ${{ secrets.CURSEFORGE_PROJECT_ID }}
-          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          loaders: |
-            fabric
-            quilt
-          game-versions: ${{ steps.versions.outputs.mc_versions }}
-          dependencies: |
-            fabric-api(required){curseforge:306612}
-            luckperms(optional){curseforge:431733}
-
       - name: Publish NeoForge to Modrinth
         if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'neoforge'
         uses: Kir-Antipov/mc-publish@v3.3
@@ -490,26 +465,10 @@ jobs:
           version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
           files: build/libs/dreamdisplayx-neoforge-${{ matrix.task.mc }}-${{ needs.build.outputs.version }}.jar
           changelog-file: changelog.md
-          modrinth-id: dreamdisplayx
+          modrinth-id: O9VrWVkP
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           loaders: neoforge
           game-versions: ${{ steps.versions.outputs.mc_versions }}
           game-version-filter: none
           dependencies: |
             luckperms(optional){modrinth:Vebnzrzj}
-
-      - name: Publish NeoForge to CurseForge
-        if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'neoforge' && steps.versions.outputs.curseforge_publishable == 'true'
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: 'Dream DisplaysX ${{ needs.build.outputs.pretty_version }} — NeoForge ${{ matrix.task.mc }}'
-          version: ${{ needs.build.outputs.version }}
-          version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
-          files: build/libs/dreamdisplayx-neoforge-${{ matrix.task.mc }}-${{ needs.build.outputs.version }}.jar
-          changelog-file: changelog.md
-          curseforge-id: ${{ secrets.CURSEFORGE_PROJECT_ID }}
-          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          loaders: neoforge
-          game-versions: ${{ steps.versions.outputs.mc_versions }}
-          dependencies: |
-            luckperms(optional){curseforge:431733}
