@@ -87,14 +87,14 @@ jobs:
         shell: bash
         run: |
           cd native-artifact
-          tar czf "$RUNNER_TEMP/native-${{ matrix.sqlite.platform }}.tar.gz" \
+          tar czf "native-${{ matrix.sqlite.platform }}.tar.gz" \
             dreamdisplayx-natives/${{ matrix.sqlite.platform }}
 
       - name: Upload packaged native library
         uses: actions/upload-artifact@v7.0.1
         with:
           name: native-${{ matrix.sqlite.platform }}
-          path: ${{ runner.temp }}/native-${{ matrix.sqlite.platform }}.tar.gz
+          path: native-artifact/native-${{ matrix.sqlite.platform }}.tar.gz
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
