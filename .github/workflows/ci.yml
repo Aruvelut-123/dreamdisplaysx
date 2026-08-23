@@ -2,6 +2,8 @@ name: CI
 
 # Runs on every push to main and every PR. Always builds and uploads artifacts,
 # with no conditional/skipped jobs, so the check set is complete and consistent.
+# Documentation, workflow, and config-marker changes never touch code, so they
+# do not trigger a build.
 on:
   push:
     branches: [ main ]
@@ -10,6 +12,8 @@ on:
       - 'docs/**'
       - 'SESSION_TASKS.md'
       - '.gitignore'
+      - '.github/**'
+      - 'native/sqlite/**'
   pull_request:
     branches: [ main ]
     paths-ignore:
@@ -17,6 +21,8 @@ on:
       - 'docs/**'
       - 'SESSION_TASKS.md'
       - '.gitignore'
+      - '.github/**'
+      - 'native/sqlite/**'
   workflow_dispatch:
 
 concurrency:
