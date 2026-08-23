@@ -3,7 +3,6 @@ package com.dreamdisplayx.platform.client.managers
 import com.dreamdisplayx.api.platform.service.keys.PlatformServices
 import com.dreamdisplayx.api.runtime.module.DreamDisplaysXModule
 import com.dreamdisplayx.api.runtime.registry.service.register
-import com.dreamdisplayx.media.player.nativebridge.NativeMedia
 import com.dreamdisplayx.media.player.process.FFmpegBinary
 import com.dreamdisplayx.platform.client.Config
 import com.dreamdisplayx.platform.client.Focuser
@@ -69,7 +68,6 @@ object ClientStartupManager {
         application.start()
 
         FFmpegBinary.prewarmAsync()
-        NativeMedia.prewarmAsync()
 
         Focuser().start()
         scope.launch {

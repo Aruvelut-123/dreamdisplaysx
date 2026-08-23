@@ -5,7 +5,6 @@ import com.dreamdisplayx.api.render.backend.model.RenderBackend
 import com.dreamdisplayx.api.render.backend.model.ShaderBackend
 import com.dreamdisplayx.api.render.texture.model.TextureUploadPath
 import com.dreamdisplayx.core.protocol.common.packets.ClientHello
-import com.dreamdisplayx.media.player.nativebridge.NativeMedia
 import com.dreamdisplayx.media.player.process.HwAccelBackend
 import com.dreamdisplayx.platform.client.managers.WarmParkPolicy
 import com.dreamdisplayx.platform.client.render.AsyncTextureUploader
@@ -36,8 +35,6 @@ object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
     /** Snapshots all probes into an immutable [ClientHello] for the handshake. */
     override fun detect(): ClientHello {
         val hwAccel = HwAccelBackend.detectDefault()
-        val nativeAvailable = safeBool { NativeMedia.isAvailable }
-        val lavAvailable = safeBool { NativeMedia.lavAvailable }
         val memory = ClientMemoryProbe.detected
         return ClientHello(
             supportsPopout = supportsPopout,
@@ -51,15 +48,16 @@ object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
             shaderBackend = safeString(ShaderBackend.UNKNOWN.wire) { ShaderPackCompat.shaderBackend().wire },
             textureUploadPath = safeString(TextureUploadPath.UNKNOWN.wire) { RenderBackendCompat.textureUploadPath().wire },
             hwAccelBackend = hwAccel.name.lowercase(),
-            nativeBackendAvailable = nativeAvailable,
-            nativeRgbaFramesEnabled = nativeAvailable && safeBool { NativeMedia.rgbaFramesEnabled },
-            nativeYuvGpuEnabled = nativeAvailable && safeBool { NativeMedia.yuvGpuEnabled },
-            lavAvailable = lavAvailable,
-            lavInProcessEnabled = lavAvailable && safeBool { NativeMedia.lavInProcessEnabled },
-            lavSurfaceInteropAvailable = lavAvailable && safeBool { NativeMedia.lavSurfaceInteropAvailable },
-            lavZeroCopyEnabled = lavAvailable && safeBool { NativeMedia.lavZeroCopyEnabled },
-            nativeUnavailableReason = if (nativeAvailable) "" else safeString("unknown") { NativeMedia.unavailableReason.ifBlank { "unknown" } },
-            lavUnavailableReason = if (lavAvailable) "" else safeString("unknown") { NativeMedia.lavUnavailableReason.ifBlank { "unknown" } },
+            // Rust native backend removed; JavaCPP replaces all native decode functionality
+            nativeBackendAvailable = false,
+            nativeRgbaFramesEnabled = false,
+            nativeYuvGpuEnabled = false,
+            lavAvailable = false,
+            lavInProcessEnabled = false,
+            lavSurfaceInteropAvailable = false,
+            lavZeroCopyEnabled = false,
+            nativeUnavailableReason = "",
+            lavUnavailableReason = "",
             systemRamMb = memory.systemRamMb,
             maxJvmMemoryMb = memory.maxJvmMemoryMb,
             dedicatedVramMb = memory.dedicatedVramMb,

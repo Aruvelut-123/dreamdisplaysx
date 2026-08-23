@@ -1,6 +1,5 @@
 package com.dreamdisplayx.platform.client.render
 
-import com.dreamdisplayx.media.player.nativebridge.NativeMedia
 import com.dreamdisplayx.platform.client.Initializer
 //? if >=1.21.11 {
 import com.mojang.blaze3d.pipeline.RenderPipeline
@@ -70,7 +69,6 @@ object DisplayYuvRenderTypes {
     val active: Boolean
         get() = !ShaderPackCompat.isShaderPackActive
                 && (isSupported || Yuv262Reflect.isAvailable)
-                && NativeMedia.yuvGpuEnabled
 
     /** Creates one RED8 plane texture through the built-in (26.1-era) or reflective 26.2 API. */
     fun createPlaneTexture(
