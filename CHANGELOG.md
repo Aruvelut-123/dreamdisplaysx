@@ -1,5 +1,7 @@
 # 1.9.3.4 Release
 
+Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdisplays/commit/304a642).
+
 ## Highlights
 
 - **yt-dlp removed** — the `yt-dlp` subprocess, binary downloader/updater, and all YouTube resolution (NewPipeExtractor) are gone. No external Python/toolchain dependency remains; Twitch, Vimeo, Kick, and Bilibili all keep their in-process resolvers.
@@ -7,6 +9,11 @@
 - **Bilibili multi-CDN smart switching** — stream resolution now collects every CDN backup URL from the Bilibili API; when a CDN keeps failing, the player automatically switches to the next backup before re-resolving.
 - **Seek-jump fix** — watching a video, then loading a new one, no longer restores the previous video's old saved position (which could jump to a stale ~8s timestamp).
 - **A/V drift auto-resync** — if the video drifts more than 5s behind the audio clock, frames are dropped to let the decoder catch up (like online players), instead of drifting unboundedly.
+
+## Server
+
+- Default volume in the server config is now divided by 100 (config stores 0–100 percent) instead of 200, so a configured default volume is applied to new displays at the correct level.
+- Server language JSONs are no longer overwritten with the bundled defaults on every startup / reload — they are only restored when a file is missing or corrupt.
 
 ## Sources
 
