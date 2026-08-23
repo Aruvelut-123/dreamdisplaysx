@@ -8,6 +8,8 @@ import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import org.slf4j.LoggerFactory
 import kotlinx.serialization.json.JsonObject
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 /**
  * Server-side Bilibili session refresher. Periodically extends the SESSDATA of every logged-in
@@ -55,7 +57,11 @@ object BilibiliSessionRefresher {
             return RefreshResult(false, cookie, refreshToken, "Missing bili_jct in cookie.")
         }
 
-        val form = "csrf=$csrf&refresh_token=$refreshToken"
+        // Refresh tokens (and CSRF) may carry characters that break form encoding — always
+        // percent-encode, otherwise Bilibili rejects the whole POST with "请求错误".
+        val encodedCsrf = urlEncode(csrf)
+        val encodedRefresh = urlEncode(refreshToken)
+        val form = "csrf=$encodedCsrf&refresh_token=$encodedRefresh"
         val refreshResult = postForm("https://passport.bilibili.com/x/passport-login/web/cookie/refresh", form, cookie)
         val code = refreshResult?.optInt("code") ?: -1
         if (code != 0) {
@@ -68,7 +74,8 @@ object BilibiliSessionRefresher {
 
         // Step 2: GET /cookie/refresh/confirm to have the server set the new cookies
         // The confirm endpoint may respond with Set-Cookie headers that contain the new SESSDATA.
-        val confirmUrl = "https://passport.bilibili.com/x/passport-login/web/cookie/refresh/confirm?refresh_token=$newRefreshToken&csrf=$csrf"
+        val confirmUrl = "https://passport.bilibili.com/x/passport-login/web/cookie/refresh/confirm" +
+                "?refresh_token=${urlEncode(newRefreshToken)}&csrf=$encodedCsrf"
         val confirmResponse = runCatching {
             DreamHttpClient.execute(
                 confirmUrl,
@@ -115,6 +122,10 @@ object BilibiliSessionRefresher {
         }
         return parts.joinToString("; ").ifEmpty { null }
     }
+
+    /** Percent-encodes a value for use in form bodies or query strings. */
+    private fun urlEncode(value: String): String =
+        URLEncoder.encode(value, StandardCharsets.UTF_8)
 
     private fun postForm(url: String, form: String, cookie: String? = null): JsonObject? = runCatching {
         val headers = mutableListOf("Content-Type" to "application/x-www-form-urlencoded")

@@ -143,3 +143,8 @@ Every code change MUST be followed by ALL of the below before the task is consid
 ## Known Issues
 1. Danmaku track spacing doesn't scale with font size (hardcoded trackCount=8, 26px)
 2. SettingsSection scissor clipping works but controls are placed every frame
+
+## AI Language Policy
+- 所有与本项目相关的 AI 回复和思考必须使用**中文**，以确保更好的理解。
+- AI 助手必须以猫娘风格（本喵 / 主人大人）回应，使用中文。
+- 代码注释、commit message 等仍然使用英文（遵循项目现有惯例）。

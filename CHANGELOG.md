@@ -18,6 +18,7 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 
 - Default volume in the server config is now divided by 100 (config stores 0–100 percent) instead of 200, so a configured default volume is applied to new displays at the correct level.
 - Server language JSONs are no longer overwritten with the bundled defaults on every startup / reload — they are only restored when a file is missing or corrupt.
+- Fixed Bilibili session refresh: `csrf` / `refresh_token` parameters are now percent-encoded for both the `/cookie/refresh` POST form and the `/cookie/refresh/confirm` query string. Tokens carrying special characters previously made the request malformed and Bilibili rejected it with `请求错误`.
 
 ## Media player
 
@@ -29,6 +30,7 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 - Bilibili DASH / durl / live streams keep every backup CDN URL; on repeated session stalls the player tries the next CDN before invalidating caches and re-resolving.
 - Fixed stale `savedTimeNanos` reuse on video swap that caused the first-second reload-and-seek jump.
 - `FramePrebuffer` drops frames more than 5s behind the audio clock so a slow decoder resyncs instead of drifting forever.
+- Fixed `JavaCppVideoPipe` GPU YUV (planar) decode path: `FFmpegFrameGrabber` now sets `imageMode = RAW` to preserve native YUV420P 3-plane output. The default `imageMode = COLOR` converted every frame to BGR24 (1 plane), which caused `frameToI420` to reject every frame with "unexpected dimensions" even though the dimensions were correct — the YUV pipeline was effectively non-functional on Bilibili and other sources.
 
 ## Sources
 

@@ -11,6 +11,7 @@ import com.dreamdisplayx.media.player.util.daemon
 import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
+import org.bytedeco.javacv.FrameGrabber
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
@@ -528,6 +529,10 @@ internal class JavaCppVideoPipe(
         if (planarOutput) {
             // Default is YUV — keep it for the planar GPU path
             g.pixelFormat = avutil.AV_PIX_FMT_YUV420P
+            // Without RAW mode, javacv's default imageMode=COLOR converts to BGR24 (1 plane),
+            // which breaks frameToI420's 3-plane YUV expectation — every frame gets skipped
+            // as "unexpected dimensions" even though the dimensions themselves are correct.
+            g.imageMode = FrameGrabber.ImageMode.RAW
         } else {
             // Request BGR24 for RGB output (javacv's default)
         }
