@@ -1,12 +1,13 @@
 name: Build
 
-# Reusable build pipeline: compiles the native libraries and assembles the
-# loader jars. Called by ci.yml (every push / PR) and release.yml (publishing).
+# Reusable build pipeline: assembles the loader jars using JavaCPP for video
+# decode (in-process FFmpegFrameGrabber) and the Gradle multi-version
+# (Stonecutter) build system. Called by ci.yml and release.yml.
 on:
   workflow_call:
     inputs:
       pull_request:
-        description: When true, trim to a single native platform (PR code-correctness run).
+        description: When true, trim to a single Stonecutter version (PR code-correctness run).
         type: boolean
         default: false
       build_type:
@@ -32,8 +33,6 @@ on:
         value: ${{ jobs.metadata.outputs.is_marketplace_publishable }}
       marketplace_publish_tasks:
         value: ${{ jobs.metadata.outputs.marketplace_publish_tasks }}
-      required_native_platforms:
-        value: ${{ jobs.metadata.outputs.required_native_platforms }}
 
 permissions:
   contents: read
@@ -55,8 +54,6 @@ jobs:
       primary_stonecutter_version: ${{ steps.stonecutter_versions.outputs.primary_version }}
       paper_build_version: ${{ steps.stonecutter_versions.outputs.paper_build_version }}
       marketplace_publish_tasks: ${{ steps.stonecutter_versions.outputs.marketplace_tasks_json }}
-      native_matrix: ${{ steps.stonecutter_versions.outputs.native_matrix_json }}
-      required_native_platforms: ${{ steps.stonecutter_versions.outputs.required_native_platforms }}
 
     steps:
       - name: Checkout repository
@@ -112,64 +109,12 @@ jobs:
               [{"kind": "bungeecord", "mc": paper_build_version}]
           )
 
-          native_matrix = [
-              {
-                  "platform": "linux-x64",
-                  "runner": "ubuntu-latest",
-                  "target": "x86_64-unknown-linux-gnu",
-                  "native_library": "libdreamdisplayx_native.so",
-                  "lav_library": "libdreamdisplayx_lav.so",
-              },
-              {
-                  "platform": "linux-aarch64",
-                  "runner": "ubuntu-24.04-arm",
-                  "target": "aarch64-unknown-linux-gnu",
-                  "native_library": "libdreamdisplayx_native.so",
-                  "lav_library": "libdreamdisplayx_lav.so",
-              },
-              {
-                  "platform": "macos-x64",
-                  "runner": "macos-15-intel",
-                  "target": "x86_64-apple-darwin",
-                  "native_library": "libdreamdisplayx_native.dylib",
-                  "lav_library": "libdreamdisplayx_lav.dylib",
-              },
-              {
-                  "platform": "macos-aarch64",
-                  "runner": "macos-14",
-                  "target": "aarch64-apple-darwin",
-                  "native_library": "libdreamdisplayx_native.dylib",
-                  "lav_library": "libdreamdisplayx_lav.dylib",
-              },
-              {
-                  "platform": "windows-x64",
-                  "runner": "windows-latest",
-                  "target": "x86_64-pc-windows-msvc",
-                  "native_library": "dreamdisplayx_native.dll",
-                  "lav_library": "dreamdisplayx_lav.dll",
-              },
-              {
-                  "platform": "windows-aarch64",
-                  "runner": "windows-11-arm",
-                  "target": "aarch64-pc-windows-msvc",
-                  "native_library": "dreamdisplayx_native.dll",
-                  "lav_library": "dreamdisplayx_lav.dll",
-              },
-          ]
-
-          is_pull_request = os.environ.get("IS_PR") == "true"
-          build_versions = versions
-          required_native_platforms = ["linux-x64"] if is_pull_request else [item["platform"] for item in native_matrix]
-          selected_native_matrix = [native_matrix[0]] if is_pull_request else native_matrix
-
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"versions_json={json.dumps(versions)}\n")
-              f.write(f"build_versions_json={json.dumps(build_versions)}\n")
+              f.write(f"build_versions_json={json.dumps(versions)}\n")
               f.write(f"primary_version={versions[0]}\n")
               f.write(f"paper_build_version={paper_build_version}\n")
               f.write(f"marketplace_tasks_json={json.dumps(tasks)}\n")
-              f.write(f"native_matrix_json={json.dumps(selected_native_matrix)}\n")
-              f.write(f"required_native_platforms={' '.join(required_native_platforms)}\n")
           EOF
 
       - name: Get version
@@ -261,20 +206,15 @@ jobs:
           echo "pretty_version=$pretty" >> $GITHUB_OUTPUT
 
   # ========================================================================
-  # Desktop native builds (unchanged from original)
+  # sqlite native rebuild: relocated JNI symbols for Fabric/NeoForge mod isolation
   # ========================================================================
-  build-natives:
-    name: Build native ${{ matrix.native.platform }}
-    runs-on: ${{ matrix.native.runner }}
+  build-sqlite-natives:
+    name: Rebuild sqlite native
+    runs-on: ubuntu-latest
     needs: metadata
-    timeout-minutes: 60
+    timeout-minutes: 30
     permissions:
       contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        native: ${{ fromJSON(needs.metadata.outputs.native_matrix) }}
 
     steps:
       - name: Checkout repository
@@ -282,355 +222,34 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Setup Rust
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-          rustup target add "${{ matrix.native.target }}"
-          rustc --version
-          cargo --version
-
-      # Needed to generate the sqlite-jdbc JNI header (javac -h) for the relocated native build.
-      # temurin has no JDK 25 for the macos-14 runner, but zulu ships it for all native runners.
       - name: Setup JDK 25
         uses: actions/setup-java@v5.2.0
         with:
           java-version: 25
           distribution: zulu
 
-      - name: Setup Zig
-        if: runner.os == 'Linux' || runner.os == 'Windows'
-        uses: mlugg/setup-zig@v2.2.1
-        with:
-          version: 0.16.0
-
-      - name: Install cargo-zigbuild
-        if: runner.os == 'Linux'
-        shell: bash
-        run: cargo install cargo-zigbuild --locked
-
-      - name: Install FFmpeg dependencies on macOS
-        if: runner.os == 'macOS'
-        run: |
-          set -euo pipefail
-          brew install ffmpeg pkg-config
-          ffmpeg_ver="$(brew list --versions ffmpeg | awk '{print $2}')"
-          echo "FFMPEG_CACHE_SUFFIX=ffmpeg-${ffmpeg_ver}" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> "$GITHUB_ENV"
-
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2.9.1
-        with:
-          workspaces: native -> target
-          key: ${{ matrix.native.target }}-${{ env.FFMPEG_CACHE_SUFFIX }}
-          cache-on-failure: true
-
-      - name: Install FFmpeg dependencies on Linux
-        if: runner.os == 'Linux'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          sudo sed -i 's|azure\.archive\.ubuntu\.com|archive.ubuntu.com|g' /etc/apt/apt-mirrors.txt 2>/dev/null || true
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 update
-          sudo apt-get install -y clang libclang-dev patchelf pkg-config xz-utils curl gcc
-          case "${{ matrix.native.target }}" in
-            x86_64-*) ffmpeg_arch=linux64 ;;
-            aarch64-*) ffmpeg_arch=linuxarm64 ;;
-            *) echo "Unsupported Linux target: ${{ matrix.native.target }}" >&2; exit 1 ;;
-          esac
-          python_bin="$(command -v python3 || command -v python || true)"
-          if [[ -z "$python_bin" ]]; then
-            echo "Python is required to resolve the latest BtbN FFmpeg asset." >&2
-            exit 1
-          fi
-          auth_args=()
-          if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-            auth_args=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-          fi
-          release_json="${RUNNER_TEMP}/btbn-ffmpeg-release.json"
-          curl -fsSL --retry 3 --retry-all-errors \
-            -A "dreamdisplayx-ci" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "${auth_args[@]}" \
-            -o "$release_json" \
-            https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest
-          url="$(
-            FFMPEG_ARCH="$ffmpeg_arch" FFMPEG_EXT="tar.xz" "$python_bin" - "$release_json" <<'PY'
-          import json, os, re, sys
-
-          path = sys.argv[1]
-          arch = os.environ["FFMPEG_ARCH"]
-          ext = os.environ["FFMPEG_EXT"]
-          pattern = re.compile(rf"^ffmpeg-n8\..*-{re.escape(arch)}-lgpl-shared-8\.1\.{re.escape(ext)}$")
-          with open(path, encoding="utf-8") as f:
-              release = json.load(f)
-          url = next(
-              (asset["browser_download_url"] for asset in release.get("assets", []) if pattern.match(asset.get("name", ""))),
-              None,
-          )
-          print(url) if url else sys.exit(f"No BtbN FFmpeg asset matched {pattern.pattern}")
-          PY
-          )"
-          dest="${RUNNER_TEMP}/ffmpeg"
-          curl -fL --retry 3 --retry-all-errors -o "${RUNNER_TEMP}/ffmpeg.tar.xz" "$url"
-          mkdir -p "${RUNNER_TEMP}/ffmpeg-extract"
-          tar -xf "${RUNNER_TEMP}/ffmpeg.tar.xz" -C "${RUNNER_TEMP}/ffmpeg-extract"
-          inner="$(find "${RUNNER_TEMP}/ffmpeg-extract" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-          mv "$inner" "$dest"
-          echo "PKG_CONFIG_PATH=${dest}/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${dest}/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
-
-      - name: Install FFmpeg dependencies on Windows
-        if: runner.os == 'Windows'
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          case "${{ matrix.native.target }}" in
-            x86_64-*) ffmpeg_arch=win64 ;;
-            aarch64-*) ffmpeg_arch=winarm64 ;;
-            *) echo "Unsupported Windows target: ${{ matrix.native.target }}" >&2; exit 1 ;;
-          esac
-          python_bin="$(command -v python3 || command -v python || true)"
-          if [[ -z "$python_bin" ]]; then
-            echo "Python is required to resolve the latest BtbN FFmpeg asset." >&2
-            exit 1
-          fi
-          auth_args=()
-          if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-            auth_args=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-          fi
-          release_json="${RUNNER_TEMP}/btbn-ffmpeg-release.json"
-          curl -fsSL --retry 3 --retry-all-errors \
-            -A "dreamdisplayx-ci" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "${auth_args[@]}" \
-            -o "$release_json" \
-            https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest
-          url="$(
-            FFMPEG_ARCH="$ffmpeg_arch" FFMPEG_EXT="zip" "$python_bin" - "$release_json" <<'PY'
-          import json, os, re, sys
-
-          path = sys.argv[1]
-          arch = os.environ["FFMPEG_ARCH"]
-          ext = os.environ["FFMPEG_EXT"]
-          pattern = re.compile(rf"^ffmpeg-n8\..*-{re.escape(arch)}-lgpl-shared-8\.1\.{re.escape(ext)}$")
-          with open(path, encoding="utf-8") as f:
-              release = json.load(f)
-          url = next(
-              (asset["browser_download_url"] for asset in release.get("assets", []) if pattern.match(asset.get("name", ""))),
-              None,
-          )
-          print(url) if url else sys.exit(f"No BtbN FFmpeg asset matched {pattern.pattern}")
-          PY
-          )"
-          dest="${RUNNER_TEMP}/ffmpeg"
-
-          curl -fL --retry 3 --retry-all-errors -o "${RUNNER_TEMP}/ffmpeg.zip" "$url"
-          7z x -y "${RUNNER_TEMP}/ffmpeg.zip" -o"${RUNNER_TEMP}/ffmpeg-extract" >/dev/null
-          inner="$(find "${RUNNER_TEMP}/ffmpeg-extract" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-          mv "$inner" "$dest"
-
-          echo "FFMPEG_DIR=${dest}" >> "$GITHUB_ENV"
-          echo "${dest}/bin" >> "$GITHUB_PATH"
-
-      - name: Build native libraries
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            cargo zigbuild \
-              --manifest-path native/Cargo.toml \
-              --release \
-              --package dreamdisplayx-native \
-              --package dreamdisplayx-lav \
-              --locked \
-              --target "${{ matrix.native.target }}.2.28"
-          else
-            cargo build \
-              --manifest-path native/Cargo.toml \
-              --release \
-              --package dreamdisplayx-native \
-              --package dreamdisplayx-lav \
-              --locked \
-              --target "${{ matrix.native.target }}"
-          fi
-
-      - name: Test native libraries
-        shell: bash
-        run: |
-          cargo test \
-            --manifest-path native/Cargo.toml \
-            --release \
-            --package dreamdisplayx-native \
-            --package dreamdisplayx-lav \
-            --locked \
-            --target "${{ matrix.native.target }}"
-
-      # The bundled sqlite-jdbc native library is rebuilt with relocated JNI symbols
-      # (Java_com_dreamdisplayx_libs_org_sqlite_core_NativeDB_*) so it stays loadable after
-      # shadow relocates org.sqlite for Fabric/NeoForge mod isolation. It is placed under
-      # dreamdisplayx-natives/$platform/ and merged into the jar by includeRebuiltSqliteNatives.
       - name: Cache sqlite native build
         uses: actions/cache@v4.2.3
         with:
           path: |
             native/sqlite/amalgamation
             native/sqlite/sqlite-jdbc-src
-          key: sqlite-${{ matrix.native.platform }}-${{ matrix.native.target }}
+          key: sqlite-linux-x64
           restore-keys: |
-            sqlite-${{ matrix.native.platform }}-
             sqlite-
 
-      - name: Install MinGW gcc on Windows
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          # choco installs mingw and puts gcc on PATH for the rest of the job.
-          choco install mingw --no-progress -y
-          echo "$PATH" >> /dev/null
-          gcc --version
-
-      - name: Build sqlite native library
+      - name: Build sqlite native library (Linux x86_64)
         shell: bash
         run: |
           set -euo pipefail
-          platform="${{ matrix.native.platform }}"
-          case "$platform" in
-            linux-x64)      os_name=Linux;    arch=x86_64 ;;
-            linux-aarch64)  os_name=Linux;    arch=aarch64 ;;
-            macos-x64)      os_name=Mac;      arch=x86_64 ;;
-            macos-aarch64)  os_name=Mac;      arch=aarch64 ;;
-            windows-x64)    os_name=Windows;  arch=x86_64 ;;
-            windows-aarch64)os_name=Windows;  arch=aarch64 ;;
-            *) echo "Unsupported sqlite platform: $platform" >&2; exit 1 ;;
-          esac
-          export OUT_DIR="$PWD/native-artifact/dreamdisplayx-natives/$platform"
-          if [[ "$platform" == windows-* ]]; then
-            # MinGW gcc (installed above) drives the Windows build; zig cc is only for cross-compiling Rust.
-            export CC="gcc"
-          elif [[ "$platform" == macos-* ]]; then
-            export CC="clang"
-          else
-            export CC="gcc"
-          fi
-          bash native/sqlite/compile.sh "$os_name" "$arch"
+          export OUT_DIR="$PWD/native-artifact/dreamdisplayx-natives/linux-x64"
+          bash native/sqlite/compile.sh Linux x86_64
 
-      - name: Collect native libraries
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          platform="${{ matrix.native.platform }}"
-          target="${{ matrix.native.target }}"
-          native_library="${{ matrix.native.native_library }}"
-          lav_library="${{ matrix.native.lav_library }}"
-          ffmpeg_dir="${FFMPEG_DIR:-}"
-
-          if [[ -z "$ffmpeg_dir" && -n "${PKG_CONFIG_PATH:-}" ]]; then
-            first_pkg_config_path="${PKG_CONFIG_PATH%%:*}"
-            if [[ "$first_pkg_config_path" == */lib/pkgconfig && -d "$first_pkg_config_path" ]]; then
-              ffmpeg_dir="$(cd "$first_pkg_config_path/../.." && pwd)"
-            fi
-          fi
-
-          release_dir="native/target/$target/release"
-          if [[ ! -f "$release_dir/$native_library" && -d "native/target/${target}.2.28/release" ]]; then
-            release_dir="native/target/${target}.2.28/release"
-          fi
-          out="native-artifact/dreamdisplayx-natives/$platform"
-          mkdir -p "$out"
-
-          cp "$release_dir/$native_library" "$out/"
-          cp "$release_dir/$lav_library" "$out/"
-
-          collect_license_metadata() {
-            local license_dir="$out/licenses"
-            mkdir -p "$license_dir"
-
-            local ffmpeg_bin=""
-            for candidate in \
-              "$ffmpeg_dir/bin/ffmpeg" \
-              "$ffmpeg_dir/bin/ffmpeg.exe" \
-              "$(command -v ffmpeg 2>/dev/null || true)"; do
-              if [[ -n "$candidate" && -f "$candidate" ]]; then
-                ffmpeg_bin="$candidate"
-                break
-              fi
-            done
-
-            if [[ -n "$ffmpeg_bin" ]]; then
-              "$ffmpeg_bin" -hide_banner -version > "$license_dir/ffmpeg-version.txt" 2>&1 || true
-              "$ffmpeg_bin" -hide_banner -L > "$license_dir/ffmpeg-license.txt" 2>&1 || true
-            fi
-
-            if [[ -n "$ffmpeg_dir" && -d "$ffmpeg_dir" ]]; then
-              while IFS= read -r license_file; do
-                cp "$license_file" "$license_dir/ffmpeg-$(basename "$license_file")"
-              done < <(find "$ffmpeg_dir" -maxdepth 2 -iname 'LICENSE*' -type f -print)
-            fi
-
-            case "${RUNNER_OS:-}" in
-              Linux)
-                cp /usr/share/doc/ffmpeg/copyright "$license_dir/ffmpeg-debian-copyright.txt" 2>/dev/null || true
-                ;;
-              macOS)
-                if command -v brew >/dev/null 2>&1; then
-                  brew info --json=v2 ffmpeg > "$license_dir/ffmpeg-homebrew.json" 2>/dev/null || true
-                fi
-                ;;
-            esac
-
-            if [[ ! -s "$license_dir/ffmpeg-license.txt" ]]; then
-              for fallback in \
-                "$license_dir"/ffmpeg-LICENSE* \
-                "$license_dir/ffmpeg-debian-copyright.txt" \
-                "$license_dir/ffmpeg-homebrew.json"; do
-                if [[ -s "$fallback" ]]; then
-                  cp "$fallback" "$license_dir/ffmpeg-license.txt"
-                  break
-                fi
-              done
-            fi
-
-            if [[ ! -s "$license_dir/ffmpeg-license.txt" ]]; then
-              {
-                echo "FFmpeg license metadata"
-                echo "Platform: $platform"
-                echo "Runner OS: ${RUNNER_OS:-unknown}"
-                echo "FFmpeg directory: ${ffmpeg_dir:-unknown}"
-                echo "FFmpeg source: https://ffmpeg.org/"
-                echo "BtbN builds: https://github.com/BtbN/FFmpeg-Builds"
-              } > "$license_dir/ffmpeg-license.txt"
-            fi
-          }
-
-          if [[ "${RUNNER_OS:-}" == "Linux" ]] && command -v patchelf >/dev/null 2>&1; then
-            for lib in "$out/$native_library" "$out/$lav_library"; do
-              patchelf --set-rpath '$ORIGIN' "$lib" || true
-            done
-          fi
-          collect_license_metadata
-
-          for required in "$native_library" "$lav_library"; do
-            test -f "$out/$required"
-          done
-          test -s "$out/licenses/ffmpeg-license.txt"
-
-          find "$out" -maxdepth 2 -type f -print | sort
-          tar -cf "native-artifact/native-$platform.tar" -C "$out/.." "$platform"
-
-      - name: Upload native libraries
+      - name: Upload sqlite native
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: native-${{ matrix.native.platform }}
-          path: native-artifact/native-${{ matrix.native.platform }}.tar
+          name: native-linux-x64
+          path: native-artifact/dreamdisplayx-natives/linux-x64
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -643,7 +262,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - metadata
-      - build-natives
     timeout-minutes: 15
     permissions:
       contents: read
@@ -690,46 +308,18 @@ jobs:
           sed -i "s/^version=.*/version=$VERSION/" gradle.properties
           grep '^version' gradle.properties
 
-      - name: Download native archives
+      - name: Download sqlite native archive
         uses: actions/download-artifact@v8.0.1
         with:
-          pattern: native-*
+          name: native-linux-x64
           path: native/build/native-archives
           merge-multiple: true
 
-      - name: Extract native bundle
+      - name: Extract sqlite native bundle
         run: |
           mkdir -p native/build/ci-bundle/dreamdisplayx-natives
-          for archive in native/build/native-archives/native-*.tar; do
-            test -f "$archive"
-            tar -xf "$archive" -C native/build/ci-bundle/dreamdisplayx-natives
-          done
-
-      - name: Validate native bundle
-        run: |
-          native_name() {
-            case "$1" in
-              windows-*) printf '%s\n' dreamdisplayx_native.dll ;;
-              macos-*) printf '%s\n' libdreamdisplayx_native.dylib ;;
-              *) printf '%s\n' libdreamdisplayx_native.so ;;
-            esac
-          }
-          lav_name() {
-            case "$1" in
-              windows-*) printf '%s\n' dreamdisplayx_lav.dll ;;
-              macos-*) printf '%s\n' libdreamdisplayx_lav.dylib ;;
-              *) printf '%s\n' libdreamdisplayx_lav.so ;;
-            esac
-          }
-          for platform in $REQUIRED_NATIVE_PLATFORMS; do
-            test -f "native/build/ci-bundle/dreamdisplayx-natives/$platform/$(native_name "$platform")"
-            test -f "native/build/ci-bundle/dreamdisplayx-natives/$platform/$(lav_name "$platform")"
-            test -s "native/build/ci-bundle/dreamdisplayx-natives/$platform/licenses/ffmpeg-license.txt"
-          done
-
-          find native/build/ci-bundle/dreamdisplayx-natives -maxdepth 2 -type f -print | sort
-        env:
-          REQUIRED_NATIVE_PLATFORMS: ${{ needs.metadata.outputs.required_native_platforms }}
+          cp -r native/build/native-archives/. native/build/ci-bundle/dreamdisplayx-natives/
+          find native/build/ci-bundle/dreamdisplayx-natives -maxdepth 3 -type f -print | sort
 
       - name: Build loaders with Gradle
         run: |
@@ -739,12 +329,8 @@ jobs:
             --no-daemon \
             --parallel
         env:
-          DREAMDISPLAYX_REQUIRE_NATIVES: "true"
-          DREAMDISPLAYX_REQUIRED_NATIVE_PLATFORMS: ${{ needs.metadata.outputs.required_native_platforms }}
           GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Xmx4G
 
-      # The Paper jar is one cross-version artifact built only in the paper_build_version job
-      # (>=1.21.11); it dispatches 1.21.1 and 26.x at runtime, so it is not built per version.
       - name: Build Paper with Gradle
         if: matrix.mc == needs.metadata.outputs.paper_build_version
         run: |
@@ -753,8 +339,6 @@ jobs:
             --no-daemon \
             --parallel
         env:
-          DREAMDISPLAYX_REQUIRE_NATIVES: "true"
-          DREAMDISPLAYX_REQUIRED_NATIVE_PLATFORMS: ${{ needs.metadata.outputs.required_native_platforms }}
           GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Xmx4G
 
       - name: Build proxy plugins with Gradle
@@ -767,101 +351,6 @@ jobs:
             --parallel
         env:
           GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Xmx4G
-
-      - name: Verify jar native bundle
-        run: |
-          python3 - <<'EOF'
-          from pathlib import Path
-          import os
-          from zipfile import ZipFile
-
-          mc = "${{ matrix.mc }}"
-          version = "${{ needs.metadata.outputs.version }}"
-          platforms = os.environ["REQUIRED_NATIVE_PLATFORMS"].split()
-          ffmpeg_components = ("avutil", "swresample", "swscale", "avcodec", "avformat", "avfilter", "avdevice")
-
-          def native_name(platform: str) -> str:
-              if platform.startswith("windows-"):
-                  return "dreamdisplayx_native.dll"
-              if platform.startswith("macos-"):
-                  return "libdreamdisplayx_native.dylib"
-              return "libdreamdisplayx_native.so"
-
-          def lav_name(platform: str) -> str:
-              if platform.startswith("windows-"):
-                  return "dreamdisplayx_lav.dll"
-              if platform.startswith("macos-"):
-                  return "libdreamdisplayx_lav.dylib"
-              return "libdreamdisplayx_lav.so"
-
-          def sqlite_lib(platform: str) -> str:
-              if platform.startswith("windows-"):
-                  return "sqlitejdbc.dll"
-              if platform.startswith("macos-"):
-                  return "libsqlitejdbc.dylib"
-              return "libsqlitejdbc.so"
-
-          def sqlite_os_arch(platform: str) -> str:
-              mapping = {
-                  "linux-x64": "Linux/x86_64",
-                  "linux-aarch64": "Linux/aarch64",
-                  "macos-x64": "Mac/x86_64",
-                  "macos-aarch64": "Mac/aarch64",
-                  "windows-x64": "Windows/x86_64",
-                  "windows-aarch64": "Windows/aarch64",
-              }
-              return mapping.get(platform, "")
-
-          # The relocated sqlite native library must expose JNI symbols for the relocated
-          # com.dreamdisplayx.libs.org.sqlite.core.NativeDB class, or Fabric/NeoForge would crash
-          # when opening SQLite.
-          REBUILT_SQLITE_SYMBOL = b"Java_com_dreamdisplayx_libs_org_sqlite_core_NativeDB_"
-
-          expected = [
-              f"{platform}/{name}"
-              for platform in platforms
-              for name in (native_name(platform), lav_name(platform), "licenses/ffmpeg-license.txt")
-          ]
-
-          for loader in ("fabric", "neoforge"):
-              jar = Path(f"build/libs/dreamdisplayx-{loader}-{mc}-{version}.jar")
-              if not jar.is_file():
-                  raise SystemExit(f"Missing jar: {jar}")
-
-              with ZipFile(jar) as zip_file:
-                  names = set(zip_file.namelist())
-                  contents = {name: zip_file.read(name) for name in names}
-
-              missing = [
-                  f"dreamdisplayx-natives/{entry}"
-                  for entry in expected
-                  if f"dreamdisplayx-natives/{entry}" not in names
-              ]
-              if missing:
-                  raise SystemExit(f"{jar} is missing native entries: {missing}.")
-
-              # Verify each required platform ships the rebuilt sqlite native with relocated symbols.
-              # It must live under the relocated org.sqlite package (com.dreamdisplayx.libs.org.sqlite)
-              # because the relocated SQLiteJDBCLoader derives its resource path from its own package.
-              for platform in platforms:
-                  osarch = sqlite_os_arch(platform)
-                  entry = f"com/dreamdisplayx/libs/org/sqlite/native/{osarch}/{sqlite_lib(platform)}"
-                  if entry not in names:
-                      raise SystemExit(f"{jar} is missing rebuilt sqlite native {entry}.")
-                  if REBUILT_SQLITE_SYMBOL not in contents[entry]:
-                      raise SystemExit(f"{jar} sqlite native {entry} lacks relocated JNI symbol.")
-
-              bundled_ffmpeg = [
-                  name for name in names
-                  if name.startswith("dreamdisplayx-natives/")
-                  and any(component in name.rsplit("/", 1)[-1].lower() for component in ffmpeg_components)
-                  and (name.endswith(".dll") or name.endswith(".dylib") or ".so" in name.rsplit("/", 1)[-1])
-              ]
-              if bundled_ffmpeg:
-                  raise SystemExit(f"{jar} unexpectedly bundles FFmpeg shared libraries: {bundled_ffmpeg}.")
-          EOF
-        env:
-          REQUIRED_NATIVE_PLATFORMS: ${{ needs.metadata.outputs.required_native_platforms }}
 
       - name: Collect artifacts
         run: |
