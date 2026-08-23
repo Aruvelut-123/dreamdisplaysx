@@ -395,7 +395,10 @@ object BilibiliApi {
                     type = MediaStreamType.VIDEO,
                     codec = null,
                     width = v.optInt("width"),
-                    height = v.optInt("height"),
+                    // Bilibili movie / bangumi DASH streams report the actual encoded height
+                    // (e.g. 808 instead of 1080), which makes the quality selector show "808p"
+                    // instead of "1080p". Map the qn (id) to the canonical height when available.
+                    height = qnToStandardHeight(v.optInt("id")) ?: v.optInt("height"),
                     fps = v.optString("frameRate")?.toDoubleOrNull(),
                     bitrate = v.optInt("bandwidth"),
                     audioTrackName = null,
@@ -528,6 +531,21 @@ object BilibiliApi {
         val wRid = md5(base + mixinKey(keys.imgKey, keys.subKey))
         return "$base&w_rid=$wRid"
     }
+
+    /** Bilibili qn (quality number) → canonical video height. The DASH stream's actual
+     *  `height` may be the encoded pixel height (e.g. 808 for a movie) rather than the
+     *  standard value (1080), which makes the quality selector show "808p" instead of
+     *  "1080p". Mapping via the qn produces canonical labels. */
+    private val QN_TO_HEIGHT = mapOf(
+        6 to 240, 16 to 360, 32 to 480, 48 to 540,
+        64 to 720, 74 to 720,
+        80 to 1080, 112 to 1080, 116 to 1080,
+        120 to 2160, 125 to 2160, 126 to 2160,
+        127 to 4320,
+    )
+
+    /** Maps [qn] to the canonical height, or null when [qn] is not a known Bilibili quality number. */
+    private fun qnToStandardHeight(qn: Int?): Int? = if (qn != null) QN_TO_HEIGHT[qn] else null
 
     /** URL-encodes [value] for a query string, using `%20` (not `+`) for spaces. */
     private fun urlEncode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")

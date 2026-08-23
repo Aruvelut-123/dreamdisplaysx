@@ -30,10 +30,11 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 - Bilibili DASH / durl / live streams keep every backup CDN URL; on repeated session stalls the player tries the next CDN before invalidating caches and re-resolving.
 - Fixed stale `savedTimeNanos` reuse on video swap that caused the first-second reload-and-seek jump.
 - `FramePrebuffer` drops frames more than 5s behind the audio clock so a slow decoder resyncs instead of drifting forever.
-- Fixed `JavaCppVideoPipe` GPU YUV (planar) decode path: `FFmpegFrameGrabber` now sets `imageMode = RAW` to preserve native YUV420P 3-plane output. The default `imageMode = COLOR` converted every frame to BGR24 (1 plane), which caused `frameToI420` to reject every frame with "unexpected dimensions" even though the dimensions were correct — the YUV pipeline was effectively non-functional on Bilibili and other sources.
+- Fixed `JavaCppVideoPipe` GPU YUV (planar) decode path: javacv's `imageMode = RAW` only fills the Y plane (frame.image[0]) and leaves U/V null, so `frameToI420` rejected every frame. Rewrote the converter to use the standard FFmpeg `sws_scale_frame` API on the underlying AVFrame (`frame.opaque`), which handles pixel format conversion and resolution scaling in one call — exactly how `ffmpeg -vf scale` works. The YUV pipeline now works with any source resolution and pixel format.
 
 ## Sources
 
+- Bilibili quality selector now shows canonical resolution labels (360P / 480P / 720P / 1080P / 4K) instead of the actual encoded heights. Movie & bangumi DASH streams report heights like 808 or 538, which previously rendered as "808p" / "538p"; the qn (`id`) is now mapped to the standard height.
 - Removed `yt-dlp` orchestrator, binary bootstrap/self-update, client race, output parser, format & search caches, and cookie manager.
 - Removed YouTube resolver chain (`NewPipeExtractor`) and YouTube-specific UI paths (chapters, related videos, title/metadata caches).
 - Removed `newpipeExtractor` (and its transitive `nanojson` / `jsoup` / `rhino`) dependencies and shadow relocations.

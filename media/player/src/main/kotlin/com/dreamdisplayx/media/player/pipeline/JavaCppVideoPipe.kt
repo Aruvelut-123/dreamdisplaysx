@@ -9,6 +9,11 @@ import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.daemon
 import org.bytedeco.ffmpeg.global.avutil
+import org.bytedeco.ffmpeg.global.swscale
+import org.bytedeco.ffmpeg.avutil.AVFrame
+import org.bytedeco.ffmpeg.swscale.SwsContext
+import org.bytedeco.ffmpeg.swscale.SwsFilter
+import org.bytedeco.javacpp.DoublePointer
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.FrameGrabber
@@ -90,6 +95,22 @@ internal class JavaCppVideoPipe(
 
     /** Scratch buffer for the popout RGBA conversion. */
     private var popoutRgba: ByteBuffer? = null
+
+    // ── Software YUV conversion (planar GPU path) ─────────────────────────
+    //
+    // javacv's RAW imageMode only fills the first plane (Y) of Frame.image,
+    // leaving U/V as null. Instead of relying on that broken Frame.image,
+    // we use the standard FFmpeg sws_scale API directly on the underlying
+    // AVFrame (frame.opaque), which works for any pixel format and handles
+    // scaling + conversion in one call — exactly like `ffmpeg -vf scale`.
+
+    /** sws scaler: source format/尺寸 → 目标 YUV420P 尺寸. */
+    private var swsCtx: SwsContext? = null
+    private var swsSrcW = 0; private var swsSrcH = 0; private var swsSrcFmt = -1
+
+    /** 目标 I420 AVFrame，sws_scale_frame 写入这里，然后我们复制平面到 spare。 */
+    private var dstAvFrame: AVFrame? = null
+    private var dstAvW = 0; private var dstAvH = 0
 
     // ── FramePipe interface ───────────────────────────────────────────────
 
@@ -201,6 +222,13 @@ internal class JavaCppVideoPipe(
                 // Ignore errors during cleanup
             }
         }
+        // Free sws scaler context and target AVFrame
+        swsCtx?.let { swscale.sws_freeContext(it) }
+        swsCtx = null
+        dstAvFrame?.let { avutil.av_frame_free(it) }
+        dstAvFrame = null
+        dstAvW = 0; dstAvH = 0
+        swsSrcW = 0; swsSrcH = 0; swsSrcFmt = -1
         i420Scratch = null
         rgbScratch = null
     }
@@ -341,47 +369,90 @@ internal class JavaCppVideoPipe(
     // ── Frame conversion ──────────────────────────────────────────────────
 
     /**
-     * Copies Y/U/V planes from a [frame] into a single I420 [dst] buffer.
-     * Returns false when dimensions don't match expectations.
+     * Converts a grabbed frame into I420 planes packed into [dst] (Y, then U, then V).
+     *
+     * **Why this bypasses [Frame.image]:** javacv's `imageMode = RAW` only fills
+     * `frame.image[0]` (Y plane), leaving U/V as null. To get a complete 3-plane
+     * YUV frame we use the standard FFmpeg sws_scale API on the underlying AVFrame
+     * stored in `frame.opaque` — exactly how `ffmpeg -vf scale` works. This also
+     * handles any pixel format conversion and resolution scaling automatically.
      */
     private fun frameToI420(frame: Frame, dst: ByteBuffer, expectedW: Int, expectedH: Int): Boolean {
-        val img = frame.image ?: return false
-        if (img.size < 3) return false
-        val y = (img[0] as? ByteBuffer) ?: return false
-        val u = (img[1] as? ByteBuffer) ?: return false
-        val v = (img[2] as? ByteBuffer) ?: return false
-        val fw = frame.imageWidth
-        val fh = frame.imageHeight
-        if (fw != expectedW || fh != expectedH) return false
+        val src = frame.opaque as? AVFrame ?: return false
+        val srcW = src.width()
+        val srcH = src.height()
+        val srcFmt = src.format()
+        if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
 
-        val yLen = fw * fh
-        val uvLen = ((fw + 1) / 2) * ((fh + 1) / 2)
-
-        // Copy Y plane — handle stride if needed
-        val yStride = frame.imageStride
-        if (yStride == fw || yStride <= 0) {
-            dst.put(y)
-        } else {
-            copyRowByRow(y, dst, yStride, fw, fh)
+        // Lazy-allocate or re-size the target I420 AVFrame
+        if (dstAvFrame == null || dstAvW != expectedW || dstAvH != expectedH) {
+            dstAvFrame?.let { avutil.av_frame_free(it) }
+            val f = avutil.av_frame_alloc() ?: return false
+            f.format(avutil.AV_PIX_FMT_YUV420P)
+            f.width(expectedW)
+            f.height(expectedH)
+            if (avutil.av_frame_get_buffer(f, 32) < 0) {
+                avutil.av_frame_free(f)
+                return false
+            }
+            dstAvFrame = f
+            dstAvW = expectedW; dstAvH = expectedH
         }
 
-        // Copy U plane
-        val uStride = frame.imageStride // javacv uses the same stride for all planes
-        if (uStride == ((fw + 1) / 2) * 2 || uStride <= 0) {
-            dst.put(u)
+        // Lazy-create or update the sws scaler
+        val sws = if (swsCtx != null && swsSrcW == srcW && swsSrcH == srcH && swsSrcFmt == srcFmt) {
+            swsCtx
         } else {
-            copyRowByRow(u, dst, uStride, (fw + 1) / 2, (fh + 1) / 2)
+            swsCtx?.let { swscale.sws_freeContext(it) }
+            val ctx = swscale.sws_getCachedContext(
+                null as SwsContext?, srcW, srcH, srcFmt, expectedW, expectedH,
+                avutil.AV_PIX_FMT_YUV420P, swscale.SWS_BILINEAR,
+                null as SwsFilter?, null as SwsFilter?, null as DoublePointer?
+            ) ?: return false
+            swsCtx = ctx
+            swsSrcW = srcW; swsSrcH = srcH; swsSrcFmt = srcFmt
+            ctx
         }
 
-        // Copy V plane
-        val vStride = frame.imageStride
-        if (vStride == ((fw + 1) / 2) * 2 || vStride <= 0) {
-            dst.put(v)
-        } else {
-            copyRowByRow(v, dst, vStride, (fw + 1) / 2, (fh + 1) / 2)
-        }
+        // sws_scale_frame: standard FFmpeg approach — one call handles pixel format
+        // conversion + resolution scaling, same as `ffmpeg -vf scale=WxH,format=yuv420p`
+        val out = dstAvFrame ?: return false
+        if (swscale.sws_scale_frame(sws, out, src) < 0) return false
 
+        // Copy the 3 planes from the output AVFrame into the packed I420 [dst] buffer
+        val yDst = out.data(0)?.asBuffer() ?: return false
+        val uDst = out.data(1)?.asBuffer() ?: return false
+        val vDst = out.data(2)?.asBuffer() ?: return false
+
+        copyPlane(yDst, out.linesize(0), expectedW, expectedH, dst)
+        copyPlane(uDst, out.linesize(1), (expectedW + 1) / 2, (expectedH + 1) / 2, dst)
+        copyPlane(vDst, out.linesize(2), (expectedW + 1) / 2, (expectedH + 1) / 2, dst)
         return true
+    }
+
+    /**
+     * Copies one plane from [src] ByteBuffer (with stride [srcStride]) into [dst],
+     * trimming each row to [rowBytes] for [rows] rows. Handles padding / alignment
+     * bytes that ffmpeg adds at the end of each row.
+     */
+    private fun copyPlane(src: ByteBuffer, srcStride: Int, rowBytes: Int, rows: Int, dst: ByteBuffer) {
+        if (srcStride <= 0 || rowBytes <= 0 || rows <= 0) return
+        if (srcStride == rowBytes) {
+            val total = rowBytes * rows
+            val limit = minOf(total, src.remaining())
+            for (i in 0 until limit) {
+                dst.put(src.get(i))
+            }
+        } else {
+            for (row in 0 until rows) {
+                val rowStart = row * srcStride
+                val limit = minOf(rowStart + rowBytes, src.remaining())
+                for (col in 0 until rowBytes) {
+                    if (rowStart + col >= limit) break
+                    dst.put(src.get(rowStart + col))
+                }
+            }
+        }
     }
 
     /**
@@ -427,18 +498,6 @@ internal class JavaCppVideoPipe(
             }
         }
         return true
-    }
-
-    /** Copies [src] (stride [srcStride]) row by row into [dst], trimming to [rowBytes] per row. */
-    private fun copyRowByRow(src: ByteBuffer, dst: ByteBuffer, srcStride: Int, rowBytes: Int, rows: Int) {
-        for (row in 0 until rows) {
-            val rowStart = row * srcStride
-            for (col in 0 until rowBytes) {
-                if (rowStart + col < src.limit()) {
-                    dst.put(src.get(rowStart + col))
-                }
-            }
-        }
     }
 
     /** Applies brightness adjustment in-place to the RGB24 frame in [buf]. */
@@ -527,11 +586,11 @@ internal class JavaCppVideoPipe(
         g.imageWidth = w
         g.imageHeight = h
         if (planarOutput) {
-            // Default is YUV — keep it for the planar GPU path
-            g.pixelFormat = avutil.AV_PIX_FMT_YUV420P
-            // Without RAW mode, javacv's default imageMode=COLOR converts to BGR24 (1 plane),
-            // which breaks frameToI420's 3-plane YUV expectation — every frame gets skipped
-            // as "unexpected dimensions" even though the dimensions themselves are correct.
+            // RAW mode: javacv fills only frame.image[0] (Y plane) and leaves U/V null,
+            // so we cannot use frame.image -> frameToI420. Instead we read the underlying
+            // AVFrame from frame.opaque and use standard FFmpeg sws_scale for conversion.
+            // Keep imageWidth/imageHeight so the Frame metadata is accurate for the EOS
+            // check and diagnostic logging; the actual YUV conversion bypasses Frame.image.
             g.imageMode = FrameGrabber.ImageMode.RAW
         } else {
             // Request BGR24 for RGB output (javacv's default)
