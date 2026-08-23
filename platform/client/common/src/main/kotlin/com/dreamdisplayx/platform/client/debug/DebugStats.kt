@@ -28,8 +28,8 @@ object DebugStats {
      * Safe to call from any thread.
      */
     fun getLines(): List<String> = buildList {
-        add("Dream DisplaysX $modVersion")
-        add("FFmpeg: $ffmpegVersion")
+        add("§bDream DisplaysX §a$modVersion")
+        add("§7FFmpeg: §f$ffmpegVersion")
         val screenCount = runCatching { DisplayRegistry.getScreens().size }.getOrDefault(0)
         if (screenCount > 0) {
             val gpu = MediaPlayer.framesToGpu.get()

@@ -28,8 +28,8 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
         clientChunk: LevelChunk?,
         serverChunk: LevelChunk?,
     ) {
-        displayer.addLine("Dream DisplaysX $modVersion")
-        displayer.addLine("FFmpeg: $ffmpegVersion")
+        displayer.addLine("§bDream DisplaysX §a$modVersion")
+        displayer.addLine("§7FFmpeg: §f$ffmpegVersion")
         val screenCount = runCatching {
             com.dreamdisplayx.platform.client.displays.DisplayRegistry.getScreens().size
         }.getOrDefault(0)

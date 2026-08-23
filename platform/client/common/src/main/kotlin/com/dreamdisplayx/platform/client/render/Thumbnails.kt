@@ -188,7 +188,14 @@ object Thumbnails {
     private suspend fun download(avgColorKey: String, cacheKey: String, bytesDeferred: Deferred<ByteArray>) {
         runCatching { bytesDeferred.await() }
             .onSuccess { bytes ->
-                Minecraft.getInstance().execute { register(avgColorKey, cacheKey, bytes) }
+                // Decode off the main thread: ImageIO.read + pixel loops + AmbientGrid are CPU-heavy
+                val decoded = runCatching { decode(bytes) }.onFailure { e ->
+                    logger.warn("Decode failed for $cacheKey: ${e.message}")
+                    BYTES.invalidate(cacheKey)
+                    IN_FLIGHT.invalidate(cacheKey)
+                    FAILED.put(cacheKey, true)
+                }.getOrNull() ?: return@onSuccess
+                Minecraft.getInstance().execute { registerDecoded(avgColorKey, cacheKey, decoded) }
             }
             .onFailure { e ->
                 if (e is CancellationException) throw e
@@ -248,18 +255,17 @@ object Thumbnails {
     private class Decoded(val image: NativeImage, val avgColor: Int, val width: Int, val height: Int, val ambientImage: NativeImage)
 
     /**
-     * Decodes [bytes] into a [NativeImage] and registers it under [key] (the composite videoId +
-     * quality key, or a direct-URL request's own key). The average color and ambient-backdrop
-     * texture are stored per [avgColorKey] so a YouTube video's LOW/HIGH tiers share the one pair.
+     * Registers a pre-decoded [decoded] thumbnail on the render thread: creates a [DynamicTexture]
+     * from the native image, registers it with the texture manager, and caches the metadata.
+     * Runs inside a `Minecraft.getInstance().execute` block (main thread) so GL operations are safe.
      */
-    private fun register(avgColorKey: String, key: String, bytes: ByteArray) {
+    private fun registerDecoded(avgColorKey: String, key: String, decoded: Decoded) {
         var image: NativeImage? = null
         var tex: DynamicTexture? = null
         var ambientImage: NativeImage? = null
         var ambientTex: DynamicTexture? = null
 
         runCatching {
-            val decoded = decode(bytes)
             image = decoded.image
             ambientImage = decoded.ambientImage
             //? if >=1.21.11 {
@@ -288,7 +294,7 @@ object Thumbnails {
             }
         }.onFailure { e ->
             // Runs inside a Minecraft.execute task, so nothing may escape onto the main thread
-            logger.warn("Decode / register failed for $key: ${e.message}")
+            logger.warn("Register failed for $key: ${e.message}")
             BYTES.invalidate(key)
             FAILED.put(key, true)
             // The texture manager owns the image only once registration succeeds; closing the

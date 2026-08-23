@@ -363,6 +363,11 @@ internal class JavaCppAudioDecoder(
         // format context even for audio-only streams, which avformat otherwise rejects
         // with the noisy "pixel_format, value: bgr24" info log.
         g.imageMode = FrameGrabber.ImageMode.RAW
+        // Hint the HTTP protocol that the server answers Range requests so a VOD seek jumps to the
+        // target offset instead of downloading from the start (the source of slow seeks).
+        if (seekOffsetNanos > 0) {
+            g.setOption("seekable", "1")
+        }
         g.start()
         // Seek if needed
         if (seekOffsetNanos > 0) {

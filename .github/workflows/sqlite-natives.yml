@@ -144,7 +144,7 @@ jobs:
           files: native-archives/native-*.tar.gz
           fail_on_unmatched_files: true
           draft: false
-          prerelease: false
+          prerelease: true
 
       - name: Update tag marker file
         env:

@@ -279,7 +279,13 @@ internal class JavaCppVideoPipe(
 
             val frame: Frame
             try {
-                frame = g.grabImage() ?: break
+                frame = g.grabImage()
+                if (frame == null) {
+                    // grabImage() returns null at end of stream (not an error).
+                    // This is a clean EOS, not "Unknown error".
+                    normalEos = true
+                    break
+                }
             } catch (e: Exception) {
                 if (!terminated.get() && !stopFlag.get()) {
                     errorMessage = e.message ?: "grabImage failed"
@@ -348,7 +354,7 @@ internal class JavaCppVideoPipe(
             }
 
             if (FramePacing.pace(framePts, getAudioClock)) {
-                if (MediaPlayer.DEBUG) MediaPlayer.framesDropped.incrementAndGet()
+                MediaPlayer.framesDropped.incrementAndGet()
                 videoPts = framePts + frameNs
                 continue
             }
@@ -724,6 +730,12 @@ internal class JavaCppVideoPipe(
         // info log on every open. In RAW mode javacv only fills the Y plane, so all conversion
         // (YUV420P or RGB24) is done here with sws_scale on the underlying AVFrame.
         g.imageMode = FrameGrabber.ImageMode.RAW
+        // For VOD seeks, hint the HTTP protocol that the server answers Range requests so FFmpeg
+        // jumps straight to the target offset instead of downloading the stream from the beginning
+        // and discarding everything up to it (which is what made seeks take seconds).
+        if (seekOffsetNanos > 0) {
+            g.setOption("seekable", "1")
+        }
         g.start()
         // Seek after start
         if (seekOffsetNanos > 0) {

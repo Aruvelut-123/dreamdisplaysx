@@ -20,6 +20,13 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 - **Stretch mode** — choose how video fits the display: **Fit** (letterbox, black bars), **Stretch** (fill/distort), or **Crop** (zoom fill, no bars). A GUI slider in the display settings menu, per-display persistence, and a server config default (`display.default_stretch_mode = "LETTERBOX"` in `config.toml`).
 - **Fixed green/pink preview** — the U/V plane swap in `i420ToRgba` was caused by `ByteBuffer.duplicate().position().get()` reading from the buffer start instead of the set position; now uses absolute offsets.
 - **Login/logout i18n** — the `/display login` and `/display logout` commands now use translatable server-language keys instead of hardcoded English strings.
+- **Full Chinese server translation** — new `zh.json` covers every server command (`/display help`, `/display info`, `/display video`, stretch-mode GUI options 适配/拉伸/裁剪, etc.); locale mapping recognizes `zh_cn` / `zh-cn` / `zh-tw` / `zh-hant` variants.
+- **Bilibili search infinite scroll** — "load more" now fetches real next pages from the Bilibili search API once the locally buffered ranking is exhausted, instead of silently stopping after the first ~60 results.
+- **Seek fixes** — a normal video end (`grabImage()` returning null) is now treated as a clean EOS so replay loops instead of erroring with `Unrecoverable: Unknown error`; entering the error state freezes the playback clock so the progress bar no longer advances over a frozen frame; VOD seeks hint the HTTP protocol that the server answers Range requests (`seekable=1`) so seeks jump instead of downloading from the start.
+- **Thumbnail decode off the main thread** — `ImageIO` decode + pixel loops + ambient-grid work moved out of `Minecraft.getInstance().execute`; the main thread now only registers the already-decoded texture, removing thumbnail-related frame hitches.
+- **F3 debug overlay counters** — `framesToGpu` / `framesDropped` are now collected unconditionally (they were gated behind a debug flag and always showed 0); the mod name renders in blue and the version in green.
+- **`/display info` duration** — displays in any mode now report their resolved duration to the server (previously only SYNCED/BROADCAST sent it, so other displays showed "Unknown").
+- **FFmpeg info-log filter** — global `av_log_set_level(AV_LOG_ERROR)` in the JavaCPP pipelines (video, audio, frame extractor), silencing the noisy `avformat_open_input rejected some options` stream dumps.
 
 ## CI / Build
 

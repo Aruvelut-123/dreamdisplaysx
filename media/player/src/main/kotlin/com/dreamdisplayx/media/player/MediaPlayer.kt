@@ -773,6 +773,8 @@ class MediaPlayer(
         }
         state.set(PlaybackState.ERROR)
         host.mediaError = DreamMediaException.Decode("Unrecoverable stream failure", isFatal = true)
+        // Stop the clock so the progress bar doesn't keep advancing through a frozen frame.
+        clock.reset(clock.currentTime())
     }
 
     /**

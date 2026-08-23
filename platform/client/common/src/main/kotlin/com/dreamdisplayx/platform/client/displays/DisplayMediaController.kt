@@ -3,7 +3,6 @@ package com.dreamdisplayx.platform.client.displays
 import com.dreamdisplayx.api.media.service.keys.MediaServices
 import com.dreamdisplayx.api.media.audio.service.keys.AudioAcousticsServices
 import com.dreamdisplayx.api.media.source.model.MediaSource
-import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.core.protocol.common.packets.ReportDuration
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.platform.client.Initializer
@@ -100,8 +99,6 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
 
     /** Reports the resolved media duration once, if this display's server clock needs it to loop. */
     private fun reportDurationIfNeeded() {
-        val mode = screen.effectiveMode
-        if (mode != PlaybackMode.SYNCED && mode != PlaybackMode.BROADCAST) return
         val durationNanos = screen.mediaPlayerDurationNanos
         if (durationNanos <= 0L) return // 0 for live streams and any not-yet-resolved case.
         Initializer.sendPacket(ReportDuration(screen.uuid, durationNanos / 1_000_000L))

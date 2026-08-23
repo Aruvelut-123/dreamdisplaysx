@@ -140,7 +140,6 @@ object TimelineManager {
      * Applies a client-reported media duration for [display]'s current video. First-report-wins: a no-op once [DisplayData.duration] is already set.
      */
     fun onDurationReported(display: DisplayData, senderId: UUID, durationMs: Long) {
-        if (display.mode != PlaybackMode.SYNCED && display.mode != PlaybackMode.BROADCAST) return
         if (durationMs !in MIN_DURATION_MS..MAX_DURATION_MS) return
         if ((display.duration ?: 0L) > 0L) return
         // Checked before the throttle below: an attacker who is never nearby must not be able to
@@ -149,6 +148,8 @@ object TimelineManager {
         if (!reportDurationThrottle.tryAcquire(display.id, REPORT_DURATION_COOLDOWN_MS)) return
 
         display.duration = durationMs * 1_000_000L
+        // Only update the timeline for modes that have one (SYNCED / BROADCAST).
+        if (display.mode != PlaybackMode.SYNCED && display.mode != PlaybackMode.BROADCAST) return
         val current = timelines[display.id] ?: return
         timelines[display.id] = current.copy(durationMs = durationMs, loop = true)
         broadcast(display, timelines.getValue(display.id))

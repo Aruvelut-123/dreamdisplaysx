@@ -71,10 +71,8 @@ internal class FrameSurface(
             val uploaded = uploader.uploadInterleaved(target, buf, pixelFormat)
             if (uploaded) {
                 textureReady.set(true)
-                if (MediaPlayer.DEBUG) {
-                    recordUpload(System.nanoTime() - start, "Upload", actualW, actualH)
-                    MediaPlayer.framesToGpu.incrementAndGet()
-                }
+                MediaPlayer.framesToGpu.incrementAndGet()
+                if (MediaPlayer.DEBUG) recordUpload(System.nanoTime() - start, "Upload", actualW, actualH)
             }
             return uploaded
         } finally {
@@ -102,10 +100,8 @@ internal class FrameSurface(
             val uploaded = uploader.uploadPlanar(y, u, v, buf)
             if (uploaded) {
                 textureReady.set(true)
-                if (MediaPlayer.DEBUG) {
-                    recordUpload(System.nanoTime() - start, "Planar upload", actualW, actualH)
-                    MediaPlayer.framesToGpu.incrementAndGet()
-                }
+                MediaPlayer.framesToGpu.incrementAndGet()
+                if (MediaPlayer.DEBUG) recordUpload(System.nanoTime() - start, "Planar upload", actualW, actualH)
             }
             return uploaded
         } finally {
@@ -138,7 +134,7 @@ internal class FrameSurface(
         val dropped = readyBufferRef.getAndSet(frame)
         if (dropped !== frame) dropped?.let {
             readyDrops.incrementAndGet()
-            if (MediaPlayer.DEBUG) MediaPlayer.framesDropped.incrementAndGet()
+            MediaPlayer.framesDropped.incrementAndGet()
             recycleFrameBuffer(it)
         }
         return takeReusableFrameBuffer(nextSize) ?: allocateFrameBuffer(nextSize)
@@ -153,7 +149,7 @@ internal class FrameSurface(
         val dropped = readyBufferRef.getAndSet(frame)
         if (dropped !== frame) dropped?.let {
             readyDrops.incrementAndGet()
-            if (MediaPlayer.DEBUG) MediaPlayer.framesDropped.incrementAndGet()
+            MediaPlayer.framesDropped.incrementAndGet()
             recycleFrameBuffer(it)
         }
     }
