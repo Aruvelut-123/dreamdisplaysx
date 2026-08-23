@@ -17,6 +17,9 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 - **Fixed A/V sync** — `Frame.timestamp` (µs) is now correctly converted to nanoseconds before comparing with the audio clock, eliminating the spurious 1s/s A/V drift that caused ~85% frame drops and video stutter.
 - **Fixed `pixel_format: bgr24` log spam** — switched to `imageMode = RAW` + `sws_scale` for all video conversion, so javacv no longer sets a pixel_format codec option on `avformat_open_input`.
 - **Fixed silent audio on S16 sources** — `JavaCppAudioDecoder` now handles both `FloatBuffer` (FLTP) and `ShortBuffer` (S16) source formats.
+- **Stretch mode** — choose how video fits the display: **Fit** (letterbox, black bars), **Stretch** (fill/distort), or **Crop** (zoom fill, no bars). A GUI slider in the display settings menu, per-display persistence, and a server config default (`display.default_stretch_mode = "LETTERBOX"` in `config.toml`).
+- **Fixed green/pink preview** — the U/V plane swap in `i420ToRgba` was caused by `ByteBuffer.duplicate().position().get()` reading from the buffer start instead of the set position; now uses absolute offsets.
+- **Login/logout i18n** — the `/display login` and `/display logout` commands now use translatable server-language keys instead of hardcoded English strings.
 
 ## CI / Build
 
