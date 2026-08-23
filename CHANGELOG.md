@@ -4,6 +4,7 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 
 ## Highlights
 
+- **JavaCPP video decode** — the Rust native library (`dreamdisplayx_native` + `dreamdisplayx_lav`) and FFmpeg CLI video pipelines are replaced by an in-process `FFmpegFrameGrabber` (JavaCPP / org.bytedeco:javacv). No more Rust build toolchain, no more external FFmpeg binary for video; the decode library is bundled from Maven as `ffmpeg-platform:8.1.2`.
 - **yt-dlp removed** — the `yt-dlp` subprocess, binary downloader/updater, and all YouTube resolution (NewPipeExtractor) are gone. No external Python/toolchain dependency remains; Twitch, Vimeo, Kick, and Bilibili all keep their in-process resolvers.
 - **Direct search service** — pasting a URL into search now shows its info card directly, and Bilibili `BV` / `av` IDs resolve straight to the video.
 - **Bilibili multi-CDN smart switching** — stream resolution now collects every CDN backup URL from the Bilibili API; when a CDN keeps failing, the player automatically switches to the next backup before re-resolving.
@@ -15,6 +16,16 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 - Default volume in the server config is now divided by 100 (config stores 0–100 percent) instead of 200, so a configured default volume is applied to new displays at the correct level.
 - Server language JSONs are no longer overwritten with the bundled defaults on every startup / reload — they are only restored when a file is missing or corrupt.
 
+## Media player
+
+- JavaCPP (`org.bytedeco:javacv:1.5.14` + `ffmpeg-platform:8.1.2`) replaces the Rust native pipeline for video decode. The `FFmpegFrameGrabber` opens URLs in-process, supports I420 planar output for GPU YUV rendering, and provides warm park, brightness, and popout.
+- Removed Rust native crates (`native/`), `NativeMedia.kt`, `LavFfmpeg.kt`, `NativeVideoFramePipe.kt`, `LavGlSurfaceTextures.kt`.
+- `PlaybackSessionManager.VideoChannel` simplified to a single `JavaCppVideoPipe` path (no more in-process libav vs native process vs JVM process fallback).
+- Audio pipeline still uses the FFmpeg CLI binary (to be migrated to JavaCPP in a future phase).
+- Bilibili DASH / durl / live streams keep every backup CDN URL; on repeated session stalls the player tries the next CDN before invalidating caches and re-resolving.
+- Fixed stale `savedTimeNanos` reuse on video swap that caused the first-second reload-and-seek jump.
+- `FramePrebuffer` drops frames more than 5s behind the audio clock so a slow decoder resyncs instead of drifting forever.
+
 ## Sources
 
 - Removed `yt-dlp` orchestrator, binary bootstrap/self-update, client race, output parser, format & search caches, and cookie manager.
@@ -22,12 +33,6 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 - Removed `newpipeExtractor` (and its transitive `nanojson` / `jsoup` / `rhino`) dependencies and shadow relocations.
 - `MediaSearchService` is now backed by `DirectSearchService`: URL paste → info card, `BV`/`av` → Bilibili video, no text search or related videos.
 - Removed `ytdlp-proxy` / `ytdlp-cookies-from-browser` client & NeoForge config entries.
-
-## Media player
-
-- Bilibili DASH / durl / live streams keep every backup CDN URL; on repeated session stalls the player tries the next CDN before invalidating caches and re-resolving.
-- Fixed stale `savedTimeNanos` reuse on video swap that caused the first-second reload-and-seek jump.
-- `FramePrebuffer` drops frames more than 5s behind the audio clock so a slow decoder resyncs instead of drifting forever.
 
 # 1.9.3.3 Release
 
