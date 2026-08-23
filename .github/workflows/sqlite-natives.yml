@@ -87,7 +87,7 @@ jobs:
         shell: bash
         run: |
           cd native-artifact
-          tar czf "${{ runner.temp }}/native-${{ matrix.sqlite.platform }}.tar.gz" \
+          tar czf "$RUNNER_TEMP/native-${{ matrix.sqlite.platform }}.tar.gz" \
             dreamdisplayx-natives/${{ matrix.sqlite.platform }}
 
       - name: Upload packaged native library
