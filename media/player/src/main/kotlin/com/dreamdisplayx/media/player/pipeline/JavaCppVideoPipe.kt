@@ -13,7 +13,10 @@ import org.bytedeco.ffmpeg.global.swscale
 import org.bytedeco.ffmpeg.avutil.AVFrame
 import org.bytedeco.ffmpeg.swscale.SwsContext
 import org.bytedeco.ffmpeg.swscale.SwsFilter
+import org.bytedeco.javacpp.BytePointer
 import org.bytedeco.javacpp.DoublePointer
+import org.bytedeco.javacpp.IntPointer
+import org.bytedeco.javacpp.PointerPointer
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.FrameGrabber
@@ -107,10 +110,6 @@ internal class JavaCppVideoPipe(
     /** sws scaler: source format/尺寸 → 目标 YUV420P 尺寸. */
     private var swsCtx: SwsContext? = null
     private var swsSrcW = 0; private var swsSrcH = 0; private var swsSrcFmt = -1
-
-    /** 目标 I420 AVFrame，sws_scale_frame 写入这里，然后我们复制平面到 spare。 */
-    private var dstAvFrame: AVFrame? = null
-    private var dstAvW = 0; private var dstAvH = 0
 
     // ── FramePipe interface ───────────────────────────────────────────────
 
@@ -222,12 +221,9 @@ internal class JavaCppVideoPipe(
                 // Ignore errors during cleanup
             }
         }
-        // Free sws scaler context and target AVFrame
+        // Free sws scaler context
         swsCtx?.let { swscale.sws_freeContext(it) }
         swsCtx = null
-        dstAvFrame?.let { avutil.av_frame_free(it) }
-        dstAvFrame = null
-        dstAvW = 0; dstAvH = 0
         swsSrcW = 0; swsSrcH = 0; swsSrcFmt = -1
         i420Scratch = null
         rgbScratch = null
@@ -384,21 +380,6 @@ internal class JavaCppVideoPipe(
         val srcFmt = src.format()
         if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
 
-        // Lazy-allocate or re-size the target I420 AVFrame
-        if (dstAvFrame == null || dstAvW != expectedW || dstAvH != expectedH) {
-            dstAvFrame?.let { avutil.av_frame_free(it) }
-            val f = avutil.av_frame_alloc() ?: return false
-            f.format(avutil.AV_PIX_FMT_YUV420P)
-            f.width(expectedW)
-            f.height(expectedH)
-            if (avutil.av_frame_get_buffer(f, 32) < 0) {
-                avutil.av_frame_free(f)
-                return false
-            }
-            dstAvFrame = f
-            dstAvW = expectedW; dstAvH = expectedH
-        }
-
         // Lazy-create or update the sws scaler
         val sws = if (swsCtx != null && swsSrcW == srcW && swsSrcH == srcH && swsSrcFmt == srcFmt) {
             swsCtx
@@ -414,45 +395,42 @@ internal class JavaCppVideoPipe(
             ctx
         }
 
-        // sws_scale_frame: standard FFmpeg approach — one call handles pixel format
-        // conversion + resolution scaling, same as `ffmpeg -vf scale=WxH,format=yuv420p`
-        val out = dstAvFrame ?: return false
-        if (swscale.sws_scale_frame(sws, out, src) < 0) return false
+        // Build destination plane pointers directly into the packed I420 [dst] buffer.
+        // Going straight from the source AVFrame to [dst] via sws_scale avoids the
+        // intermediate AVFrame → ByteBuffer copy, whose capacities JavaCPP does not
+        // reliably report (that previously produced a corrupted "limit=3" frame).
+        val ySize = expectedW * expectedH
+        val uvSize = ((expectedW + 1) / 2) * ((expectedH + 1) / 2)
+        val dstY = BytePointer(dst.sliceView(0, ySize))
+        val dstU = BytePointer(dst.sliceView(ySize, uvSize))
+        val dstV = BytePointer(dst.sliceView(ySize + uvSize, uvSize))
 
-        // Copy the 3 planes from the output AVFrame into the packed I420 [dst] buffer
-        val yDst = out.data(0)?.asBuffer() ?: return false
-        val uDst = out.data(1)?.asBuffer() ?: return false
-        val vDst = out.data(2)?.asBuffer() ?: return false
+        // Source plane pointers come straight from the decoded AVFrame's native memory.
+        val srcY = src.data(0) ?: return false
+        val srcU = src.data(1) ?: return false
+        val srcV = src.data(2) ?: return false
 
-        copyPlane(yDst, out.linesize(0), expectedW, expectedH, dst)
-        copyPlane(uDst, out.linesize(1), (expectedW + 1) / 2, (expectedH + 1) / 2, dst)
-        copyPlane(vDst, out.linesize(2), (expectedW + 1) / 2, (expectedH + 1) / 2, dst)
+        val srcSlices = PointerPointer(srcY, srcU, srcV)
+        val srcStrides = IntPointer(src.linesize(0), src.linesize(1), src.linesize(2))
+        val dstSlices = PointerPointer(dstY, dstU, dstV)
+        val dstStrides = IntPointer(expectedW, (expectedW + 1) / 2, (expectedW + 1) / 2)
+
+        // One sws_scale call performs pixel format conversion + resolution scaling and
+        // writes the YUV420P planes straight into the packed I420 buffer — exactly what
+        // `ffmpeg -vf scale=WxH,format=yuv420p` does.
+        val linesScaled = swscale.sws_scale(sws, srcSlices, srcStrides, 0, srcH, dstSlices, dstStrides)
+        if (linesScaled < 0) return false
+
+        // Publish the written byte count so the caller's flip() sizes the frame correctly.
+        dst.position(ySize + 2 * uvSize)
         return true
     }
 
-    /**
-     * Copies one plane from [src] ByteBuffer (with stride [srcStride]) into [dst],
-     * trimming each row to [rowBytes] for [rows] rows. Handles padding / alignment
-     * bytes that ffmpeg adds at the end of each row.
-     */
-    private fun copyPlane(src: ByteBuffer, srcStride: Int, rowBytes: Int, rows: Int, dst: ByteBuffer) {
-        if (srcStride <= 0 || rowBytes <= 0 || rows <= 0) return
-        if (srcStride == rowBytes) {
-            val total = rowBytes * rows
-            val limit = minOf(total, src.remaining())
-            for (i in 0 until limit) {
-                dst.put(src.get(i))
-            }
-        } else {
-            for (row in 0 until rows) {
-                val rowStart = row * srcStride
-                val limit = minOf(rowStart + rowBytes, src.remaining())
-                for (col in 0 until rowBytes) {
-                    if (rowStart + col >= limit) break
-                    dst.put(src.get(rowStart + col))
-                }
-            }
-        }
+    /** Returns a view of [buffer] covering exactly [length] bytes starting at [offset] (position exclusive view). */
+    private fun ByteBuffer.sliceView(offset: Int, length: Int): ByteBuffer {
+        val view = duplicate()
+        view.position(offset).limit(offset + length)
+        return view as ByteBuffer
     }
 
     /**
