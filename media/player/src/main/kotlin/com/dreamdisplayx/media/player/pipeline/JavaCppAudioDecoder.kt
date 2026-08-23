@@ -351,6 +351,10 @@ internal class JavaCppAudioDecoder(
         // Audio format: 44.1 kHz, stereo
         g.sampleRate = SAMPLE_RATE
         g.audioChannels = CHANNELS
+        // RAW image mode prevents javacv from setting a pixel_format codec option on the
+        // format context even for audio-only streams, which avformat otherwise rejects
+        // with the noisy "pixel_format, value: bgr24" info log.
+        g.imageMode = FrameGrabber.ImageMode.RAW
         g.start()
         // Seek if needed
         if (seekOffsetNanos > 0) {
