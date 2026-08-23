@@ -109,6 +109,8 @@ Every code change MUST be followed by ALL of the below before the task is consid
 - Follow the existing format in `CHANGELOG.md`
 - Add entries under the current/next version heading
 - Never merge upstream changelog into our version's section
+- **Every fork version section MUST contain** a `Based on Dream Displays [<commit>](<url>)` line immediately after the version heading, linking to the upstream commit this fork version is based on. This line must never be removed or altered to point to a different commit.
+- Only sync from the upstream `main` branch; never merge other upstream branches (e.g. `feat/new-readme`).
 
 ## CI/CD & Versioning Rules
 
