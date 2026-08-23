@@ -4,7 +4,9 @@ Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdispla
 
 ## Highlights
 
-- **JavaCPP audio decode** — the FFmpeg CLI subprocess for audio is replaced by an in-process `FFmpegFrameGrabber` (JavaCPP). No more external FFmpeg binary download for audio; `HlsAudioFeeder` removed. Scrub-preview frame extraction still uses the CLI binary (to be migrated later).
+- **JavaCPP audio decode** — the FFmpeg CLI subprocess for audio is replaced by an in-process `FFmpegFrameGrabber` (JavaCPP). No more external FFmpeg binary download for audio; `HlsAudioFeeder` removed.
+- **ScrubPreview frame extraction** — migrated from FFmpeg CLI subprocess to `JavaCppFrameExtractor` (in-process `FFmpegFrameGrabber` frame grab to JPEG). No more FFmpeg binary needed for thumbnails.
+- **FFmpeg CLI completely removed** — all FFmpeg binary download, probe, capabilities, and CLI process management code (`FFmpegBinary.kt`, `FFmpegCapabilities.kt`, `MediaProcess.kt`, `VideoFramePipe.kt`, `HlsAudioFeeder.kt`, `HlsSeekPlaylist.kt`) deleted. The entire mod is now fully self-contained: no external FFmpeg binary, no Rust toolchain, no Python.
 - **JavaCPP video decode** — the Rust native library (`dreamdisplayx_native` + `dreamdisplayx_lav`) and FFmpeg CLI video pipelines are replaced by an in-process `FFmpegFrameGrabber` (JavaCPP / org.bytedeco:javacv). No more Rust build toolchain, no more external FFmpeg binary for video; the decode library is bundled from Maven as `ffmpeg-platform:8.1.2`.
 - **yt-dlp removed** — the `yt-dlp` subprocess, binary downloader/updater, and all YouTube resolution (NewPipeExtractor) are gone. No external Python/toolchain dependency remains; Twitch, Vimeo, Kick, and Bilibili all keep their in-process resolvers.
 - **Direct search service** — pasting a URL into search now shows its info card directly, and Bilibili `BV` / `av` IDs resolve straight to the video.
