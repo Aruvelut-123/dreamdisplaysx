@@ -49,6 +49,9 @@ data class ClientDisplaySettings(
 
     /** Whether the 3D acoustics engine applies to this display; false forces the legacy distance-gain-only path. */
     var acousticsEnabled: Boolean = true,
+
+    /** How the video frame is scaled to fit the display's render resolution. "LETTERBOX", "STRETCH", or "CROP". */
+    var stretchMode: String = "LETTERBOX",
 ) {
 
     companion object {

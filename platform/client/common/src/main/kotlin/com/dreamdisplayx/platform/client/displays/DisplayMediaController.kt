@@ -80,13 +80,14 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         Minecraft.getInstance().execute { screen.reloadTexture() }
     }
 
-    /** Applies volume, brightness, and paused state to the player, then seeks to the saved position. */
+    /** Applies volume, brightness, stretch mode, and paused state to the player, then seeks to the saved position. */
     fun start() {
         val mp = player ?: return
         videoStarted = true
         (screen.videoUrl?.let(MediaSource::from) as? MediaSource.YouTube)?.let { WatchedVideoStore.markWatched(it.videoId) }
         screen.applyEffectiveVolume()
         mp.setBrightness(screen.brightness)
+        mp.setStretchMode(screen.stretchMode)
         if (screen.paused) mp.pause() else {
             mp.play()
             screen.paused = false

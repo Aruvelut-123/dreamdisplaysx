@@ -12,6 +12,7 @@ import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.dreamdisplayx.api.media.model.DreamMediaException
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.model.VideoQuality
 import com.dreamdisplayx.api.media.audio.model.AcousticEnvironment
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
@@ -96,7 +97,7 @@ class DisplayScreen(
     val dimensionKey: String = "",
 ) {
     /** Per-display client settings (volume, quality, mute, ...) loaded from disk. */
-    internal val savedSettings = ClientSettingsStore.getSettings(uuid, defaultVolume())
+    internal val savedSettings = ClientSettingsStore.getSettings(uuid, defaultVolume(), defaultStretchMode())
 
     /** True if the local player owns this display. */
     var owner: Boolean = Minecraft.getInstance().player?.gameProfile?.id?.toString() == ownerUuid.toString()
@@ -243,6 +244,15 @@ class DisplayScreen(
             field = value.coerceIn(0f, 2f)
             mediaPlayer?.setBrightness(field)
             ClientSettingsStore.updateSettings(uuid, volume, quality, field, muted, paused)
+            DisplayRegistry.recordScreen(this)
+        }
+
+    /** Video stretch mode (LETTERBOX / STRETCH / CROP); writes push to the player and persist the setting. */
+    var stretchMode: StretchMode = StretchMode.parse(savedSettings.stretchMode)
+        set(value) {
+            field = value
+            mediaPlayer?.setStretchMode(value)
+            ClientSettingsStore.setStretchMode(uuid, value)
             DisplayRegistry.recordScreen(this)
         }
 
@@ -1107,6 +1117,13 @@ class DisplayScreen(
             val serverDefault = ClientPacketManager.serverSnapshot.defaultVolume
             if (serverDefault >= 0f) return serverDefault.coerceIn(0f, MAX_SERVER_DEFAULT_VOLUME) // No to bad servers
             return ClientDisplaySettings.DEFAULT_VOLUME
+        }
+
+        /** Initial per-display stretch mode for newly seen displays (server default, else LETTERBOX). */
+        internal fun defaultStretchMode(): String {
+            val serverDefault = ClientPacketManager.serverSnapshot.defaultStretchMode
+            if (serverDefault.isNotBlank()) return serverDefault
+            return "LETTERBOX"
         }
 
         /** Fallback target quality (pixel height) when none is resolvable. */

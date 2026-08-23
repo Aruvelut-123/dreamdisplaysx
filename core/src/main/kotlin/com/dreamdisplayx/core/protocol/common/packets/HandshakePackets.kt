@@ -51,6 +51,7 @@ data class ServerHello(
     @ProtoNumber(6) val maxDisplays: Int = -1,
     @ProtoNumber(7) val allowedFeatures: List<String> = emptyList(),
     @ProtoNumber(8) val defaultVolume: Float = -1f,
+    @ProtoNumber(9) val defaultStretchMode: String = "",
 ) : DreamPacket
 
 /** Server tells the client to evict the listed displays from local caches. */

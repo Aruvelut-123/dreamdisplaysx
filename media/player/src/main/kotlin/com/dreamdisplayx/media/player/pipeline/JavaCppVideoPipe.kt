@@ -3,6 +3,7 @@
 package com.dreamdisplayx.media.player.pipeline
 
 import com.dreamdisplayx.api.media.model.FramePixelFormat
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.api.security.policy.MediaHosts
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.roundToInt
 
 /**
  * JavaCPP (FFmpegFrameGrabber) based video frame pipe — replaces both
@@ -107,10 +109,10 @@ internal class JavaCppVideoPipe(
     // AVFrame (frame.opaque), which works for any pixel format and handles
     // scaling + conversion in one call — exactly like `ffmpeg -vf scale`.
 
-    /** sws scaler: source format/尺寸 → 目标格式(根据输出模式) 尺寸. */
+    /** sws scaler: source crop/size → 目标格式(根据输出模式) 尺寸. */
     private var swsCtx: SwsContext? = null
     private var swsSrcW = 0; private var swsSrcH = 0; private var swsSrcFmt = -1
-    private var swsDstFmt = -1
+    private var swsDstW = 0; private var swsDstH = 0; private var swsDstFmt = -1
 
     // ── FramePipe interface ───────────────────────────────────────────────
 
@@ -151,6 +153,7 @@ internal class JavaCppVideoPipe(
         getAudioClock: () -> Long,
         onFirstFrame: () -> Unit,
         getBrightness: () -> Double,
+        getStretchMode: () -> StretchMode = { StretchMode.LETTERBOX },
         onEos: (stderr: String, normalEos: Boolean) -> Unit,
         parkFlag: AtomicBoolean? = null,
         presentPreview: Boolean = true,
@@ -182,7 +185,7 @@ internal class JavaCppVideoPipe(
         val thread = daemon(
             {
                 read(w, h, frameNs, seekOffsetNanos, stopFlag, terminated, getAudioClock, onFirstFrame,
-                    getBrightness, onEos, prebuffer, presentPreview)
+                    getBrightness, getStretchMode, onEos, prebuffer, presentPreview)
             },
             "MediaPlayer-video",
         ).also { it.start() }
@@ -225,7 +228,7 @@ internal class JavaCppVideoPipe(
         // Free sws scaler context
         swsCtx?.let { swscale.sws_freeContext(it) }
         swsCtx = null
-        swsSrcW = 0; swsSrcH = 0; swsSrcFmt = -1; swsDstFmt = -1
+        swsSrcW = 0; swsSrcH = 0; swsSrcFmt = -1; swsDstW = 0; swsDstH = 0; swsDstFmt = -1
         i420Scratch = null
         rgbScratch = null
     }
@@ -236,7 +239,7 @@ internal class JavaCppVideoPipe(
         w: Int, h: Int, frameNs: Long, seekOffsetNanos: Long,
         stopFlag: AtomicBoolean, terminated: AtomicBoolean,
         getAudioClock: () -> Long, onFirstFrame: () -> Unit, getBrightness: () -> Double,
-        onEos: (stderr: String, normalEos: Boolean) -> Unit,
+        getStretchMode: () -> StretchMode, onEos: (stderr: String, normalEos: Boolean) -> Unit,
         prebuffer: FramePrebuffer?, presentPreview: Boolean,
     ) {
         val frameSize = if (planarOutput) {
@@ -296,15 +299,16 @@ internal class JavaCppVideoPipe(
             }
 
             spare.clear()
+            val mode = getStretchMode()
             if (planarOutput) {
-                val success = frameToI420(frame, spare, w, h)
+                val success = frameToI420(frame, spare, w, h, mode)
                 if (!success) {
                     logger.warn("$debugLabel Skipped frame: unexpected dimensions ${frame.imageWidth}x${frame.imageHeight}")
                     videoPts += frameNs
                     continue
                 }
             } else {
-                val success = frameToRgb24(frame, spare, w, h)
+                val success = frameToRgb24(frame, spare, w, h, mode)
                 if (!success) {
                     logger.warn("$debugLabel Skipped frame: unexpected dimensions ${frame.imageWidth}x${frame.imageHeight}")
                     videoPts += frameNs
@@ -381,7 +385,7 @@ internal class JavaCppVideoPipe(
      * stored in `frame.opaque` — exactly how `ffmpeg -vf scale` works. This also
      * handles any pixel format conversion and resolution scaling automatically.
      */
-    private fun frameToI420(frame: Frame, dst: ByteBuffer, expectedW: Int, expectedH: Int): Boolean {
+    private fun frameToI420(frame: Frame, dst: ByteBuffer, expectedW: Int, expectedH: Int, stretchMode: StretchMode): Boolean {
         val src = frame.opaque as? AVFrame ?: return false
         val srcW = src.width()
         val srcH = src.height()
@@ -389,50 +393,151 @@ internal class JavaCppVideoPipe(
         if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
 
         val dstFmt = avutil.AV_PIX_FMT_YUV420P
-        // Lazy-create or update the sws scaler
-        val sws = if (swsCtx != null && swsSrcW == srcW && swsSrcH == srcH && swsSrcFmt == srcFmt && swsDstFmt == dstFmt) {
+        val plan = ScalingPlan.compute(srcW, srcH, expectedW, expectedH, stretchMode, srcFmt)
+
+        // Lazy-create or update the sws scaler — keyed on source crop size + destination fit size
+        val sws = if (swsCtx != null && swsSrcW == plan.srcW && swsSrcH == plan.srcH && swsSrcFmt == srcFmt
+            && swsDstW == plan.dstW && swsDstH == plan.dstH && swsDstFmt == dstFmt
+        ) {
             swsCtx
         } else {
             swsCtx?.let { swscale.sws_freeContext(it) }
             val ctx = swscale.sws_getCachedContext(
-                null as SwsContext?, srcW, srcH, srcFmt, expectedW, expectedH,
-                dstFmt, swscale.SWS_BILINEAR,
+                null as SwsContext?, plan.srcW, plan.srcH, srcFmt,
+                plan.dstW, plan.dstH, dstFmt, swscale.SWS_BILINEAR,
                 null as SwsFilter?, null as SwsFilter?, null as DoublePointer?
             ) ?: return false
             swsCtx = ctx
-            swsSrcW = srcW; swsSrcH = srcH; swsSrcFmt = srcFmt; swsDstFmt = dstFmt
+            swsSrcW = plan.srcW; swsSrcH = plan.srcH; swsSrcFmt = srcFmt
+            swsDstW = plan.dstW; swsDstH = plan.dstH; swsDstFmt = dstFmt
             ctx
         }
 
-        // Build destination plane pointers directly into the packed I420 [dst] buffer.
-        // Going straight from the source AVFrame to [dst] via sws_scale avoids the
-        // intermediate AVFrame → ByteBuffer copy, whose capacities JavaCPP does not
-        // reliably report (that previously produced a corrupted "limit=3" frame).
+        // Build destination plane pointers into the packed I420 [dst] buffer.
         val ySize = expectedW * expectedH
         val uvSize = ((expectedW + 1) / 2) * ((expectedH + 1) / 2)
-        val dstY = BytePointer(dst.sliceView(0, ySize))
-        val dstU = BytePointer(dst.sliceView(ySize, uvSize))
-        val dstV = BytePointer(dst.sliceView(ySize + uvSize, uvSize))
 
-        // Source plane pointers come straight from the decoded AVFrame's native memory.
-        // Collect every non-null plane so the scaler sees the exact layout of the source
-        // format (3 planes for YUV420P, 2 for NV12, 1 for packed RGB, …).
+        // For LETTERBOX: fill the whole buffer with black (limited-range Y=16, U=V=128)
+        // before writing the scaled video into the centred sub-rectangle.
+        if (plan.pad) {
+            fillI420Black(dst, ySize, uvSize)
+        }
+
+        // Offset destination pointers into the letterboxed area
+        val dstY = BytePointer(dst.sliceView(plan.dstOffY * expectedW + plan.dstOffX, plan.dstW * plan.dstH))
+        val dstU = BytePointer(dst.sliceView(
+            ySize + (plan.dstOffY / 2) * ((expectedW + 1) / 2) + (plan.dstOffX / 2),
+            ((plan.dstW + 1) / 2) * ((plan.dstH + 1) / 2),
+        ))
+        val dstV = BytePointer(dst.sliceView(
+            ySize + uvSize + (plan.dstOffY / 2) * ((expectedW + 1) / 2) + (plan.dstOffX / 2),
+            ((plan.dstW + 1) / 2) * ((plan.dstH + 1) / 2),
+        ))
+
+        // Source plane pointers — offset horizontally for CROP mode
         val srcPtrs = (0 until 4).mapNotNull { i -> src.data(i)?.takeIf { !it.isNull } }.toTypedArray()
         if (srcPtrs.isEmpty()) return false
-        val srcSlices = PointerPointer<BytePointer>(*srcPtrs)
+        val srcOffBytes = plan.srcOffX * plan.srcPlaneBpp
+        val srcOffBytesUV = plan.srcOffX * plan.srcPlaneBpp / 2
+        val srcSlices = PointerPointer<BytePointer>(
+            *srcPtrs.mapIndexed { idx, ptr ->
+                if (plan.srcOffX <= 0) ptr
+                else if (idx == 0) BytePointer(ptr).position(srcOffBytes.toLong()) as BytePointer
+                else BytePointer(ptr).position(srcOffBytesUV.toLong()) as BytePointer
+            }.toTypedArray()
+        )
         val srcStrides = IntPointer(*IntArray(srcPtrs.size) { src.linesize(it) })
         val dstSlices = PointerPointer<BytePointer>(dstY, dstU, dstV)
+        // Destination strides are the FULL buffer line width, so sws_scale writes only
+        // plan.dstW pixels per line into the centred sub-rectangle, leaving the black padding.
         val dstStrides = IntPointer(expectedW, (expectedW + 1) / 2, (expectedW + 1) / 2)
 
-        // One sws_scale call performs pixel format conversion + resolution scaling and
-        // writes the YUV420P planes straight into the packed I420 buffer — exactly what
-        // `ffmpeg -vf scale=WxH,format=yuv420p` does.
-        val linesScaled = swscale.sws_scale(sws, srcSlices, srcStrides, 0, srcH, dstSlices, dstStrides)
+        val linesScaled = swscale.sws_scale(sws, srcSlices, srcStrides, plan.srcOffY, plan.srcH, dstSlices, dstStrides)
         if (linesScaled < 0) return false
 
-        // Publish the written byte count so the caller's flip() sizes the frame correctly.
         dst.position(ySize + 2 * uvSize)
         return true
+    }
+
+    /** Fills an I420 buffer with limited-range black (Y=16, U=128, V=128). */
+    private fun fillI420Black(buf: ByteBuffer, ySize: Int, uvSize: Int) {
+        buf.position(0)
+        repeat(ySize) { buf.put(16.toByte()) }
+        repeat(uvSize) { buf.put(128.toByte()) }
+        repeat(uvSize) { buf.put(128.toByte()) }
+        buf.rewind()
+    }
+
+    /** Fills an RGB24 buffer with black (0, 0, 0). */
+    private fun fillRgb24Black(buf: ByteBuffer, rgbSize: Int) {
+        buf.position(0)
+        repeat(rgbSize) { buf.put(0.toByte()) }
+        buf.rewind()
+    }
+
+    /** Describes how to scale one frame — which source rectangle to use and where to place it in the output. */
+    internal data class ScalingPlan(
+        /** Source crop width (for CROP) or full width (for STRETCH/LETTERBOX). */
+        val srcW: Int, val srcH: Int,
+        /** Horizontal source pixel offset (CROP mode only). */
+        val srcOffX: Int,
+        /** Vertical source row offset (CROP mode only). */
+        val srcOffY: Int,
+        /** Bytes per pixel in the source plane 0, for pointer offset calculation. */
+        val srcPlaneBpp: Int,
+        /** Destination video area width (fitted, for LETTERBOX == full width for STRETCH/CROP). */
+        val dstW: Int, val dstH: Int,
+        /** Horizontal offset of the video area in the destination buffer (LETTERBOX mode only). */
+        val dstOffX: Int, val dstOffY: Int,
+        /** True when the destination buffer must be pre-filled with black (LETTERBOX mode). */
+        val pad: Boolean,
+    ) {
+        companion object {
+            fun compute(srcW: Int, srcH: Int, expectedW: Int, expectedH: Int, mode: StretchMode, srcFmt: Int): ScalingPlan {
+                return when (mode) {
+                    StretchMode.STRETCH -> ScalingPlan(
+                        srcW = srcW, srcH = srcH, srcOffX = 0, srcOffY = 0,
+                        srcPlaneBpp = planeBytesPerPixel(srcFmt),
+                        dstW = expectedW, dstH = expectedH, dstOffX = 0, dstOffY = 0, pad = false,
+                    )
+                    StretchMode.LETTERBOX -> {
+                        val scale = minOf(expectedW.toDouble() / srcW, expectedH.toDouble() / srcH)
+                        val fitW = (srcW * scale).roundToInt().coerceAtLeast(1)
+                        val fitH = (srcH * scale).roundToInt().coerceAtLeast(1)
+                        // Align offsets to even for chroma subsampling
+                        val offX = ((expectedW - fitW) / 2) and 1.inv()
+                        val offY = ((expectedH - fitH) / 2) and 1.inv()
+                        ScalingPlan(
+                            srcW = srcW, srcH = srcH, srcOffX = 0, srcOffY = 0,
+                            srcPlaneBpp = planeBytesPerPixel(srcFmt),
+                            dstW = fitW, dstH = fitH, dstOffX = offX, dstOffY = offY, pad = true,
+                        )
+                    }
+                    StretchMode.CROP -> {
+                        val scale = maxOf(expectedW.toDouble() / srcW, expectedH.toDouble() / srcH)
+                        val cropW = (expectedW / scale).roundToInt().coerceIn(1, srcW)
+                        val cropH = (expectedH / scale).roundToInt().coerceIn(1, srcH)
+                        val offX = ((srcW - cropW) / 2) and 1.inv()
+                        val offY = ((srcH - cropH) / 2) and 1.inv()
+                        ScalingPlan(
+                            srcW = cropW, srcH = cropH, srcOffX = offX, srcOffY = offY,
+                            srcPlaneBpp = planeBytesPerPixel(srcFmt),
+                            dstW = expectedW, dstH = expectedH, dstOffX = 0, dstOffY = 0, pad = false,
+                        )
+                    }
+                }
+            }
+
+            /** Rough bytes per pixel for plane 0 of the given pixel format — used for CROP horizontal offset. */
+            private fun planeBytesPerPixel(fmt: Int): Int = when (fmt) {
+                avutil.AV_PIX_FMT_YUV420P, avutil.AV_PIX_FMT_YUVJ420P -> 1
+                avutil.AV_PIX_FMT_NV12 -> 1
+                avutil.AV_PIX_FMT_RGB24, avutil.AV_PIX_FMT_BGR24 -> 3
+                avutil.AV_PIX_FMT_RGBA, avutil.AV_PIX_FMT_BGRA,
+                avutil.AV_PIX_FMT_ARGB, avutil.AV_PIX_FMT_ABGR -> 4
+                else -> 1
+            }
+        }
     }
 
     /** Returns a view of [buffer] covering exactly [length] bytes starting at [offset] (position exclusive view). */
@@ -453,7 +558,7 @@ internal class JavaCppVideoPipe(
      * info log). With imageMode = RAW + sws_scale, we handle the conversion
      * ourselves and no pixel_format option is ever set on the format context.
      */
-    private fun frameToRgb24(frame: Frame, dst: ByteBuffer, expectedW: Int, expectedH: Int): Boolean {
+    private fun frameToRgb24(frame: Frame, dst: ByteBuffer, expectedW: Int, expectedH: Int, stretchMode: StretchMode): Boolean {
         val src = frame.opaque as? AVFrame ?: return false
         val srcW = src.width()
         val srcH = src.height()
@@ -461,32 +566,47 @@ internal class JavaCppVideoPipe(
         if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
 
         val dstFmt = avutil.AV_PIX_FMT_RGB24
-        // Lazy-create or update the sws scaler for RGB24 output
-        val sws = if (swsCtx != null && swsSrcW == srcW && swsSrcH == srcH && swsSrcFmt == srcFmt && swsDstFmt == dstFmt) {
+        val plan = ScalingPlan.compute(srcW, srcH, expectedW, expectedH, stretchMode, srcFmt)
+
+        // Lazy-create or update the sws scaler for RGB24 output — keyed on source crop + dest fit size
+        val sws = if (swsCtx != null && swsSrcW == plan.srcW && swsSrcH == plan.srcH && swsSrcFmt == srcFmt
+            && swsDstW == plan.dstW && swsDstH == plan.dstH && swsDstFmt == dstFmt
+        ) {
             swsCtx
         } else {
             swsCtx?.let { swscale.sws_freeContext(it) }
             val ctx = swscale.sws_getCachedContext(
-                null as SwsContext?, srcW, srcH, srcFmt, expectedW, expectedH,
-                dstFmt, swscale.SWS_BILINEAR,
+                null as SwsContext?, plan.srcW, plan.srcH, srcFmt,
+                plan.dstW, plan.dstH, dstFmt, swscale.SWS_BILINEAR,
                 null as SwsFilter?, null as SwsFilter?, null as DoublePointer?
             ) ?: return false
             swsCtx = ctx
-            swsSrcW = srcW; swsSrcH = srcH; swsSrcFmt = srcFmt; swsDstFmt = dstFmt
+            swsSrcW = plan.srcW; swsSrcH = plan.srcH; swsSrcFmt = srcFmt
+            swsDstW = plan.dstW; swsDstH = plan.dstH; swsDstFmt = dstFmt
             ctx
         }
 
         val rgbSize = expectedW * expectedH * 3
-        val dstPlane = BytePointer(dst.sliceView(0, rgbSize))
+        if (plan.pad) fillRgb24Black(dst, rgbSize)
+        // Destination plane offset into the letterboxed area
+        val dstPlane = BytePointer(
+            dst.sliceView((plan.dstOffY * expectedW + plan.dstOffX) * 3, plan.dstW * plan.dstH * 3),
+        )
 
-        // Source plane pointers from the decoded AVFrame
+        // Source plane pointers from the decoded AVFrame — horizontally offset for CROP mode
         val srcY = src.data(0) ?: return false
         val srcU = if (srcFmt == avutil.AV_PIX_FMT_YUV420P || srcFmt == avutil.AV_PIX_FMT_YUVJ420P) src.data(1) else null
         val srcV = if (srcU != null) src.data(2) else null
+        val offY = plan.srcOffX * plan.srcPlaneBpp
+        val offUV = plan.srcOffX * plan.srcPlaneBpp / 2
         val srcSlices = if (srcU != null && srcV != null) {
-            PointerPointer<BytePointer>(srcY, srcU, srcV)
+            val yp = if (offY <= 0) srcY else BytePointer(srcY).position(offY.toLong()) as BytePointer
+            val up = if (offUV <= 0) srcU else BytePointer(srcU).position(offUV.toLong()) as BytePointer
+            val vp = if (offUV <= 0) srcV else BytePointer(srcV).position(offUV.toLong()) as BytePointer
+            PointerPointer<BytePointer>(yp, up, vp)
         } else {
-            PointerPointer<BytePointer>(srcY)
+            val yp = if (offY <= 0) srcY else BytePointer(srcY).position(offY.toLong()) as BytePointer
+            PointerPointer<BytePointer>(yp)
         }
         val srcStrides = if (srcU != null && srcV != null) {
             IntPointer(src.linesize(0), src.linesize(1), src.linesize(2))
@@ -497,7 +617,7 @@ internal class JavaCppVideoPipe(
         val dstSlices = PointerPointer<BytePointer>(dstPlane)
         val dstStrides = IntPointer(expectedW * 3)
 
-        val linesScaled = swscale.sws_scale(sws, srcSlices, srcStrides, 0, srcH, dstSlices, dstStrides)
+        val linesScaled = swscale.sws_scale(sws, srcSlices, srcStrides, plan.srcOffY, plan.srcH, dstSlices, dstStrides)
         if (linesScaled < 0) return false
 
         dst.position(rgbSize)
@@ -544,14 +664,16 @@ internal class JavaCppVideoPipe(
     private fun i420ToRgba(i420: ByteBuffer, w: Int, h: Int, rgba: ByteBuffer) {
         val yLen = w * h
         val uvLen = ((w + 1) / 2) * ((h + 1) / 2)
-        val uPlane = i420.duplicate().position(yLen).limit(yLen + uvLen) as ByteBuffer
-        val vPlane = i420.duplicate().position(yLen + uvLen).limit(yLen + 2 * uvLen) as ByteBuffer
 
+        // NB: ByteBuffer.get(int) is an ABSOLUTE index into the buffer's own storage — a
+        // duplicate()'d view starts at 0, not at its current position. Reading through a
+        // repositioned view therefore indexes the Y plane for U/V too (green/pink popout).
+        // Use absolute offsets into the original buffer instead.
         for (row in 0 until h) {
             for (col in 0 until w) {
                 val y = i420.get(row * w + col).toInt() and 0xFF
-                val u = uPlane.get((row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
-                val v = vPlane.get((row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
+                val u = i420.get(yLen + (row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
+                val v = i420.get(yLen + uvLen + (row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
 
                 // YUV to RGB (BT.601)
                 var r = (y + 1.402 * (v - 128)).toInt().coerceIn(0, 255)

@@ -79,13 +79,11 @@ object VanillaCommandTree {
                             val platform = StringArgumentType.getString(ctx, "platform")
                             val token = StringArgumentType.getString(ctx, "token")
                             if (token.isBlank()) {
-                                ctx.source.sendFailure(Component.literal("The credential token must not be empty."))
+                                MessageUtil.sendMessage(player, "loginTokenEmpty")
                                 return@executes 0
                             }
                             if (!CredentialActions.isSupported(platform)) {
-                                ctx.source.sendFailure(
-                                    Component.literal("Unsupported platform: $platform. Supported: bilibili"),
-                                )
+                                MessageUtil.sendMessage(player, "loginUnsupportedPlatform", platform)
                                 return@executes 0
                             }
                             val snapshot = CredentialActions.globalLogin(platform, token)
@@ -94,10 +92,7 @@ object VanillaCommandTree {
                             if (onlinePlayers.isNotEmpty()) {
                                 VanillaNetworking.adapter.sendV2(onlinePlayers, snapshot)
                             }
-                            ctx.source.sendSuccess(
-                                { Component.literal("Logged in on $platform globally. Credential broadcast to all players.") },
-                                false,
-                            )
+                            MessageUtil.sendMessage(player, "loginSuccess", platform)
                             1
                         }
                 )
@@ -117,7 +112,7 @@ object VanillaCommandTree {
                     if (onlinePlayers.isNotEmpty()) {
                         VanillaNetworking.adapter.sendV2(onlinePlayers, snapshot)
                     }
-                    ctx.source.sendSuccess({ Component.literal("Logged out of $platform globally.") }, false)
+                    MessageUtil.sendMessage(player, "logoutSuccess", platform)
                     1
                 }
         )

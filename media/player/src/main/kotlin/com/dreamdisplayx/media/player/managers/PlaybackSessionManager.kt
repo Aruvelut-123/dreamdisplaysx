@@ -3,6 +3,7 @@ package com.dreamdisplayx.media.player.managers
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.audio.service.AudioDspStage
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.api.media.player.RenderExecutor
@@ -35,6 +36,7 @@ internal class PlaybackSessionManager(
     /** Returns the current GPU texture dimensions (width to height). */
     private val getTextureSize: () -> Pair<Int, Int>,
     private val getBrightness: () -> Double,
+    private val getStretchMode: () -> StretchMode = { StretchMode.LETTERBOX },
 
     /** Invoked by the live video channel when the stream ends or errors. Called on the reader thread. */
     private val onStreamEnd: (stderr: String, normalEos: Boolean) -> Unit,
@@ -113,7 +115,8 @@ internal class PlaybackSessionManager(
                 url = safeUrl, w = w, h = h, seekOffsetNanos = offsetNanos,
                 sourceFps = fps, stopFlag = stop, terminated = terminated,
                 getAudioClock = getAudioClock, onFirstFrame = onFirstFrame,
-                getBrightness = getBrightness, onEos = onEos, parkFlag = parkFlag,
+                getBrightness = getBrightness, getStretchMode = getStretchMode,
+                onEos = onEos, parkFlag = parkFlag,
                 presentPreview = presentPreview, tolerateLateness = tolerateLateness,
             ) ?: throw IOException("JavaCPP video session failed to start")
             thread = vt

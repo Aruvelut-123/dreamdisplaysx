@@ -207,5 +207,9 @@
     "customMediaDisabled":  "\u00267D |\u0026f Custom video links are disabled on this server",
     "customMediaHostBlocked":  "\u00267D |\u0026f Videos from this site are not allowed on this server",
     "customMediaNoPermission":  "\u00267D |\u0026f You don\u0027t have permission to play your own video links",
-    "customMediaTooFast":  "\u00267D |\u0026f You\u0027re switching video links too fast. Wait a moment"
+    "customMediaTooFast":  "\u00267D |\u0026f You\u0027re switching video links too fast. Wait a moment",
+    "loginTokenEmpty":  "\u00267D |\u0026f The credential token must not be empty.",
+    "loginUnsupportedPlatform":  "\u00267D |\u0026f Unsupported platform: %s. Supported: bilibili",
+    "loginSuccess":  "\u00267D |\u0026f Logged in on %s globally. Credential broadcast to all players.",
+    "logoutSuccess":  "\u00267D |\u0026f Logged out of %s globally."
 }

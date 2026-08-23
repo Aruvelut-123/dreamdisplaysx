@@ -2,6 +2,7 @@ package com.dreamdisplayx.media.player
 
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.model.FramePixelFormat
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.model.VideoQuality
 import com.dreamdisplayx.api.media.audio.service.AudioDspStage
 import com.dreamdisplayx.api.media.player.GpuTextureRef
@@ -225,6 +226,7 @@ class MediaPlayer(
         terminated = terminated,
         getTextureSize = { host.textureWidth to host.textureHeight },
         getBrightness = { brightness },
+        getStretchMode = { stretchMode },
         onStreamEnd = ::handleStreamEnd,
         onQualitySwitchAborted = { appliedAnyway -> handleQualitySwitchAborted(appliedAnyway) },
         onAudioFailure = { stderr -> handleAudioFailure(stderr) },
@@ -262,6 +264,9 @@ class MediaPlayer(
 
     @Volatile
     private var brightness = 1.0
+
+    @Volatile
+    private var stretchMode = StretchMode.LETTERBOX
 
     private val volume = VolumeController(env.config.defaultDisplayVolume) {
         sessionManager.setVolume(it)
@@ -458,6 +463,11 @@ class MediaPlayer(
     /** Sets the brightness multiplier applied to each frame before GPU upload (0.0–2.0). */
     fun setBrightness(brightness: Float) {
         this.brightness = brightness.toDouble().coerceIn(0.0, 2.0)
+    }
+
+    /** Sets how the video frame is scaled to fit the display (stretch / letterbox / crop). */
+    fun setStretchMode(mode: StretchMode) {
+        stretchMode = mode
     }
 
     /** Returns the list of available video quality levels (in pixels) for the current stream. */

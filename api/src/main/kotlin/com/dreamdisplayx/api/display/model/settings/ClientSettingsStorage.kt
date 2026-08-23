@@ -1,6 +1,7 @@
 package com.dreamdisplayx.api.display.model.settings
 
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.model.VideoQuality
 import java.util.*
 
@@ -21,6 +22,7 @@ interface ClientSettingsStorage {
     fun getSettings(
         displayUuid: UUID,
         defaultVolume: Float = ClientDisplaySettings.DEFAULT_VOLUME,
+        defaultStretchMode: String = "LETTERBOX",
     ): ClientDisplaySettings
 
     /** Updates all playback settings for [displayUuid] and immediately persists them to disk. */
@@ -47,6 +49,9 @@ interface ClientSettingsStorage {
 
     /** Sets whether the 3D acoustics engine applies to [displayUuid] and saves. */
     fun setAcousticsEnabled(displayUuid: UUID, enabled: Boolean)
+
+    /** Sets the video stretch mode (LETTERBOX / STRETCH / CROP) for [displayUuid] and saves. */
+    fun setStretchMode(displayUuid: UUID, mode: StretchMode)
 
     /** Removes the settings for [displayUuid], persisting only if an entry existed. Returns whether anything was removed. */
     fun remove(displayUuid: UUID): Boolean

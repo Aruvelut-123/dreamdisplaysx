@@ -107,5 +107,15 @@
   "dreamdisplayx.ui.bilibili_paid": "付费",
   "dreamdisplayx.ui.custom": "Link",
   "dreamdisplayx.sort.my_links": "My links",
-  "dreamdisplayx.suggestions.no_links": "No saved links yet. Paste a video link above to play it."
+  "dreamdisplayx.suggestions.no_links": "No saved links yet. Paste a video link above to play it.",
+  "dreamdisplayx.mode.letterbox": "Fit",
+  "dreamdisplayx.mode.stretch": "Stretch",
+  "dreamdisplayx.mode.crop": "Crop",
+  "dreamdisplayx.button.stretch": "Stretch mode",
+  "dreamdisplayx.button.stretch.tooltip.1": "Stretch mode",
+  "dreamdisplayx.button.stretch.tooltip.2": "How the video fits the display when the aspect ratios differ",
+  "dreamdisplayx.button.stretch.tooltip.3": "Fit the video inside the display, keeping aspect ratio, and add black bars",
+  "dreamdisplayx.button.stretch.tooltip.4": "Scale the video to exactly fill the display (may distort)",
+  "dreamdisplayx.button.stretch.tooltip.5": "Zoom the video to fill the display, cropping the edges",
+  "dreamdisplayx.button.stretch.tooltip.6": "Current: %s"
 }

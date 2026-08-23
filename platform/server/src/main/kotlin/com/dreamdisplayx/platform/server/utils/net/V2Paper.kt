@@ -53,6 +53,7 @@ object PaperV2Networking : PluginMessageListener {
         isReportingEnabled = PaperServer.config.settings.webhookUrl.isNotEmpty(),
         allowedFeatures = ServerFeature.playbackFeatureWires,
         defaultVolume = PaperServer.config.settings.defaultVolume,
+        defaultStretchMode = PaperServer.config.settings.defaultStretchMode,
         maxDisplays = maxDisplaysFor(player.hasPermission(PaperServer.config.permissions.createBypass)),
     )
 

@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.client.storage
 
 import com.dreamdisplayx.api.media.model.VideoQuality
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.display.model.settings.ClientDisplaySettings
 import com.dreamdisplayx.api.display.model.settings.ClientSettingsStorage
 import com.dreamdisplayx.util.json.JsonFileStore
@@ -52,9 +53,10 @@ object ClientSettingsStore : ClientSettingsStorage {
     override fun getSettings(
         displayUuid: UUID,
         defaultVolume: Float,
+        defaultStretchMode: String,
     ): ClientDisplaySettings =
         settings.computeIfAbsent(displayUuid) {
-            ClientDisplaySettings(volume = defaultVolume.coerceIn(0f, 1f))
+            ClientDisplaySettings(volume = defaultVolume.coerceIn(0f, 1f), stretchMode = defaultStretchMode)
         }
 
     /** Updates all playback settings for [displayUuid] and immediately persists them to disk. */
@@ -108,6 +110,13 @@ object ClientSettingsStore : ClientSettingsStorage {
     override fun setAcousticsEnabled(displayUuid: UUID, enabled: Boolean) {
         val s = getSettings(displayUuid)
         s.acousticsEnabled = enabled
+        save()
+    }
+
+    /** Sets the video stretch mode for [displayUuid] and saves. */
+    override fun setStretchMode(displayUuid: UUID, mode: StretchMode) {
+        val s = getSettings(displayUuid)
+        s.stretchMode = mode.name.lowercase()
         save()
     }
 

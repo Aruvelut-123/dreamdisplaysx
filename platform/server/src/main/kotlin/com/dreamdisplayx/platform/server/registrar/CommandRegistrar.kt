@@ -138,11 +138,11 @@ object CommandRegistrar {
                             val platform = StringArgumentType.getString(ctx, "platform")
                             val token = StringArgumentType.getString(ctx, "token")
                             if (token.isBlank()) {
-                                sender.sendMessage(Component.text("The credential token must not be empty."))
+                                MessageUtil.sendMessage(player, "loginTokenEmpty")
                                 return@executes 1
                             }
                             if (!CredentialActions.isSupported(platform)) {
-                                sender.sendMessage(Component.text("Unsupported platform: $platform. Supported: bilibili"))
+                                MessageUtil.sendMessage(player, "loginUnsupportedPlatform", platform)
                                 return@executes 1
                             }
                             val snapshot = CredentialActions.globalLogin(platform, token)
@@ -151,9 +151,7 @@ object CommandRegistrar {
                             if (onlinePlayers.isNotEmpty()) {
                                 PaperV2Networking.send(onlinePlayers.toList(), snapshot)
                             }
-                            sender.sendMessage(
-                                Component.text("Logged in on $platform globally. Credential broadcast to all players.")
-                            )
+                            MessageUtil.sendMessage(player, "loginSuccess", platform)
                             1
                         }
                 )
@@ -174,7 +172,7 @@ object CommandRegistrar {
                     if (onlinePlayers.isNotEmpty()) {
                         PaperV2Networking.send(onlinePlayers.toList(), snapshot)
                     }
-                    sender.sendMessage(Component.text("Logged out of $platform globally."))
+                    MessageUtil.sendMessage(player, "logoutSuccess", platform)
                     1
                 }
         )

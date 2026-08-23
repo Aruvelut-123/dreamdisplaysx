@@ -7,6 +7,7 @@ import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.service.keys.DisplayServices
 import com.dreamdisplayx.api.media.service.keys.MediaServices
 import com.dreamdisplayx.api.media.model.VideoQuality
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
 import com.dreamdisplayx.api.media.audio.service.keys.AudioAcousticsServices
 import com.dreamdisplayx.api.media.search.model.MediaSearchResult
@@ -72,6 +73,7 @@ class DisplayMenu private constructor(
     private lateinit var brightness: ValueSlider
     private lateinit var audio3d: ModeSlider<AcousticQuality>
     private lateinit var sync: ModeSlider<PlaybackMode>
+    private lateinit var stretch: ModeSlider<StretchMode>
     private lateinit var progress: SeekBar
     private lateinit var suggestions: SuggestionsPanel
     private lateinit var preview: PreviewSection
@@ -198,6 +200,24 @@ class DisplayMenu private constructor(
             ds.canSetModeHere || (ds.watchParty != null && ds.canCloseWatchPartyHere)
         }
         sync.visibleWhen = notErrored
+
+        stretch = addUi(
+            ModeSlider(
+                modes = STRETCH_MODES,
+                initial = ds.stretchMode,
+                current = { ds.stretchMode },
+                enabledFor = { true },
+                label = { Component.translatable(stretchModeLabel(it)) },
+            ) { mode ->
+                if (mode != ds.stretchMode) ds.stretchMode = mode
+            })
+        stretch.visibleWhen = notErrored
+
+        val stretchReset = addUi(IconButton("refresh") {
+            if (ds.stretchMode != StretchMode.LETTERBOX) ds.stretchMode = StretchMode.LETTERBOX
+        })
+        stretchReset.enabledWhen = { ds.stretchMode != StretchMode.LETTERBOX }
+        stretchReset.visibleWhen = notErrored
 
         val renderDReset = addUi(IconButton("refresh") {
             val defaultChunks =
@@ -351,7 +371,7 @@ class DisplayMenu private constructor(
                 dropdown, audioTrackDropdown,
             )
         settings = SettingsSection(
-            rows = settingsRows(renderDReset, qualityReset, brightnessReset, audio3dReset, syncReset),
+            rows = settingsRows(renderDReset, qualityReset, brightnessReset, audio3dReset, syncReset, stretchReset),
             ownerActions = listOf(reportButton, deleteButton, lockButton),
             buttonTooltips = listOf(
                 lockButton to {
@@ -374,7 +394,7 @@ class DisplayMenu private constructor(
     /** Builds the settings rows with their tooltip content. */
     private fun settingsRows(
         renderDReset: IconButton, qualityReset: IconButton,
-        brightnessReset: IconButton, audio3dReset: IconButton, syncReset: IconButton,
+        brightnessReset: IconButton, audio3dReset: IconButton, syncReset: IconButton, stretchReset: IconButton,
     ): List<SettingsSection.Row> {
         val ds = displayScreen
         return listOf(
@@ -436,6 +456,21 @@ class DisplayMenu private constructor(
                     tooltipValue(
                         "dreamdisplayx.button.synchronization.tooltip.5",
                         Component.translatable(syncModeLabel(sync.mode)),
+                    ),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.stretch", stretch, stretchReset) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.stretch.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.stretch.tooltip.2"),
+                    Component.literal(""),
+                    tooltipModeBullet("dreamdisplayx.mode.letterbox", "dreamdisplayx.button.stretch.tooltip.3"),
+                    tooltipModeBullet("dreamdisplayx.mode.stretch", "dreamdisplayx.button.stretch.tooltip.4"),
+                    tooltipModeBullet("dreamdisplayx.mode.crop", "dreamdisplayx.button.stretch.tooltip.5"),
+                    Component.literal(""),
+                    tooltipValue(
+                        "dreamdisplayx.button.stretch.tooltip.6",
+                        Component.translatable(stretchModeLabel(stretch.mode)),
                     ),
                 )
             },
@@ -693,6 +728,16 @@ class DisplayMenu private constructor(
 
         /** The three sync-mode notches exposed by the playback-mode slider. */
         private val SYNC_MODES = listOf(PlaybackMode.LOCAL, PlaybackMode.SYNCED, PlaybackMode.BROADCAST)
+
+        /** The three stretch-mode notches exposed by the fit slider. */
+        private val STRETCH_MODES = listOf(StretchMode.LETTERBOX, StretchMode.STRETCH, StretchMode.CROP)
+
+        /** Translation key for the compact label shown inside the stretch-mode slider. */
+        private fun stretchModeLabel(mode: StretchMode): String = when (mode) {
+            StretchMode.LETTERBOX -> "dreamdisplayx.mode.letterbox"
+            StretchMode.STRETCH -> "dreamdisplayx.mode.stretch"
+            StretchMode.CROP -> "dreamdisplayx.mode.crop"
+        }
 
         /** Opens the menu for [displayScreen]. */
         fun open(displayScreen: DisplayScreen) {

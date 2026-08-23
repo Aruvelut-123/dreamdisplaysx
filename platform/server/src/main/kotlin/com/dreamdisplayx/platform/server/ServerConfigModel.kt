@@ -59,6 +59,9 @@ data class SettingsSection(
     /** Volume in [0, 1] ready for the wire; config stores 0-100 percent. */
     val defaultVolume get() = display.default_volume / 100f
 
+    /** Default stretch mode for new displays. */
+    val defaultStretchMode get() = display.default_stretch_mode
+
     // Custom media (player-pasted links)
     val customMediaPolicy: com.dreamdisplayx.api.security.policy.CustomMediaPolicy.Settings
         get() = com.dreamdisplayx.api.security.policy.CustomMediaPolicy.Settings(
@@ -103,6 +106,7 @@ data class SettingsSection(
         val max_render_distance: Double = 96.0,
         val default_volume: Int = 50,
         val max_displays_per_player: Int = 100,
+        val default_stretch_mode: String = "LETTERBOX",
     )
 
     /**
@@ -269,6 +273,7 @@ fun parseServerConfig(t: TomlTable?): ParsedServerConfig = ParsedServerConfig(
             max_render_distance = t?.getDouble("display.max_render_distance") ?: 96.0,
             default_volume = t?.getLong("display.default_volume")?.toInt()?.coerceIn(0, 100) ?: 50,
             max_displays_per_player = t?.getLong("display.max_displays_per_player")?.toInt() ?: 100,
+            default_stretch_mode = t?.getString("display.default_stretch_mode") ?: "LETTERBOX",
         ),
         customMedia = SettingsSection.CustomMediaConfig(
             enabled = t?.getBoolean("custom_media.enabled") ?: true,
