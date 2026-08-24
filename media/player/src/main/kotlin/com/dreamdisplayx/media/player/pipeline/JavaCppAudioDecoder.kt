@@ -349,7 +349,7 @@ internal class JavaCppAudioDecoder(
         // audio clock from lagging behind the video PTS by the decoder's open time.
         g.setOption("probesize", "128K")
         g.setOption("analyzeduration", "100000")
-        g.setOption("rw_timeout", "15000000")
+        g.setOption("rw_timeout", "5000000")
         g.setOption("user_agent", USER_AGENT)
         // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer.
         MediaHosts.refererFor(url)?.let { g.setOption("headers", "Referer: $it\r\n") }

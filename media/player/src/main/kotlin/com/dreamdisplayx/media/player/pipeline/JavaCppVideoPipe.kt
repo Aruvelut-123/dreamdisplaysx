@@ -781,7 +781,7 @@ internal class JavaCppVideoPipe(
         // Skip the frame-rate probe: we already know the target FPS from the resolver, and
         // fpsprobesize would otherwise read and discard extra frames before the first grab.
         g.setOption("fpsprobesize", "0")
-        g.setOption("rw_timeout", "15000000")
+        g.setOption("rw_timeout", "5000000")
         g.setOption("user_agent", USER_AGENT)
         // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer;
         // a host a player pasted gets none and stays anonymous, matching the old CLI pipeline.
