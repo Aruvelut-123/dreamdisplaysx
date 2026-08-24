@@ -344,10 +344,9 @@ internal class JavaCppAudioDecoder(
     @Throws(Exception::class)
     private fun createGrabber(url: String, seekOffsetNanos: Long): FFmpegFrameGrabber {
         val g = FFmpegFrameGrabber(url)
-        // Same probe optimisations as the video pipe: smaller probesize + shorter analyze
-        // so the audio decoder opens as fast as the in-place video seek, preventing the
-        // audio clock from lagging behind the video PTS by the decoder's open time.
-        g.setOption("probesize", "128K")
+        // Same probe optimisations as the video pipe but with a smaller probesize for audio-only
+        // streams (audio codec detection needs far less data than video key-frame search).
+        g.setOption("probesize", "64K")
         g.setOption("analyzeduration", "100000")
         g.setOption("rw_timeout", "5000000")
         g.setOption("user_agent", USER_AGENT)

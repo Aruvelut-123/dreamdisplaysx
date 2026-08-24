@@ -20,4 +20,14 @@ interface PlaybackConfig {
 
     /** Whether the GPU-side YUV (planar I420) render path is active; selects the planar decode output. */
     val gpuYuvActive: Boolean
+
+    /**
+     * Ordered list of FFmpeg hwaccel backend names to try for video decode, in priority order.
+     * The first candidate that the FFmpeg build supports and the GPU driver can open will be used;
+     * if none works, the video pipe falls back to software decode.  Empty = software only.
+     *
+     * Known values: `"qsv"`, `"cuda"`, `"nvdec"`, `"amf"`, `"d3d11va"`, `"vaapi"`, `"vulkan"`,
+     * `"videotoolbox"`, `"dxva2"`, `"mediacodec"`.
+     */
+    val hwAccelCandidates: List<String> get() = emptyList()
 }

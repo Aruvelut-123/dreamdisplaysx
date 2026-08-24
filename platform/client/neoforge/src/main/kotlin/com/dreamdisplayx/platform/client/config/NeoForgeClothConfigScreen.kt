@@ -1,8 +1,7 @@
-package com.dreamdisplayx.platform.client
+package com.dreamdisplayx.platform.client.config
 
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
 import com.dreamdisplayx.media.player.process.HwAccelEnumerator
-import com.dreamdisplayx.platform.client.config.ConfigScreenText
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import me.shedaniel.clothconfig2.api.ConfigBuilder
 import me.shedaniel.clothconfig2.api.ConfigCategory
@@ -12,13 +11,13 @@ import net.minecraft.network.chat.Component
 import java.util.Optional
 
 /**
- * Cloth Config screen provider — only loaded at runtime when Cloth Config is on the classpath.
- * If Cloth Config is absent, [ModMenuIntegration] detects this via reflection and skips the
- * config button entirely.
+ * Cloth Config screen for NeoForge — mirrors the Fabric [ClothConfigScreenProvider] exactly
+ * so the same localizable keys work on both platforms. Registered via [IConfigScreenFactory].
  *
- * All labels are localizable through `dreamdisplayx.config.*` translation keys.
+ * Requires Cloth Config to be installed; otherwise no in-game config editor is available
+ * (the shared `Config.toml` remains the source of truth for manual editing).
  */
-object ClothConfigScreenProvider {
+internal object NeoForgeClothConfigScreen {
 
     fun create(parent: Screen?): Screen {
         val config = ClientStateManager.config
@@ -68,7 +67,7 @@ object ClothConfigScreenProvider {
                 .build(),
         )
 
-        // Video decoder selection (dropdown with all available FFmpeg hwaccel backends)
+        // Video decoder selection (dropdown)
         val decoderSelections = buildList {
             add("auto")
             add("software")
@@ -78,8 +77,8 @@ object ClothConfigScreenProvider {
             entryBuilder.startDropdownMenu(
                 Component.translatable(ConfigScreenText.Keys.DECODER),
                 config.hwaccelDecoder.ifEmpty { "auto" },
-                { it }, // String → String identity parser
-                { v -> ConfigScreenText.decoderLabel(v) }, // String → Component display
+                { it },
+                { v -> ConfigScreenText.decoderLabel(v) },
             )
                 .setDefaultValue("auto")
                 .setSelections(decoderSelections)
@@ -112,7 +111,7 @@ object ClothConfigScreenProvider {
                 .build(),
         )
 
-        // Default render distance (int field)
+        // Default render distance
         general.addEntry(
             entryBuilder.startIntField(
                 Component.translatable(ConfigScreenText.Keys.DEFAULT_RENDER_DISTANCE),
@@ -124,7 +123,7 @@ object ClothConfigScreenProvider {
                 .build(),
         )
 
-        // Default volume (double field)
+        // Default volume
         general.addEntry(
             entryBuilder.startDoubleField(
                 Component.translatable(ConfigScreenText.Keys.DEFAULT_VOLUME),
@@ -136,7 +135,7 @@ object ClothConfigScreenProvider {
                 .build(),
         )
 
-        // Audio acoustics (enum selector)
+        // Audio acoustics
         general.addEntry(
             entryBuilder.startEnumSelector(
                 Component.translatable(ConfigScreenText.Keys.AUDIO_ACOUSTICS),

@@ -20,6 +20,8 @@ import kotlinx.io.IOException
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.util.Collections
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -59,6 +61,9 @@ internal class PlaybackSessionManager(
     /** Whether the GPU-side planar (I420) render path is active. */
     private val gpuYuvActive: Boolean,
 
+    /** FFmpeg hwaccel backend names to try, in priority order; empty = software decode only. */
+    private val hwAccelCandidates: List<String> = emptyList(),
+
     /** Optional per-display acoustics DSP stage; null keeps the legacy distance-gain-only pipeline. */
     audioStage: AudioDspStage? = null,
 ) {
@@ -92,7 +97,7 @@ internal class PlaybackSessionManager(
      * One decode channel: JavaCPP-based video pipe (replaces the old native + process pipelines).
      */
     private inner class VideoChannel {
-        val javaCppPipe: JavaCppVideoPipe = JavaCppVideoPipe(debugLabel, uploaderFactory, gpuYuvActive)
+        val javaCppPipe: JavaCppVideoPipe = JavaCppVideoPipe(debugLabel, uploaderFactory, gpuYuvActive, this@PlaybackSessionManager.hwAccelCandidates)
         val pipe: FramePipe = javaCppPipe
 
         @Volatile
@@ -321,19 +326,30 @@ internal class PlaybackSessionManager(
         val channel = VideoChannel()
         try {
             val firstVideoFrame = CountDownLatch(1)
+            // Open the audio decoder in the background so its network open happens in parallel
+            // with the video grabber's open (the video reader thread opens async already, but the
+            // audio decoder's createGrabber → g.start() blocks the caller — serializing them made
+            // audio always lag the video by a full decoder open time).
+            val aStop = AtomicBoolean()
+            val audioFuture = CompletableFuture.supplyAsync {
+                try {
+                    buildAudioDecoder(streamSet, offsetNanos, aStop)
+                } catch (e: IOException) {
+                    throw CompletionException(e)
+                }
+            }
             channel.launch(streamSet, w, h, offsetNanos, onFirstFrame = {
                 clock.markFirstFrame()
                 firstVideoFrame.countDown()
                 onFirstFrame()
             }, onEos = onStreamEnd, parkFlag = parkFlag,
                 onDriftResync = onDriftResync)
-            val aStop = AtomicBoolean()
             val ap = try {
-                buildAudioDecoder(streamSet, offsetNanos, aStop)
-            } catch (e: IOException) {
+                audioFuture.get()
+            } catch (e: CompletionException) {
                 // The video side is already running; tear it down before propagating
                 channel.teardownProcess()
-                throw e
+                throw e.cause ?: IOException("Audio decoder failed to start", e)
             }
             active = channel
             audioHalf = ap?.let {
@@ -380,7 +396,16 @@ internal class PlaybackSessionManager(
                 clock.reset(offsetNanos)
                 val aStop = AtomicBoolean()
                 try {
-                    val ap = buildAudioDecoder(streamSet, offsetNanos, aStop)
+                    // Open the replacement audio decoder in the background: the video reader is
+                    // already seeking the reused grabber on its own thread, so the audio open can
+                    // overlap that seek instead of holding the control thread behind it.
+                    val ap = CompletableFuture.supplyAsync {
+                        try {
+                            buildAudioDecoder(streamSet, offsetNanos, aStop)
+                        } catch (e: IOException) {
+                            throw CompletionException(e)
+                        }
+                    }.get()
                     val originKnown = audioOriginKnown()
                     audioHalf = ap?.let {
                         AudioHalf(
@@ -418,17 +443,28 @@ internal class PlaybackSessionManager(
         val channel = VideoChannel()
         try {
             val firstVideoFrame = CountDownLatch(1)
+            // Open the audio decoder in the background so its network open happens in parallel
+            // with the video grabber's open (the video reader thread opens async already, but the
+            // audio decoder's createGrabber → g.start() blocks the caller — serializing them made
+            // audio always lag the video by a full decoder open time).
+            val aStop = AtomicBoolean()
+            val audioFuture = CompletableFuture.supplyAsync {
+                try {
+                    buildAudioDecoder(streamSet, offsetNanos, aStop)
+                } catch (e: IOException) {
+                    throw CompletionException(e)
+                }
+            }
             channel.launch(streamSet, w, h, offsetNanos, onFirstFrame = {
                 clock.markFirstFrame()
                 firstVideoFrame.countDown()
             }, onEos = onStreamEnd, parkFlag = parkFlag)
-            val aStop = AtomicBoolean()
             val ap = try {
-                buildAudioDecoder(streamSet, offsetNanos, aStop)
-            } catch (e: IOException) {
+                audioFuture.get()
+            } catch (e: CompletionException) {
                 channel.teardownProcess()
                 renderExecutor.execute { channel.pipe.cleanup() }
-                throw e
+                throw e.cause ?: IOException("Audio decoder failed to start", e)
             }
             synchronized(switchLock) { active = channel }
             audioHalf = ap?.let {

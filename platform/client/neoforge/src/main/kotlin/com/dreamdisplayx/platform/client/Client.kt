@@ -37,9 +37,9 @@ class Client(modEventBus: IEventBus) : DreamMod {
         // can host the ClientApplication on top of it during bootstrap.
         DreamServices.registry.register(PlatformServices.PLATFORM, NeoForgePlatformIntegrationProvider.create())
         Initializer.onModInit(this)
-        // Register a standard NeoForge client config so Configured can discover and edit these values.
-        com.dreamdisplayx.platform.client.config.NeoForgeConfig.register()
-        com.dreamdisplayx.platform.client.config.NeoForgeConfig.listen(modEventBus)
+        // Register the Cloth Config screen as the in-game config UI (requires Cloth Config installed);
+        // without Cloth there is no in-game editor — Config.toml remains the source of truth.
+        registerConfigScreenFactory()
 
         //? if >=26 {
         modEventBus.addListener(::onRegisterDebugEntries)
@@ -136,6 +136,34 @@ class Client(modEventBus: IEventBus) : DreamMod {
         Initializer.onStop()
     }
     //?}
+
+    /** Registers the Cloth Config screen factory when Cloth is present on the classpath. */
+    private fun registerConfigScreenFactory() {
+        val clothConfigClass = try {
+            Class.forName("me.shedaniel.clothconfig2.api.ConfigBuilder")
+            true
+        } catch (_: Exception) {
+            false
+        }
+        if (!clothConfigClass) return
+        // IConfigScreenFactory is a functional interface: Screen createScreen(ModContainer, Screen)
+        // Using reflection to avoid a compile dependency on the NeoForge client API.
+        val factoryClass = try {
+            Class.forName("net.neoforged.neoforge.client.gui.IConfigScreenFactory")
+        } catch (_: Exception) {
+            return
+        }
+        val container = net.neoforged.fml.ModLoadingContext.get().getActiveContainer()
+        val registerMethod = container.javaClass.getMethod("registerExtensionPoint", Class::class.java, Any::class.java)
+        val factory = java.lang.reflect.Proxy.newProxyInstance(
+            factoryClass.classLoader, arrayOf(factoryClass),
+        ) { _, _, args ->
+            // The first argument is the ModContainer (ignored), the second is the parent Screen.
+            val parent = args[1] as? net.minecraft.client.gui.screens.Screen
+            com.dreamdisplayx.platform.client.config.NeoForgeClothConfigScreen.create(parent)
+        }
+        registerMethod.invoke(container, factoryClass, factory)
+    }
 
     //? if >=1.21.11 {
     /** On render events. */

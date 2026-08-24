@@ -18,6 +18,7 @@ repositories {
     maven("https://jitpack.io")
     maven("https://maven.fabricmc.net/")
     maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://maven.shedaniel.me/") // Cloth Config
     maven(rootProject.layout.projectDirectory.dir(".gradle/loom-cache/remapped_mods")) {
         name = "fabricLoomRemappedMods"
     }
@@ -94,6 +95,7 @@ dependencies {
     compileOnly(libs.bstats)
     compileOnly("io.papermc.paper:paper-api:${scVersion("paper.api.version")}")
     compileOnly("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")
+    compileOnly("me.shedaniel.cloth:cloth-config-neoforge:${scVersion("cloth.config.version")}")
     if (isLegacyObfuscated) {
         compileOnly(project(path = ":platform:client:fabric", configuration = "mappedFabricApiElements"))
     } else {

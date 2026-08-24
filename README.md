@@ -95,7 +95,7 @@ Create a display, paste a link with `/display video <link>` — Dream DisplaysX 
 - Brightness control from 0% to 100%
 - Multiple video languages support
 - Integrated controls for play, pause, and seek
-- Hardware accelerations
+- **Hardware-accelerated video decode** — FFmpeg hwaccel with per-platform backends (QSV, NVDEC, AMF, D3D11VA, VA-API, Vulkan, VideoToolbox), auto-detected from the GPU vendor and OS
 - And much more!
 
 ### Displays

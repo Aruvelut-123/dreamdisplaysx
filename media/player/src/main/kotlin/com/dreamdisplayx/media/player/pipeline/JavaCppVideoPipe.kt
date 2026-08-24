@@ -8,6 +8,7 @@ import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer
+import com.dreamdisplayx.media.player.process.HwAccelEnumerator
 import com.dreamdisplayx.media.player.util.daemon
 import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.ffmpeg.global.swscale
@@ -39,6 +40,8 @@ internal class JavaCppVideoPipe(
     uploaderFactory: FrameUploaderFactory,
     /** True when frames stay as raw I420 planes; YUV→RGB runs on the GPU. */
     private val planarOutput: Boolean,
+    /** FFmpeg hwaccel backend names to try for decode, in priority order; empty = software only. */
+    private val hwAccelCandidates: List<String> = emptyList(),
 ) : FramePipe {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/JavaCppVideoPipe")
 
@@ -776,10 +779,78 @@ internal class JavaCppVideoPipe(
 
     // ── Grabber helpers ───────────────────────────────────────────────────
 
-    /** Creates and configures a new FFmpegFrameGrabber for [url]. */
+    /**
+     * Creates and configures a new FFmpegFrameGrabber for [url].
+     *
+     * Hardware decode: each [hwAccelCandidates] backend is verified against the FFmpeg build
+     * (`av_hwdevice_iterate_types`) before use — backends the build doesn't know are skipped.
+     * If a candidate opens but fails to decode at probe time, the next candidate is tried.  When
+     * all candidates fail (no driver, no device, unsupported format), a plain software grabber is
+     * used — the same behavior as an empty candidate list.
+     */
     @Throws(Exception::class)
     private fun createGrabber(url: String, w: Int, h: Int, seekOffsetNanos: Long): FFmpegFrameGrabber {
+        for (hwaccel in hwAccelCandidates) {
+            if (!HwAccelEnumerator.isSupported(hwaccel)) {
+                logger.debug("{} Skipping hwaccel '{}': not compiled into this FFmpeg build.", debugLabel, hwaccel)
+                continue
+            }
+            try {
+                return createHwAccelGrabber(url, w, h, seekOffsetNanos, hwaccel)
+            } catch (e: Exception) {
+                logger.warn("{} Hwaccel '{}' unusable: {} — trying next candidate / software.", debugLabel, hwaccel, e.message)
+            }
+        }
+        logger.info("{} Using software video decode (hwaccel: {}).", debugLabel, hwAccelCandidates.ifEmpty { listOf("none") })
+        return createSoftwareGrabber(url, w, h, seekOffsetNanos)
+    }
+
+    /** Opens a software (no hwaccel options) grabber. */
+    @Throws(Exception::class)
+    private fun createSoftwareGrabber(url: String, w: Int, h: Int, seekOffsetNanos: Long): FFmpegFrameGrabber {
         val g = FFmpegFrameGrabber(url)
+        configureBaseOptions(g, url, seekOffsetNanos)
+        g.imageWidth = w
+        g.imageHeight = h
+        g.imageMode = FrameGrabber.ImageMode.RAW
+        g.start()
+        seekAfterStart(g, seekOffsetNanos)
+        return g
+    }
+
+    /**
+     * Opens a grabber with FFmpeg's `hwaccel` option set to [hwaccel], requesting yuv420p output
+     * so hardware-decoded frames are transferred back to system memory in the planar YUV420P
+     * format the existing sws_scale pipeline already understands (avoiding NV12 plane handling).
+     * A single probe frame proves the backend actually decodes before the grabber is handed over.
+     */
+    @Throws(Exception::class)
+    private fun createHwAccelGrabber(
+        url: String, w: Int, h: Int, seekOffsetNanos: Long, hwaccel: String,
+    ): FFmpegFrameGrabber {
+        val g = FFmpegFrameGrabber(url)
+        configureBaseOptions(g, url, seekOffsetNanos)
+        g.setOption("hwaccel", hwaccel)
+        g.setOption("hwaccel_output_format", "yuv420p")
+        g.imageWidth = w
+        g.imageHeight = h
+        g.imageMode = FrameGrabber.ImageMode.RAW
+        g.start()
+        // Probe: opening may succeed even when the driver/device can't decode (no driver, no
+        // hardware frames). Grabbing one frame proves usability; the frame is discarded.
+        val probe = g.grabImage()
+        if (probe == null) {
+            throw java.io.IOException("hwaccel '$hwaccel' produced no frame")
+        }
+        // Re-apply the seek target: the probe consumed the first frame(s), so rewind to the
+        // intended position so the reader loop presents the same timeline as the software path.
+        seekAfterStart(g, seekOffsetNanos)
+        logger.info("{} Video decode via hwaccel '{}'.", debugLabel, hwaccel)
+        return g
+    }
+
+    /** Sets the shared format-level options for a new grabber. */
+    private fun configureBaseOptions(g: FFmpegFrameGrabber, url: String, seekOffsetNanos: Long) {
         // Smaller probe for faster session startup — the CLI's `-ss before -i` approach only
         // needs enough data to find the stream header; 128K probesize is enough for most
         // network VODs and cuts the initial open time by roughly half vs 256K.
@@ -796,14 +867,6 @@ internal class JavaCppVideoPipe(
         g.setOption("reconnect_delay_max", "10")
         g.setOption("reconnect_on_network_error", "1")
         g.setOption("reconnect_on_http_error", "5xx")
-        // Set output dimensions
-        g.imageWidth = w
-        g.imageHeight = h
-        // Always use RAW mode: javacv's COLOR mode sets the pixel_format codec option on the
-        // format context, which avformat rejects with the noisy "pixel_format, value: bgr24"
-        // info log on every open. In RAW mode javacv only fills the Y plane, so all conversion
-        // (YUV420P or RGB24) is done here with sws_scale on the underlying AVFrame.
-        g.imageMode = FrameGrabber.ImageMode.RAW
         // For VOD seeks, hint the HTTP protocol that the server answers Range requests so FFmpeg
         // jumps straight to the target offset instead of downloading the stream from the beginning
         // and discarding everything up to it (which is what made seeks take seconds).
@@ -811,13 +874,14 @@ internal class JavaCppVideoPipe(
         if (seekOffsetNanos > 0) {
             g.setOption("seekable", "1")
         }
-        g.start()
-        // Seek after start
+    }
+
+    /** Applies the post-start seek (nanos → micros) when [seekOffsetNanos] is positive. */
+    private fun seekAfterStart(g: FFmpegFrameGrabber, seekOffsetNanos: Long) {
         if (seekOffsetNanos > 0) {
             // Due to FFmpeg seeking behavior, seek then flush
             g.setTimestamp(seekOffsetNanos / 1000L) // convert nanos to micros
         }
-        return g
     }
 
     /** Frame rate assumption for sources without a valid FPS. */

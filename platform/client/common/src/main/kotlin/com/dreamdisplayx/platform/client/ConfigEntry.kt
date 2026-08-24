@@ -7,7 +7,7 @@ package com.dreamdisplayx.platform.client
  *
  * @param key TOML key / config name (e.g. `use-hw-accel`).
  * @param label User-facing short label for the row.
- * @param comment Human-readable explanation shown under the control (like a Configured tooltip).
+ * @param comment Human-readable explanation shown under the control (like a config-editor tooltip).
  * @param type The control kind to render.
  * @param values For [ConfigEntryType.ENUM], the allowed values in display order; otherwise empty.
  * @param get Reads the current value.
