@@ -366,7 +366,8 @@ internal class PlaybackSessionManager(
         // at the new offset, which is the same work as the full-swap path.
         val safeUrl = MediaHostGuard.resolveSafeUrl(streamSet.currentVideo.url)
         if (old.javaCppPipe.currentUrl == safeUrl && old.javaCppPipe.expectedW == w && old.javaCppPipe.expectedH == h) {
-            if (old.javaCppPipe.requestInPlaceSeek(offsetNanos)) {
+            val firstVideoFrame = CountDownLatch(1)
+            if (old.javaCppPipe.requestInPlaceSeek(offsetNanos, firstVideoFrame)) {
                 val oldAudio = audioHalf
                 audioHalf = null
                 oldAudio?.stop?.set(true)
@@ -382,8 +383,9 @@ internal class PlaybackSessionManager(
                             audio.start(
                                 it, terminated, aStop,
                                 contentStartNanos = offsetNanos, originKnown = originKnown,
-                                startGate = null, onUnexpectedEnd = onAudioFailure,
-                                catchUp = if (originKnown) AudioSink.CatchUp(offsetNanos) { clock.currentTime() } else null,
+                                // Gate audio on the first frame of the new timeline, so sound does
+                                // not lead the picture after a seek (same as the full-swap path).
+                                startGate = firstVideoFrame, onUnexpectedEnd = onAudioFailure,
                             ),
                             aStop,
                         )

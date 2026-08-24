@@ -23,6 +23,7 @@ import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.FrameGrabber
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
@@ -96,6 +97,14 @@ internal class JavaCppVideoPipe(
     @Volatile
     internal var currentUrl: String? = null
         private set
+
+    /**
+     * When non-null, the reader loop counts down this latch after the first frame following an
+     * in-place seek is presented, so the audio half waits for the video to be ready (same as the
+     * full channel-swap path). Set / cleared by [requestInPlaceSeek] and [doInPlaceSeek].
+     */
+    @Volatile
+    private var seekFirstFrameLatch: CountDownLatch? = null
 
     /** Pending in-place seek target in nanos; 0 = none. The reader loop consumes and applies it. */
     private val seekRequestedNanos = AtomicLong(0L)
@@ -216,10 +225,14 @@ internal class JavaCppVideoPipe(
      * The reader loop picks this up at the next frame boundary and applies
      * [g.setTimestamp] directly on the same grabber. Returns true when a seek was
      * scheduled; false if the pipe has no active grabber to seek on.
+     *
+     * @param firstFrameLatch when non-null, counted down after the first frame of the new
+     *   timeline is presented (used as the audio start gate).
      */
-    fun requestInPlaceSeek(offsetNanos: Long): Boolean {
+    fun requestInPlaceSeek(offsetNanos: Long, firstFrameLatch: CountDownLatch? = null): Boolean {
         if (grabber == null) return false
         seekRequestedNanos.set(offsetNanos)
+        seekFirstFrameLatch = firstFrameLatch
         return true
     }
 
@@ -410,6 +423,7 @@ internal class JavaCppVideoPipe(
             if (!firstFrame) {
                 firstFrame = true
                 onFirstFrame()
+                seekFirstFrameLatch?.countDown()
                 if (MediaPlayer.DEBUG) logger.debug("$debugLabel First frame $w x $h (javaCPP).")
             }
             videoPts = framePts + frameNs
@@ -804,7 +818,19 @@ internal class JavaCppVideoPipe(
             // Seek the same grabber directly (nanos -> micros), exactly like the initial open.
             g.setTimestamp(offsetNanos / 1000L)
             logger.debug("$debugLabel In-place seek to ${offsetNanos / 1_000_000} ms on existing grabber.")
-            prebuffer?.resetForSeek(onFirstFrame)
+            if (prebuffer != null) {
+                // Prebuffer path: the seek's audio latch opens inside the wrapped first-frame
+                // callback below, which the prebuffer consumer fires when it presents the first
+                // frame of the new timeline.
+                val seekLatch = seekFirstFrameLatch
+                seekFirstFrameLatch = null
+                prebuffer.resetForSeek {
+                    onFirstFrame()
+                    seekLatch?.countDown()
+                }
+            }
+            // Non-prebuffer path: keep seekFirstFrameLatch set so the reader loop counts it down
+            // right after onFirstFrame() fires for the first post-seek frame.
         } catch (e: Exception) {
             logger.warn("$debugLabel In-place seek to ${offsetNanos / 1_000_000} ms failed: ${e.message}")
             // Fall back to a hard teardown; caller goes through the full re-open path.
