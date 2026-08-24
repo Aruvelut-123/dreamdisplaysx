@@ -20,6 +20,9 @@ object DebugStats {
     /** Cached mod version. */
     val modVersion: String by lazy { GeneralUtil.getPrettyModVersion() }
 
+    /** Cached git commit id. */
+    val commitId: String by lazy { GeneralUtil.getCommitId() }
+
     /** Whether a NeoForge-native entry is already registered (to avoid double-adding in mixin). */
     val neoForgeEntryRegistered = AtomicBoolean(false)
 
@@ -29,6 +32,7 @@ object DebugStats {
      */
     fun getLines(): List<String> = buildList {
         add("§bDream DisplaysX §a$modVersion")
+        add("§7Commit: §f$commitId")
         add("§7FFmpeg: §f$ffmpegVersion")
         val screenCount = runCatching { DisplayRegistry.getScreens().size }.getOrDefault(0)
         if (screenCount > 0) {

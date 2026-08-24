@@ -13,6 +13,7 @@ import com.dreamdisplayx.platform.client.overlay.OverlayManager
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
 import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
 import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
+import com.dreamdisplayx.util.GeneralUtil
 import com.dreamdisplayx.util.OsInfo
 import net.minecraft.client.Minecraft
 //? if >=26 {
@@ -47,7 +48,7 @@ object Initializer {
         }
         ClientPacketManager.bind(dreamDisplaysMod)
 
-        logger.info("Starting Dream DisplaysX...")
+        logger.info("Dream DisplaysX v${GeneralUtil.getPrettyModVersion()} (${GeneralUtil.getCommitId()}) starting...")
         ClientStartupManager.start()
     }
 

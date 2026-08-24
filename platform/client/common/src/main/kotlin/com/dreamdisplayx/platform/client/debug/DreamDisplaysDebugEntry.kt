@@ -22,6 +22,8 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
 
     private val modVersion: String by lazy { GeneralUtil.getPrettyModVersion() }
 
+    private val commitId: String by lazy { GeneralUtil.getCommitId() }
+
     override fun display(
         displayer: DebugScreenDisplayer,
         level: Level?,
@@ -29,6 +31,7 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
         serverChunk: LevelChunk?,
     ) {
         displayer.addLine("§bDream DisplaysX §a$modVersion")
+        displayer.addLine("§7Commit: §f$commitId")
         displayer.addLine("§7FFmpeg: §f$ffmpegVersion")
         val screenCount = runCatching {
             com.dreamdisplayx.platform.client.displays.DisplayRegistry.getScreens().size

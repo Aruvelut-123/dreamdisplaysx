@@ -26,6 +26,11 @@ object GeneralUtil {
         runCatching { readResource("/assets/dreamdisplayx/version.txt").trim() }
             .getOrDefault("unknown")
 
+    /** Returns the short git commit hash from `commit.txt`, or "unknown" if the resource is missing. */
+    fun getCommitId(): String =
+        runCatching { readResource("/assets/dreamdisplayx/commit.txt").trim() }
+            .getOrDefault("unknown")
+
     /** Formats version to human-readable label: `1.8.5-dev` -> `1.8.5 Developer`, `1.9.0-preview` -> `1.9.0 Preview`. */
     fun getPrettyModVersion(): String {
         val version = getModVersion()
