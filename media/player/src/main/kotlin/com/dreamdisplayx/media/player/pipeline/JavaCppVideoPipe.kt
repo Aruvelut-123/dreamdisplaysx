@@ -773,8 +773,17 @@ internal class JavaCppVideoPipe(
     @Throws(Exception::class)
     private fun createGrabber(url: String, w: Int, h: Int, seekOffsetNanos: Long): FFmpegFrameGrabber {
         val g = FFmpegFrameGrabber(url)
-        g.setOption("probesize", "256K")
-        g.setOption("analyzeduration", "200000")
+        // Smaller probe for faster session startup — the CLI's `-ss before -i` approach only
+        // needs enough data to find the stream header; 128K probesize is enough for most
+        // network VODs and cuts the initial open time by roughly half vs 256K.
+        g.setOption("probesize", "128K")
+        g.setOption("analyzeduration", "100000")
+        // Skip the frame-rate probe: we already know the target FPS from the resolver, and
+        // fpsprobesize would otherwise read and discard extra frames before the first grab.
+        g.setOption("fpsprobesize", "0")
+        // Direct I/O: skip libavformat's internal streaming buffer where the format allows it,
+        // so the first decoded frame arrives sooner (at the cost of more syscalls, which is fine).
+        g.setOption("avioflags", "direct")
         g.setOption("rw_timeout", "15000000")
         g.setOption("user_agent", USER_AGENT)
         // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer;
@@ -797,6 +806,7 @@ internal class JavaCppVideoPipe(
         // For VOD seeks, hint the HTTP protocol that the server answers Range requests so FFmpeg
         // jumps straight to the target offset instead of downloading the stream from the beginning
         // and discarding everything up to it (which is what made seeks take seconds).
+        // Set this BEFORE start() so the very first probe phase uses Range requests too.
         if (seekOffsetNanos > 0) {
             g.setOption("seekable", "1")
         }
