@@ -27,7 +27,7 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
     private val commitId: String by lazy { I18n.get("dreamdisplayx.debug.commit") }
 
     /** Shared group for right-side display alongside system specs. */
-    private val groupId = Identifier("minecraft", "system_specs")
+    private val groupId = Identifier.of("minecraft", "system_specs")
 
     override fun display(
         displayer: DebugScreenDisplayer,

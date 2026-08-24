@@ -36,11 +36,9 @@ object DebugStats {
         add("§7Commit: §f$commitId")
         add("§7FFmpeg: §f$ffmpegVersion")
         val screenCount = runCatching { DisplayRegistry.getScreens().size }.getOrDefault(0)
-        if (screenCount > 0) {
-            val gpu = MediaPlayer.framesToGpu.get()
-            val dropped = MediaPlayer.framesDropped.get()
-            add("Displays: $screenCount active")
-            add("Frames: $gpu GPU, $dropped dropped")
-        }
+        val gpu = MediaPlayer.framesToGpu.get()
+        val dropped = MediaPlayer.framesDropped.get()
+        add("Displays: $screenCount active")
+        add("Frames: $gpu GPU, $dropped dropped")
     }
 }
