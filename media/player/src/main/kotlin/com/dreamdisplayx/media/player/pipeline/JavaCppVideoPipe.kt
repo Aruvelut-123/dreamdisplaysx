@@ -778,9 +778,6 @@ internal class JavaCppVideoPipe(
         // network VODs and cuts the initial open time by roughly half vs 256K.
         g.setOption("probesize", "128K")
         g.setOption("analyzeduration", "100000")
-        // Skip the frame-rate probe: we already know the target FPS from the resolver, and
-        // fpsprobesize would otherwise read and discard extra frames before the first grab.
-        g.setOption("fpsprobesize", "0")
         g.setOption("rw_timeout", "5000000")
         g.setOption("user_agent", USER_AGENT)
         // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer;

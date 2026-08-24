@@ -336,13 +336,20 @@ internal class PlaybackSessionManager(
                 throw e
             }
             active = channel
+            // The audio decoder opens after the video decoder, so by the time
+            // audio starts, the video is already ahead by the open gap.  A
+            // CatchUp skips the leading PCM gap so the audio clock lands at the
+            // video's current position, avoiding the AudioMasterClock stall
+            // takeover (750 ms) → wall-clock drift → dropped frames → stuck video.
+            val catchUp = AudioSink.CatchUp(offsetNanos) { clock.currentTime() }
             audioHalf = ap?.let {
                 AudioHalf(
                     it,
                     audio.start(
                         it, terminated, aStop,
                         contentStartNanos = offsetNanos, originKnown = audioOriginKnown(),
-                        startGate = firstVideoFrame, onUnexpectedEnd = onAudioFailure,
+                        startGate = firstVideoFrame, catchUp = catchUp,
+                        onUnexpectedEnd = onAudioFailure,
                     ),
                     aStop,
                 )
@@ -435,13 +442,15 @@ internal class PlaybackSessionManager(
                 throw e
             }
             synchronized(switchLock) { active = channel }
+            val catchUp = AudioSink.CatchUp(offsetNanos) { clock.currentTime() }
             audioHalf = ap?.let {
                 AudioHalf(
                     it,
                     audio.start(
                         it, terminated, aStop,
                         contentStartNanos = offsetNanos, originKnown = audioOriginKnown(),
-                        startGate = firstVideoFrame, onUnexpectedEnd = onAudioFailure,
+                        startGate = firstVideoFrame, catchUp = catchUp,
+                        onUnexpectedEnd = onAudioFailure,
                     ),
                     aStop,
                 )
