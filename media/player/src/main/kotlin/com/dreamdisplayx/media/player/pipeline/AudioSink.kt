@@ -29,9 +29,6 @@ internal class AudioSink(private val debugLabel: String) {
         /** Stereo 16-bit PCM: 4 bytes per frame. One second is SAMPLE_RATE * BYTES_PER_FRAME bytes. */
         const val BYTES_PER_FRAME = 4
 
-        /** Largest single A/V resync skip (500 ms) — caps the jump in one pump cycle so video frames aren't mass-dropped in one go, which flashes the display. */
-        private const val MAX_RESYNC_CHUNK_NANOS = 500_000_000L
-
         /** Chunk size for each read from the audio process and each write to the line. 1 / 20 s of stereo 16-bit PCM */
         private const val CHUNK_BYTES = SAMPLE_RATE * 2 * 2 / 20
 
@@ -206,10 +203,7 @@ internal class AudioSink(private val debugLabel: String) {
         val target = pendingResyncNanos.getAndSet(0L)
         if (target <= 0L || !owns(session)) return
         val scratch = ByteArray(CHUNK_BYTES)
-        // Cap each skip to ~500 ms so the video pipe has time to drop frames smoothly
-        // instead of being asked to jump the whole gap at once (which flashes the display).
-        val cap = minOf(target, MAX_RESYNC_CHUNK_NANOS)
-        var toSkip = cap * SAMPLE_RATE / 1_000_000_000L * BYTES_PER_FRAME
+        var toSkip = target * SAMPLE_RATE / 1_000_000_000L * BYTES_PER_FRAME
         var skipped = 0L
         while (toSkip > 0 && !terminated.get() && !stopFlag.get()) {
             val n = MediaUtil.readFull(input, scratch, minOf(CHUNK_BYTES.toLong(), toSkip).toInt())
@@ -219,10 +213,7 @@ internal class AudioSink(private val debugLabel: String) {
         }
         if (skipped <= 0L) return
         session.contentStartNanos += bytesToNanos(skipped)
-        // Re-queue any remaining gap so the next pump cycle finishes the catch-up.
-        val remaining = target - bytesToNanos(skipped)
-        if (remaining > 0L) pendingResyncNanos.accumulateAndGet(remaining, ::maxOf)
-        logger.debug("$debugLabel [audio] re-synced by skipping ${bytesToNanos(skipped) / 1_000_000} ms of PCM (${bytesToNanos(remaining) / 1_000_000} ms remaining).")
+        logger.debug("$debugLabel [audio] re-synced by skipping ${bytesToNanos(skipped) / 1_000_000} ms of PCM.")
     }
 
     /** Opens new clock session, superseding previous, and resets shared state. */

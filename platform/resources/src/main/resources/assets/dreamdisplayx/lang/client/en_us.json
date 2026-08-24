@@ -103,7 +103,7 @@
   "dreamdisplayx.sort.bilibili.video": "Video",
   "dreamdisplayx.sort.bilibili.bangumi": "Bangumi",
   "dreamdisplayx.sort.bilibili.movie": "Movie",
-  "dreamdisplayx.ui.bilibili_vip": "大会员",
+  "dreamdisplayx.ui.bilibili_vip": "大会�?,
   "dreamdisplayx.ui.bilibili_paid": "付费",
   "dreamdisplayx.ui.custom": "Link",
   "dreamdisplayx.sort.my_links": "My links",
@@ -118,4 +118,5 @@
   "dreamdisplayx.button.stretch.tooltip.4": "Scale the video to exactly fill the display (may distort)",
   "dreamdisplayx.button.stretch.tooltip.5": "Zoom the video to fill the display, cropping the edges",
   "dreamdisplayx.button.stretch.tooltip.6": "Current: %s"
+  "dreamdisplayx.debug.commit": "unknown",
 }

@@ -102,4 +102,5 @@
   "dreamdisplayx.ui.custom": "Link",
   "dreamdisplayx.sort.my_links": "Moje linki",
   "dreamdisplayx.suggestions.no_links": "Brak zapisanych linków. Wklej powyżej link do filmu, aby go odtworzyć."
+  "dreamdisplayx.debug.commit": "unknown",
 }

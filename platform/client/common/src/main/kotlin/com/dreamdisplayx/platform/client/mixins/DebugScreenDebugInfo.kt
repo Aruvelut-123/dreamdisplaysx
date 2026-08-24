@@ -30,5 +30,11 @@ open class DebugScreenDebugInfo {
         if (DebugStats.neoForgeEntryRegistered.get()) return
         lines.addAll(DebugStats.getLines())
     }
+
+    @Inject(method = ["renderLinesRight"], at = [At("HEAD")], require = 0)
+    open fun onRenderLinesRight(guiGraphics: GuiGraphics, lines: MutableList<String>, scaled: Boolean, ci: CallbackInfo) {
+        if (DebugStats.neoForgeEntryRegistered.get()) return
+        lines.addAll(DebugStats.getLines())
+    }
     //?}
 }

@@ -11,16 +11,6 @@ subprojects {
 
     tasks.withType<ProcessResources>().configureEach {
         filteringCharset = Charsets.UTF_8.name()
-        // Inject the short git commit hash into every resource processing run so that
-        // commit.txt gets the real value. The lazy provider avoids running git when the
-        // task is up-to-date or the build does not touch resources.
-        val commitId = providers.exec {
-            commandLine("git", "rev-parse", "--short", "HEAD")
-        }.standardOutput.asText.map { it.trim() }
-        inputs.property("commit", commitId)
-        filesMatching("assets/dreamdisplayx/commit.txt") {
-            expand(mapOf("commit" to commitId.get()))
-        }
     }
     repositories {
         mavenCentral()

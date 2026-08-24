@@ -102,4 +102,5 @@
   "dreamdisplayx.ui.custom": "Lien",
   "dreamdisplayx.sort.my_links": "Mes liens",
   "dreamdisplayx.suggestions.no_links": "Aucun lien enregistré. Collez un lien vidéo ci-dessus pour le lire."
+  "dreamdisplayx.debug.commit": "unknown",
 }

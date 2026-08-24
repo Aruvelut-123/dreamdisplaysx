@@ -319,6 +319,22 @@ jobs:
           sed -i "s/^version=.*/version=$VERSION/" gradle.properties
           grep '^version' gradle.properties
 
+      # Inject the commit hash into the client lang files before building. The
+      # F3 debug overlay reads dreamdisplayx.debug.commit from the lang table,
+      # so the placeholder (written as "unknown") becomes the real short hash
+      # in the packed resources. Gradle's processResources expand cannot be
+      # relied on (it silently skips resources outside the module's own source
+      # set), so the CI job rewrites the files on disk before the build runs.
+      - name: Inject commit hash into lang files
+        run: |
+          COMMIT="${GITHUB_SHA:0:8}"
+          echo "Injecting commit $COMMIT into client lang files"
+          git rev-parse --short HEAD || true
+          for f in platform/resources/src/main/resources/assets/dreamdisplayx/lang/client/*.json; do
+            sed -i "s/\"dreamdisplayx.debug.commit\": \"unknown\"/\"dreamdisplayx.debug.commit\": \"${COMMIT}\"/" "$f"
+          done
+          grep 'dreamdisplayx.debug.commit' platform/resources/src/main/resources/assets/dreamdisplayx/lang/client/en_us.json
+
       - name: Download sqlite native archives
         env:
           GH_TOKEN: ${{ github.token }}

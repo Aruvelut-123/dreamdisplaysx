@@ -3,6 +3,7 @@ package com.dreamdisplayx.platform.client.debug
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.util.GeneralUtil
+import net.minecraft.client.resources.language.I18n
 import org.bytedeco.ffmpeg.global.avutil
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -21,7 +22,7 @@ object DebugStats {
     val modVersion: String by lazy { GeneralUtil.getPrettyModVersion() }
 
     /** Cached git commit id. */
-    val commitId: String by lazy { GeneralUtil.getCommitId() }
+    val commitId: String by lazy { I18n.get("dreamdisplayx.debug.commit") }
 
     /** Whether a NeoForge-native entry is already registered (to avoid double-adding in mixin). */
     val neoForgeEntryRegistered = AtomicBoolean(false)
