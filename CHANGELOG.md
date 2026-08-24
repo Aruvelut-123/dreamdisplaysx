@@ -1,6 +1,6 @@
-# 1.9.3.4 Release
+# 1.9.4.1 Release
 
-Based on Dream Displays [`304a642`](https://github.com/arnodoelinger/dreamdisplays/commit/304a642).
+Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
 ## Highlights
 
