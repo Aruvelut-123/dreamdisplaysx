@@ -107,6 +107,7 @@ Every task MUST be tracked in the session's `todo` task list at all times:
 3. **On completion** of a step, mark it `completed` immediately (do not batch completions)
 4. **At the end** of the task, every step must be `completed`; remove any abandoned steps from the list
 5. **`todo.md`** — when the task produces a persistent artifact (config, code, docs), also update or create `todo.md` in the project root to track the broader project state. The session `todo` task list tracks the immediate session; `todo.md` tracks the project roadmap.
+6. **`TODO.md` cleanup** — completed items in `TODO.md` must be **deleted** from the list, not left under a "已完成" section. The file should only contain items that are still pending or in progress; once an item is done, remove it entirely.
 
 ### Commit Message Format
 - Use clear, descriptive messages following conventional commits when possible
