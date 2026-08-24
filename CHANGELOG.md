@@ -201,6 +201,29 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
   broadcasts `PlatformCredentials` to all online v2 clients.
 - **Cross-server credential sync**: SQLite/MySQL via `SqlCredentialSyncBackend`.
 - **LuckPerms support**: `dreamdisplayx.login` and `dreamdisplayx.logout` nodes (default OP).
+# 1.9.4 Release
+
+## Highlights
+
+- Added support for Bilibili bangumi URLs (episodes and seasons / movies)
+- Some visual and config fixes
+
+## Client
+
+### Improvements
+
+- Added support for Bilibili bangumi URLs (episodes and seasons / movies) ([#188](https://github.com/arnodoelinger/dreamdisplays/issues/188))
+
+### Fixes
+
+- Fixed displays created in one dimension appearing at the same coordinates in every other dimension ([#192](https://github.com/arnodoelinger/dreamdisplays/issues/192))
+
+## Server
+
+### Fixes
+
+- Fixed server config default volume not applied correctly ([#190](https://github.com/arnodoelinger/dreamdisplays/issues/190))
+- Fixed user-edited language files being overwritten on every server start / reload
 
 # 1.9.3 Release
 
@@ -231,7 +254,6 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 ### Fixes
 
 - Fixed "Couldn't place player in world" error on some `Fabric` / `NeoForge` servers
->>>>>>> upstream/main
 
 # 1.9.2 Release
 
