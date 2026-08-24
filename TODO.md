@@ -19,7 +19,7 @@
 - Android 平台支持（重新评估可行性）
 - 移除客户端 V1 协议支持
 - 支持 WorldGuard 和领地插件（Land Claim Plugin）
-- 同内容播放支持（Same content playback）
+- 同内容播放支持（Same content playback，归入 V3 协议）：多个显示器同步播放同一内容，播放状态与进度保持一致
 - 播放列表与队列（V3 协议）
 - Flashback 回放支持
 
