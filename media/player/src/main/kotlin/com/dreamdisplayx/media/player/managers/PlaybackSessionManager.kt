@@ -351,7 +351,7 @@ internal class PlaybackSessionManager(
         }
     }
 
-    /** Seamless seek: silences old audio, freezes picture on last frame, warms new stream at offset. */
+    /** Seamless seek: silences old audio, warms new stream at offset. */
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         if (!isPlaying || terminated.get() || parkFlag.get()) return false
         audioWarmPool.invalidateAll()
@@ -360,6 +360,47 @@ internal class PlaybackSessionManager(
         val old = active ?: return false
         val (w, h) = targetDims(streamSet, lastQuality)
 
+        // ── Fast path: same source ── in-place seek on the existing grabber   ──
+        // The grabber stays open (no re-open, no re-probe), the reader thread
+        // seeks it directly with setTimestamp. Audio still needs a fresh decoder
+        // at the new offset, which is the same work as the full-swap path.
+        val safeUrl = MediaHostGuard.resolveSafeUrl(streamSet.currentVideo.url)
+        if (old.javaCppPipe.currentUrl == safeUrl && old.javaCppPipe.expectedW == w && old.javaCppPipe.expectedH == h) {
+            if (old.javaCppPipe.requestInPlaceSeek(offsetNanos)) {
+                val oldAudio = audioHalf
+                audioHalf = null
+                oldAudio?.stop?.set(true)
+                audio.stop()
+                clock.reset(offsetNanos)
+                val aStop = AtomicBoolean()
+                try {
+                    val ap = buildAudioDecoder(streamSet, offsetNanos, aStop)
+                    val originKnown = audioOriginKnown()
+                    audioHalf = ap?.let {
+                        AudioHalf(
+                            it,
+                            audio.start(
+                                it, terminated, aStop,
+                                contentStartNanos = offsetNanos, originKnown = originKnown,
+                                startGate = null, onUnexpectedEnd = onAudioFailure,
+                                catchUp = if (originKnown) AudioSink.CatchUp(offsetNanos) { clock.currentTime() } else null,
+                            ),
+                            aStop,
+                        )
+                    }
+                    discardHalvesAsync(null, oldAudio)
+                    logger.debug("$debugLabel In-place seek to ${offsetNanos / 1_000_000} ms (video grabber reused).")
+                    return true
+                } catch (e: IOException) {
+                    logger.error("$debugLabel Failed to restart audio after in-place seek.", e)
+                    discardHalvesAsync(null, oldAudio)
+                    return false
+                }
+            }
+            // requestInPlaceSeek returned false (no grabber) — fall through to full channel swap
+        }
+
+        // ── Standard path: full channel swap ──
         // Freeze the picture and cut the sound right away
         old.stop.set(true)
         val oldAudio = audioHalf

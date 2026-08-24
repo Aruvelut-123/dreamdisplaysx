@@ -92,6 +92,14 @@ internal class JavaCppVideoPipe(
     @Volatile
     private var grabber: FFmpegFrameGrabber? = null
 
+    /** URL currently open in [grabber], used to decide whether an in-place seek is possible. */
+    @Volatile
+    internal var currentUrl: String? = null
+        private set
+
+    /** Pending in-place seek target in nanos; 0 = none. The reader loop consumes and applies it. */
+    private val seekRequestedNanos = AtomicLong(0L)
+
     /** The reader thread, alive while the session is active. */
     @Volatile
     private var readerThread: Thread? = null
@@ -182,6 +190,8 @@ internal class JavaCppVideoPipe(
             return null
         }
         grabber = g
+        currentUrl = url
+        seekRequestedNanos.set(0L)
 
         val frameNs = (1_000_000_000.0 / outputFps(sourceFps)).toLong()
         val prebuffer = FramePrebuffer.createIfEnabled(
@@ -199,6 +209,18 @@ internal class JavaCppVideoPipe(
         ).also { it.start() }
         readerThread = thread
         return thread
+    }
+
+    /**
+     * Requests an in-place seek on the existing grabber (no re-open, no re-probe).
+     * The reader loop picks this up at the next frame boundary and applies
+     * [g.setTimestamp] directly on the same grabber. Returns true when a seek was
+     * scheduled; false if the pipe has no active grabber to seek on.
+     */
+    fun requestInPlaceSeek(offsetNanos: Long): Boolean {
+        if (grabber == null) return false
+        seekRequestedNanos.set(offsetNanos)
+        return true
     }
 
     /**
@@ -265,6 +287,23 @@ internal class JavaCppVideoPipe(
         var errorMessage = ""
 
         while (!terminated.get() && !stopFlag.get()) {
+            // In-place seek: when the session manager requests a new position on the same
+            // grabber, seek it directly and reset the pipeline state instead of killing the
+            // old pipe and creating a new one (which re-opens the network connection and
+            // re-probes the stream, both slow and failure-prone).
+            val seekTo = seekRequestedNanos.getAndSet(0L)
+            if (seekTo != 0L) {
+                doInPlaceSeek(seekTo, surface, prebuffer, onFirstFrame)
+                // Reset the per-seek locals so the loop continues from the new position.
+                videoPts = seekTo
+                firstFrame = false
+                normalEos = false
+                errorMessage = ""
+                firstRawPtsNanos = Long.MIN_VALUE
+                lastFrameReceivedNanos.set(System.nanoTime())
+                continue
+            }
+
             // Warm park
             val pk = parked
             if (pk != null && pk.get()) {
@@ -748,4 +787,31 @@ internal class JavaCppVideoPipe(
     /** Frame rate assumption for sources without a valid FPS. */
     private fun outputFps(sourceFps: Double): Double =
         sourceFps.takeIf { it.isFinite() && it > 1.0 && it <= 240.0 } ?: 30.0
+
+    /**
+     * Applies an in-place seek to [offsetNanos] on the existing grabber: seeks the already-open
+     * stream (no network re-open, no re-probe) and resets the frame pipeline so playout restarts
+     * at the new position. Runs on the reader thread; [prebuffer] / [surface] are reader-owned.
+     */
+    private fun doInPlaceSeek(
+        offsetNanos: Long,
+        surface: FrameSurface,
+        prebuffer: FramePrebuffer?,
+        onFirstFrame: () -> Unit,
+    ) {
+        val g = grabber ?: return
+        try {
+            // Seek the same grabber directly (nanos -> micros), exactly like the initial open.
+            g.setTimestamp(offsetNanos / 1000L)
+            logger.debug("$debugLabel In-place seek to ${offsetNanos / 1_000_000} ms on existing grabber.")
+            prebuffer?.resetForSeek(onFirstFrame)
+        } catch (e: Exception) {
+            logger.warn("$debugLabel In-place seek to ${offsetNanos / 1_000_000} ms failed: ${e.message}")
+            // Fall back to a hard teardown; caller goes through the full re-open path.
+            try { g.stop() } catch (_: Exception) { }
+            return
+        }
+        surface.clear()
+        // PTS anchoring of the new timeline starts over.
+    }
 }
