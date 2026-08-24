@@ -781,9 +781,6 @@ internal class JavaCppVideoPipe(
         // Skip the frame-rate probe: we already know the target FPS from the resolver, and
         // fpsprobesize would otherwise read and discard extra frames before the first grab.
         g.setOption("fpsprobesize", "0")
-        // Direct I/O: skip libavformat's internal streaming buffer where the format allows it,
-        // so the first decoded frame arrives sooner (at the cost of more syscalls, which is fine).
-        g.setOption("avioflags", "direct")
         g.setOption("rw_timeout", "15000000")
         g.setOption("user_agent", USER_AGENT)
         // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer;

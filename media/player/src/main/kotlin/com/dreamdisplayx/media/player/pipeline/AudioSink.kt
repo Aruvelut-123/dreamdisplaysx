@@ -29,9 +29,6 @@ internal class AudioSink(private val debugLabel: String) {
         /** Stereo 16-bit PCM: 4 bytes per frame. One second is SAMPLE_RATE * BYTES_PER_FRAME bytes. */
         const val BYTES_PER_FRAME = 4
 
-        /** Max time the audio thread waits for the first video frame before starting anyway (3 seconds). */
-        private const val AUDIO_GATE_TIMEOUT_NANOS = 3_000_000_000L
-
         /** Chunk size for each read from the audio process and each write to the line. 1 / 20 s of stereo 16-bit PCM */
         private const val CHUNK_BYTES = SAMPLE_RATE * 2 * 2 / 20
 
@@ -848,21 +845,12 @@ internal class AudioSink(private val debugLabel: String) {
         stopFlag: AtomicBoolean,
     ): Boolean {
         if (gate == null || gate.count == 0L) return true
-        // Wait for the video first frame or a timeout — if the video open/seek is slow
-        // (e.g. network latency, slow probe) the gate would otherwise block audio forever,
-        // causing the audio clock to stall while the video PTS advances, producing the
-        // "Pacing wait … clock stalled" pattern and a 5-second frozen video.
-        val deadline = System.nanoTime() + AUDIO_GATE_TIMEOUT_NANOS
         while (!terminated.get() && !stopFlag.get()) {
             try {
                 if (gate.await(50L, TimeUnit.MILLISECONDS)) return true
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
                 return false
-            }
-            if (System.nanoTime() >= deadline) {
-                logger.warn("$debugLabel [audio] start gate timed out after ${AUDIO_GATE_TIMEOUT_NANOS / 1_000_000} ms — starting audio without gate.")
-                return true
             }
         }
         return false

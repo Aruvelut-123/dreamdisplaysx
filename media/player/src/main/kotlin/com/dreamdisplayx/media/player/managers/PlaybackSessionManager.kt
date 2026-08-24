@@ -387,9 +387,12 @@ internal class PlaybackSessionManager(
                             audio.start(
                                 it, terminated, aStop,
                                 contentStartNanos = offsetNanos, originKnown = originKnown,
-                                // Gate audio on the first frame of the new timeline, so sound does
-                                // not lead the picture after a seek (same as the full-swap path).
                                 startGate = firstVideoFrame, onUnexpectedEnd = onAudioFailure,
+                                // The video was already playing (in-place seek is instant) while the
+                                // audio decoder was opening, so when the gate opens the audio is
+                                // behind by its own open+probe time. Skip that span of PCM so sound
+                                // joins the current picture instead of trailing it for the session.
+                                catchUp = AudioSink.CatchUp(offsetNanos) { pacingClockNanos() },
                             ),
                             aStop,
                         )
