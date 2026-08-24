@@ -100,9 +100,12 @@ internal object FramePacing {
 
     /**
      * Any diff larger than this, for a caller that has no independent way to tell a stale-timeline frame from real drift,
-     * is treated as a stale-timeline frame.
+     * is treated as a stale-timeline frame.  Raised from 1s to 10s because the audio decoder can take
+     * several seconds to produce its first PCM (network probe, CDN latency), and during that window the
+     * audio clock is properly behind the video PTS — not on a different timeline.  Dropping frames there
+     * as "stale" freezes the picture long after the audio recovers.
      */
-    private const val STALE_TIMELINE_DIFF_NS = 1_000_000_000L
+    private const val STALE_TIMELINE_DIFF_NS = 10_000_000_000L
 
     /**
      * Give up on a frame after actually waiting this long: either it belongs to a dead timeline (survived a seek's flush) or the clock is stuck.
