@@ -101,6 +101,6 @@
   "dreamdisplayx.sort.watched": "Просмотрено",
   "dreamdisplayx.ui.custom": "Ссылка",
   "dreamdisplayx.sort.my_links": "Мои ссылки",
-  "dreamdisplayx.suggestions.no_links": "Сохранённых ссылок пока нет. Вставьте ссылку на видео выше, чтобы включить его."
-  "dreamdisplayx.debug.commit": "unknown",
+  "dreamdisplayx.suggestions.no_links": "Сохранённых ссылок пока нет. Вставьте ссылку на видео выше, чтобы включить его.",
+  "dreamdisplayx.debug.commit": "unknown"
 }

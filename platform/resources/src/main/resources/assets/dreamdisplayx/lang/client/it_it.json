@@ -101,6 +101,6 @@
   "dreamdisplayx.sort.watched": "Visti",
   "dreamdisplayx.ui.custom": "Link",
   "dreamdisplayx.sort.my_links": "I miei link",
-  "dreamdisplayx.suggestions.no_links": "Nessun link salvato. Incolla sopra un link a un video per riprodurlo."
-  "dreamdisplayx.debug.commit": "unknown",
+  "dreamdisplayx.suggestions.no_links": "Nessun link salvato. Incolla sopra un link a un video per riprodurlo.",
+  "dreamdisplayx.debug.commit": "unknown"
 }

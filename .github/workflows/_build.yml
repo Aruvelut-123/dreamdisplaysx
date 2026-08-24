@@ -325,14 +325,13 @@ jobs:
       # in the packed resources. Gradle's processResources expand cannot be
       # relied on (it silently skips resources outside the module's own source
       # set), so the CI job rewrites the files on disk before the build runs.
+      # The Python helper rewrites the JSON properly (language files may contain
+      # non-ASCII text, so sed/power-shell byte surgery corrupts them).
       - name: Inject commit hash into lang files
         run: |
           COMMIT="${GITHUB_SHA:0:8}"
           echo "Injecting commit $COMMIT into client lang files"
-          git rev-parse --short HEAD || true
-          for f in platform/resources/src/main/resources/assets/dreamdisplayx/lang/client/*.json; do
-            sed -i "s/\"dreamdisplayx.debug.commit\": \"unknown\"/\"dreamdisplayx.debug.commit\": \"${COMMIT}\"/" "$f"
-          done
+          python scripts/inject_commit_hash.py "$COMMIT"
           grep 'dreamdisplayx.debug.commit' platform/resources/src/main/resources/assets/dreamdisplayx/lang/client/en_us.json
 
       - name: Download sqlite native archives
