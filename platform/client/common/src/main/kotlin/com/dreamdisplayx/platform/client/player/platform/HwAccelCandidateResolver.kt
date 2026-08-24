@@ -15,9 +15,10 @@ import com.dreamdisplayx.util.OsInfo
  *  - Windows NVIDIA     → `cuda` (NVDEC), fallback `d3d11va`
  *  - Windows AMD        → `amf`, fallback `d3d11va`
  *  - Windows unknown GPU→ `d3d11va` (global Windows fallback)
- *  - Linux              → `vaapi` (global Linux fallback), `vulkan` preferred when a Vulkan
+ *  - Windows + Vulkan renderer → vendor-specific backend first (`vulkan` appended as a
+ *    trailing fallback when available; on Windows the GPU vendor's decoder is always preferred)
+ *  - Linux              → `vaapi` (global Linux fallback); `vulkan` preferred when a Vulkan
  *    render backend is active
- *  - Vulkan render backend (e.g. 26.2) prepends `vulkan` on every platform except macOS.
  *
  * The exact FFmpeg build capabilities are verified later by `HwAccelEnumerator` inside the video
  * pipe; the candidates here are the *desired* priority list, and an unavailable or failed backend
@@ -38,8 +39,11 @@ internal object HwAccelCandidateResolver {
                     Vendor.AMD -> listOf("amf", "d3d11va")
                     Vendor.UNKNOWN -> listOf("d3d11va")
                 }
-                if (vulkanBackend) listOf("vulkan") + vendorPlan else vendorPlan
+                // On Windows the vendor-specific decoder always wins; Vulkan is only a trailing
+                // fallback when the Vulkan renderer is active and it is available.
+                if (vulkanBackend) vendorPlan + "vulkan" else vendorPlan
             }
+            // On Linux Vulkan is a real decode backend (VA-API on Vulkan WSI); prefer it there.
             OsInfo.isLinux -> if (vulkanBackend) listOf("vulkan", "vaapi") else listOf("vaapi")
             else -> emptyList()
         }

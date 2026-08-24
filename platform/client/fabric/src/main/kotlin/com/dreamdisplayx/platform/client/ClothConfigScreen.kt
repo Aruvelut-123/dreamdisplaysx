@@ -75,10 +75,9 @@ object ClothConfigScreenProvider {
             addAll(HwAccelEnumerator.availableBackends())
         }
         general.addEntry(
-            entryBuilder.startDropdownMenu(
+            entryBuilder.startStringDropdownMenu(
                 Component.translatable(ConfigScreenText.Keys.DECODER),
                 config.hwaccelDecoder.ifEmpty { "auto" },
-                { it }, // String → String identity parser
                 { v -> ConfigScreenText.decoderLabel(v) }, // String → Component display
             )
                 .setDefaultValue("auto")
