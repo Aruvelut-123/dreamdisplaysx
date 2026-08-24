@@ -28,6 +28,12 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 - **F3 debug overlay counters** — `framesToGpu` / `framesDropped` are now collected unconditionally (they were gated behind a debug flag and always showed 0); the mod name renders in blue and the version in green.
 - **`/display info` duration** — displays in any mode now report their resolved duration to the server (previously only SYNCED/BROADCAST sent it, so other displays showed "Unknown").
 - **FFmpeg info-log filter** — global `av_log_set_level(AV_LOG_ERROR)` in the JavaCPP pipelines (video, audio, frame extractor), silencing the noisy `avformat_open_input rejected some options` stream dumps.
+- **Audio CDN failover on A/V drift** — the prebuffer now reports genuine drift resyncs (video falling > 5 s behind the audio clock); after 3 of them the player switches the audio stream to the next backup CDN instead of staying on a bad line. The normal pacing skips (fresh frame ready) do not count.
+- **Bilibili unreleased content filtered** — search results whose badge says 预告 / 未上映 / 敬请期待 / 即将上映 / 尚未上映 are no longer offered, so clicking them can't fail with "Bilibili video/room could not be reached" and then confuse the display.
+- **Bilibili resolution not cached** — VOD stream resolution is resolved fresh on every play (no 30-minute cache), so after a re-login the player immediately picks the credential's highest quality instead of stale anonymous 480p.
+- **Commit ID in build & F3** — every build stamps `assets/dreamdisplayx/commit.txt` with `git rev-parse --short HEAD`; the startup log prints `v1.9.4.1 Developer (abcd123)` and the F3 debug overlay shows a `Commit: <hash>` line. Works for developer, preview, and release builds alike.
+- **Fabric Cloth Config screen** — the Fabric ModMenu "Configure" button now opens a proper Cloth Config screen (boolean toggles, int/double fields, enum selector). Cloth Config is an optional dependency: when it is not installed, the button is hidden and the game is unaffected. The old hand-drawn `ClientConfigScreen` was removed.
+- **Seek to 0 / EOS reliability** — the in-place seek request sentinel is now `Long.MIN_VALUE` so seeking to the very beginning is honored (previously 0 was indistinguishable from "no request": video never moved, audio gate never opened → fast-forwarded silent video); `grabImage()`'s `@NotNull`-induced `NullPointerException` ("must not be null") at EOF is treated as a clean end, and an in-place seek that fails releases the audio start gate so sound can never be stuck muted.
 
 ## CI / Build
 

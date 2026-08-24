@@ -29,6 +29,7 @@ repositories {
     mavenCentral()
     maven("https://maven.fabricmc.net/")
     maven("https://maven.terraformersmc.com/releases/")
+    maven("https://maven.shedaniel.me/")
     maven("https://maven.parchmentmc.org")
     maven("https://maven.quiltmc.org/repository/release/")
     maven("https://maven.quiltmc.org/repository/snapshot/")
@@ -114,8 +115,10 @@ dependencies {
     // ships deobfuscated so plain compileOnly is correct there.
     if (isLegacyObfuscated) {
         "modCompileOnly"("com.terraformersmc:modmenu:${scVersion("modmenu.version")}")
+        "modCompileOnly"("me.shedaniel.cloth:cloth-config-fabric:${scVersion("cloth.config.version")}")
     } else {
         compileOnly("com.terraformersmc:modmenu:${scVersion("modmenu.version")}")
+        compileOnly("me.shedaniel.cloth:cloth-config-fabric:${scVersion("cloth.config.version")}")
     }
     compileOnly("io.papermc.paper:paper-api:${scVersion("paper.api.version")}")
     compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
