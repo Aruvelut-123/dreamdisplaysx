@@ -17,6 +17,11 @@
 - 视频播放前测速自动选择最快 CDN（复杂功能，需讨论方案）
 - 分辨率问题：走近看 1080p 和 4K 一样模糊——排查纹理/解码尺寸
 - Android 平台支持（重新评估可行性）
+- 移除客户端 V1 协议支持
+- 支持 WorldGuard 和领地插件（Land Claim Plugin）
+- 同内容播放支持（Same content playback）
+- 播放列表与队列（V3 协议）
+- Flashback 回放支持
 
 ## 已完成
 - ✅ 字号变化时自动清理 fontCache/metricsCache（防止无限增长）
