@@ -103,6 +103,12 @@ class MediaPlayer(
         private const val SEEK_END_GUARD_NANOS = 500_000_000L
 
         /**
+         * When the picture falls this far behind the audio clock more than this many times, the
+         * audio decoder's CDN is presumably bad — switch the audio stream to its next backup CDN.
+         */
+        private const val AUDIO_DRIFT_RESYNC_THRESHOLD = 3
+
+        /**
          * On reappearance, cached replay resumes this far before the saved position. Default 0 = zero rewind: the saved position itself is the resume point.
          */
         private val REPLAY_LEAD_NS: Long =
@@ -201,9 +207,16 @@ class MediaPlayer(
     @Volatile
     private var cdnVideoIndex = -1
 
-    /** Current CDN backup index for the audio stream. */
+    /** Current CDN backup index for the audio stream (-1 = primary URL, 0 = first backup, etc.). */
     @Volatile
     private var cdnAudioIndex = -1
+
+    /**
+     * How many times the prebuffer has dropped a frame because the video is > 5 s behind the audio
+     * clock. When this reaches [AUDIO_DRIFT_RESYNC_THRESHOLD] the audio stream is switched to the
+     * next backup CDN (if available). Reset on every successful stream start.
+     */
+    private var audioDriftResyncCount = 0
 
     /** In-place audio restarts used by the current session (see [handleAudioFailure]); reset per session. */
     private val audioRestartAttempts = AtomicInteger(0)
@@ -699,7 +712,8 @@ class MediaPlayer(
                 retryPolicy.reset()
                 cdnVideoIndex = -1
                 cdnAudioIndex = -1
-            }
+            },
+            onDriftResync = { notifyAudioDriftResync() },
         )
         if (sessionManager.isPlaying) {
             state.set(PlaybackState.PLAYING)
@@ -938,6 +952,34 @@ class MediaPlayer(
             return true
         }
         return false
+    }
+
+    /**
+     * Called from the prebuffer consumer thread when a frame is dropped because the audio clock
+     * is > 5 s ahead of the video PTS (genuine A/V drift, not a normal pacing skip). Counts
+     * consecutive resyncs and switches the audio stream to the next backup CDN once the threshold
+     * is reached. Counter is reset on every successful stream start.
+     */
+    internal fun notifyAudioDriftResync() {
+        if (++audioDriftResyncCount < AUDIO_DRIFT_RESYNC_THRESHOLD) return
+        audioDriftResyncCount = 0
+        safeExecute {
+            val ss = streams ?: return@safeExecute
+            val audio = ss.currentAudio
+            val audioBackups = audio.backupUrls
+            if (cdnAudioIndex < audioBackups.size - 1) {
+                cdnAudioIndex++
+                val newUrl = audioBackups[cdnAudioIndex]
+                logger.warn("$debugLabel A/V drift: switching audio to backup CDN #${cdnAudioIndex + 1}.")
+                streams = ss.copy(currentAudio = audio.copy(url = newUrl))
+                val pos = clock.currentTime()
+                if (sessionManager.beginSeek(ss.copy(currentAudio = audio.copy(url = newUrl)), pos, lastQuality)) {
+                    watchdog.start()
+                } else {
+                    startStreams(ss.copy(currentAudio = audio.copy(url = newUrl)), pos)
+                }
+            }
+        }
     }
 
     /**

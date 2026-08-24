@@ -154,6 +154,14 @@ internal class FramePrebuffer(
         drainAndRecycle()
     }
 
+    /**
+     * Called when a frame is dropped because the audio clock is more than [AV_DRIFT_RESYNC_NS]
+     * ahead of the video PTS — the decoder is falling behind the audio line. The caller may use
+     * this to switch to a backup audio CDN after a few consecutive resyncs.
+     */
+    @Volatile
+    var onDriftResync: (() -> Unit)? = null
+
     /** Drops queued raw frames while keeping the prebuffer alive for a later un-park. */
     fun trimForPark() {
         drainAndRecycle()
@@ -256,7 +264,13 @@ internal class FramePrebuffer(
                 if (dropped || flushRequested) {
                     surface.recycleFrameBuffer(tf.buf)
                     // A drop caused by a flush or a teardown says nothing about A / V health
-                    if (dropped && !flushRequested && alive()) recordFrame(lateNs, presentedIt = false)
+                    if (dropped && !flushRequested && alive()) {
+                        recordFrame(lateNs, presentedIt = false)
+                        // Only genuine A/V drift resyncs (the decoder is > 5 s behind the audio
+                        // clock) fire the CDN-failover hook; drops caused by a fresh frame being
+                        // ready are normal pacing and must not count.
+                        if (lateNs > AV_DRIFT_RESYNC_NS) onDriftResync?.invoke()
+                    }
                     continue
                 }
                 recordFrame(lateNs, presentedIt = true)

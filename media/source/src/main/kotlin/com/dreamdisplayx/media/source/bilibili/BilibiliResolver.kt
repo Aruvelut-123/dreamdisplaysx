@@ -18,8 +18,11 @@ object BilibiliResolver : MediaResolverService {
     /** Alongside the other first-party in-process resolvers. */
     override val priority: Int = 10
 
-    /** Live playurl URLs are session-bound, so live entries expire fast; VODs are stable. */
-    private val cache = LiveAwareResolvedMediaCache(maxSize = 64, liveTtlSeconds = 25, staticTtlMinutes = 30)
+    /** Live playurl URLs are session-bound, so live entries expire fast; VODs are not cached
+     * so that login-state changes (e.g. rejoin after a Bilibili logout) always pick up the current
+     * credential and the highest available resolution — stale cached entries would otherwise keep
+     * serving e.g. 480p long after the user logged back in. */
+    private val cache = LiveAwareResolvedMediaCache(maxSize = 64, liveTtlSeconds = 25, staticTtlMinutes = 0)
 
     override fun canResolve(source: MediaSource): Boolean = source is MediaSource.Bilibili
 

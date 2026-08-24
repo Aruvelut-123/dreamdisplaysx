@@ -106,8 +106,8 @@ internal class JavaCppVideoPipe(
     @Volatile
     private var seekFirstFrameLatch: CountDownLatch? = null
 
-    /** Pending in-place seek target in nanos; 0 = none. The reader loop consumes and applies it. */
-    private val seekRequestedNanos = AtomicLong(0L)
+    /** Pending in-place seek target in nanos; [Long.MIN_VALUE] = none. The reader loop consumes and applies it. */
+    private val seekRequestedNanos = AtomicLong(Long.MIN_VALUE)
 
     /** The reader thread, alive while the session is active. */
     @Volatile
@@ -183,6 +183,8 @@ internal class JavaCppVideoPipe(
         parkFlag: AtomicBoolean? = null,
         presentPreview: Boolean = true,
         tolerateLateness: Boolean = true,
+        /** Called when the prebuffer drops a frame because the audio clock is > 5 s ahead of the video PTS. */
+        onDriftResync: (() -> Unit)? = null,
     ): Thread? {
         release()
         clear()
@@ -200,7 +202,7 @@ internal class JavaCppVideoPipe(
         }
         grabber = g
         currentUrl = url
-        seekRequestedNanos.set(0L)
+        seekRequestedNanos.set(Long.MIN_VALUE)
 
         val frameNs = (1_000_000_000.0 / outputFps(sourceFps)).toLong()
         val prebuffer = FramePrebuffer.createIfEnabled(
@@ -208,6 +210,7 @@ internal class JavaCppVideoPipe(
             presentPreview, tolerateLateness, parkFlag,
         ).also { activePrebuffer = it }
         prebuffer?.onPresent = { buf -> feedSink(buf, w, h) }
+        prebuffer?.onDriftResync = onDriftResync
 
         val thread = daemon(
             {
@@ -304,8 +307,8 @@ internal class JavaCppVideoPipe(
             // grabber, seek it directly and reset the pipeline state instead of killing the
             // old pipe and creating a new one (which re-opens the network connection and
             // re-probes the stream, both slow and failure-prone).
-            val seekTo = seekRequestedNanos.getAndSet(0L)
-            if (seekTo != 0L) {
+            val seekTo = seekRequestedNanos.getAndSet(Long.MIN_VALUE)
+            if (seekTo != Long.MIN_VALUE) {
                 doInPlaceSeek(seekTo, surface, prebuffer, onFirstFrame)
                 // Reset the per-seek locals so the loop continues from the new position.
                 videoPts = seekTo
@@ -340,6 +343,14 @@ internal class JavaCppVideoPipe(
                 }
             } catch (e: Exception) {
                 if (!terminated.get() && !stopFlag.get()) {
+                    // JavaCV's grabImage() declares @NotNull but the native FFmpeg layer can
+                    // return null at end of stream — the Kotlin/Java null check then throws
+                    // "grabImage() must not be null" (NullPointerException). Treat that as a
+                    // clean EOS, not an unrecoverable error.
+                    if (e.message?.contains("must not be null") == true || e is NullPointerException) {
+                        normalEos = true
+                        break
+                    }
                     errorMessage = e.message ?: "grabImage failed"
                     logger.warn("$debugLabel grabImage: ${errorMessage}")
                 }
@@ -833,6 +844,11 @@ internal class JavaCppVideoPipe(
             // right after onFirstFrame() fires for the first post-seek frame.
         } catch (e: Exception) {
             logger.warn("$debugLabel In-place seek to ${offsetNanos / 1_000_000} ms failed: ${e.message}")
+            // Release the audio gate so the player doesn't deadlock with silence when the in-place
+            // seek fails; the caller falls through to a full channel-swap (or error) which rebuilds
+            // the audio half with its own latch.
+            seekFirstFrameLatch?.countDown()
+            seekFirstFrameLatch = null
             // Fall back to a hard teardown; caller goes through the full re-open path.
             try { g.stop() } catch (_: Exception) { }
             return

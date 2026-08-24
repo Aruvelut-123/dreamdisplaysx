@@ -108,6 +108,7 @@ internal class PlaybackSessionManager(
             onFirstFrame: () -> Unit, onEos: (String, Boolean) -> Unit,
             getAudioClock: () -> Long = ::pacingClockNanos, parkFlag: AtomicBoolean? = null,
             presentPreview: Boolean = true, tolerateLateness: Boolean = true,
+            onDriftResync: (() -> Unit)? = null,
         ) {
             val safeUrl = MediaHostGuard.resolveSafeUrl(streamSet.currentVideo.url)
             val fps = outputFps(streamSet.currentVideo.fps)
@@ -118,6 +119,7 @@ internal class PlaybackSessionManager(
                 getBrightness = getBrightness, getStretchMode = getStretchMode,
                 onEos = onEos, parkFlag = parkFlag,
                 presentPreview = presentPreview, tolerateLateness = tolerateLateness,
+                onDriftResync = onDriftResync,
             ) ?: throw IOException("JavaCPP video session failed to start")
             thread = vt
         }
@@ -304,6 +306,7 @@ internal class PlaybackSessionManager(
     fun start(
         streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int, live: Boolean = false,
         onFirstFrame: () -> Unit = {},
+        onDriftResync: (() -> Unit)? = null,
     ) {
         stop()
         if (terminated.get()) return
@@ -322,7 +325,8 @@ internal class PlaybackSessionManager(
                 clock.markFirstFrame()
                 firstVideoFrame.countDown()
                 onFirstFrame()
-            }, onEos = onStreamEnd, parkFlag = parkFlag)
+            }, onEos = onStreamEnd, parkFlag = parkFlag,
+                onDriftResync = onDriftResync)
             val aStop = AtomicBoolean()
             val ap = try {
                 buildAudioDecoder(streamSet, offsetNanos, aStop)

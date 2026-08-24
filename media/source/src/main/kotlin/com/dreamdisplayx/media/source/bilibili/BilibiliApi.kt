@@ -137,6 +137,8 @@ object BilibiliApi {
             val seasonId = item.optLong("season_id") ?: return@mapNotNull null
             val mode = item.optInt("media_mode")
             val label = accessLabelFor(item)
+            // Skip unreleased / trailer items that cannot be played
+            if (label == "unreleased") return@mapNotNull null
             BilibiliSearchItem(
                 title = seriesTitle(item),
                 uploader = null,
@@ -168,6 +170,8 @@ object BilibiliApi {
             val seasonId = item.optLong("season_id") ?: return@mapNotNull null
             val mode = item.optInt("media_mode")
             val label = accessLabelFor(item)
+            // Skip unreleased / trailer items that cannot be played
+            if (label == "unreleased") return@mapNotNull null
             BilibiliSearchItem(
                 title = seriesTitle(item),
                 uploader = null,
@@ -214,6 +218,7 @@ object BilibiliApi {
      * a marker for genuinely restricted content:
      *  - "vip"  for pink "大会员" / "VIP" badges (watchable with a Big Membership),
      *  - "paid" for yellow pay-per-view badges ("付费" / "会员特价" / "单片购买"),
+     *  - "unreleased" for items that are not yet available ("预告" / "未上映" / "敬请期待"),
      *  - null   otherwise (free, or other badge kinds like "独家" which aren't paywalled here).
      * `media_mode` is deliberately not used — Bilibili sets it to 2 for both VIP and pay-per-view.
      */
@@ -224,6 +229,9 @@ object BilibiliApi {
         }
         val joined = badgeTexts.joinToString(" ")
         return when {
+            // Unreleased / trailer items cannot be played at all — filter out via accessLabel
+            joined.contains("预告") || joined.contains("未上映") || joined.contains("敬请期待")
+                || joined.contains("即将上映") || joined.contains("尚未上映") -> "unreleased"
             joined.contains("大会员") || joined.contains("VIP") -> "vip"
             joined.contains("付费") || joined.contains("特价") || joined.contains("购买") || joined.contains("单片") -> "paid"
             else -> null
