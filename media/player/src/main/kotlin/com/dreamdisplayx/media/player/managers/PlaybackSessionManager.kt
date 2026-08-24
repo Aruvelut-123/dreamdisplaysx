@@ -336,18 +336,13 @@ internal class PlaybackSessionManager(
                 throw e
             }
             active = channel
-            // Let audio catch up to where the video *actually is* (real decoded PTS), not wall
-            // time (which includes the decoder's own open time). The audio pump joins the timeline
-            // by skipping leading PCM up to the video position, so both start in sync.
-            val catchUp = AudioSink.CatchUp(offsetNanos) { videoPtsNanos().takeIf { it != Long.MIN_VALUE } ?: offsetNanos }
             audioHalf = ap?.let {
                 AudioHalf(
                     it,
                     audio.start(
                         it, terminated, aStop,
                         contentStartNanos = offsetNanos, originKnown = audioOriginKnown(),
-                        startGate = firstVideoFrame, catchUp = catchUp,
-                        onUnexpectedEnd = onAudioFailure,
+                        startGate = firstVideoFrame, onUnexpectedEnd = onAudioFailure,
                     ),
                     aStop,
                 )
@@ -386,19 +381,13 @@ internal class PlaybackSessionManager(
                 try {
                     val ap = buildAudioDecoder(streamSet, offsetNanos, aStop)
                     val originKnown = audioOriginKnown()
-                    val catchUp = if (originKnown) {
-                        AudioSink.CatchUp(offsetNanos) { videoPtsNanos().takeIf { it != Long.MIN_VALUE } ?: offsetNanos }
-                    } else {
-                        null
-                    }
                     audioHalf = ap?.let {
                         AudioHalf(
                             it,
                             audio.start(
                                 it, terminated, aStop,
                                 contentStartNanos = offsetNanos, originKnown = originKnown,
-                                startGate = firstVideoFrame, catchUp = catchUp,
-                                onUnexpectedEnd = onAudioFailure,
+                                startGate = firstVideoFrame, onUnexpectedEnd = onAudioFailure,
                             ),
                             aStop,
                         )
@@ -440,15 +429,13 @@ internal class PlaybackSessionManager(
                 throw e
             }
             synchronized(switchLock) { active = channel }
-            val catchUp = AudioSink.CatchUp(offsetNanos) { videoPtsNanos().takeIf { it != Long.MIN_VALUE } ?: offsetNanos }
             audioHalf = ap?.let {
                 AudioHalf(
                     it,
                     audio.start(
                         it, terminated, aStop,
                         contentStartNanos = offsetNanos, originKnown = audioOriginKnown(),
-                        startGate = firstVideoFrame, catchUp = catchUp,
-                        onUnexpectedEnd = onAudioFailure,
+                        startGate = firstVideoFrame, onUnexpectedEnd = onAudioFailure,
                     ),
                     aStop,
                 )
@@ -491,7 +478,7 @@ internal class PlaybackSessionManager(
             ap, terminated, aStop,
             contentStartNanos = offsetNanos, originKnown = originKnown,
             startGate = null, onUnexpectedEnd = onAudioFailure,
-            catchUp = if (originKnown) AudioSink.CatchUp(offsetNanos) { videoPtsNanos().takeIf { it != Long.MIN_VALUE } ?: offsetNanos } else null,
+            catchUp = if (originKnown) AudioSink.CatchUp(offsetNanos) { clock.currentTime() } else null,
         )
         audioHalf = AudioHalf(ap, at, aStop)
         logger.debug("$debugLabel Audio half restarted in place at ${offsetNanos / 1_000_000} ms.")
@@ -606,11 +593,7 @@ internal class PlaybackSessionManager(
         // drops the span the new track fell behind the live clock so it joins already lip-synced. The
         // HLS-feeder path (live) carries its own exact PES-PTS anchor instead, so no byte skip there.
         val originKnown = audioOriginKnown()
-        val catchUp = if (originKnown) {
-            AudioSink.CatchUp(seekNanos) { videoPtsNanos().takeIf { it != Long.MIN_VALUE } ?: seekNanos }
-        } else {
-            null
-        }
+        val catchUp = if (originKnown) AudioSink.CatchUp(seekNanos) { clock.currentTime() } else null
         val oldAudio = audioHalf
         audio.startSwitch(
             ap, terminated, aStop,
@@ -859,12 +842,6 @@ internal class PlaybackSessionManager(
 
     /** The position playback is actually at, for callers that need to freeze or save it. */
     fun currentPacingNanos(): Long = pacingClockNanos()
-
-    /**
-     * Current video PTS from the active pipe, used as the drift reference for audio catch-up.
-     * [Long.MIN_VALUE] when no frame has been decoded yet.
-     */
-    private fun videoPtsNanos(): Long = active?.javaCppPipe?.lastDecodedPtsNanos ?: Long.MIN_VALUE
 
     /** Exact audio-vs-video offset from shared PTS: video first raw PTS, no HLS feeder with JavaCPP. */
     private fun exactAvBiasNanos(): Long? {
