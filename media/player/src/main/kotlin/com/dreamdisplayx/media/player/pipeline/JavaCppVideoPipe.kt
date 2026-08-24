@@ -84,6 +84,12 @@ internal class JavaCppVideoPipe(
     var firstRawPtsNanos: Long = Long.MIN_VALUE
         private set
 
+    /** PTS of the most recently decoded frame; captured once when audio first catches up, so the
+     *  audio clock can be anchored to the video's real decoded progress instead of the seek offset. */
+    @Volatile
+    var lastDecodedPtsNanos: Long = Long.MIN_VALUE
+        private set
+
     private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGB24)
 
     @Volatile
@@ -403,6 +409,7 @@ internal class JavaCppVideoPipe(
             // Use the frame's timestamp if available, otherwise synthetic. Convert µs → ns so the
             // prebuffer / pacing (which compare against the nanosecond audio clock) see correct drift.
             val framePts = if (frame.timestamp > 0) frame.timestamp * 1000L else videoPts
+            lastDecodedPtsNanos = framePts
 
             if (prebuffer != null) {
                 if (!MediaPlayer.captureSamples) {
