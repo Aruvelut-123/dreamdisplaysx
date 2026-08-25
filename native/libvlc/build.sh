@@ -77,7 +77,8 @@ case "$OS_NAME" in
       --enable-libvlc --enable-libvlccore
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
-      --disable-avcodec --disable-avformat --disable-swscale
+      --enable-avcodec --enable-avformat --enable-swscale
+      --enable-postproc --enable-avutil
       --disable-chromaprint --disable-bluray
       --enable-dbus --enable-pulse --enable-alsa
       --enable-xcb --enable-xvideo
@@ -97,7 +98,7 @@ case "$OS_NAME" in
     brew install autoconf automake libtool pkg-config gettext ragel yasm \
       freetype fontconfig libxml2 dbus gnutls \
       lua mad libogg libvorbis libtheora \
-      x264 x265 libvpx
+      x264 x265 libvpx ffmpeg
 
     # Homebrew installs gettext + libtool keg-only; force-link them
     brew link --overwrite gettext libtool 2>/dev/null || true
@@ -107,7 +108,8 @@ case "$OS_NAME" in
       --enable-libvlc --enable-libvlccore
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
-      --disable-avcodec --disable-avformat --disable-swscale
+      --enable-avcodec --enable-avformat --enable-swscale
+      --enable-postproc --enable-avutil
       --disable-chromaprint --disable-bluray
       --enable-dbus --enable-freetype --enable-fontconfig
       --enable-vorbis --enable-ogg --enable-mad
@@ -163,6 +165,7 @@ case "$OS_NAME" in
         ${MINGW_PREFIX}-x264 \
         ${MINGW_PREFIX}-x265 \
         ${MINGW_PREFIX}-libvpx \
+        ${MINGW_PREFIX}-ffmpeg \
         make gettext
     "
 
@@ -183,7 +186,8 @@ case "$OS_NAME" in
       --enable-libvlc --enable-libvlccore
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
-      --disable-avcodec --disable-avformat --disable-swscale
+      --enable-avcodec --enable-avformat --enable-swscale
+      --enable-postproc --enable-avutil
       --disable-chromaprint --disable-bluray
       --enable-freetype --enable-fontconfig
       --enable-vorbis --enable-ogg --enable-mad
@@ -217,15 +221,39 @@ make -j"${MAKE_JOBS}" 2>&1 | tail -20
 echo ">>> Installing to $OUT_LIBDIR"
 make install 2>&1 | tail -10
 
-# ── 4. Collect & verify ─────────────────────────────────────────────────────
+# ── 4. Normalize install layout ────────────────────────────────────────────
+# `make install` scatters files under prefix/lib (SOs) and prefix/lib/vlc/plugins.
+# Flatten to the loader's expected layout:
+#   $OUT_LIBDIR/libvlc.so | libvlc.dll | libvlc.dylib
+#   $OUT_LIBDIR/libvlccore.*
+#   $OUT_LIBDIR/plugins/...
 cd "$ROOT"
-echo ">>> Collected files in $OUT_LIBDIR:"
-ls -la "$OUT_LIBDIR/lib/"
-if [[ -d "$OUT_LIBDIR/lib/vlc/plugins" ]]; then
-  mv "$OUT_LIBDIR/lib/vlc/plugins" "$OUT_LIBDIR/plugins"
-  rm -rf "$OUT_LIBDIR/lib/vlc"
+echo ">>> Normalizing install layout in $OUT_LIBDIR"
+for sub in bin lib lib64 Lib Lib64; do
+  if [[ -d "$OUT_LIBDIR/$sub" ]]; then
+    # Lift library files up (DLLs install to bin/ on Windows, SOs to lib/ on Unix)
+    find "$OUT_LIBDIR/$sub" -maxdepth 1 -type f \
+      \( -name 'libvlc*' -o -name 'libvlccore*' \) -exec mv -f {} "$OUT_LIBDIR/" \;
+    # Move plugins dir if present under this subdir
+    if [[ -d "$OUT_LIBDIR/$sub/vlc/plugins" ]]; then
+      rm -rf "$OUT_LIBDIR/plugins"
+      mv "$OUT_LIBDIR/$sub/vlc/plugins" "$OUT_LIBDIR/plugins"
+    elif [[ -d "$OUT_LIBDIR/$sub/plugins" ]]; then
+      rm -rf "$OUT_LIBDIR/plugins"
+      mv "$OUT_LIBDIR/$sub/plugins" "$OUT_LIBDIR/plugins"
+    fi
+    rm -rf "$OUT_LIBDIR/$sub"
+  fi
+done
+# Any leftover nested vlc dir directly under output
+if [[ -d "$OUT_LIBDIR/vlc/plugins" ]]; then
+  rm -rf "$OUT_LIBDIR/plugins"
+  mv "$OUT_LIBDIR/vlc/plugins" "$OUT_LIBDIR/plugins"
+  rm -rf "$OUT_LIBDIR/vlc"
 fi
-if [[ -d "$OUT_LIBDIR/plugins" ]]; then
-  echo "  Plugins: $(find "$OUT_LIBDIR/plugins" -type f | wc -l) files"
-fi
+# Drop unwanted share/include/etc dirs
+rm -rf "$OUT_LIBDIR/share" "$OUT_LIBDIR/include" "$OUT_LIBDIR/etc"
+echo ">>> Collected files:"
+find "$OUT_LIBDIR" -maxdepth 1 -type f | sort
+echo "  Plugins: $(find "$OUT_LIBDIR/plugins" -type f 2>/dev/null | wc -l) files"
 echo ">>> Done building LibVLC $VLC_VER for $OS_NAME/$OS_ARCH"
