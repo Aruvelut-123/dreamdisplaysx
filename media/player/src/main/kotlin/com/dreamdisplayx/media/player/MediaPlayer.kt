@@ -19,6 +19,7 @@ import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.policy.RetryPolicy
 import com.dreamdisplayx.media.player.preparation.MediaPreparationService
 import com.dreamdisplayx.media.player.preparation.PreparedMedia
+import com.dreamdisplayx.media.player.cdn.CdnSpeedProbe
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.MediaUtil
@@ -712,8 +713,18 @@ class MediaPlayer(
         host.cancelQualityHandoff()
         audioRestartAttempts.set(0)
         lastAudioFailureNanos = 0L
+        // CDN speed probe: test all candidate CDN hosts and reorder streams so the fastest
+        // edge is used first, reducing the chance of stall-driven failover during playback.
+        val (probedVideo, probedAudio) = CdnSpeedProbe.reorderForPlayback(streamSet.currentVideo, streamSet.currentAudio)
+        val probedStreamSet = if (probedVideo != streamSet.currentVideo || probedAudio != streamSet.currentAudio) {
+            streamSet.copy(
+                currentVideo = probedVideo ?: streamSet.currentVideo,
+                currentAudio = probedAudio ?: streamSet.currentAudio,
+            )
+        } else streamSet
+
         sessionManager.start(
-            streamSet,
+            probedStreamSet,
             offsetNanos,
             lastQuality,
             live = liveStream,
