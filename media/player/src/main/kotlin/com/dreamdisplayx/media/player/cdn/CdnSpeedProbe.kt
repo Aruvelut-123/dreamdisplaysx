@@ -288,7 +288,9 @@ object CdnSpeedProbe {
             val elapsedMs = (System.nanoTime() - start) / 1_000_000.0
             if (elapsedMs <= 0.0) return Long.MAX_VALUE // instant = loopback
             val bytes = response.body.size.coerceAtLeast(1)
-            (bytes / elapsedMs / 1000.0).toLong().coerceAtLeast(1)
+            // bytes / elapsedMs = B/ms = MB/s × 1000 (since B/ms * 1000 = B/s, B/s / 1e6 = MB/s).
+            // So the raw quotient is already MB/s × 1000 — no extra factor needed.
+            (bytes / elapsedMs).toLong().coerceAtLeast(1)
         } catch (e: IOException) {
             logger.warn("CDN bandwidth probe for $host failed: ${e.message ?: e::class.java.simpleName}")
             -1
