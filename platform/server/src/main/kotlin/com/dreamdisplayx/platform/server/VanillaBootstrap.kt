@@ -134,33 +134,5 @@ object VanillaBootstrap {
                 }
             }
         }
-
-        // Hourly Bilibili session refresh: extend every stored credential before it expires.
-        ServerCoroutines.io.launch {
-            // First refresh after a short delay to let the server settle
-            delay(30_000L.milliseconds)
-            while (!server.isStopped) {
-                try {
-                    // Refresh global credential and broadcast to all online players
-                    CredentialActions.refreshAllBilibili(
-                        pushToPlayer = { playerUuid, credential ->
-                            val player = server.playerList.getPlayer(java.util.UUID.fromString(playerUuid))
-                            if (player != null) {
-                                VanillaNetworking.adapter.sendV2(listOf(player), credential)
-                            }
-                        },
-                        broadcastToAll = { credential ->
-                            val online = server.playerList.players
-                            if (online.isNotEmpty()) {
-                                VanillaNetworking.adapter.sendV2(online, credential)
-                            }
-                        },
-                    )
-                } catch (e: Exception) {
-                    com.dreamdisplayx.platform.server.VanillaServerState.logger.warn("Bilibili session refresh sweep failed.", e)
-                }
-                delay(1.hours)
-            }
-        }
     }
 }

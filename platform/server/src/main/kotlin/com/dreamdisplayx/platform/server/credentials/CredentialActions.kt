@@ -12,10 +12,12 @@ import org.slf4j.LoggerFactory
  * - `"<uuid>:bilibili_refresh"` — the refresh token (empty if not available)
  * - `"__global__:bilibili"` — the global SESSDATA cookie string (shared across all players)
  * - `"__global__:bilibili_refresh"` — the global refresh token
- * - `"__global__:bilibili_buvid3"` — the device fingerprint the passport API requires for
- *   session refresh (generated once on first login, same format as PiliPlus)
  *
  * When a global credential is set, it is broadcast to all online players.
+ *
+ * ⚠ Session refresh has been removed — Bilibili's passport API (`/x/passport-login/web/cookie/refresh`)
+ * now requires device-fingerprint parameters that are impractical to maintain in a headless server
+ * context.  When the stored SESSDATA expires the user must log in again via `/display login`.
  */
 object CredentialActions {
     private const val REFRESH_DELIMITER = "||"
@@ -29,11 +31,6 @@ object CredentialActions {
         if (refresh.isNotEmpty()) {
             CredentialStore.setGlobal("${platform}_refresh", refresh)
         }
-        // Generate a persistent buvid3 for the session-refresh flow
-        // (Bilibili's passport API returns -400 请求错误 without this device fingerprint).
-        if (CredentialStore.getGlobal("${platform}_buvid3").isNullOrEmpty()) {
-            CredentialStore.setGlobal("${platform}_buvid3", BilibiliSessionRefresher.generateBuvid3())
-        }
         return globalSnapshot()
     }
 
@@ -41,7 +38,6 @@ object CredentialActions {
     fun globalLogout(platform: String): PlatformCredentials {
         CredentialStore.clearGlobal(platform)
         CredentialStore.clearGlobal("${platform}_refresh")
-        CredentialStore.clearGlobal("${platform}_buvid3")
         return globalSnapshot()
     }
 
@@ -99,44 +95,5 @@ object CredentialActions {
         val idx = token.indexOf(REFRESH_DELIMITER)
         return if (idx >= 0) token.substring(0, idx) to token.substring(idx + 2)
         else token to ""
-    }
-
-    /**
-     * Refreshes the single global Bilibili session using its refresh token. On success the new
-     * SESSDATA and refresh token are stored and broadcast to every online player via
-     * [broadcastToAll]. Per-player refresh has been removed.     */
-    fun refreshAllBilibili(
-        pushToPlayer: (playerUuid: String, credentials: PlatformCredentials) -> Unit,
-        broadcastToAll: ((PlatformCredentials) -> Unit)? = null,
-    ) {
-        // Refresh global credential first
-        val globalRefreshToken = CredentialStore.getGlobal("bilibili_refresh")
-        val globalSessdata = CredentialStore.getGlobal("bilibili")
-        val globalBuvid3 = CredentialStore.getGlobal("bilibili_buvid3")
-        if (!globalRefreshToken.isNullOrEmpty() && !globalSessdata.isNullOrEmpty()) {
-            val result = BilibiliSessionRefresher.refresh(globalRefreshToken, globalSessdata, globalBuvid3)
-            if (result.success) {
-                if (result.cookie != null && result.cookie != globalSessdata) {
-                    CredentialStore.setGlobal("bilibili", result.cookie)
-                }
-                val newRefresh = result.refreshToken
-                if (newRefresh != null && newRefresh != globalRefreshToken) {
-                    CredentialStore.setGlobal("bilibili_refresh", newRefresh)
-                }
-                val newBuvid3 = result.buvid3
-                if (newBuvid3 != null && newBuvid3 != globalBuvid3) {
-                    CredentialStore.setGlobal("bilibili_buvid3", newBuvid3)
-                }
-                val fresh = PlatformCredentials(
-                    bilibiliSessdata = result.cookie ?: globalSessdata,
-                    bilibiliRefreshToken = newRefresh ?: globalRefreshToken,
-                )
-                broadcastToAll?.invoke(fresh)
-                return
-            } else {
-                logger.warn("Global Bilibili session refresh failed: {}", result.message)
-            }
-        }
-
     }
 }

@@ -101,33 +101,6 @@ class PaperServer : JavaPlugin() {
         ChannelRegistrar.registerChannels(this)
         runRepeatingTasks()
 
-        // Hourly Bilibili session refresh sweep
-        ServerCoroutines.io.launch {
-            delay(30_000L.milliseconds)
-            while (isActive) {
-                try {
-                    // Refresh global credential and broadcast to all online players
-                    CredentialActions.refreshAllBilibili(
-                        pushToPlayer = { playerUuid, credentials ->
-                            val player = server.getPlayer(java.util.UUID.fromString(playerUuid))
-                            if (player != null) {
-                                PaperV2Networking.send(listOf(player), credentials)
-                            }
-                        },
-                        broadcastToAll = { credentials ->
-                            val online = server.getOnlinePlayers()
-                            if (online.isNotEmpty()) {
-                                PaperV2Networking.send(online.toList(), credentials)
-                            }
-                        },
-                    )
-                } catch (e: Exception) {
-                    Companion.logger.warn("Bilibili session refresh sweep failed.", e)
-                }
-                delay(1.hours)
-            }
-        }
-
         TelemetryMetrics.register(this, Metrics(this, 26488))
     }
 
