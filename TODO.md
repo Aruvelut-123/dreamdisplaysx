@@ -5,7 +5,6 @@
 > **协议说明**：原版 Dream Displays X 仅支持 V2 协议。V3 协议不再向后兼容（不再支持 V2），只兼容旧版基础功能，但不支持新版 V3 专属新特性。
 
 - 显示块动态灯光（LambDynamicLights 方案，Fabric+NeoForge+全版本）：LambDynamicLights 安装启用→逐块彩色光（采样视频对应像素颜色）；仅 Iris 光影→普通光；都没装→照旧
-- 分辨率问题：走近看 1080p 和 4K 一样模糊——排查纹理/解码尺寸
 - Android 平台支持（重新评估可行性）
 - 移除客户端 V1 协议支持
 - 支持 WorldGuard 和领地插件（Land Claim Plugin）
