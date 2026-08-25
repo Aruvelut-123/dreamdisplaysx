@@ -477,6 +477,7 @@ class MediaPlayer(
         streams = rollback.previousStreams
         lastQuality = rollback.previousQuality
         host.videoContentAspect = rollback.previousStreams.currentVideo.contentAspect()
+        host.videoContentHeight = rollback.previousStreams.currentVideo.height ?: 0
         if (lastRequestedQuality == rollback.target) lastRequestedQuality = rollback.previousQuality
     }
 
@@ -654,6 +655,7 @@ class MediaPlayer(
                 streams = it.streamSet
                 lastQuality = MediaStreamSelector.parseQuality(it.streamSet.currentVideo)
                 host.videoContentAspect = it.streamSet.currentVideo.contentAspect()
+                host.videoContentHeight = it.streamSet.currentVideo.height ?: 0
             }
 
             if (DEBUG) {
@@ -1141,6 +1143,7 @@ class MediaPlayer(
         streams = newSs
         lastQuality = MediaStreamSelector.parseQuality(newSs.currentVideo)
         host.videoContentAspect = newSs.currentVideo.contentAspect()
+        host.videoContentHeight = newSs.currentVideo.height ?: 0
         env.renderExecutor.execute {
             if (sessionManager.isPlaying && !sessionManager.isParked()) {
                 // Parallel quality switch: stage the new-resolution texture, but the live video keeps

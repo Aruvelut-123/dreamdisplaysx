@@ -37,6 +37,11 @@ class DisplayPlaybackHost(private val screen: DisplayScreen) : PlaybackHost {
             screen.videoContentAspect = value
         }
 
+    /** Pixel height of the decoded content, so the texture can be sized to match the source. */
+    override var videoContentHeight: Int
+        get() = screen.videoContentHeight
+        set(value) { screen.videoContentHeight = value }
+
     /** The display's current media error, or `null` when healthy. */
     override var mediaError: DreamMediaException?
         get() = screen.mediaError

@@ -34,6 +34,11 @@ interface PlaybackHost {
     /** Content aspect ratio of the resolved video; the player updates this on (re)resolve. */
     var videoContentAspect: Double
 
+    /** Pixel height of the resolved video stream (e.g. 2160 for 4K); the player updates this on
+     *  (re)resolve so the display texture can be sized to match the source even when the user's
+     *  quality setting is lower (e.g. Auto → 1080p but the actual stream is 4K). */
+    var videoContentHeight: Int
+
     /** Last fatal/recoverable media error; the player sets this to surface failures to the UI. */
     var mediaError: DreamMediaException?
 

@@ -229,6 +229,12 @@ class DisplayScreen(
     @Volatile
     var videoContentAspect: Double = 0.0
 
+    /** Pixel height of the decoded video content (e.g. 2160 for 4K); `0` until the first frame.
+     *  Used by [createTexture] to allocate a texture large enough for the source even when the
+     *  user's quality setting is lower (e.g. Auto → 1080p but the actual stream is 4K). */
+    @Volatile
+    var videoContentHeight: Int = 0
+
     /** User-set volume (`0.0`..`1.0`); writes apply the effective volume and persist the setting. */
     var volume: Float = savedSettings.volume
         set(value) {
@@ -540,7 +546,7 @@ class DisplayScreen(
 
     /** Sizes the GPU texture buffers for the current dimensions and quality before the first frame. */
     internal fun prepareTextureDimensions() {
-        textureResource.prepareDimensions(width, height, parseQualityOrDefault())
+        textureResource.prepareDimensions(width, height, effectiveTextureHeight())
     }
 
     /** Re-attaches the popout sink chain to a freshly created [player]. */
@@ -928,12 +934,12 @@ class DisplayScreen(
     fun createTexture() {
         hasEverRendered = false
         firstFrameNanos = 0L
-        textureResource.allocate(width, height, parseQualityOrDefault())
+        textureResource.allocate(width, height, effectiveTextureHeight())
     }
 
     /** Stages new-resolution texture; live frame renders until first new frame (render thread only). */
     fun beginQualityHandoff() {
-        textureResource.allocatePending(width, height, parseQualityOrDefault())
+        textureResource.allocatePending(width, height, effectiveTextureHeight())
     }
 
     /** Drops any staged quality-handoff texture (e.g. when a full session restart supersedes it). */
@@ -1041,6 +1047,14 @@ class DisplayScreen(
         if (qualityCap > 0) return qualityCap
         return quality.targetHeight ?: DEFAULT_QUALITY
     }
+
+    /**
+     * The pixel height used for GPU texture allocation: the user's quality setting, but never
+     * below the resolved video's own height — a 4K stream stays 4K on screen even when the
+     * quality setting is Auto (which would otherwise cap the texture at [DEFAULT_QUALITY]).
+     */
+    private fun effectiveTextureHeight(): Int =
+        maxOf(parseQualityOrDefault(), videoContentHeight)
 
     /** Last raytraced acoustic environment, refreshed on the [ENV_PROBE_INTERVAL_TICKS] cadence. */
     private var cachedEnvironment: AcousticEnvironment = AcousticEnvironment.OPEN_AIR

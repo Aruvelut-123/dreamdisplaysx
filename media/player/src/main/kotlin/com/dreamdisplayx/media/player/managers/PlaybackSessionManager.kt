@@ -932,7 +932,11 @@ internal class PlaybackSessionManager(
     /** Resolves the decode dimensions: the current/target texture size when known, else from quality. */
     private fun targetDims(streamSet: ActiveStreams?, lastQuality: Int = 0): Pair<Int, Int> {
         val (tw, th) = getTextureSize()
-        if (tw > 0 && th > 0) return tw to th
+        if (tw > 0 && th > 0) {
+            // The texture size already tracks the source height (MediaPlayer pushes
+            // host.videoContentHeight, and createTexture uses max(quality, source)).
+            return tw to th
+        }
         val q = when {
             lastQuality > 0 -> lastQuality
             streamSet != null -> MediaStreamSelector.parseQuality(streamSet.currentVideo)
