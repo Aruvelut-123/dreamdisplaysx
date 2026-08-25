@@ -41,10 +41,19 @@ object ConfigScreenText {
         const val DEFAULT_VOLUME_TOOLTIP = "dreamdisplayx.config.default_volume.tooltip"
         const val AUDIO_ACOUSTICS = "dreamdisplayx.config.audio_acoustics"
         const val AUDIO_ACOUSTICS_TOOLTIP = "dreamdisplayx.config.audio_acoustics.tooltip"
+        const val CDN_MIRROR = "dreamdisplayx.config.cdn_mirror"
+        const val CDN_MIRROR_TOOLTIP = "dreamdisplayx.config.cdn_mirror.tooltip"
     }
 
     /** Localized component for the decoder dropdown label. Falls back to the raw [value] when the key is unknown. */
     fun decoderLabel(value: String): Component =
         if (value in KNOWN_DECODER_VALUES) Component.translatable("dreamdisplayx.config.decoder.$value")
         else Component.literal(value)
+
+    /** Localized component for the Bilibili CDN mirror dropdown label. */
+    fun cdnLabel(value: String): Component {
+        val label = com.dreamdisplayx.media.player.cdn.BilibiliCdnMirror.CDN_LABELS[value]
+            ?: return Component.literal(value)
+        return Component.translatable("dreamdisplayx.config.cdn.$label")
+    }
 }

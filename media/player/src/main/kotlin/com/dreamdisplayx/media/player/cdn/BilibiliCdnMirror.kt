@@ -43,6 +43,35 @@ enum class BilibiliCdnMirror(
 
     companion object {
         /**
+         * Maps config values (mirror host, friendly name, or special value) to translatable
+         * label keys for the config UI dropdown.  The keys are localised via
+         * `dreamdisplayx.config.cdn.<label>`.
+         */
+        val CDN_LABELS: Map<String, String> = entries.flatMap { e ->
+            when (e) {
+                BASE_URL -> listOf("BASE_URL" to "base_url")
+                BACKUP_URL -> listOf("BACKUP_URL" to "backup_url")
+                else -> {
+                    val host = e.host
+                    val label = e.name.lowercase()
+                    if (host != null) listOf(host to label, e.name to label) else emptyList()
+                }
+            }
+        }.distinctBy { it.first }.toMap() + ("auto" to "auto")
+
+        /** All config values that can be stored in `bilibili-cdn-mirror` setting: friendly names and hosts. */
+        val CONFIG_VALUES: List<String> = buildList {
+            add("auto")
+            add("BASE_URL")
+            add("BACKUP_URL")
+            for (e in entries) {
+                if (e.host != null) {
+                    add(e.name)
+                    add(e.host)
+                }
+            }
+        }
+        /**
          * Regex for Bilibili upos mirror URLs whose host can be replaced.
          * Matches `upos-*-*` and `upos-tf-*` and `proxy-tf-*` on bilivideo.com / akamaized.net,
          * with an `/upgcxcode/` path.

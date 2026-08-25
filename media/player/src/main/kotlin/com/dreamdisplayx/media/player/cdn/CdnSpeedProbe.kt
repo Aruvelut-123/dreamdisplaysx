@@ -38,8 +38,14 @@ object CdnSpeedProbe {
     /** Total budget for probing all candidates of one stream. */
     private const val TOTAL_BUDGET_MS = 6_000L
 
+    /** Budget for the startup pre-probe; runs on a background thread so it can afford to be slow. */
+    private const val WARMUP_BUDGET_MS = 45_000L
+
     /** Cache of hostname → measured bandwidth (MB/s × 1000, higher = faster); -1 = failed. */
     private val hostScoreCache = ConcurrentHashMap<String, Long>()
+
+    /** Guards [startupProbe] so it only runs once per process. */
+    private val startupProbeStarted = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /** Regex for Bilibili upos-mirror URLs whose host can be replaced. */
     private val MIRROR_REGEX = Regex(
@@ -51,13 +57,13 @@ object CdnSpeedProbe {
      *
      * @param video  the video stream, or null for audio-only.
      * @param audio  the audio stream, or null for video-only.
-     * @param preferredMirror  when non-null and non-empty, the explicit hostname of a Bilibili CDN
-     *                         mirror (e.g. `"upos-sz-mirrorcos.bilivideo.com"`) — all Bilibili
-     *                         mirror URLs in the candidate set are rewritten to this host.  Auto
-     *                         probing is skipped entirely, so the session opens faster.  Pass
-     *                         `"BASE_URL"` to keep the original API host, or `"BACKUP_URL"` to use
-     *                         the first backup URL from the API response.
-     * @param preferredMirrorHost  the explicit host to use when [preferredMirror] is set.
+     * @param preferredMirrorHost  the raw value of the `bilibili-cdn-mirror` config option:
+     *   - `null`, blank or `"auto"` → auto-probe the mirror hosts by bandwidth;
+     *   - `"BASE_URL"` → keep the API's original stream URLs untouched;
+     *   - `"BACKUP_URL"` → use the first backup URL from the API response;
+     *   - anything else → treated as a mirror hostname and substituted into every mirror URL
+     *     (e.g. `"upos-sz-mirrorcos.bilivideo.com"`).  Hosts that fail basic validation are
+     *     rejected with a warning and playback proceeds unmodified.
      * @param authReferer  the Referer header to send with probe requests (mirrors the decoder's
      *                     request), or null to omit.
      */
@@ -75,9 +81,39 @@ object CdnSpeedProbe {
         }
         if (candidateUrls.isEmpty()) return video to audio
 
-        // Explicit mirror selected → rewrite every Bilibili mirror URL.
-        if (preferredMirrorHost != null) {
-            return rewriteToMirror(video, audio, candidateUrls, preferredMirrorHost, authReferer)
+        // Resolve the config value: `null`/blank/`auto` fall through to the auto probe below.
+        val explicit = preferredMirrorHost?.trim()
+        if (!explicit.isNullOrEmpty() && !explicit.equals("auto", ignoreCase = true)) {
+            when {
+                explicit.equals("BASE_URL", ignoreCase = true) -> {
+                    logger.info("CDN mirror: BASE_URL selected, keeping the API's original URLs.")
+                    return video to audio
+                }
+                explicit.equals("BACKUP_URL", ignoreCase = true) -> {
+                    logger.info("CDN mirror: BACKUP_URL selected, using first backup URL when available.")
+                    return promoteFirstBackup(video, audio)
+                }
+                else -> {
+                    // Friendly mirror names ("cos", "hw", "ali", ...) resolve to their host via
+                    // the BilibiliCdnMirror list (based on PiliPlus's CDNService); a full hostname
+                    // ("upos-sz-mirrorcos.bilivideo.com") is used as-is.
+                    val mirror = BilibiliCdnMirror.entries.firstOrNull {
+                        it.host != null && (it.name.equals(explicit, ignoreCase = true) ||
+                                it.host.equals(explicit, ignoreCase = true))
+                    }
+                    val hostCandidate = mirror?.host ?: explicit
+                    // Validate the candidate host before rewriting: must parse as a real hostname.
+                    val host = runCatching { java.net.URI("https://$hostCandidate/").host }
+                        .getOrNull()?.removeSurrounding("[", "]")
+                    if (host == null || host.isBlank() || !host.contains('.') || host.contains(' ') ||
+                        host.any { !it.isLetterOrDigit() && it != '.' && it != '-' }
+                    ) {
+                        logger.warn("CDN mirror '{}' is not a valid hostname; ignoring.", explicit)
+                        return video to audio
+                    }
+                    return rewriteToMirror(video, audio, candidateUrls, host, authReferer)
+                }
+            }
         }
 
         // Auto: separate Bilibili mirror URLs (host-replaceable) from regular URLs.
@@ -89,45 +125,44 @@ object CdnSpeedProbe {
             return reorderByLatency(video, audio, regularUrls, authReferer)
         }
 
-        val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TOTAL_BUDGET_MS)
-
-        // Group mirror URLs by hostname.
-        val hostToUrl = LinkedHashMap<String, String>()
+        // Candidate hosts: the full known mirror list (PiliPlus-based BilibiliCdnMirror) first,
+        // so we never depend on whichever hosts the Bilibili API happened to return.  URL templates
+        // come from the stream itself — the host is replaced per candidate.
+        val templateByHost = LinkedHashMap<String, String>()
         for (url in mirrorUrls) {
-            val host = MediaHosts.hostOf(url) ?: continue
-            if (host !in hostToUrl) hostToUrl[host] = url
+            val h = MediaHosts.hostOf(url) ?: continue
+            templateByHost.getOrPut(h) { url }
         }
-        if (hostToUrl.size <= 1) {
-            // Only one mirror host → just rewrite to it (skips probing, saves time).
-            val bestHost = hostToUrl.keys.first()
-            return rewriteToMirror(video, audio, candidateUrls, bestHost, authReferer)
-        }
+        val templateUrl = templateByHost.values.firstOrNull()
+        if (templateUrl == null) return video to audio
 
-        // Probe bandwidth for each distinct host (cached or fresh).
+        val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TOTAL_BUDGET_MS)
+        val candidateHosts = (BilibiliCdnMirror.entries.mapNotNull { it.host } + templateByHost.keys).distinct()
         val scores = LinkedHashMap<String, Long>()
-        for ((host, url) in hostToUrl) {
-            if (System.nanoTime() > deadlineNanos) break
+        var probed = false
+        for (host in candidateHosts) {
             val cached = hostScoreCache[host]
             if (cached != null) {
-                scores[host] = cached
+                if (cached >= 0) scores[host] = cached
                 continue
             }
-            val score = probeBandwidth(host, url, deadlineNanos, authReferer)
+            if (System.nanoTime() > deadlineNanos) break
+            probed = true
+            val probeUrl = templateByHost[host] ?: replaceHost(templateUrl, host)
+            val score = probeBandwidth(host, probeUrl, deadlineNanos, authReferer)
             hostScoreCache[host] = score
             if (score >= 0) scores[host] = score
         }
 
         if (scores.isEmpty()) {
-            // All probes failed — keep the original order.
-            logger.info("CDN bandwidth probe: all hosts unreachable, using original order.")
+            logger.info("CDN ranking: all hosts unreachable, using original order.")
             return video to audio
         }
 
-        // Sort by throughput descending (higher = faster).
         val bestHost = scores.maxByOrNull { it.value }?.key ?: return video to audio
-        val detail = scores.entries.joinToString(", ") { (h, s) -> "$h=${s / 1000.0}MB/s" }
-        logger.info("CDN bandwidth probe: $detail  → selected $bestHost")
-
+        val detail = scores.entries.sortedByDescending { it.value }
+            .joinToString(", ") { (h, s) -> "$h=${s / 1000.0}MB/s" }
+        logger.info("CDN ranking (${if (probed) "probing" else "cached"}): $detail → selected $bestHost")
         return rewriteToMirror(video, audio, candidateUrls, bestHost, authReferer)
     }
 
@@ -175,6 +210,29 @@ object CdnSpeedProbe {
         val uri = runCatching { URI(url) }.getOrNull() ?: return url
         return runCatching { URI(uri.scheme, newHost, uri.path, uri.query, uri.fragment).toString() }
             .getOrNull() ?: url
+    }
+
+    /**
+     * `BACKUP_URL` selector: promotes each stream's first backup URL to the primary position
+     * (matching PiliPlus's "backup URL" CDN option). Streams without backups are unchanged.
+     */
+    private fun promoteFirstBackup(
+        video: MediaStream?,
+        audio: MediaStream?,
+    ): Pair<MediaStream?, MediaStream?> {
+        var changed = false
+        fun promote(s: MediaStream): MediaStream {
+            val first = s.backupUrls.firstOrNull() ?: return s
+            if (first == s.url) return s
+            changed = true
+            return s.copy(
+                url = first,
+                backupUrls = listOf(s.url) + s.backupUrls.drop(1),
+            )
+        }
+        val newVideo = video?.let { promote(it) }
+        val newAudio = audio?.let { promote(it) }
+        return if (changed) newVideo to newAudio else video to audio
     }
 
     // ── Bandwidth probe ─────────────────────────────────────────────────────
@@ -322,5 +380,78 @@ object CdnSpeedProbe {
             logger.warn("CDN latency probe for $host aborted: ${e.message ?: e::class.java.simpleName}")
             -1
         }
+    }
+
+    // ── Startup pre-probe & public queries ─────────────────────────────────
+
+    /**
+     * Startup pre-probe: given sample Bilibili stream URLs fetched from a known public video
+     * (e.g. PiliPlus's sample `BV1fK4y1t7hj`), this measures bandwidth to every known
+     * [BilibiliCdnMirror] host and caches the scores.  Called at game startup on a background
+     * thread so the first Bilibili playback already has a complete mirror ranking — subsequent
+     * auto playbacks consume the cached scores and never probe again.
+     *
+     * Based on the PiliPlus CDNService approach — the same content is available from any mirror,
+     * so we pick the fastest edge for the user's location.
+     */
+    fun startupProbe(templateUrls: List<String>, authReferer: String? = null) {
+        if (!startupProbeStarted.compareAndSet(false, true)) return
+        val templateUrl = templateUrls.firstOrNull { MIRROR_REGEX.containsMatchIn(it) }
+            ?: templateUrls.firstOrNull { it.contains("/upgcxcode/") }
+            ?: return
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(WARMUP_BUDGET_MS)
+        val ranked = LinkedHashMap<String, Long>()
+        val visible = BilibiliCdnMirror.entries.filter { it.host != null }
+        val total = visible.size
+        for (mirror in visible) {
+            val host = mirror.host!!
+            val cached = hostScoreCache[host]
+            if (cached != null) {
+                if (cached >= 0) ranked[host] = cached
+                continue
+            }
+            if (System.nanoTime() > deadline) {
+                logger.info("CDN startup probe: budget exhausted after {}/{} mirrors.", ranked.size, total)
+                break
+            }
+            val probeUrl = replaceHost(templateUrl, host)
+            if (probeUrl == templateUrl) continue // replaceHost failed
+            val score = probeBandwidth(host, probeUrl, deadline, authReferer)
+            hostScoreCache[host] = score
+            if (score >= 0) ranked[host] = score
+        }
+        if (ranked.isEmpty()) {
+            logger.info("CDN startup probe: no mirrors reachable.")
+            return
+        }
+        val ordered = ranked.entries.sortedByDescending { it.value }
+        val detail = ordered.joinToString(", ") { (h, s) -> "$h=${s / 1000.0}MB/s" }
+        logger.info("CDN startup probe (based on PiliPlus mirror list, {} mirrors): {}", ranked.size, detail)
+        val best = ordered.first()
+        logger.info(
+            "CDN startup probe: fastest mirror = {} ({} MB/s)",
+            best.key,
+            "%.1f".format(best.value / 1000.0),
+        )
+    }
+
+    /** Returns the hostname with the highest cached bandwidth score, or null if none is cached. */
+    fun bestMirrorHost(): String? = hostScoreCache
+        .filter { it.value >= 0 }
+        .maxByOrNull { it.value }?.key
+
+    /**
+     * Returns all known mirrors with their cached bandwidth scores, sorted fastest-first.
+     * Each pair is `(hostname, MB/s × 1000)`.
+     */
+    fun mirrorRanking(): List<Pair<String, Long>> = hostScoreCache
+        .filter { it.value >= 0 }
+        .entries.sortedByDescending { it.value }
+        .map { it.key to it.value }
+
+    /** Clears all cached scores so the next probe runs fresh. */
+    fun clearScores() {
+        hostScoreCache.clear()
+        startupProbeStarted.set(false)
     }
 }

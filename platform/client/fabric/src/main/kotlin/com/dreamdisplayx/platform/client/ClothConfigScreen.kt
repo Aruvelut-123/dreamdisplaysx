@@ -1,8 +1,10 @@
 package com.dreamdisplayx.platform.client
 
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
+import com.dreamdisplayx.media.player.cdn.BilibiliCdnMirror
 import com.dreamdisplayx.media.player.process.HwAccelEnumerator
 import com.dreamdisplayx.platform.client.config.ConfigScreenText
+import com.dreamdisplayx.platform.client.managers.ClientStartupManager
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import me.shedaniel.clothconfig2.api.ConfigBuilder
 import me.shedaniel.clothconfig2.api.ConfigCategory
@@ -26,6 +28,10 @@ object ClothConfigScreenProvider {
             .setParentScreen(parent)
             .setTitle(Component.translatable(ConfigScreenText.Keys.TITLE))
             .setSavingRunnable { config.save() }
+
+        // Re-run the CDN bandwidth ranking whenever the config page is opened, so the
+        // dropdown / tooltips reflect fresh measurements (based on PiliPlus's speed test).
+        ClientStartupManager.refreshCdnRanking()
 
         val general: ConfigCategory = builder.getOrCreateCategory(
             Component.translatable(ConfigScreenText.Keys.CATEGORY_GENERAL),
@@ -144,6 +150,23 @@ object ClothConfigScreenProvider {
                 .setDefaultValue(AcousticQuality.ADVANCED)
                 .setTooltip(Component.translatable(ConfigScreenText.Keys.AUDIO_ACOUSTICS_TOOLTIP))
                 .setSaveConsumer { v: AcousticQuality -> config.audioAcoustics = v }
+                .build(),
+        )
+
+        // Bilibili CDN mirror selection (dropdown with all known mirrors + auto/BASE_URL/BACKUP_URL)
+        val cdnValues = BilibiliCdnMirror.CONFIG_VALUES.toTypedArray()
+        val currentCdn = config.bilibiliCdnMirror.ifBlank { "auto" }
+            .let { v -> if (v in BilibiliCdnMirror.CONFIG_VALUES) v else v }
+        general.addEntry(
+            entryBuilder.startSelector(
+                Component.translatable(ConfigScreenText.Keys.CDN_MIRROR),
+                cdnValues,
+                if (currentCdn in cdnValues) currentCdn else "auto",
+            )
+                .setDefaultValue("auto")
+                .setNameProvider { v -> ConfigScreenText.cdnLabel(v) }
+                .setTooltip(Component.translatable(ConfigScreenText.Keys.CDN_MIRROR_TOOLTIP))
+                .setSaveConsumer { v: String -> config.bilibiliCdnMirror = v }
                 .build(),
         )
 

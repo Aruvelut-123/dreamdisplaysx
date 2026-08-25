@@ -1,10 +1,5 @@
 # Dream DisplaysX — TODO
 
-## 待修复
-
-### 遗留 A/V 同步问题
-- Pinned CatchUp（b53a45a8）仍会跳帧 + 闪屏一次；有时闪 2–3 次后音频消失——catch-up 目标是 decode head（prebuffer 最深层帧）而非播放位置，需改为按实际播放位置对齐
-
 ## 待办（功能/优化）
 
 > **协议说明**：原版 Dream Displays X 仅支持 V2 协议。V3 协议不再向后兼容（不再支持 V2），只兼容旧版基础功能，但不支持新版 V3 专属新特性。
