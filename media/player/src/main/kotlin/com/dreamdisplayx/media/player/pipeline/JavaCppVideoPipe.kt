@@ -24,6 +24,7 @@ import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.FrameGrabber
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -475,9 +476,17 @@ internal class JavaCppVideoPipe(
      */
     private fun frameToI420(frame: Frame, dst: ByteBuffer, expectedW: Int, expectedH: Int, stretchMode: StretchMode): Boolean {
         val src = frame.opaque as? AVFrame ?: return false
-        val srcW = src.width()
-        val srcH = src.height()
-        val srcFmt = src.format()
+        val srcW: Int
+        val srcH: Int
+        val srcFmt: Int
+        try {
+            srcW = src.width()
+            srcH = src.height()
+            srcFmt = src.format()
+        } catch (e: Exception) {
+            if (MediaPlayer.DEBUG) logger.warn("$debugLabel AVFrame invalid: {}", e.message)
+            return false
+        }
         if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
         // Guard: hardware frames (hw_frames_ctx set) or frames without CPU data pointers must
         // never reach sws_scale — sws_scale reads GPU addresses as system memory and fails
@@ -529,26 +538,35 @@ internal class JavaCppVideoPipe(
             ((plan.dstW + 1) / 2) * ((plan.dstH + 1) / 2),
         ))
 
-        // Source plane pointers — offset horizontally for CROP mode
-        val srcPtrs = (0 until 4).mapNotNull { i -> src.data(i)?.takeIf { !it.isNull } }.toTypedArray()
-        if (srcPtrs.isEmpty()) return false
+        // Source plane pointers — offset horizontally for CROP mode.
+        // sws_scale reads up to 4 entries from the pointer arrays, so always provide 4.
+        val srcPtrs = arrayOfNulls<BytePointer>(4)
+        for (i in 0 until 4) {
+            srcPtrs[i] = try {
+                val d = src.data(i)
+                if (d != null && !d.isNull()) d else null
+            } catch (_: Exception) { null }
+        }
+        if (srcPtrs[0] == null) return false
         val srcOffBytes = plan.srcOffX * plan.srcPlaneBpp
         val srcOffBytesUV = plan.srcOffX * plan.srcPlaneBpp / 2
         val srcSlices = PointerPointer<BytePointer>(
-            *srcPtrs.mapIndexed { idx, ptr ->
-                if (plan.srcOffX <= 0) ptr
-                else if (idx == 0) BytePointer(ptr).position(srcOffBytes.toLong()) as BytePointer
-                else BytePointer(ptr).position(srcOffBytesUV.toLong()) as BytePointer
-            }.toTypedArray()
+            if (plan.srcOffX <= 0) srcPtrs[0] else BytePointer(srcPtrs[0]).position(srcOffBytes.toLong()) as BytePointer,
+            srcPtrs[1]?.let { if (plan.srcOffX <= 0) it else BytePointer(it).position(srcOffBytesUV.toLong()) as BytePointer },
+            srcPtrs[2]?.let { if (plan.srcOffX <= 0) it else BytePointer(it).position(srcOffBytesUV.toLong()) as BytePointer },
+            srcPtrs[3],
         )
-        val srcStrides = IntPointer(*IntArray(srcPtrs.size) { src.linesize(it) })
-        val dstSlices = PointerPointer<BytePointer>(dstY, dstU, dstV)
+        val srcStrides = IntPointer(
+            src.linesize(0), src.linesize(1), src.linesize(2), src.linesize(3),
+        )
+        // Always provide 4 entries for the dst arrays — sws_scale reads up to 4.
+        val dstSlices = PointerPointer<BytePointer>(dstY, dstU, dstV, null as BytePointer?)
         // Destination strides are the FULL buffer line width, so sws_scale writes only
         // plan.dstW pixels per line into the centred sub-rectangle, leaving the black padding.
-        val dstStrides = IntPointer(expectedW, (expectedW + 1) / 2, (expectedW + 1) / 2)
+        val dstStrides = IntPointer(expectedW, (expectedW + 1) / 2, (expectedW + 1) / 2, 0)
 
         val linesScaled = swscale.sws_scale(sws, srcSlices, srcStrides, plan.srcOffY, plan.srcH, dstSlices, dstStrides)
-        if (linesScaled < 0) return false
+        if (linesScaled <= 0) return false
 
         dst.position(ySize + 2 * uvSize)
         return true
@@ -655,9 +673,17 @@ internal class JavaCppVideoPipe(
      */
     private fun frameToRgb24(frame: Frame, dst: ByteBuffer, expectedW: Int, expectedH: Int, stretchMode: StretchMode): Boolean {
         val src = frame.opaque as? AVFrame ?: return false
-        val srcW = src.width()
-        val srcH = src.height()
-        val srcFmt = src.format()
+        val srcW: Int
+        val srcH: Int
+        val srcFmt: Int
+        try {
+            srcW = src.width()
+            srcH = src.height()
+            srcFmt = src.format()
+        } catch (e: Exception) {
+            if (MediaPlayer.DEBUG) logger.warn("$debugLabel AVFrame invalid: {}", e.message)
+            return false
+        }
         if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
         // Guard: same as frameToI420 — never feed hardware frames to sws_scale.
         if (src.hw_frames_ctx() != null) {
@@ -693,32 +719,40 @@ internal class JavaCppVideoPipe(
             dst.sliceView((plan.dstOffY * expectedW + plan.dstOffX) * 3, plan.dstW * plan.dstH * 3),
         )
 
-        // Source plane pointers from the decoded AVFrame — horizontally offset for CROP mode
-        val srcY = src.data(0) ?: return false
-        val srcU = if (srcFmt == avutil.AV_PIX_FMT_YUV420P || srcFmt == avutil.AV_PIX_FMT_YUVJ420P) src.data(1) else null
-        val srcV = if (srcU != null) src.data(2) else null
+        // Source plane pointers from the decoded AVFrame — always provide 4 entries for sws_scale,
+        // with null slots for planes the format doesn't carry (sws_scale reads up to 4 entries).
+        val srcY = try { src.data(0) } catch (_: Exception) { null }
+        if (srcY == null || srcY.isNull()) return false
+        val srcU = if (srcFmt == avutil.AV_PIX_FMT_YUV420P || srcFmt == avutil.AV_PIX_FMT_YUVJ420P) {
+            try { src.data(1) } catch (_: Exception) { null }
+        } else null
+        val srcV = if (srcU != null) {
+            try { src.data(2) } catch (_: Exception) { null }
+        } else null
         val offY = plan.srcOffX * plan.srcPlaneBpp
         val offUV = plan.srcOffX * plan.srcPlaneBpp / 2
-        val srcSlices = if (srcU != null && srcV != null) {
+        val hasUv = srcU != null && srcV != null && !srcU.isNull() && !srcV.isNull()
+        val srcSlices = if (hasUv) {
             val yp = if (offY <= 0) srcY else BytePointer(srcY).position(offY.toLong()) as BytePointer
-            val up = if (offUV <= 0) srcU else BytePointer(srcU).position(offUV.toLong()) as BytePointer
-            val vp = if (offUV <= 0) srcV else BytePointer(srcV).position(offUV.toLong()) as BytePointer
-            PointerPointer<BytePointer>(yp, up, vp)
+            val up = if (offUV <= 0) srcU!! else BytePointer(srcU!!).position(offUV.toLong()) as BytePointer
+            val vp = if (offUV <= 0) srcV!! else BytePointer(srcV!!).position(offUV.toLong()) as BytePointer
+            PointerPointer<BytePointer>(yp, up, vp, null as BytePointer?)
         } else {
             val yp = if (offY <= 0) srcY else BytePointer(srcY).position(offY.toLong()) as BytePointer
-            PointerPointer<BytePointer>(yp)
+            PointerPointer<BytePointer>(yp, null as BytePointer?, null as BytePointer?, null as BytePointer?)
         }
-        val srcStrides = if (srcU != null && srcV != null) {
-            IntPointer(src.linesize(0), src.linesize(1), src.linesize(2))
+        val srcStrides = if (hasUv) {
+            IntPointer(src.linesize(0), src.linesize(1), src.linesize(2), src.linesize(3))
         } else {
-            IntPointer(src.linesize(0))
+            IntPointer(src.linesize(0), src.linesize(1), src.linesize(2), src.linesize(3))
         }
 
-        val dstSlices = PointerPointer<BytePointer>(dstPlane)
-        val dstStrides = IntPointer(expectedW * 3)
+        // sws_scale reads up to 4 entries from dst arrays as well — provide 4 with null / 0 slots.
+        val dstSlices = PointerPointer<BytePointer>(dstPlane, null as BytePointer?, null as BytePointer?, null as BytePointer?)
+        val dstStrides = IntPointer(expectedW * 3, 0, 0, 0)
 
         val linesScaled = swscale.sws_scale(sws, srcSlices, srcStrides, plan.srcOffY, plan.srcH, dstSlices, dstStrides)
-        if (linesScaled < 0) return false
+        if (linesScaled <= 0) return false
 
         dst.position(rgbSize)
         return true
@@ -872,6 +906,18 @@ internal class JavaCppVideoPipe(
                     "output_format may not be supported by this backend"
                 )
             }
+            // Third line of defence: some backends (AMF) report valid-looking data pointers
+            // that still point to GPU/device memory.  sws_scale then fails even though the
+            // pointer addresses are non-null.  Run a tiny sws_scale pass to verify the data
+            // is actually CPU-addressable.
+            if (!probeSwsReadable(probeAv)) {
+                probe.close()
+                g.stop()
+                throw java.io.IOException(
+                    "hwaccel '$hwaccel' sws_scale probe failed — " +
+                    "data pointers are not CPU-addressable"
+                )
+            }
         }
         // Re-apply the seek target: the probe consumed the first frame(s), so rewind to the
         // intended position so the reader loop presents the same timeline as the software path.
@@ -879,6 +925,52 @@ internal class JavaCppVideoPipe(
         MediaPlayer.currentDecoder.set(hwaccel)
         logger.info("{} Video decode via hwaccel '{}'.", debugLabel, hwaccel)
         return g
+    }
+
+    /**
+     * Probes whether [probe] is a CPU-addressable frame that sws_scale can actually read.
+     *
+     * Some hwaccel backends (notably AMF) ignore `hwaccel_output_format=yuv420p` or report
+     * valid-looking data pointers that still point at GPU/device memory.  sws_scale then fails
+     * with "bad dst image pointers" on every frame even though `hw_frames_ctx()` is null and
+     * `data(i)` is non-null.  The only reliable check is to run a tiny sws_scale pass and see
+     * whether it produces output.
+     */
+    private fun probeSwsReadable(src: AVFrame): Boolean {
+        return try {
+            val w = src.width()
+            val h = src.height()
+            val fmt = src.format()
+            if (w <= 0 || h <= 0 || fmt < 0) return false
+            val ctx = swscale.sws_getCachedContext(
+                null as SwsContext?, w, h, fmt,
+                w, h, fmt, swscale.SWS_BILINEAR,
+                null as SwsFilter?, null as SwsFilter?, null as DoublePointer?,
+            ) ?: return false
+            try {
+                val srcPtrs = arrayOfNulls<BytePointer>(4)
+                for (i in 0 until 4) {
+                    srcPtrs[i] = try {
+                        val d = src.data(i)
+                        if (d != null && !d.isNull()) d else null
+                    } catch (_: Exception) { null }
+                }
+                if (srcPtrs[0] == null) return false
+                // The tiny pass reads up to 4 entries from the pointer arrays, so pass exactly 4.
+                val srcSlices = PointerPointer<BytePointer>(srcPtrs[0], srcPtrs[1], srcPtrs[2], srcPtrs[3])
+                val srcStrides = IntPointer(src.linesize(0), src.linesize(1), src.linesize(2), src.linesize(3))
+                val out = BytePointer(ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder()))
+                val dstSlices = PointerPointer<BytePointer>(out, null as BytePointer?, null as BytePointer?, null as BytePointer?)
+                val dstStrides = IntPointer(w * 4, 0, 0, 0)
+                val lines = swscale.sws_scale(ctx, srcSlices, srcStrides, 0, h, dstSlices, dstStrides)
+                lines > 0
+            } finally {
+                swscale.sws_freeContext(ctx)
+            }
+        } catch (e: Exception) {
+            if (MediaPlayer.DEBUG) logger.warn("$debugLabel Probe sws_scale failed: {}", e.message)
+            false
+        }
     }
 
     /** Sets the shared format-level options for a new grabber. */
