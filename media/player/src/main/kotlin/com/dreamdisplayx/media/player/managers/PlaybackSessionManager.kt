@@ -23,6 +23,7 @@ import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -399,13 +400,18 @@ internal class PlaybackSessionManager(
                     // Open the replacement audio decoder in the background: the video reader is
                     // already seeking the reused grabber on its own thread, so the audio open can
                     // overlap that seek instead of holding the control thread behind it.
-                    val ap = CompletableFuture.supplyAsync {
-                        try {
-                            buildAudioDecoder(streamSet, offsetNanos, aStop)
-                        } catch (e: IOException) {
-                            throw CompletionException(e)
-                        }
-                    }.get()
+                    val ap = try {
+                        CompletableFuture.supplyAsync {
+                            try {
+                                buildAudioDecoder(streamSet, offsetNanos, aStop)
+                            } catch (e: IOException) {
+                                throw CompletionException(e)
+                            }
+                        }.get()
+                    } catch (e: ExecutionException) {
+                        val rootCause = e.cause?.let { if (it is CompletionException) it.cause else it }
+                        throw (rootCause as? IOException) ?: IOException("Audio decoder failed to start", e.cause)
+                    }
                     val originKnown = audioOriginKnown()
                     audioHalf = ap?.let {
                         AudioHalf(
@@ -461,10 +467,11 @@ internal class PlaybackSessionManager(
             }, onEos = onStreamEnd, parkFlag = parkFlag)
             val ap = try {
                 audioFuture.get()
-            } catch (e: CompletionException) {
+            } catch (e: ExecutionException) {
                 channel.teardownProcess()
                 renderExecutor.execute { channel.pipe.cleanup() }
-                throw e.cause ?: IOException("Audio decoder failed to start", e)
+                val rootCause = e.cause?.let { if (it is CompletionException) it.cause else it }
+                throw (rootCause as? IOException) ?: IOException("Audio decoder failed to start", e.cause)
             }
             synchronized(switchLock) { active = channel }
             audioHalf = ap?.let {
