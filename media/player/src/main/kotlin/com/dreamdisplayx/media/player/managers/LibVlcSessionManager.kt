@@ -9,16 +9,20 @@ import com.dreamdisplayx.api.media.player.RenderExecutor
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.events.PlayerEvents
-import com.dreamdisplayx.media.player.pipeline.*
+import com.dreamdisplayx.api.media.audio.service.AudioDspStage
+import com.dreamdisplayx.media.player.pipeline.FrameSurface
+import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.daemon
 import com.dreamdisplayx.media.player.util.joinSafely
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
+import kotlinx.io.IOException
 import org.slf4j.LoggerFactory
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.player.base.MediaPlayer as VlcjMediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
+import uk.co.caprica.vlcj.player.base.callback.AudioCallback
 import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormat
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormatCallback
@@ -102,10 +106,6 @@ internal class LibVlcSessionManager(
 
     @Volatile
     private var audioPipeIn: PipedInputStream? = null
-
-    /** Process wrapper for AudioSink compatibility. */
-    @Volatile
-    private var audioProcess: LibVlcAudioProcess? = null
 
     // ── Frame surface ─────────────────────────────────────────────────────
 
@@ -257,7 +257,6 @@ internal class LibVlcSessionManager(
         val audioPipeIn = PipedInputStream(audioPipeOut, 1024 * 1024)
         this.audioPipeOut = audioPipeOut
         this.audioPipeIn = audioPipeIn
-        audioProcess = LibVlcAudioProcess(audioPipeIn)
 
         mp.audio().callback("S16N", AudioSink.SAMPLE_RATE, 2, audioCallback(mediaPlayer!!))
 
@@ -321,7 +320,7 @@ internal class LibVlcSessionManager(
      */
     fun startReplayVideoOnly(
         @Suppress("UNUSED_PARAMETER") snapshot: ByteArray?,
-        @Suppress("UNUSED_PARAMETER") resume: Boolean,
+        @Suppress("UNUSED_PARAMETER") resume: Long,
         @Suppress("UNUSED_PARAMETER") positionNanos: Long,
         @Suppress("UNUSED_PARAMETER") audioPcm: ByteArray?,
     ): Boolean = false
@@ -373,7 +372,6 @@ internal class LibVlcSessionManager(
         runCatching { audioPipeOut?.close() }
         audioPipeOut = null
         audioPipeIn = null
-        audioProcess = null
         surface.clear()
     }
 
@@ -734,44 +732,65 @@ internal class LibVlcSessionManager(
 }
 
 /**
- * Minimal AudioSink wrapper for the libvlc PCM pipe.
- * Replaces the old AudioSink from the media:audio module.
+ * Minimal AudioSink for the libvlc PCM pipe — reads S16 stereo PCM from a
+ * [PipedInputStream] and writes it to a [SourceDataLine] for actual audio output.
+ * libvlc handles A/V sync internally; this sink just plays the PCM.
  */
 internal class AudioSink(private val debugLabel: String) {
     companion object {
         const val SAMPLE_RATE = 44100
         const val BYTES_PER_FRAME = 4 // S16 stereo
+        private const val CHUNK_BYTES = SAMPLE_RATE * 2 * 2 / 20 // ~0.05s
     }
 
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/AudioSink")
     private var stream: java.io.InputStream? = null
     private var thread: Thread? = null
+    private var line: javax.sound.sampled.SourceDataLine? = null
     @Volatile private var running = false
     @Volatile private var paused = false
-    private var readBuffer = ByteArray(4096)
+    private var readBuffer = ByteArray(CHUNK_BYTES)
 
     fun start(url: String, debugLabel: String, pipeIn: java.io.InputStream, offsetNanos: Long, clock: PlaybackClock) {
         stop()
         stream = pipeIn
         running = true
-        // The audio thread reads from the pipe and keeps the clock running
+
+        // Open the audio line
+        val audioFormat = javax.sound.sampled.AudioFormat(
+            SAMPLE_RATE.toFloat(), 16, 2, true, false // S16LE stereo
+        )
+        val info = javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine::class.java, audioFormat)
+        try {
+            val audioLine = javax.sound.sampled.AudioSystem.getLine(info) as javax.sound.sampled.SourceDataLine
+            audioLine.open(audioFormat, CHUNK_BYTES * 8)
+            audioLine.start()
+            line = audioLine
+        } catch (e: Exception) {
+            logger.warn("$debugLabel Audio line unavailable: ${e.message}")
+        }
+
         val st = pipeIn
         thread = daemon({
             try {
                 while (running && !Thread.currentThread().isInterrupted) {
                     if (paused) {
+                        line?.stop()
                         try { Thread.sleep(20) } catch (_: InterruptedException) { break }
                         continue
                     }
+                    if (line != null && !line!!.isRunning) line!!.start()
                     val n = st.read(readBuffer)
                     if (n < 0) break
-                    // Clock advances as PCM arrives
                     if (n > 0) {
-                        clock.advanceByBytes(n)
+                        line?.write(readBuffer, 0, n)
                     }
                 }
             } catch (e: Exception) {
                 if (running) logger.warn("$debugLabel AudioSink: ${e.message}")
+            } finally {
+                runCatching { line?.drain(); line?.stop(); line?.close() }
+                line = null
             }
         }, "MediaPlayer-audio").also { it.start() }
     }
@@ -782,96 +801,32 @@ internal class AudioSink(private val debugLabel: String) {
         thread?.interrupt()
         thread = null
         stream = null
+        runCatching { line?.drain(); line?.stop(); line?.close() }
+        line = null
     }
 
-    fun pause() { paused = true }
-    fun resume() { paused = false }
+    fun pause() {
+        paused = true
+        thread?.interrupt()
+    }
+
+    fun resume() {
+        paused = false
+        thread?.interrupt()
+    }
 
     fun setVolume(volume: Double) {
-        // Volume is handled by the MediaPlayer host
+        val gain = (volume * 6.0 - 80.0).coerceIn(-80.0, 6.0) // dB
+        try {
+            line?.let {
+                if (it.isControlSupported(javax.sound.sampled.FloatControl.Type.MASTER_GAIN)) {
+                    (it.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN) as javax.sound.sampled.FloatControl).value = gain.toFloat()
+                }
+            }
+        } catch (_: Exception) { }
     }
 
     fun requestResync() {
         // No-op: libvlc handles A/V sync
-    }
-}
-
-/**
- * Minimal Process wrapper for libvlc audio pipe.
- */
-internal class LibVlcAudioProcess(
-    private val input: PipedInputStream,
-) : Process() {
-    @Volatile private var destroyed = false
-    override fun getOutputStream(): java.io.OutputStream = throw UnsupportedOperationException()
-    override fun getInputStream(): java.io.InputStream = input
-    override fun getErrorStream(): java.io.InputStream = java.io.ByteArrayInputStream(ByteArray(0))
-    override fun waitFor(timeout: Long, unit: TimeUnit): Boolean {
-        val deadline = System.nanoTime() + unit.toNanos(timeout)
-        while (System.nanoTime() < deadline && !destroyed) { try { Thread.sleep(10) } catch (_: InterruptedException) { return false } }
-        return destroyed
-    }
-    override fun waitFor(): Int { while (!destroyed) { try { Thread.sleep(100) } catch (_: InterruptedException) { return 0 } }; return 0 }
-    override fun exitValue(): Int = if (destroyed) 0 else throw IllegalThreadStateException()
-    override fun destroy() { destroyed = true; input.close() }
-    override fun destroyForcibly(): Process = apply { destroy() }
-    override fun isAlive(): Boolean = !destroyed
-}
-
-/**
- * Placeholder for the audio DSP stage type.
- */
-internal data class AudioDspStage(val enabled: Boolean = false)
-
-/**
- * Placeholder for the warm audio track type.
- */
-internal data class WarmTrack(val url: String, val info: String = "")
-
-/**
- * Minimal clock interface for A/V sync.
- */
-internal class PlaybackClock {
-    var isRunning = false; private set
-    private var originNanos = System.nanoTime()
-    private var positionNanos = 0L
-    private var bytesToNanosFactor = 1.0
-
-    fun currentTime(): Long = if (isRunning) positionNanos + (System.nanoTime() - originNanos) else positionNanos
-
-    fun advanceByBytes(bytes: Int) {
-        if (!isRunning) {
-            isRunning = true
-            originNanos = System.nanoTime()
-        }
-        // 44100 Hz, stereo, S16 = 4 bytes/frame = 176400 bytes/sec
-        // Each byte = 1/176400 seconds = ~5670 ns
-        positionNanos += (bytes.toLong() * 5670L)
-    }
-
-    fun pause() {
-        if (isRunning) {
-            positionNanos += (System.nanoTime() - originNanos)
-            isRunning = false
-        }
-    }
-
-    fun resume() {
-        if (!isRunning) {
-            originNanos = System.nanoTime()
-            isRunning = true
-        }
-    }
-
-    fun seek(offsetNanos: Long) {
-        positionNanos = offsetNanos.coerceAtLeast(0)
-        originNanos = System.nanoTime()
-        isRunning = true
-    }
-
-    fun reset() {
-        isRunning = false
-        positionNanos = 0L
-        originNanos = System.nanoTime()
     }
 }

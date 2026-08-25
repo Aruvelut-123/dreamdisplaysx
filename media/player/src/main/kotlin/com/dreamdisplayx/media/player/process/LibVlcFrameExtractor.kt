@@ -63,11 +63,8 @@ object LibVlcFrameExtractor {
 
             // Latch: set when the first frame arrives
             val frameLatch = CountDownLatch(1)
-            @Volatile
             var frameBuffer: ByteBuffer? = null
-            @Volatile
             var frameW = 0
-            @Volatile
             var frameH = 0
 
             // Video callbacks: use I420 chroma

@@ -12,7 +12,7 @@ import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplayx.media.player.events.PlayerEvents
-import com.dreamdisplayx.media.player.managers.PlaybackSessionManager
+import com.dreamdisplayx.media.player.managers.LibVlcSessionManager
 import com.dreamdisplayx.media.player.managers.StatsReporter
 import com.dreamdisplayx.media.player.managers.StreamWatchdog
 import com.dreamdisplayx.media.player.managers.WarmTrack
@@ -249,7 +249,7 @@ class MediaPlayer(
     )
 
     /** Session manager. */
-    private val sessionManager = PlaybackSessionManager(
+    private val sessionManager = LibVlcSessionManager(
         debugLabel = debugLabel,
         clock = clock,
         events = events,
@@ -737,13 +737,6 @@ class MediaPlayer(
             probedStreamSet,
             offsetNanos,
             lastQuality,
-            live = liveStream,
-            onFirstFrame = {
-                retryPolicy.reset()
-                cdnVideoIndex = -1
-                cdnAudioIndex = -1
-            },
-            onDriftResync = { notifyAudioDriftResync() },
         )
         if (sessionManager.isPlaying) {
             state.set(PlaybackState.PLAYING)

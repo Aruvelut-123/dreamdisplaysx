@@ -3,6 +3,7 @@
 package com.dreamdisplayx.media.player.pipeline
 
 import com.dreamdisplayx.api.media.model.FramePixelFormat
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.api.security.policy.MediaHosts
