@@ -72,10 +72,8 @@ object CdnSpeedProbe {
         val order = hostToUrls.keys.sortedBy { scores[it] ?: Long.MAX_VALUE }
         if (order.size < 2 || scores.isEmpty()) return video to audio
 
-        if (logger.isDebugEnabled) {
-            val detail = order.joinToString(", ") { "$it=${scores[it]?.let { s -> "${s / 1000.0}ms" } ?: "?"}" }
-            logger.debug("CDN probe result: $detail")
-        }
+        val detail = order.joinToString(", ") { "$it=${scores[it]?.let { s -> "${s / 1000.0}ms" } ?: "?"}" }
+        logger.info("CDN probe result: $detail")
 
         val newVideo = video?.let { reorder(it, order) }
         val newAudio = audio?.let { reorder(it, order) }
@@ -131,15 +129,15 @@ object CdnSpeedProbe {
                 ),
             )
             if (!response.isSuccessful) {
-                logger.debug("CDN probe for $host returned HTTP ${response.code}; marking slow.")
+                logger.warn("CDN probe for $host returned HTTP ${response.code}; marking slow.")
                 return -1
             }
             TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - start)
         } catch (e: IOException) {
-            logger.debug("CDN probe for $host failed: ${e.message ?: e::class.java.simpleName}")
+            logger.warn("CDN probe for $host failed: ${e.message ?: e::class.java.simpleName}")
             -1
         } catch (e: Exception) {
-            logger.debug("CDN probe for $host aborted: ${e.message ?: e::class.java.simpleName}")
+            logger.warn("CDN probe for $host aborted: ${e.message ?: e::class.java.simpleName}")
             -1
         }
     }

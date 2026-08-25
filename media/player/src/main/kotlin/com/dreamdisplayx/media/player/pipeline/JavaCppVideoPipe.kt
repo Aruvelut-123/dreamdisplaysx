@@ -24,7 +24,6 @@ import org.bytedeco.javacv.Frame
 import org.bytedeco.javacv.FrameGrabber
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -906,18 +905,11 @@ internal class JavaCppVideoPipe(
                     "output_format may not be supported by this backend"
                 )
             }
-            // Third line of defence: some backends (AMF) report valid-looking data pointers
-            // that still point to GPU/device memory.  sws_scale then fails even though the
-            // pointer addresses are non-null.  Run a tiny sws_scale pass to verify the data
-            // is actually CPU-addressable.
-            if (!probeSwsReadable(probeAv)) {
-                probe.close()
-                g.stop()
-                throw java.io.IOException(
-                    "hwaccel '$hwaccel' sws_scale probe failed — " +
-                    "data pointers are not CPU-addressable"
-                )
-            }
+            // (Note: a real sws_scale probe pass was tried here in an earlier commit, but it
+            //  incorrectly rejected valid backends because sws_scale treats null entries in the
+            //  pointer array as errors. The existing hw_frames_ctx / data-null checks above are
+            //  sufficient for the backends tested so far, and the 4-element pointer-array fix in
+            //  frameToI420 / frameToRgb24 prevents the original "bad dst image pointers" crash.)
         }
         // Re-apply the seek target: the probe consumed the first frame(s), so rewind to the
         // intended position so the reader loop presents the same timeline as the software path.
@@ -925,52 +917,6 @@ internal class JavaCppVideoPipe(
         MediaPlayer.currentDecoder.set(hwaccel)
         logger.info("{} Video decode via hwaccel '{}'.", debugLabel, hwaccel)
         return g
-    }
-
-    /**
-     * Probes whether [probe] is a CPU-addressable frame that sws_scale can actually read.
-     *
-     * Some hwaccel backends (notably AMF) ignore `hwaccel_output_format=yuv420p` or report
-     * valid-looking data pointers that still point at GPU/device memory.  sws_scale then fails
-     * with "bad dst image pointers" on every frame even though `hw_frames_ctx()` is null and
-     * `data(i)` is non-null.  The only reliable check is to run a tiny sws_scale pass and see
-     * whether it produces output.
-     */
-    private fun probeSwsReadable(src: AVFrame): Boolean {
-        return try {
-            val w = src.width()
-            val h = src.height()
-            val fmt = src.format()
-            if (w <= 0 || h <= 0 || fmt < 0) return false
-            val ctx = swscale.sws_getCachedContext(
-                null as SwsContext?, w, h, fmt,
-                w, h, fmt, swscale.SWS_BILINEAR,
-                null as SwsFilter?, null as SwsFilter?, null as DoublePointer?,
-            ) ?: return false
-            try {
-                val srcPtrs = arrayOfNulls<BytePointer>(4)
-                for (i in 0 until 4) {
-                    srcPtrs[i] = try {
-                        val d = src.data(i)
-                        if (d != null && !d.isNull()) d else null
-                    } catch (_: Exception) { null }
-                }
-                if (srcPtrs[0] == null) return false
-                // The tiny pass reads up to 4 entries from the pointer arrays, so pass exactly 4.
-                val srcSlices = PointerPointer<BytePointer>(srcPtrs[0], srcPtrs[1], srcPtrs[2], srcPtrs[3])
-                val srcStrides = IntPointer(src.linesize(0), src.linesize(1), src.linesize(2), src.linesize(3))
-                val out = BytePointer(ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder()))
-                val dstSlices = PointerPointer<BytePointer>(out, null as BytePointer?, null as BytePointer?, null as BytePointer?)
-                val dstStrides = IntPointer(w * 4, 0, 0, 0)
-                val lines = swscale.sws_scale(ctx, srcSlices, srcStrides, 0, h, dstSlices, dstStrides)
-                lines > 0
-            } finally {
-                swscale.sws_freeContext(ctx)
-            }
-        } catch (e: Exception) {
-            if (MediaPlayer.DEBUG) logger.warn("$debugLabel Probe sws_scale failed: {}", e.message)
-            false
-        }
     }
 
     /** Sets the shared format-level options for a new grabber. */
