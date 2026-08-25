@@ -40,10 +40,16 @@ internal object ShaderPackCompat {
         // Fast path: no Iris at all
         if (!irisPresent()) return false
 
-        // Try every known API / method to detect an active pack
+        // Try every known API / method to detect an active pack.  If a detector runs
+        // successfully and returns a definitive "no", trust it — the old conservative
+        // fallback (always return true when Iris is present) forced the slow RGB24
+        // pipeline even when shaders are disabled via `enableShaders=false` in
+        // iris.properties, causing frame drops and stutter on every video.
+        var anyDetectorSucceeded = false
         for (candidate in IRIS_DETECTORS) {
             try {
                 val clazz = Class.forName(candidate.className)
+                anyDetectorSucceeded = true
                 when (candidate.kind) {
                     DetectorKind.API_GET_INSTANCE -> {
                         val api = clazz.getMethod("getInstance").invoke(null)
@@ -56,6 +62,11 @@ internal object ShaderPackCompat {
                 }
             } catch (_: Exception) { }
         }
+
+        // At least one detector ran and said "no" — trust it (shaders are disabled or
+        // no pack is loaded).  Only fall back to the conservative true when every
+        // detector threw an exception and we genuinely cannot tell.
+        if (anyDetectorSucceeded) return false
 
         // Iris is present but all detection methods failed — conservatively assume a pack is active.
         // Returning true here means the YUV pipeline is disabled, which is safer than the

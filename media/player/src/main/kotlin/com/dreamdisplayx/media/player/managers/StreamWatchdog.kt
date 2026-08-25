@@ -38,7 +38,9 @@ internal class StreamWatchdog(
     fun start() {
         stop()
         deliveredAFrame = false
-        lastSeenStamp = getLastFrameNanos()
+        // Reset the baseline to NOW, not the last frame timestamp, so a restart doesn't
+        // immediately inherit the previous session's silence gap and fire a false stall.
+        lastSeenStamp = System.nanoTime()
         job = scope.launch {
             delay(checkIntervalMs.milliseconds)
             // Stops at the first stall: recovery is the caller's job, and it restarts the watchdog
