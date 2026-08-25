@@ -29,17 +29,27 @@ import java.util.concurrent.TimeUnit
 object CdnSpeedProbe {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/CdnSpeedProbe")
 
-    /** Chunk size for bandwidth probes — 256 KB is enough to measure throughput without being heavy. */
+    /** Chunk size for on-the-fly bandwidth probes (short budget during playback). */
     private const val PROBE_BANDWIDTH_BYTES = 256 * 1024
+
+    /**
+     * Chunk size for the startup pre-probe — same as PiliPlus's CDN speed test
+     * (`maxSize = 8 * 1024 * 1024`).  A large download lets TCP leave slow-start and reflects the
+     * real achievable throughput; a 256 KB chunk mostly measures connection setup.
+     */
+    private const val STARTUP_PROBE_BANDWIDTH_BYTES = 8 * 1024 * 1024
 
     /** Per-host probe budget. */
     private const val PROBE_TIMEOUT_MS = 3_000L
+
+    /** Per-host budget for the startup pre-probe, matching PiliPlus's 15 s receive timeout. */
+    private const val STARTUP_PROBE_TIMEOUT_MS = 15_000L
 
     /** Total budget for probing all candidates of one stream. */
     private const val TOTAL_BUDGET_MS = 6_000L
 
     /** Budget for the startup pre-probe; runs on a background thread so it can afford to be slow. */
-    private const val WARMUP_BUDGET_MS = 45_000L
+    private const val WARMUP_BUDGET_MS = 60_000L
 
     /** Cache of hostname → measured bandwidth (MB/s × 1000, higher = faster); -1 = failed. */
     private val hostScoreCache = ConcurrentHashMap<String, Long>()
@@ -238,7 +248,10 @@ object CdnSpeedProbe {
     // ── Bandwidth probe ─────────────────────────────────────────────────────
 
     /**
-     * Measures throughput to [host] by requesting a 256 KB Range from [url].
+     * Measures throughput to [host] by requesting a Range from [url].
+     * @param chunkBytes  number of bytes to request (Range `bytes=0-{chunkBytes-1}`).
+     *                    Startup probe uses 8 MB (matching PiliPlus); on-the-fly uses 256 KB.
+     * @param timeoutMs  per-host timeout; startup uses 15 s (matching PiliPlus), on-the-fly uses 3 s.
      * Returns throughput in MB/s × 1000 (higher = better), or -1 on failure.
      */
     private fun probeBandwidth(
@@ -246,19 +259,21 @@ object CdnSpeedProbe {
         url: String,
         deadlineNanos: Long,
         authReferer: String?,
+        chunkBytes: Int = PROBE_BANDWIDTH_BYTES,
+        timeoutMs: Long = PROBE_TIMEOUT_MS,
     ): Long {
         val remainingMs = TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime())
-            .coerceIn(500L, PROBE_TIMEOUT_MS)
+            .coerceIn(500L, timeoutMs)
         val start = System.nanoTime()
         return try {
-            val headers = mutableListOf("Range" to "bytes=0-${PROBE_BANDWIDTH_BYTES - 1}")
+            val headers = mutableListOf("Range" to "bytes=0-${chunkBytes - 1}")
             authReferer?.let { headers.add("Referer" to it) }
             MediaHosts.refererFor(url)?.let { ref ->
                 if (ref !in headers.map { it.second }) headers.add("Referer" to ref)
             }
             val response = DreamHttpClient.executeLimited(
                 url,
-                PROBE_BANDWIDTH_BYTES,
+                chunkBytes,
                 DreamHttpClient.RequestOptions(
                     headers = DreamHttpClient.headersOf(*headers.toTypedArray()),
                     connectTimeoutMs = remainingMs,
@@ -416,7 +431,11 @@ object CdnSpeedProbe {
             }
             val probeUrl = replaceHost(templateUrl, host)
             if (probeUrl == templateUrl) continue // replaceHost failed
-            val score = probeBandwidth(host, probeUrl, deadline, authReferer)
+            val score = probeBandwidth(
+                host, probeUrl, deadline, authReferer,
+                chunkBytes = STARTUP_PROBE_BANDWIDTH_BYTES,  // 8 MB, same as PiliPlus
+                timeoutMs = STARTUP_PROBE_TIMEOUT_MS,        // 15 s, same as PiliPlus
+            )
             hostScoreCache[host] = score
             if (score >= 0) ranked[host] = score
         }
