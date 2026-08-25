@@ -521,8 +521,10 @@ internal class JavaCppVideoPipe(
         val uvSize = ((expectedW + 1) / 2) * ((expectedH + 1) / 2)
 
         // For LETTERBOX: fill the whole buffer with black (limited-range Y=16, U=V=128)
-        // before writing the scaled video into the centred sub-rectangle.
-        if (plan.pad) {
+        // before writing the scaled video into the centred sub-rectangle — but only when
+        // there actually ARE letterbox bars (aspect mismatch). Same-aspect videos skip the
+        // per-frame full-buffer zero write, which is a large fraction of the decode cost.
+        if (plan.pad && (plan.dstOffX > 0 || plan.dstOffY > 0)) {
             fillI420Black(dst, ySize, uvSize)
         }
 

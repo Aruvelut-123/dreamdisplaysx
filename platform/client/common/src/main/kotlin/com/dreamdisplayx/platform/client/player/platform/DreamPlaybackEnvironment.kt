@@ -43,6 +43,10 @@ object DreamPlaybackEnvironment : PlaybackEnvironment {
          */
         override val hwAccelCandidates: List<String> get() =
             HwAccelCandidateResolver.resolve(ClientStateManager.config.hwaccelDecoder, useHwAccel)
+
+        /** Preferred Bilibili CDN mirror host, or auto-select by probe when unset / `"auto"`. */
+        override val bilibiliCdnMirror: String? get() =
+            ClientStateManager.config.bilibiliCdnMirror.ifBlank { null }
     }
 
     /** Runs tasks on Minecraft's render/main thread. */

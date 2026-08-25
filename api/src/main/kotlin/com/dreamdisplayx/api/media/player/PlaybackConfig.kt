@@ -30,4 +30,14 @@ interface PlaybackConfig {
      * `"videotoolbox"`, `"dxva2"`, `"mediacodec"`.
      */
     val hwAccelCandidates: List<String> get() = emptyList()
+
+    /**
+     * Preferred Bilibili CDN mirror host, or null / empty to auto-select by bandwidth probe.
+     *
+     * When set to a known mirror hostname (e.g. `"upos-sz-mirrorcos.bilivideo.com"`), every
+     * Bilibili stream URL's host is replaced with this value before playback starts — the API
+     * returns the same content from any mirror.  Special values `"BASE_URL"` and `"BACKUP_URL"`
+     * keep the original API host or the first backup URL respectively.
+     */
+    val bilibiliCdnMirror: String? get() = null
 }

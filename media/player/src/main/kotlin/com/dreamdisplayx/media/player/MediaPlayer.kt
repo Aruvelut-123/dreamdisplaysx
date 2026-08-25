@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.api.media.player.PlaybackEnvironment
 import com.dreamdisplayx.api.media.player.PlaybackHost
 import com.dreamdisplayx.api.media.stream.model.MediaStream
+import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplayx.media.player.events.PlayerEvents
 import com.dreamdisplayx.media.player.managers.PlaybackSessionManager
@@ -715,7 +716,14 @@ class MediaPlayer(
         lastAudioFailureNanos = 0L
         // CDN speed probe: test all candidate CDN hosts and reorder streams so the fastest
         // edge is used first, reducing the chance of stall-driven failover during playback.
-        val (probedVideo, probedAudio) = CdnSpeedProbe.reorderForPlayback(streamSet.currentVideo, streamSet.currentAudio)
+        // Bandwidth measurement (256 KB Range) is used for Bilibili mirror URLs; the fallback
+        // TTFB latency probe runs for other platforms.  Credits: based on PiliPlus's CDN
+        // mirror-selection and speed-test approach.
+        val (probedVideo, probedAudio) = CdnSpeedProbe.reorderForPlayback(
+            streamSet.currentVideo, streamSet.currentAudio,
+            preferredMirrorHost = env.config.bilibiliCdnMirror,
+            authReferer = MediaHosts.refererFor(streamSet.currentVideo?.url ?: ""),
+        )
         val probedStreamSet = if (probedVideo != streamSet.currentVideo || probedAudio != streamSet.currentAudio) {
             streamSet.copy(
                 currentVideo = probedVideo ?: streamSet.currentVideo,

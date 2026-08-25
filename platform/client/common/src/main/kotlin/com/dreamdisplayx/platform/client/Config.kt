@@ -57,6 +57,14 @@ class Config(private val baseDir: File) {
     /** Output profile for spatialized audio: `true` renders binaural for headphones, `false` a plain stereo pan for speakers. */
     var audioBinauralOutput: Boolean = true
 
+    /**
+     * Preferred Bilibili CDN mirror, or `"auto"` to select by bandwidth probe at playback time.
+     * See [com.dreamdisplayx.media.player.cdn.BilibiliCdnMirror] for the known mirror hostnames
+     * (`"upos-sz-mirrorcos.bilivideo.com"`, `"upos-sz-mirrorhw.bilivideo.com"`, ...) and the
+     * special values `"BASE_URL"` / `"BACKUP_URL"`.
+     */
+    var bilibiliCdnMirror: String = "auto"
+
     init {
         load()
     }
@@ -123,6 +131,7 @@ class Config(private val baseDir: File) {
         data["audio-acoustics"]?.let { token ->
             AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }?.let { audioAcoustics = it }
         }
+        data["bilibili-cdn-mirror"]?.let { bilibiliCdnMirror = it }
         when (data["audio-output-profile"]?.lowercase()) {
             "speakers" -> audioBinauralOutput = false
             "headphones", "auto" -> audioBinauralOutput = true
@@ -143,6 +152,7 @@ class Config(private val baseDir: File) {
         t?.getString("audio-acoustics")?.let { token ->
             AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }?.let { audioAcoustics = it }
         }
+        t?.getString("bilibili-cdn-mirror")?.let { bilibiliCdnMirror = it }
         when (t?.getString("audio-output-profile")?.lowercase()) {
             "speakers" -> audioBinauralOutput = false
             "headphones", "auto" -> audioBinauralOutput = true
@@ -220,6 +230,13 @@ class Config(private val baseDir: File) {
             get = { audioAcoustics },
             apply = { audioAcoustics = it; save() },
         ),
+        ConfigEntry(
+            "bilibili-cdn-mirror", "Bilibili CDN mirror",
+            "Preferred Bilibili CDN mirror host for stream URLs, or `auto` to pick the fastest by bandwidth probe at playback time. Special values: `BASE_URL` (keep API URL), `BACKUP_URL` (use first backup URL).",
+            ConfigEntryType.STRING,
+            get = { bilibiliCdnMirror },
+            apply = { bilibiliCdnMirror = it; save() },
+        ),
     )
 
     /** Persists the current configuration values to disk as standard TOML. */
@@ -236,6 +253,7 @@ class Config(private val baseDir: File) {
             appendLine("prefer-fps60 = $preferFps60")
             appendLine("audio-acoustics = \"${audioAcoustics.name.lowercase()}\"")
             appendLine("audio-output-profile = \"${if (audioBinauralOutput) "headphones" else "speakers"}\"")
+            appendLine("bilibili-cdn-mirror = \"${tomlQuote(bilibiliCdnMirror)}\"")
         })
     }
 
