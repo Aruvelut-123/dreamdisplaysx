@@ -479,6 +479,13 @@ internal class JavaCppVideoPipe(
         val srcH = src.height()
         val srcFmt = src.format()
         if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
+        // Guard: hardware frames (hw_frames_ctx set) or frames without CPU data pointers must
+        // never reach sws_scale — sws_scale reads GPU addresses as system memory and fails
+        // with "bad dst image pointers" on every frame.
+        if (src.hw_frames_ctx() != null) {
+            if (MediaPlayer.DEBUG) logger.warn("$debugLabel Hardware frame reached the converter; skipping.")
+            return false
+        }
 
         val dstFmt = avutil.AV_PIX_FMT_YUV420P
         val plan = ScalingPlan.compute(srcW, srcH, expectedW, expectedH, stretchMode, srcFmt)
@@ -652,6 +659,11 @@ internal class JavaCppVideoPipe(
         val srcH = src.height()
         val srcFmt = src.format()
         if (srcW <= 0 || srcH <= 0 || srcFmt < 0) return false
+        // Guard: same as frameToI420 — never feed hardware frames to sws_scale.
+        if (src.hw_frames_ctx() != null) {
+            if (MediaPlayer.DEBUG) logger.warn("$debugLabel Hardware frame reached the RGB converter; skipping.")
+            return false
+        }
 
         val dstFmt = avutil.AV_PIX_FMT_RGB24
         val plan = ScalingPlan.compute(srcW, srcH, expectedW, expectedH, stretchMode, srcFmt)
@@ -842,6 +854,24 @@ internal class JavaCppVideoPipe(
         val probe = g.grabImage()
         if (probe == null) {
             throw java.io.IOException("hwaccel '$hwaccel' produced no frame")
+        }
+        // Verify the decoder actually transferred the frame to system memory.  When a hwaccel
+        // backend ignores `hwaccel_output_format` (e.g. AMF on some FFmpeg builds), the AVFrame
+        // stays on the hardware device — its data pointers are null or GPU addresses that
+        // sws_scale cannot read from, causing "bad dst image pointers" on every frame.
+        val probeAv = probe.opaque as? AVFrame
+        if (probeAv != null) {
+            val hasCpuData = (0 until 4).any { i ->
+                val d = probeAv.data(i); d != null && !d.isNull()
+            }
+            if (probeAv.hw_frames_ctx() != null || !hasCpuData) {
+                probe.close()
+                g.stop()
+                throw java.io.IOException(
+                    "hwaccel '$hwaccel' left frame on the hardware device; " +
+                    "output_format may not be supported by this backend"
+                )
+            }
         }
         // Re-apply the seek target: the probe consumed the first frame(s), so rewind to the
         // intended position so the reader loop presents the same timeline as the software path.
