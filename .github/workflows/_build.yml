@@ -206,20 +206,21 @@ jobs:
           echo "pretty_version=$pretty" >> $GITHUB_OUTPUT
 
   # ========================================================================
-  # sqlite native natives: downloaded from a GitHub Release produced by the
-  # standalone "Build SQLite Natives" workflow (sqlite-natives.yml), which
-  # compiles the relocated JNI symbols for Fabric/NeoForge mod isolation.
-  # Building the 6-platform C bundle on every CI run would be wasteful since
-  # the sqlite sources never change between builds. Run that workflow
-  # (workflow_dispatch) whenever the sqlite version or compiler flags change.
+  # native natives: downloaded from a GitHub Release produced by the
+  # standalone "Build Natives" workflow (natives.yml), which compiles the
+  # relocated sqlite JNI symbols and collects the official LibVLC runtime for
+  # Fabric/NeoForge mod isolation. Building the 6-platform C bundles on every
+  # CI run would be wasteful since the sources never change between builds.
+  # Run that workflow (workflow_dispatch) whenever the sqlite version,
+  # VLC version or compiler flags change.
   # ========================================================================
-  download-sqlite-natives:
-    name: Download sqlite natives
+  download-natives:
+    name: Download natives
     runs-on: ubuntu-latest
     needs: metadata
     timeout-minutes: 5
     outputs:
-      sqlite_release: ${{ steps.check_release.outputs.sqlite_release }}
+      natives_release: ${{ steps.check_release.outputs.natives_release }}
 
     steps:
       - name: Checkout repository
@@ -227,41 +228,41 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Resolve sqlite native release
+      - name: Resolve natives release
         id: check_release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           # First try the tag from the marker file (if set up)
-          if [[ -f .github/sqlite-natives-tag.txt ]]; then
-            TAG="$(cat .github/sqlite-natives-tag.txt | tr -d '[:space:]')"
+          if [[ -f .github/natives-tag.txt ]]; then
+            TAG="$(cat .github/natives-tag.txt | tr -d '[:space:]')"
             if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-              echo "Found prebuilt sqlite natives release $TAG (from tag file)"
-              echo "sqlite_release=$TAG" >> "$GITHUB_OUTPUT"
+              echo "Found prebuilt natives release $TAG (from tag file)"
+              echo "natives_release=$TAG" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "Tag file points to $TAG which does not exist; falling back to latest release."
           fi
 
-          # Fallback: find the most recent sqlite-natives-* release
+          # Fallback: find the most recent natives-* release
           LATEST="$(
             gh release list --repo "${{ github.repository }}" --limit 50 \
               --json tagName --jq '.[].tagName' \
-              | grep -E '^sqlite-natives-' \
+              | grep -E '^natives-' \
               | sort -t- -k3 -n -r \
               | head -1
           )"
           if [[ -n "$LATEST" ]]; then
-            echo "Found latest sqlite natives release $LATEST"
-            echo "sqlite_release=$LATEST" >> "$GITHUB_OUTPUT"
+            echo "Found latest natives release $LATEST"
+            echo "natives_release=$LATEST" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "ERROR: No sqlite natives release found."
+          echo "ERROR: No natives release found."
           echo ""
-          echo "Run the 'Build SQLite Natives' workflow (.github/workflows/sqlite-natives.yml)"
-          echo "manually (Actions -> Build SQLite Natives -> Run workflow) to compile and"
-          echo "publish the 6-platform sqlite native libraries, then re-run this build."
+          echo "Run the 'Build Natives' workflow (.github/workflows/natives.yml)"
+          echo "manually (Actions -> Build Natives -> Run workflow) to compile and"
+          echo "publish the 6-platform sqlite + libvlc native libraries, then re-run this build."
           exit 1
 
   # ========================================================================
@@ -272,7 +273,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - metadata
-      - download-sqlite-natives
+      - download-natives
     timeout-minutes: 15
     permissions:
       contents: read
@@ -334,18 +335,29 @@ jobs:
           python scripts/inject_commit_hash.py "$COMMIT"
           grep 'dreamdisplayx.debug.commit' platform/resources/src/main/resources/assets/dreamdisplayx/lang/client/en_us.json
 
-      - name: Download sqlite native archives
+      - name: Download native archives (sqlite + libvlc)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.download-sqlite-natives.outputs.sqlite_release }}"
+          TAG="${{ needs.download-natives.outputs.natives_release }}"
           mkdir -p native/build/ci-bundle/dreamdisplayx-natives
           gh release download "$TAG" --repo "${{ github.repository }}" \
-            --dir native/build/ci-bundle --pattern 'native-*.tar.gz'
-          for f in native/build/ci-bundle/native-*.tar.gz; do
+            --dir native/build/ci-bundle --pattern '*.tar.gz' '--pattern sqlite-*.tar.gz' '--pattern libvlc-*.tar.gz'
+          # sqlite archives extract to <Os>/<arch>/<lib> matching includeRebuiltSqliteNatives
+          for f in native/build/ci-bundle/sqlite-*.tar.gz; do
             tar xzf "$f" -C native/build/ci-bundle/dreamdisplayx-natives
           done
+          # libvlc archives extract to native/build/ci-bundle/libvlc/
+          mkdir -p native/build/ci-bundle/libvlc
+          for f in native/build/ci-bundle/libvlc-*.tar.gz; do
+            PLATFORM="$(basename "$f" | sed 's/libvlc-\(.*\)\.tar\.gz/\1/')"
+            mkdir -p "native/build/ci-bundle/libvlc/$PLATFORM"
+            tar xzf "$f" -C "native/build/ci-bundle/libvlc/$PLATFORM"
+          done
+          echo "=== sqlite natives ==="
           find native/build/ci-bundle/dreamdisplayx-natives -maxdepth 3 -type f -print | sort
+          echo "=== libvlc natives ==="
+          find native/build/ci-bundle/libvlc -maxdepth 4 -type f -print | sort | head -40
 
       - name: Build loaders with Gradle
         run: |

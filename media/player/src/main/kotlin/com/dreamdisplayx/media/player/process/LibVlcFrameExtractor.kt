@@ -51,6 +51,9 @@ object LibVlcFrameExtractor {
             args.add("--http-referer=$referer")
         }
 
+        // Ensure libvlc natives are loaded
+        com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
+
         val factory = try {
             MediaPlayerFactory(args)
         } catch (e: Exception) {

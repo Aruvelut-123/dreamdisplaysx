@@ -2,6 +2,14 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **libvlc migration (feat/libvlc branch)** — the media pipeline is being ported
+> from JavaCPP/FFmpeg to **libvlc** (vlcj). One unified `EmbeddedMediaPlayer`
+> handles video + audio (no split channels); play/pause/seek/A-V sync are all
+> delegated to libvlc instead of reimplemented pacing loops. The bundled LibVLC
+> runtime is collected by the CI "Build Natives" workflow (like sqlite-jdbc) and
+> injected into the fat jars, because `vlcj-natives` ships no native binaries.
+> This work is in progress on the `feat/libvlc` branch.
+
 ## Highlights
 
 - **JavaCPP audio decode** — the FFmpeg CLI subprocess for audio is replaced by an in-process `FFmpegFrameGrabber` (JavaCPP). No more external FFmpeg binary download for audio; `HlsAudioFeeder` removed.

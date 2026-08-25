@@ -14,6 +14,7 @@ import com.dreamdisplayx.media.player.pipeline.FrameSurface
 import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
+import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
 import com.dreamdisplayx.media.player.util.daemon
 import com.dreamdisplayx.media.player.util.joinSafely
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
@@ -231,6 +232,9 @@ internal class LibVlcSessionManager(
             "--live-caching=600",
         )
         MediaHosts.refererFor(safeUrl)?.let { args.add("--http-referer=$it") }
+
+        // Ensure libvlc natives are loaded before creating the factory
+        LibVlcNativesLoader.load()
 
         val fact = MediaPlayerFactory(args)
         factory = fact

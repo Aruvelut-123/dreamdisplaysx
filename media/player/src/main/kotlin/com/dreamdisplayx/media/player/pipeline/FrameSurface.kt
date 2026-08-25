@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Render-facing half of a frame pipe, shared by [JavaCppVideoPipe]: the reusable direct-buffer
+ * Render-facing half of a frame pipe, shared by the libvlc video pipe: the reusable direct-buffer
  * pool and GPU upload plumbing.
  */
 internal class FrameSurface(

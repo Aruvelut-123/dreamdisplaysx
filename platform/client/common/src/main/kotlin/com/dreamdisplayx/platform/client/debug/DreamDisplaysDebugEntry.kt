@@ -17,16 +17,8 @@ import net.minecraft.world.level.chunk.LevelChunk
  * Uses [addToGroup] to place lines on the right side alongside system specs.
  */
 object DreamDisplaysDebugEntry : DebugScreenEntry {
-    private val libvlcVersion: String by lazy {
-        runCatching {
-            val f = uk.co.caprica.vlcj.factory.MediaPlayerFactory()
-            try {
-                f.application().version() ?: "unknown"
-            } finally {
-                f.release()
-            }
-        }.getOrDefault("unknown")
-    }
+    private val libvlcVersion: String
+        get() = com.dreamdisplayx.media.player.util.LibVlcNativesLoader.libvlcVersion ?: "unavailable"
 
     private val modVersion: String by lazy { GeneralUtil.getPrettyModVersion() }
 

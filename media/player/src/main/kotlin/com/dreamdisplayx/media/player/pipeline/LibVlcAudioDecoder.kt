@@ -3,6 +3,7 @@
 package com.dreamdisplayx.media.player.pipeline
 
 import com.dreamdisplayx.api.security.policy.MediaHosts
+import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
 import com.dreamdisplayx.media.player.util.daemon
 import org.slf4j.LoggerFactory
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
@@ -164,6 +165,9 @@ internal class LibVlcAudioDecoder(
         MediaHosts.refererFor(url)?.let { referer ->
             args.add("--http-referer=$referer")
         }
+
+        // Ensure libvlc natives are loaded
+        LibVlcNativesLoader.load()
 
         val fact = try {
             MediaPlayerFactory(args)

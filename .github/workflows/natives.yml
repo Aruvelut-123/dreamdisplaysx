@@ -1,0 +1,224 @@
+# Build Natives — standalone workflow
+#
+# Compiles/collects the relocated native libraries the fat loader jars need and
+# publishes the binaries as a GitHub Release. Only the main project build
+# workflow downloads them from that release, so the C toolchains (MinGW on
+# Windows) are not needed on every CI run.
+#
+# Two product groups, one release:
+#   - sqlite: compiles the relocated sqlite-jdbc native library (mod isolation)
+#   - libvlc: collects the official LibVLC runtime (libvlc.dll / .so / .dylib
+#             + plugins) so built jars carry the full decoder itself
+#
+# Trigger: manual (workflow_dispatch). The release tag is auto-generated from
+# the commit SHA and timestamp, and the tag marker files
+# (.github/natives-sqlite-tag.txt, .github/natives-libvlc-tag.txt) are updated
+# so the main build workflow always picks up the latest pre-built natives.
+
+name: Build Natives
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: natives
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sqlite:
+    name: sqlite ${{ matrix.sqlite.platform }}
+    runs-on: ${{ matrix.sqlite.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        sqlite:
+          - { platform: linux-x64,      os: Linux,   arch: x86_64,  runner: ubuntu-latest }
+          - { platform: linux-aarch64,  os: Linux,   arch: aarch64, runner: ubuntu-24.04-arm }
+          - { platform: macos-x64,      os: Mac,     arch: x86_64,  runner: macos-15-intel }
+          - { platform: macos-aarch64,  os: Mac,     arch: aarch64, runner: macos-14 }
+          - { platform: windows-x64,    os: Windows, arch: x86_64,  runner: windows-latest }
+          - { platform: windows-aarch64,os: Windows, arch: aarch64, runner: windows-11-arm }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 1
+
+      - name: Setup JDK 25
+        uses: actions/setup-java@v5.2.0
+        with:
+          java-version: 25
+          distribution: zulu
+
+      - name: Cache sqlite native build
+        uses: actions/cache@v4.2.3
+        with:
+          path: |
+            native/sqlite/amalgamation
+            native/sqlite/sqlite-jdbc-src
+          key: sqlite-${{ matrix.sqlite.platform }}
+          restore-keys: |
+            sqlite-${{ matrix.sqlite.platform }}-
+            sqlite-
+
+      - name: Install MinGW gcc on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          choco install mingw --no-progress -y
+          echo "$PATH" >> /dev/null
+          gcc --version
+
+      - name: Build sqlite native library
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OUT_DIR="$PWD/native-artifact/sqlite/${{ matrix.sqlite.platform }}"
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            export CC="gcc"
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            export CC="clang"
+          else
+            export CC="gcc"
+          fi
+          bash native/sqlite/compile.sh ${{ matrix.sqlite.os }} ${{ matrix.sqlite.arch }}
+
+      - name: Package sqlite native library
+        shell: bash
+        run: |
+          # Pack only the platform content (<os>/<arch>/libsqlitejdbc.so etc.).
+          tar czf "sqlite-${{ matrix.sqlite.platform }}.tar.gz" \
+            -C native-artifact/sqlite/${{ matrix.sqlite.platform }} .
+
+      - name: Upload packaged sqlite native library
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: sqlite-${{ matrix.sqlite.platform }}
+          path: sqlite-${{ matrix.sqlite.platform }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  libvlc:
+    name: libvlc ${{ matrix.libvlc.platform }}
+    runs-on: ${{ matrix.libvlc.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        libvlc:
+          - { platform: linux-x64,      os: Linux,   arch: x86_64,  runner: ubuntu-latest }
+          - { platform: linux-aarch64,  os: Linux,   arch: aarch64, runner: ubuntu-24.04-arm }
+          - { platform: macos-x64,      os: Mac,     arch: x86_64,  runner: macos-15-intel }
+          - { platform: macos-aarch64,  os: Mac,     arch: aarch64, runner: macos-14 }
+          - { platform: windows-x64,    os: Windows, arch: x86_64,  runner: windows-latest }
+          - { platform: windows-aarch64,os: Windows, arch: aarch64, runner: windows-11-arm }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 1
+
+      - name: Cache libvlc collected runtime
+        uses: actions/cache@v4.2.3
+        with:
+          path: native/libvlc/.collect-cache
+          key: libvlc-${{ matrix.libvlc.platform }}
+          restore-keys: |
+            libvlc-${{ matrix.libvlc.platform }}-
+            libvlc-
+
+      - name: Install 7-Zip on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: choco install 7zip --no-progress -y
+
+      - name: Collect libvlc native runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OUT_DIR="$PWD/native-artifact/libvlc/${{ matrix.libvlc.platform }}"
+          bash native/libvlc/collect.sh ${{ matrix.libvlc.os }} ${{ matrix.libvlc.arch }}
+
+      - name: Package libvlc native runtime
+        shell: bash
+        run: |
+          tar czf "libvlc-${{ matrix.libvlc.platform }}.tar.gz" \
+            -C native-artifact/libvlc/${{ matrix.libvlc.platform }} .
+
+      - name: Upload packaged libvlc native runtime
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: libvlc-${{ matrix.libvlc.platform }}
+          path: libvlc-${{ matrix.libvlc.platform }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [ sqlite, libvlc ]
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.gen_tag.outputs.tag }}
+
+    steps:
+      - name: Checkout repository (for tag marker update)
+        uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 1
+
+      - name: Generate release tag
+        id: gen_tag
+        run: |
+          SHA_SHORT="${GITHUB_SHA:0:7}"
+          TS="$(date +%s)"
+          echo "tag=natives-${SHA_SHORT}-${TS}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all native archives
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: '*-*'
+          path: native-archives
+          merge-multiple: true
+
+      - name: List archives
+        run: ls -la native-archives/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2.2.2
+        with:
+          tag_name: ${{ steps.gen_tag.outputs.tag }}
+          name: Natives ${{ steps.gen_tag.outputs.tag }}
+          body: >
+            Pre-built native libraries for all 6 target platforms:
+            sqlite-jdbc with relocated JNI symbols
+            (com.dreamdisplayx.libs.org.sqlite) and the official LibVLC runtime.
+          files: native-archives/*.tar.gz
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: true
+
+      - name: Update tag marker file
+        env:
+          # A Personal Access Token (classic or fine-grained with repo: contents write)
+          # is required because the default GITHUB_TOKEN cannot trigger downstream
+          # workflows. Create a secret named NATIVES_TOKEN in the repo settings.
+          TOKEN: ${{ secrets.NATIVES_TOKEN }}
+        if: env.TOKEN != ''
+        run: |
+          git clone "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" repo
+          cd repo
+          echo "${{ steps.gen_tag.outputs.tag }}" > .github/natives-tag.txt
+          git add .github/natives-tag.txt
+          git -c user.name="natives-bot" \
+              -c user.email="actions@github.com" \
+              commit -m "chore: update natives tag to ${{ steps.gen_tag.outputs.tag }}"
+          git push

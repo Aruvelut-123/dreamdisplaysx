@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.client.debug
 
 import com.dreamdisplayx.media.player.MediaPlayer
+import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.util.GeneralUtil
 import net.minecraft.client.resources.language.I18n
@@ -11,17 +12,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Thread-safe; called from the render thread (or any thread via [getLines]).
  */
 object DebugStats {
-    /** Cached LibVLC version string, read once. */
-    val libvlcVersion: String by lazy {
-        runCatching {
-            val f = uk.co.caprica.vlcj.factory.MediaPlayerFactory()
-            try {
-                f.application().version() ?: "unknown"
-            } finally {
-                f.release()
-            }
-        }.getOrDefault("unknown")
-    }
+    /** Cached LibVLC version string, read once (populated by [LibVlcNativesLoader]). */
+    val libvlcVersion: String
+        get() = LibVlcNativesLoader.libvlcVersion ?: "unavailable"
 
     /** Cached mod version. */
     val modVersion: String by lazy { GeneralUtil.getPrettyModVersion() }

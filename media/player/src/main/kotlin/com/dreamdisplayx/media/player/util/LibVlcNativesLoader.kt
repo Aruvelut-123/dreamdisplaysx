@@ -1,0 +1,238 @@
+package com.dreamdisplayx.media.player.util
+
+import org.slf4j.LoggerFactory
+import java.io.File
+import java.io.FileOutputStream
+import java.net.JarURLConnection
+import java.util.jar.JarFile
+
+/**
+ * Loads and extracts the bundled LibVLC native libraries from the classpath
+ * (`libvlc/native/<os>/<arch>/...`) to a temporary directory, sets the system
+ * properties vlcj needs to discover them, and caches the libvlc version for
+ * the F3 debug overlay.
+ *
+ * Survival-critical: vlcj 4.8.1's `vlcj-natives` artifact ships no native
+ * binaries, so the CI "Build Natives" workflow collects the official LibVLC
+ * runtime and the shadow jar bundles it under `libvlc/native/...` (like
+ * sqlite-jdbc bundles its natives under `org/sqlite/native/...`).
+ */
+object LibVlcNativesLoader {
+
+    private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcNatives")
+
+    /** Cached libvlc version string, populated after a successful load. */
+    @Volatile
+    var libvlcVersion: String? = null
+        private set
+
+    /** True once [load] has completed successfully. */
+    @Volatile
+    var loaded: Boolean = false
+        private set
+
+    /** Path to the extracted libvlc native directory. */
+    @Volatile
+    private var extractedDir: File? = null
+
+    /**
+     * Extracts the bundled libvlc natives (if any) and sets up the system
+     * properties so vlcj's `NativeDiscovery` can find them.
+     *
+     * Safe to call multiple times; subsequent calls are a no-op.
+     *
+     * @return true if natives were extracted and configured, false if no
+     *         bundled natives were found (libvlc will need system-installed VLC).
+     */
+    @JvmStatic
+    fun load(): Boolean {
+        if (loaded) return true
+
+        val platform = detectPlatform()
+        val resourceRoot = "libvlc/native/${platform.os}/${platform.arch}/"
+
+        // Check if bundled natives exist on the classpath
+        val testResource = javaClass.getResource("/$resourceRoot")
+        if (testResource == null) {
+            logger.warn(
+                "No bundled libvlc natives found at $resourceRoot; " +
+                    "falling back to system-installed VLC. " +
+                    "Run the 'Build Natives' workflow to bundle libvlc.",
+            )
+            // Still try to get version from system VLC
+            cacheVersionFromSystem()
+            return false
+        }
+
+        try {
+            // Extract to a stable cache directory
+            val cacheDir = File(
+                System.getProperty("user.home"),
+                ".dreamdisplayx/libvlc/cache",
+            )
+            cacheDir.mkdirs()
+
+            // Use a versioned subdirectory based on resource content hash
+            val extractDir = File(cacheDir, platform.os + "-" + platform.arch)
+            extractDir.mkdirs()
+
+            // Extract all files from the resource tree
+            val extracted = extractResources(resourceRoot, extractDir)
+            if (extracted.isEmpty()) {
+                logger.warn("No libvlc files extracted from classpath resources.")
+                return false
+            }
+
+            // Set system properties for vlcj's discovery
+            System.setProperty("jna.library.path", extractDir.absolutePath)
+
+            // Set VLC_PLUGIN_PATH if a plugins directory was extracted
+            val pluginsDir = File(extractDir, "plugins")
+            if (pluginsDir.isDirectory) {
+                System.setProperty("VLC_PLUGIN_PATH", pluginsDir.absolutePath)
+            }
+
+            extractedDir = extractDir
+            loaded = true
+
+            logger.info(
+                "LibVLC natives extracted to {} ({} files), " +
+                    "jna.library.path and VLC_PLUGIN_PATH set.",
+                extractDir.absolutePath, extracted.size,
+            )
+
+            // Cache the version for DebugStats
+            cacheVersionFromExtracted()
+            return true
+        } catch (e: Exception) {
+            logger.error("Failed to extract libvlc natives from classpath", e)
+            return false
+        }
+    }
+
+    /** Platform detection result. */
+    private data class NativePlatform(val os: String, val arch: String)
+
+    private fun detectPlatform(): NativePlatform {
+        val osName = System.getProperty("os.name").lowercase()
+        val osArch = System.getProperty("os.arch").lowercase()
+
+        val os = when {
+            osName.contains("win") -> "Windows"
+            osName.contains("mac") -> "Mac"
+            else -> "Linux"
+        }
+        val arch = when {
+            osArch.contains("aarch64") || osArch.contains("arm64") -> "aarch64"
+            else -> "x86_64"
+        }
+        return NativePlatform(os, arch)
+    }
+
+    /**
+     * Recursively lists all resources under [resourceRoot] and copies them to
+     * [extractDir], preserving the relative path structure.
+     *
+     * Works with both `jar:` URLs (packed fat jar) and `file:` URLs (dev
+     * run from the build output directory).
+     *
+     * @return list of extracted files
+     */
+    private fun extractResources(resourceRoot: String, extractDir: File): List<File> {
+        val extracted = mutableListOf<File>()
+
+        val classLoader = javaClass.classLoader ?: ClassLoader.getSystemClassLoader()
+        val resources = classLoader.getResources(resourceRoot)
+        while (resources.hasMoreElements()) {
+            val url = resources.nextElement()
+            when (url.protocol) {
+                "jar" -> extracted += extractFromJar(url, resourceRoot, extractDir)
+                "file" -> extracted += extractFromDir(File(url.toURI()), resourceRoot, extractDir)
+                else -> logger.warn("Unhandled libvlc resource protocol: {}", url.protocol)
+            }
+        }
+        return extracted
+    }
+
+    /** Copies every entry under [resourceRoot] from the jar containing [jarUrl]. */
+    private fun extractFromJar(jarUrl: java.net.URL, resourceRoot: String, extractDir: File): List<File> {
+        val extracted = mutableListOf<File>()
+        val connection = jarUrl.openConnection() as JarURLConnection
+        val jarFile: JarFile = connection.jarFile
+        try {
+            val prefix = resourceRoot.removeSuffix("/")
+            jarFile.entries().asSequence().forEach { entry ->
+                val name = entry.name
+                if (!entry.isDirectory && name.startsWith(prefix + "/")) {
+                    val relativePath = name.removePrefix(prefix).trimStart('/')
+                    val target = File(extractDir, relativePath)
+                    target.parentFile.mkdirs()
+                    jarFile.getInputStream(entry).use { input ->
+                        FileOutputStream(target).use { output -> input.copyTo(output) }
+                    }
+                    extracted.add(target)
+                }
+            }
+        } finally {
+            jarFile.close()
+        }
+        return extracted
+    }
+
+    /** Copies every file under the classpath directory [dir]. */
+    private fun extractFromDir(dir: File, resourceRoot: String, extractDir: File): List<File> {
+        val extracted = mutableListOf<File>()
+        val prefix = resourceRoot.removeSuffix("/")
+        if (!dir.isDirectory) return extracted
+        dir.walkTopDown().filter { it.isFile }.forEach { file ->
+            val relativePath = file.absolutePath.removePrefix(dir.absolutePath).trimStart('/', '\\')
+            val target = File(extractDir, relativePath)
+            target.parentFile.mkdirs()
+            file.copyTo(target, overwrite = true)
+            extracted.add(target)
+        }
+        return extracted
+    }
+
+    /**
+     * Tries to create a temporary MediaPlayerFactory to read the libvlc version
+     * after extraction. Fails silently if the native library isn't loadable.
+     */
+    private fun cacheVersionFromExtracted() {
+        try {
+            // vlcj factory discovery should now find libvlc via jna.library.path
+            val factory = uk.co.caprica.vlcj.factory.MediaPlayerFactory()
+            try {
+                val ver = factory.application().version()
+                if (ver != null && ver.isNotBlank()) {
+                    libvlcVersion = ver
+                    logger.info("LibVLC version: {}", ver)
+                }
+            } finally {
+                factory.release()
+            }
+        } catch (e: Exception) {
+            logger.warn("Could not query libvlc version after extraction: ${e.message}")
+        }
+    }
+
+    /**
+     * Fallback: tries to get the libvlc version from a system-installed VLC.
+     */
+    private fun cacheVersionFromSystem() {
+        try {
+            val factory = uk.co.caprica.vlcj.factory.MediaPlayerFactory()
+            try {
+                val ver = factory.application().version()
+                if (ver != null && ver.isNotBlank()) {
+                    libvlcVersion = ver
+                    logger.info("LibVLC version (system): {}", ver)
+                }
+            } finally {
+                factory.release()
+            }
+        } catch (e: Exception) {
+            logger.debug("No system-installed libvlc found: ${e.message}")
+        }
+    }
+}
