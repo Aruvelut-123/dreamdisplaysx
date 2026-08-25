@@ -107,7 +107,7 @@ jobs:
   libvlc:
     name: libvlc ${{ matrix.libvlc.platform }}
     runs-on: ${{ matrix.libvlc.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -125,26 +125,28 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Cache libvlc collected runtime
+      - name: Cache libvlc build
         uses: actions/cache@v4.2.3
         with:
-          path: native/libvlc/.collect-cache
-          key: libvlc-${{ matrix.libvlc.platform }}
+          path: native/libvlc/.build-cache
+          key: libvlc-${{ matrix.libvlc.platform }}-3.0.21
           restore-keys: |
             libvlc-${{ matrix.libvlc.platform }}-
             libvlc-
 
-      - name: Install 7-Zip on Windows
+      - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
-        shell: bash
-        run: choco install 7zip --no-progress -y
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
 
-      - name: Collect libvlc native runtime
+      - name: Build libvlc native runtime from source
         shell: bash
         run: |
           set -euo pipefail
           export OUT_DIR="$PWD/native-artifact/libvlc/${{ matrix.libvlc.platform }}"
-          bash native/libvlc/collect.sh ${{ matrix.libvlc.os }} ${{ matrix.libvlc.arch }}
+          bash native/libvlc/build.sh ${{ matrix.libvlc.os }} ${{ matrix.libvlc.arch }}
 
       - name: Package libvlc native runtime
         shell: bash
