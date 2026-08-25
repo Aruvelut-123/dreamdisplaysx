@@ -10,28 +10,27 @@ import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.daemon
 import org.slf4j.LoggerFactory
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
-import uk.co.caprica.vlcj.player.base.MediaPlayer
+import uk.co.caprica.vlcj.player.base.MediaPlayer as VlcjMediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
+import uk.co.caprica.vlcj.player.base.State
 import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
-import uk.co.caprica.vlcj.player.embedded.videosurface.CallbackVideoSurface
-import uk.co.caprica.vlcj.player.embedded.videosurface.VideoSurfaceAdapters
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormat
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormatCallback
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.RenderCallback
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * LibVLC (vlcj) based video frame pipe — replaces [JavaCppVideoPipe].
- * Uses libvlc's video callbacks to receive decoded frames in I420 format,
- * feeds them into the shared [FrameSurface] / [FramePrebuffer] pipeline.
  *
- * LibVLC handles demuxing, decoding, and hardware acceleration internally;
- * this pipe only receives the native-resolution frames and paces them into
- * the renderer.
+ * Uses libvlc's built-in playback (play/pause/seek) and delivers frames
+ * through the video callback ([RenderCallback]) directly into the shared
+ * [FrameSurface] pipeline. No separate reader thread, no manual pacing,
+ * no prebuffer — libvlc handles all demuxing, decoding, A/V sync, and
+ * hardware acceleration internally.
  */
 internal class LibVlcVideoPipe(
     private val debugLabel: String,
@@ -42,7 +41,6 @@ internal class LibVlcVideoPipe(
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcVideoPipe")
 
     companion object {
-        private const val PARK_POLL_MS = 2L
         /** libvlc options shared across all instances. */
         private val SHARED_LIBVLC_ARGS = listOf(
             "--no-video-title-show",
@@ -53,14 +51,12 @@ internal class LibVlcVideoPipe(
             "--network-caching=300",
             "--file-caching=300",
             "--live-caching=600",
-            "--clock-synchro=0",
-            "--no-audio",  // video pipe only, no audio output
+            "--no-audio",  // video pipe only
         )
     }
 
     // ── FramePipe state ───────────────────────────────────────────────────
 
-    /** Updated by the control thread on every frame; used by the watchdog to detect stalls. */
     override val lastFrameReceivedNanos = AtomicLong(0)
 
     @Volatile
@@ -81,20 +77,14 @@ internal class LibVlcVideoPipe(
     @Volatile
     var expectedH = 0; private set
 
-    /** PTS of the first decoded frame, used for exact A/V bias anchoring. [Long.MIN_VALUE] until a frame is read. */
+    /** PTS of the first decoded frame, used for exact A/V bias anchoring. */
     @Volatile
-    var firstRawPtsNanos: Long = Long.MIN_VALUE
-        private set
+    var firstRawPtsNanos: Long = Long.MIN_VALUE; private set
 
-    /** PTS of the most recently decoded frame. */
     @Volatile
-    var lastDecodedPtsNanos: Long = Long.MIN_VALUE
-        private set
+    var lastDecodedPtsNanos: Long = Long.MIN_VALUE; private set
 
     private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGB24)
-
-    @Volatile
-    private var activePrebuffer: FramePrebuffer? = null
 
     // ── LibVLC state ──────────────────────────────────────────────────────
 
@@ -104,37 +94,27 @@ internal class LibVlcVideoPipe(
     @Volatile
     private var mediaPlayer: EmbeddedMediaPlayer? = null
 
-    /** URL currently being played, used to decide whether an in-place seek is possible. */
     @Volatile
-    internal var currentUrl: String? = null
-        private set
+    internal var currentUrl: String? = null; private set
 
-    /** The control thread, alive while the session is active. */
+    /** EOS monitor thread (poll-only, no pacing). */
     @Volatile
-    private var controlThread: Thread? = null
+    private var eosThread: Thread? = null
 
-    /** When set, the control thread idles between frames (warm park). */
+    /** Park flag — when set, libvlc is paused. */
     @Volatile
-    private var parked: AtomicBoolean? = null
+    private var parkFlag: AtomicBoolean? = null
 
-    /** Latest frame buffer from libvlc callback, read by the control thread. */
-    private val latestFrame = AtomicReference<FrameData?>(null)
+    // ── Callback-driven state ─────────────────────────────────────────────
 
-    /** Pending in-place seek target in nanos; [Long.MIN_VALUE] = none. */
-    private val seekRequestedNanos = AtomicLong(Long.MIN_VALUE)
-
-    /** When non-null, counted down after the first frame of a seek is presented. */
-    @Volatile
-    private var seekFirstFrameLatch: CountDownLatch? = null
-
-    /** Video dimensions reported by libvlc at start. */
     @Volatile
     private var sourceW = 0
+
     @Volatile
     private var sourceH = 0
 
-    /** Frame buffer holding the current I420 frame from libvlc. */
-    private var i420Buffer: ByteBuffer? = null
+    /** Scratch buffer for the callback to pack I420 planes into. */
+    private var i420Scratch: ByteBuffer? = null
 
     /** Scratch buffer for RGB24 conversion. */
     private var rgbScratch: ByteBuffer? = null
@@ -142,14 +122,19 @@ internal class LibVlcVideoPipe(
     /** Scratch buffer for popout RGBA. */
     private var popoutRgba: ByteBuffer? = null
 
-    /** Reported by libvlc callback, used to detect resolution changes. */
-    @Volatile
-    private var frameW = 0
-    @Volatile
-    private var frameH = 0
-
-    /** Latch that the first frame callback counts down to unblock start(). */
+    /** Signalled by the callback when the first frame arrives. */
     private val firstFrameLatch = CountDownLatch(1)
+
+    @Volatile
+    private var firstFrameFired = false
+
+    // ── EOS / error signals ───────────────────────────────────────────────
+
+    @Volatile
+    private var eosReached = false
+
+    @Volatile
+    private var errorMessage = ""
 
     // ── FramePipe interface ───────────────────────────────────────────────
 
@@ -166,7 +151,6 @@ internal class LibVlcVideoPipe(
     override fun clear() = surface.clear()
 
     override fun trimForPark() {
-        activePrebuffer?.trimForPark()
         surface.clear()
         popoutRgba = null
     }
@@ -176,8 +160,8 @@ internal class LibVlcVideoPipe(
     // ── Session lifecycle ─────────────────────────────────────────────────
 
     /**
-     * Opens [url] with libvlc and starts the control thread.
-     * Returns the running thread, or null when the player could not be opened.
+     * Opens [url] with libvlc and starts frame delivery via callbacks.
+     * Returns an EOS-monitor thread (never null on success), or null on failure.
      */
     fun start(
         url: String,
@@ -202,20 +186,19 @@ internal class LibVlcVideoPipe(
         expectedW = w
         expectedH = h
         firstRawPtsNanos = Long.MIN_VALUE
-        parked = parkFlag
+        lastDecodedPtsNanos = Long.MIN_VALUE
+        this.parkFlag = parkFlag
         lastFrameReceivedNanos.set(System.nanoTime())
-        latestFrame.set(null)
-        sourceW = w
-        sourceH = h
+        eosReached = false
+        errorMessage = ""
+        firstFrameFired = false
 
-        // Build libvlc args with referer
+        // Build libvlc args
         val args = mutableListOf<String>()
         args.addAll(SHARED_LIBVLC_ARGS)
         MediaHosts.refererFor(url)?.let { referer ->
             args.add("--http-referer=$referer")
         }
-        // Use --no-video-decode for software (or let VLC auto-detect hwaccel)
-        // For now, let VLC auto-detect hardware acceleration
 
         val fact = try {
             MediaPlayerFactory(args)
@@ -228,304 +211,142 @@ internal class LibVlcVideoPipe(
         val mp = fact.mediaPlayers().newEmbeddedMediaPlayer()
         mediaPlayer = mp
 
-        // Set up video callbacks
+        // Video callbacks: libvlc delivers I420 planes
         val videoSurface = fact.videoSurfaces().newVideoSurface(
             bufferFormatCallback,
-            renderCallback,
+            renderCallback(onFirstFrame, getBrightness, getStretchMode),
             true, // useDirectBuffers
         )
         mp.videoSurface().set(videoSurface)
 
-        // Listen for events
+        // Event listener: track EOS / errors
         mp.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
-            override fun playing(mp: MediaPlayer) {
-                logger.debug("$debugLabel libvlc playing.")
-            }
-
-            override fun finished(mp: MediaPlayer) {
+            override fun finished(mp: VlcjMediaPlayer) {
                 logger.debug("$debugLabel libvlc finished.")
-                // Will be handled by the control thread
+                eosReached = true
             }
 
-            override fun error(mp: MediaPlayer) {
+            override fun error(mp: VlcjMediaPlayer) {
                 logger.error("$debugLabel libvlc error.")
+                errorMessage = "libvlc decode error"
+                eosReached = true
             }
 
-            override fun timeChanged(mp: MediaPlayer, time: Long) {
-                // time in ms — not used for frame pacing currently
+            override fun playing(mp: VlcjMediaPlayer) {
+                if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc playing.")
+            }
+
+            override fun paused(mp: VlcjMediaPlayer) {
+                if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc paused.")
+            }
+
+            override fun stopped(mp: VlcjMediaPlayer) {
+                if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc stopped.")
             }
         })
 
         // Start playback
         mp.media().play(url)
 
-        // Wait for the first frame to arrive (or timeout)
+        // Wait for the first frame (or timeout) so the caller knows it's alive
         try {
-            if (!firstFrameLatch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+            if (!firstFrameLatch.await(10, TimeUnit.SECONDS)) {
                 logger.error("$debugLabel libvlc first frame timeout for $url")
                 mp.controls().stop()
                 mp.release()
                 fact.release()
+                factory = null
+                mediaPlayer = null
                 return null
             }
         } catch (_: InterruptedException) {
             mp.controls().stop()
             mp.release()
             fact.release()
+            factory = null
+            mediaPlayer = null
             return null
         }
 
-        // Seek to the target offset if needed
+        // Seek to the target offset
         if (seekOffsetNanos > 0) {
             mp.controls().setTime(seekOffsetNanos / 1_000_000L)
         }
 
         currentUrl = url
-        seekRequestedNanos.set(Long.MIN_VALUE)
 
-        val frameNs = (1_000_000_000.0 / outputFps(sourceFps)).toLong()
-        val prebuffer = FramePrebuffer.createIfEnabled(
-            surface, frameNs, getAudioClock, onFirstFrame, terminated, stopFlag, debugLabel,
-            presentPreview, tolerateLateness, parkFlag,
-        ).also { activePrebuffer = it }
-        prebuffer?.onPresent = { buf -> feedSink(buf, w, h) }
-        prebuffer?.onDriftResync = onDriftResync
-
+        // EOS monitor thread (replaces the old reader thread for join compatibility)
         val thread = daemon(
             {
-                controlLoop(w, h, frameNs, seekOffsetNanos, stopFlag, terminated, getAudioClock, onFirstFrame,
-                    getBrightness, getStretchMode, onEos, prebuffer, presentPreview)
+                eosMonitor(terminated, stopFlag, onEos)
             },
-            "MediaPlayer-video",
+            "MediaPlayer-video-eos",
         ).also { it.start() }
-        controlThread = thread
+        eosThread = thread
         return thread
     }
 
-    /**
-     * Requests an in-place seek on the existing libvlc player (no re-open).
-     * The control loop picks this up at the next frame boundary.
-     */
+    /** Seeks the libvlc player to [offsetNanos] (millisecond precision). */
     fun requestInPlaceSeek(offsetNanos: Long, firstFrameLatch: CountDownLatch? = null): Boolean {
-        if (mediaPlayer == null) return false
-        seekRequestedNanos.set(offsetNanos)
-        seekFirstFrameLatch = firstFrameLatch
-        // Apply the seek immediately on the libvlc player
-        mediaPlayer?.controls()?.setTime(offsetNanos / 1_000_000L)
+        val mp = mediaPlayer ?: return false
+        mp.controls().setTime(offsetNanos / 1_000_000L)
+        if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc seek to ${offsetNanos / 1_000_000} ms.")
         return true
     }
 
-    /** Stops the libvlc player. */
+    /** Stops libvlc playback. */
     fun kill() {
         mediaPlayer?.controls()?.stop()
     }
 
-    /** Releases the libvlc player and all resources. */
+    /** Releases all libvlc resources. */
     fun release() {
-        parked = null
-        controlThread = null
-        latestFrame.set(null)
+        eosThread = null
         val mp = mediaPlayer
         mediaPlayer = null
         if (mp != null) {
             try {
                 mp.controls().stop()
                 mp.release()
-            } catch (_: Exception) {
-                // Ignore errors during cleanup
-            }
+            } catch (_: Exception) { }
         }
         val fact = factory
         factory = null
         if (fact != null) {
             try {
                 fact.release()
-            } catch (_: Exception) {
-                // Ignore errors during cleanup
-            }
+            } catch (_: Exception) { }
         }
-        i420Buffer = null
+        i420Scratch = null
         rgbScratch = null
     }
 
-    // ── Control loop ──────────────────────────────────────────────────────
+    // ── EOS monitor ───────────────────────────────────────────────────────
 
-    private fun controlLoop(
-        w: Int, h: Int, frameNs: Long, seekOffsetNanos: Long,
-        stopFlag: AtomicBoolean, terminated: AtomicBoolean,
-        getAudioClock: () -> Long, onFirstFrame: () -> Unit, getBrightness: () -> Double,
-        getStretchMode: () -> StretchMode, onEos: (stderr: String, normalEos: Boolean) -> Unit,
-        prebuffer: FramePrebuffer?, presentPreview: Boolean,
+    /**
+     * Polls for EOS / error and calls [onEos]. Runs on a separate thread so the
+     * callback is not invoked from libvlc's internal thread pool.
+     */
+    private fun eosMonitor(
+        terminated: AtomicBoolean,
+        stopFlag: AtomicBoolean,
+        onEos: (String, Boolean) -> Unit,
     ) {
-        val frameSize = if (planarOutput) {
-            val c = ((w + 1) / 2) * ((h + 1) / 2)
-            w * h + 2 * c
-        } else {
-            w * h * 3
-        }
-        var spare = surface.takeOrAllocate(frameSize)
-        surface.recycleFrameBuffer(surface.allocateFrameBuffer(frameSize))
-
-        var firstFrame = false
-        var videoPts = seekOffsetNanos
-        var normalEos = false
-        var errorMessage = ""
-        var lastPts = 0L
-
-        while (!terminated.get() && !stopFlag.get()) {
-            // In-place seek
-            val seekTo = seekRequestedNanos.getAndSet(Long.MIN_VALUE)
-            if (seekTo != Long.MIN_VALUE) {
-                doInPlaceSeek(seekTo, surface, prebuffer, onFirstFrame)
-                videoPts = seekTo
-                firstFrame = false
-                normalEos = false
-                errorMessage = ""
-                firstRawPtsNanos = Long.MIN_VALUE
-                lastFrameReceivedNanos.set(System.nanoTime())
-                continue
-            }
-
-            // Warm park
-            val pk = parked
+        while (!terminated.get() && !stopFlag.get() && !eosReached) {
+            // Park: pause libvlc playback
+            val pk = parkFlag
             if (pk != null && pk.get()) {
-                while (pk.get() && !terminated.get() && !stopFlag.get()) {
-                    try { Thread.sleep(PARK_POLL_MS) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); break }
+                try { mediaPlayer?.controls()?.setPause(true) } catch (_: Exception) { }
+                while (pk.get() && !terminated.get() && !stopFlag.get() && !eosReached) {
+                    try { Thread.sleep(50) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); return }
                 }
-                lastFrameReceivedNanos.set(System.nanoTime())
+                try { mediaPlayer?.controls()?.setPause(false) } catch (_: Exception) { }
                 continue
             }
-
-            // Check for EOS: libvlc state ENDED or stopped
-            val mp = mediaPlayer
-            if (mp == null) {
-                normalEos = true
-                break
-            }
-            val state = mp.status().state()
-            if (state == uk.co.caprica.vlcj.player.base.State.ENDED) {
-                normalEos = true
-                break
-            }
-            if (state == uk.co.caprica.vlcj.player.base.State.ERROR) {
-                errorMessage = "libvlc playback error"
-                break
-            }
-            if (state == uk.co.caprica.vlcj.player.base.State.STOPPED) {
-                // Only treat as EOS if we weren't explicitly stopped by kill()
-                if (!stopFlag.get()) {
-                    normalEos = true
-                    break
-                }
-            }
-
-            // Check for a new frame from the libvlc callback
-            val frameData = latestFrame.getAndSet(null)
-            if (frameData == null) {
-                // No frame yet — sleep briefly and poll again
-                try { Thread.sleep(1) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); break }
-                continue
-            }
-
-            // We have a frame from libvlc
-            frameW = frameData.width
-            frameH = frameData.height
-            lastFrameReceivedNanos.set(System.nanoTime())
-
-            // Record the first PTS
-            if (firstRawPtsNanos == Long.MIN_VALUE && frameData.pts > 0) {
-                firstRawPtsNanos = frameData.pts
-            }
-
-            // Copy the frame data from libvlc's buffer into our FrameSurface buffer
-            spare.clear()
-            if (planarOutput) {
-                // Frame from libvlc is already I420 — copy directly
-                val ySize = w * h
-                val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
-                val totalSize = ySize + 2 * uvSize
-
-                // If source dimensions differ from expected, resize
-                if (frameData.width == w && frameData.height == h) {
-                    for (i in 0 until totalSize) {
-                        spare.put(frameData.buffer.get(i))
-                    }
-                } else {
-                    // Simple nearest-neighbor resize for the initial port
-                    resizeI420(
-                        frameData.buffer, frameData.width, frameData.height,
-                        spare, w, h,
-                    )
-                }
-            } else {
-                // Convert I420 to RGB24
-                val rgbSize = w * h * 3
-                if (frameData.width == w && frameData.height == h) {
-                    i420ToRgb24(frameData.buffer, w, h, spare)
-                } else {
-                    // Resize + convert
-                    val scratch = rgbScratch ?: surface.allocateFrameBuffer(frameData.width * frameData.height * 3)
-                        .also { rgbScratch = it }
-                    scratch.clear()
-                    i420ToRgb24(frameData.buffer, frameData.width, frameData.height, scratch)
-                    resizeRgb24(scratch, frameData.width, frameData.height, spare, w, h)
-                }
-                applyBrightness(spare, w * h * 3, getBrightness())
-            }
-            spare.flip()
-
-            val pk2 = parked
-            if (pk2 != null && pk2.get()) continue
-
-            // Use the frame PTS or synthetic
-            val framePts = if (frameData.pts > 0) frameData.pts else videoPts
-            lastDecodedPtsNanos = framePts
-
-            if (prebuffer != null) {
-                if (!MediaPlayer.captureSamples) {
-                    feedSink(spare, w, h)
-                    videoPts += frameNs
-                    continue
-                }
-                spare = prebuffer.submit(spare, framePts, frameSize)
-                if (MediaPlayer.DEBUG) MediaPlayer.samplesIn.incrementAndGet()
-                videoPts = framePts + frameNs
-                continue
-            }
-
-            if (FramePacing.pace(framePts, getAudioClock)) {
-                MediaPlayer.framesDropped.incrementAndGet()
-                videoPts = framePts + frameNs
-                continue
-            }
-
-            feedSink(spare, w, h)
-
-            if (!MediaPlayer.captureSamples) {
-                videoPts = framePts + frameNs
-                continue
-            }
-
-            spare = surface.publish(spare, frameSize)
-            if (MediaPlayer.DEBUG) MediaPlayer.samplesIn.incrementAndGet()
-            if (!firstFrame) {
-                firstFrame = true
-                onFirstFrame()
-                seekFirstFrameLatch?.countDown()
-                if (MediaPlayer.DEBUG) logger.debug("$debugLabel First frame $w x $h (libvlc).")
-            }
-            videoPts = framePts + frameNs
+            try { Thread.sleep(100) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); return }
         }
-
-        if (!terminated.get() && !stopFlag.get() && normalEos) {
-            prebuffer?.finish()
-        } else {
-            prebuffer?.abort()
-        }
-        if (activePrebuffer === prebuffer) activePrebuffer = null
-
-        if (!terminated.get() && !stopFlag.get()) {
-            onEos(errorMessage.ifEmpty { if (normalEos) "End of stream" else "Unknown error" }, normalEos)
+        if (!terminated.get() && !stopFlag.get() && eosReached) {
+            onEos(errorMessage.ifEmpty { "End of stream" }, errorMessage.isEmpty())
         }
     }
 
@@ -533,98 +354,134 @@ internal class LibVlcVideoPipe(
 
     private val bufferFormatCallback = object : BufferFormatCallback {
         override fun getBufferFormat(width: Int, height: Int): BufferFormat {
-            logger.debug("$debugLabel libvlc buffer format: ${width}x${height}")
             sourceW = width
             sourceH = height
-            // Use I420 chroma — libvlc will convert to planar YUV420P
-            val chroma = "I420"
-            val pitches = intArrayOf(width, (width + 1) / 2, (width + 1) / 2)
-            val lines = intArrayOf(height, (height + 1) / 2, (height + 1) / 2)
-            return BufferFormat(chroma, width, height, pitches, lines)
+            if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc source: ${width}x${height}")
+            // I420 chroma: libvlc converts to planar YUV420P
+            return BufferFormat("I420", width, height,
+                intArrayOf(width, (width + 1) / 2, (width + 1) / 2),
+                intArrayOf(height, (height + 1) / 2, (height + 1) / 2),
+            )
         }
 
         override fun allocatedBuffers(buffers: Array<ByteBuffer>) {
-            logger.debug("$debugLabel libvlc allocated ${buffers.size} buffers, total size = ${buffers.sumOf { it.capacity() }}")
+            if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc allocated ${buffers.size} buffers, total ${buffers.sumOf { it.capacity() }} bytes.")
         }
     }
 
-    private val renderCallback = RenderCallback { mp, buffers, format ->
-        if (buffers.isEmpty()) return@RenderCallback
-        // For I420 format, buffers[0] = Y, buffers[1] = U, buffers[2] = V
-        // We pack them into a single buffer for the FrameSurface
-        val w = format.width
-        val h = format.height
+    private fun renderCallback(
+        onFirstFrame: () -> Unit,
+        getBrightness: () -> Double,
+        getStretchMode: () -> StretchMode,
+    ): RenderCallback = RenderCallback { mp, buffers, format ->
+        if (eosReached || buffers.isEmpty()) return@RenderCallback
+
+        val w = sourceW
+        val h = sourceH
         if (w <= 0 || h <= 0) return@RenderCallback
 
         val ySize = w * h
         val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
         val totalSize = ySize + 2 * uvSize
 
-        val buf = when {
-            i420Buffer != null && i420Buffer!!.capacity() >= totalSize -> {
-                i420Buffer!!.clear()
-                i420Buffer!!
+        // Pack I420 planes into a contiguous buffer
+        val i420 = bufferOf(totalSize) { buf ->
+            // Y plane
+            if (buffers.size > 0) {
+                val y = buffers[0].duplicate(); y.rewind()
+                copyOrPad(y, buf, ySize, 16.toByte())
+            } else {
+                for (i in 0 until ySize) buf.put(16.toByte())
             }
-            else -> {
-                ByteBuffer.allocateDirect(totalSize).also { i420Buffer = it }
+            // U plane
+            if (buffers.size > 1) {
+                val u = buffers[1].duplicate(); u.rewind()
+                copyOrPad(u, buf, uvSize, 128.toByte())
+            } else {
+                for (i in 0 until uvSize) buf.put(128.toByte())
+            }
+            // V plane
+            if (buffers.size > 2) {
+                val v = buffers[2].duplicate(); v.rewind()
+                copyOrPad(v, buf, uvSize, 128.toByte())
+            } else {
+                for (i in 0 until uvSize) buf.put(128.toByte())
             }
         }
 
-        // Pack Y plane
-        if (buffers.size > 0) {
-            val yBuf = buffers[0]
-            yBuf.rewind()
-            val yLimit = minOf(ySize, yBuf.remaining())
-            for (i in 0 until yLimit) {
-                buf.put(yBuf.get())
-            }
-            // Pad any remaining rows
-            for (i in yLimit until ySize) {
-                buf.put(16.toByte()) // black Y
-            }
-        }
-        // Pack U plane
-        if (buffers.size > 1) {
-            val uBuf = buffers[1]
-            uBuf.rewind()
-            val uLimit = minOf(uvSize, uBuf.remaining())
-            for (i in 0 until uLimit) {
-                buf.put(uBuf.get())
-            }
-            for (i in uLimit until uvSize) {
-                buf.put(128.toByte())
-            }
+        // Allocate frame buffer from the surface pool
+        val frameSize = if (planarOutput) {
+            val c = ((expectedW + 1) / 2) * ((expectedH + 1) / 2)
+            expectedW * expectedH + 2 * c
         } else {
-            for (i in 0 until uvSize) buf.put(128.toByte())
+            expectedW * expectedH * 3
         }
-        // Pack V plane
-        if (buffers.size > 2) {
-            val vBuf = buffers[2]
-            vBuf.rewind()
-            val vLimit = minOf(uvSize, vBuf.remaining())
-            for (i in 0 until vLimit) {
-                buf.put(vBuf.get())
-            }
-            for (i in vLimit until uvSize) {
-                buf.put(128.toByte())
-            }
-        } else {
-            for (i in 0 until uvSize) buf.put(128.toByte())
-        }
+        var spare = surface.takeOrAllocate(frameSize)
+        spare.clear()
 
+        // Convert / resize into the output buffer
+        if (w == expectedW && h == expectedH) {
+            if (planarOutput) {
+                i420.rewind()
+                for (i in 0 until totalSize) spare.put(i420.get())
+            } else {
+                i420ToRgb24(i420, w, h, spare)
+                applyBrightness(spare, frameSize, getBrightness())
+            }
+        } else {
+            if (planarOutput) {
+                resizeI420(i420, w, h, spare, expectedW, expectedH)
+            } else {
+                val scratch = rgbScratch ?: surface.allocateFrameBuffer(w * h * 3).also { rgbScratch = it }
+                scratch.clear()
+                i420ToRgb24(i420, w, h, scratch)
+                resizeRgb24(scratch, w, h, spare, expectedW, expectedH)
+                applyBrightness(spare, frameSize, getBrightness())
+            }
+        }
+        spare.flip()
+
+        // Park check: if parked, skip frame delivery
+        if (parkFlag?.get() == true) return@RenderCallback
+
+        // Popout sink
+        feedSink(spare, expectedW, expectedH)
+
+        // Publish to the surface (render thread picks it up in updateFrame)
+        surface.publish(spare, frameSize)
+        lastFrameReceivedNanos.set(System.nanoTime())
+
+        // Capture PTS
+        if (firstRawPtsNanos == Long.MIN_VALUE) {
+            firstRawPtsNanos = mp.status().time() * 1_000_000L
+        }
+        lastDecodedPtsNanos = mp.status().time() * 1_000_000L
+
+        // First frame callback
+        if (!firstFrameFired) {
+            firstFrameFired = true
+            onFirstFrame()
+            firstFrameLatch.countDown()
+        }
+    }
+
+    /** Returns a direct ByteBuffer of [size] filled by [body]. */
+    private fun bufferOf(size: Int, body: (ByteBuffer) -> Unit): ByteBuffer {
+        val buf = ByteBuffer.allocateDirect(size)
+        body(buf)
         buf.flip()
+        return buf
+    }
 
-        // Get PTS from the media player
-        val pts = mp.status().time() * 1_000_000L // ms → ns
-
-        latestFrame.set(FrameData(buf, w, h, pts))
+    /** Copies min([limit], [src.remaining]) bytes from [src] to [dst], padding with [pad] for the rest. */
+    private fun copyOrPad(src: ByteBuffer, dst: ByteBuffer, limit: Int, pad: Byte) {
+        val n = minOf(limit, src.remaining())
+        for (i in 0 until n) dst.put(src.get())
+        for (i in n until limit) dst.put(pad)
     }
 
     // ── Frame conversion ──────────────────────────────────────────────────
 
-    /**
-     * Converts I420 data to RGB24 packed buffer.
-     */
     private fun i420ToRgb24(i420: ByteBuffer, w: Int, h: Int, rgb: ByteBuffer) {
         val ySize = w * h
         val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
@@ -634,31 +491,19 @@ internal class LibVlcVideoPipe(
                 val y = i420.get(row * w + col).toInt() and 0xFF
                 val u = i420.get(ySize + (row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
                 val v = i420.get(ySize + uvSize + (row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
-
-                // YUV to RGB (BT.601)
                 val r = (y + 1.402 * (v - 128)).toInt().coerceIn(0, 255)
                 val g = (y - 0.344 * (u - 128) - 0.714 * (v - 128)).toInt().coerceIn(0, 255)
                 val b = (y + 1.772 * (u - 128)).toInt().coerceIn(0, 255)
-
-                rgb.put(r.toByte())
-                rgb.put(g.toByte())
-                rgb.put(b.toByte())
+                rgb.put(r.toByte()); rgb.put(g.toByte()); rgb.put(b.toByte())
             }
         }
         i420.rewind()
     }
 
-    /**
-     * Simple nearest-neighbor resize for I420.
-     */
     private fun resizeI420(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
         val srcYSize = srcW * srcH
         val srcUVSize = ((srcW + 1) / 2) * ((srcH + 1) / 2)
-        val dstYSize = dstW * dstH
-        val dstUVSize = ((dstW + 1) / 2) * ((dstH + 1) / 2)
         src.rewind()
-
-        // Resize Y plane
         for (dy in 0 until dstH) {
             val sy = (dy * srcH / dstH).coerceIn(0, srcH - 1)
             for (dx in 0 until dstW) {
@@ -666,7 +511,6 @@ internal class LibVlcVideoPipe(
                 dst.put(src.get(sy * srcW + sx))
             }
         }
-        // Resize U plane
         for (dy in 0 until (dstH + 1) / 2) {
             val sy = (dy * ((srcH + 1) / 2) / ((dstH + 1) / 2)).coerceIn(0, ((srcH + 1) / 2) - 1)
             for (dx in 0 until (dstW + 1) / 2) {
@@ -674,7 +518,6 @@ internal class LibVlcVideoPipe(
                 dst.put(src.get(srcYSize + sy * ((srcW + 1) / 2) + sx))
             }
         }
-        // Resize V plane
         for (dy in 0 until (dstH + 1) / 2) {
             val sy = (dy * ((srcH + 1) / 2) / ((dstH + 1) / 2)).coerceIn(0, ((srcH + 1) / 2) - 1)
             for (dx in 0 until (dstW + 1) / 2) {
@@ -685,44 +528,36 @@ internal class LibVlcVideoPipe(
         src.rewind()
     }
 
-    /**
-     * Simple nearest-neighbor resize for RGB24.
-     */
     private fun resizeRgb24(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
         src.rewind()
         for (dy in 0 until dstH) {
             val sy = (dy * srcH / dstH).coerceIn(0, srcH - 1)
             for (dx in 0 until dstW) {
                 val sx = (dx * srcW / dstW).coerceIn(0, srcW - 1)
-                val srcPos = (sy * srcW + sx) * 3
-                dst.put(src.get(srcPos))
-                dst.put(src.get(srcPos + 1))
-                dst.put(src.get(srcPos + 2))
+                val p = (sy * srcW + sx) * 3
+                dst.put(src.get(p)); dst.put(src.get(p + 1)); dst.put(src.get(p + 2))
             }
         }
         src.rewind()
     }
 
-    /** Applies brightness adjustment in-place to the RGB24 frame in [buf]. */
     private fun applyBrightness(buf: ByteBuffer, size: Int, brightness: Double) {
         val factor = brightness.coerceIn(0.0, 2.0)
         if (factor == 1.0) return
-        val savedPosition = buf.position()
-        val savedLimit = buf.limit()
+        val savedPos = buf.position()
+        val savedLim = buf.limit()
         buf.flip()
         for (i in 0 until size) {
-            val value = ((buf.get(i).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
-            buf.put(i, value.toByte())
+            val v = ((buf.get(i).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
+            buf.put(i, v.toByte())
         }
-        buf.limit(savedLimit)
-        buf.position(savedPosition)
+        buf.limit(savedLim)
+        buf.position(savedPos)
     }
 
-    /** Feeds the current frame to the popout sink. */
     private fun feedSink(buf: ByteBuffer, w: Int, h: Int) {
         val sink = popoutFrameSink ?: return
         if (planarOutput) {
-            // Convert I420 → RGBA for popout
             val rgbaSize = w * h * 4
             val rgba = popoutRgba?.takeIf { it.capacity() >= rgbaSize }
                 ?: surface.allocateFrameBuffer(rgbaSize).also { popoutRgba = it }
@@ -739,7 +574,6 @@ internal class LibVlcVideoPipe(
         }
     }
 
-    /** Simple I420 → RGBA conversion (software, for the popout). */
     private fun i420ToRgba(i420: ByteBuffer, w: Int, h: Int, rgba: ByteBuffer) {
         val yLen = w * h
         val uvLen = ((w + 1) / 2) * ((h + 1) / 2)
@@ -751,56 +585,9 @@ internal class LibVlcVideoPipe(
                 var r = (y + 1.402 * (v - 128)).toInt().coerceIn(0, 255)
                 var g = (y - 0.344 * (u - 128) - 0.714 * (v - 128)).toInt().coerceIn(0, 255)
                 var b = (y + 1.772 * (u - 128)).toInt().coerceIn(0, 255)
-                rgba.put(r.toByte())
-                rgba.put(g.toByte())
-                rgba.put(b.toByte())
-                rgba.put(0xFF.toByte())
+                rgba.put(r.toByte()); rgba.put(g.toByte()); rgba.put(b.toByte()); rgba.put(0xFF.toByte())
             }
         }
         i420.rewind()
     }
-
-    /** Applies an in-place seek on the existing libvlc player. */
-    private fun doInPlaceSeek(
-        offsetNanos: Long,
-        surface: FrameSurface,
-        prebuffer: FramePrebuffer?,
-        onFirstFrame: () -> Unit,
-    ) {
-        val mp = mediaPlayer ?: return
-        try {
-            mp.controls().setTime(offsetNanos / 1_000_000L)
-            logger.debug("$debugLabel In-place seek to ${offsetNanos / 1_000_000} ms on libvlc player.")
-            latestFrame.set(null)
-            if (prebuffer != null) {
-                val seekLatch = seekFirstFrameLatch
-                seekFirstFrameLatch = null
-                prebuffer.resetForSeek {
-                    onFirstFrame()
-                    seekLatch?.countDown()
-                }
-            }
-        } catch (e: Exception) {
-            logger.warn("$debugLabel In-place seek to ${offsetNanos / 1_000_000} ms failed: ${e.message}")
-            seekFirstFrameLatch?.countDown()
-            seekFirstFrameLatch = null
-            try { mp.controls().stop() } catch (_: Exception) { }
-            return
-        }
-        surface.clear()
-    }
-
-    /** Frame rate assumption for sources without a valid FPS. */
-    private fun outputFps(sourceFps: Double): Double =
-        sourceFps.takeIf { it.isFinite() && it > 1.0 && it <= 240.0 } ?: 30.0
-
-    // ── Internal data class ───────────────────────────────────────────────
-
-    /** Holds one decoded frame from libvlc. */
-    private data class FrameData(
-        val buffer: ByteBuffer,
-        val width: Int,
-        val height: Int,
-        val pts: Long, // nanoseconds
-    )
 }
