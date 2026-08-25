@@ -258,6 +258,22 @@ jobs:
             exit 0
           fi
 
+          # Compatibility fallback: legacy sqlite-natives-* release (from before the
+          # unified "Build Natives" workflow). Lets main-branch builds keep working
+          # until the first natives release is published, then natives-* wins.
+          LEGACY="$(
+            gh release list --repo "${{ github.repository }}" --limit 50 \
+              --json tagName --jq '.[].tagName' \
+              | grep -E '^sqlite-natives-' \
+              | sort -t- -k3 -n -r \
+              | head -1
+          )"
+          if [[ -n "$LEGACY" ]]; then
+            echo "No natives-* release yet; using legacy sqlite release $LEGACY (libvlc deferred)."
+            echo "natives_release=$LEGACY" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           echo "ERROR: No natives release found."
           echo ""
           echo "Run the 'Build Natives' workflow (.github/workflows/natives.yml)"
@@ -342,14 +358,15 @@ jobs:
           TAG="${{ needs.download-natives.outputs.natives_release }}"
           mkdir -p native/build/ci-bundle/dreamdisplayx-natives
           gh release download "$TAG" --repo "${{ github.repository }}" \
-            --dir native/build/ci-bundle --pattern '*.tar.gz' '--pattern sqlite-*.tar.gz' '--pattern libvlc-*.tar.gz'
-          # sqlite archives extract to <Os>/<arch>/<lib> matching includeRebuiltSqliteNatives
-          for f in native/build/ci-bundle/sqlite-*.tar.gz; do
-            tar xzf "$f" -C native/build/ci-bundle/dreamdisplayx-natives
+            --dir native/build/ci-bundle --pattern '*.tar.gz'
+          # sqlite — handles both legacy native-*.tar.gz and unified sqlite-*.tar.gz
+          for f in native/build/ci-bundle/native-*.tar.gz native/build/ci-bundle/sqlite-*.tar.gz; do
+            [[ -f "$f" ]] && tar xzf "$f" -C native/build/ci-bundle/dreamdisplayx-natives
           done
-          # libvlc archives extract to native/build/ci-bundle/libvlc/
+          # libvlc — only present in unified release
           mkdir -p native/build/ci-bundle/libvlc
           for f in native/build/ci-bundle/libvlc-*.tar.gz; do
+            [[ -f "$f" ]] || continue
             PLATFORM="$(basename "$f" | sed 's/libvlc-\(.*\)\.tar\.gz/\1/')"
             mkdir -p "native/build/ci-bundle/libvlc/$PLATFORM"
             tar xzf "$f" -C "native/build/ci-bundle/libvlc/$PLATFORM"
