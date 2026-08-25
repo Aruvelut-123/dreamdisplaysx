@@ -79,21 +79,37 @@ object DisplayYuvRenderTypes {
         if (isSupported) VideoPlaneTexture(label, width, height)
         else Yuv262Reflect.createPlaneTexture(label, width, height)
 
-    /** Compiled lazily by the backend on first draw; shared by every YUV display. */
-    private val pipeline: RenderPipeline by lazy {
-        if (!isSupported) return@lazy Yuv262Reflect.createPipeline()
-        RenderPipelineCompat.createDisplayPipeline(
+    /** Shader-state version for which [pipelineCache] was built; -1 = never built. */
+    @Volatile
+    private var pipelineVersion = -1L
+
+    /** Cached [RenderPipeline] for the current [pipelineVersion]; null until first build. */
+    private var pipelineCache: RenderPipeline? = null
+
+    /** Returns the appropriate YUV pipeline for the current shader state, rebuilding when necessary. */
+    private fun buildPipeline(): RenderPipeline =
+        if (!isSupported) Yuv262Reflect.createPipeline()
+        else RenderPipelineCompat.createDisplayPipeline(
             Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "pipeline/display_yuv"),
             Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_fog"),
             Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_yuv"),
             listOf(SAMPLER_Y, SAMPLER_U, SAMPLER_V),
         )
+
+    /** Shared pipeline, refreshed when the shader state changes. */
+    private fun getPipeline(): RenderPipeline {
+        val v = ShaderPackCompat.shaderStateVersion
+        if (v != pipelineVersion || pipelineCache == null) {
+            pipelineVersion = v
+            pipelineCache = buildPipeline()
+        }
+        return pipelineCache!!
     }
 
     /** Creates the [RenderType] drawing a display through the YUV pipeline from its three plane textures. */
     fun create(yId: Identifier, uId: Identifier, vId: Identifier): RenderType = RenderType.create(
         "dream-displays-yuv",
-        RenderSetup.builder(pipeline)
+        RenderSetup.builder(getPipeline())
             .withTexture(SAMPLER_Y, yId) { planeSampler() }
             .withTexture(SAMPLER_U, uId) { planeSampler() }
             .withTexture(SAMPLER_V, vId) { planeSampler() }

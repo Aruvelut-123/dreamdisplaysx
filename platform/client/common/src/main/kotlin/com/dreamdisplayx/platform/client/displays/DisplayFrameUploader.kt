@@ -4,6 +4,7 @@ import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.platform.client.render.DisplayTextureResource
 import com.dreamdisplayx.platform.client.render.DisplayYuvRenderTypes
 import com.dreamdisplayx.platform.client.render.GpuTextureHandle
+import com.dreamdisplayx.platform.client.render.ShaderPackCompat
 import net.minecraft.client.renderer.texture.AbstractTexture
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -24,12 +25,27 @@ internal class DisplayFrameUploader(private val uuid: UUID) {
      */
     private var shaderPackYuvFallbackRequested = false
 
+    /** Last [ShaderPackCompat.shaderStateVersion] seen; when it changes the pipeline must be rebuilt. */
+    private var lastShaderStateVersion = ShaderPackCompat.shaderStateVersion
+
     /**
      * Uploads the latest decoded frame(s) from [mp] into [tex], invoking [onRendered] whenever a frame
      * actually lands. Promotes a staged quality-handoff texture the instant its first frame arrives, so
      * the picture snaps to the new quality with no freeze and no blank. Render thread only.
      */
     fun upload(mp: MediaPlayer, tex: DisplayTextureResource, onRendered: () -> Unit) {
+        // Shader pack toggled (enabled or disabled): the old pipeline may have been compiled under
+        // the previous backend (Iris overrides custom programs and can leave them black even after
+        // the pack is turned off), so force a full pipeline restart to get fresh render types.
+        val shaderVersion = ShaderPackCompat.shaderStateVersion
+        if (shaderVersion != lastShaderStateVersion) {
+            lastShaderStateVersion = shaderVersion
+            shaderPackYuvFallbackRequested = false
+            if (tex.isYuv) {
+                mp.restartVideoPipeline()
+                return
+            }
+        }
         if (tex.isYuv && !DisplayYuvRenderTypes.active) {
             if (!shaderPackYuvFallbackRequested) {
                 shaderPackYuvFallbackRequested = true
