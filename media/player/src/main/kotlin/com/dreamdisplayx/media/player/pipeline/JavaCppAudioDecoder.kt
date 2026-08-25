@@ -348,14 +348,14 @@ internal class JavaCppAudioDecoder(
         // streams (audio codec detection needs far less data than video key-frame search).
         g.setOption("probesize", "64K")
         g.setOption("analyzeduration", "100000")
-        g.setOption("rw_timeout", "5000000")
+        g.setOption("rw_timeout", "3000000")
         g.setOption("user_agent", USER_AGENT)
         // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer.
         MediaHosts.refererFor(url)?.let { g.setOption("headers", "Referer: $it\r\n") }
         g.setOption("multiple_requests", "1")
         g.setOption("reconnect", "1")
         g.setOption("reconnect_streamed", "1")
-        g.setOption("reconnect_delay_max", "10")
+        g.setOption("reconnect_delay_max", "5")
         g.setOption("reconnect_on_network_error", "1")
         g.setOption("reconnect_on_http_error", "5xx")
         // Audio format: 44.1 kHz, stereo

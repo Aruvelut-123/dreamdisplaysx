@@ -858,7 +858,7 @@ internal class JavaCppVideoPipe(
         // network VODs and cuts the initial open time by roughly half vs 256K.
         g.setOption("probesize", "128K")
         g.setOption("analyzeduration", "100000")
-        g.setOption("rw_timeout", "5000000")
+        g.setOption("rw_timeout", "3000000")
         g.setOption("user_agent", USER_AGENT)
         // Platform CDNs (e.g. Bilibili's bilivideo.com) answer 403 without the right Referer;
         // a host a player pasted gets none and stays anonymous, matching the old CLI pipeline.
@@ -866,7 +866,7 @@ internal class JavaCppVideoPipe(
         g.setOption("multiple_requests", "1")
         g.setOption("reconnect", "1")
         g.setOption("reconnect_streamed", "1")
-        g.setOption("reconnect_delay_max", "10")
+        g.setOption("reconnect_delay_max", "5")
         g.setOption("reconnect_on_network_error", "1")
         g.setOption("reconnect_on_http_error", "5xx")
         // For VOD seeks, hint the HTTP protocol that the server answers Range requests so FFmpeg

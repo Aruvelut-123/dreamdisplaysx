@@ -63,6 +63,7 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 - **Audio decoder parallel open** — `PlaybackSessionManager.start()` and `beginSeek` now open the audio decoder (`CompletableFuture.supplyAsync`) concurrently with the video channel, reducing the initial A/V open gap from `audio_open + video_open` to `max(audio_open, video_open)`. Audio seek timeout also reduced via `probesize=64K`.
 - **Configurable video decoder** — the new `hwaccelDecoder` option (`"auto"` / `"software"` / specific FFmpeg backend name) lets the user choose the preferred decode backend. A dropdown in the Cloth Config screen lists every available FFmpeg hwaccel type. Default: `"auto"` (OS + GPU vendor detection).
 - **Cloth Config screen localisation** — the Fabric and NeoForge Cloth Config screens now use translatable `Component`s (`dreamdisplayx.config.*` keys) instead of hardcoded strings. en_us and zh_cn keys added; missing locales fall back to English automatically.
+- **Faster stall detection** — network `rw_timeout` reduced from 5s to 3s and reconnect back-off cap from 10s to 5s in both the video and audio JavaCPP grabbers, so a dead CDN connection trips the failure path sooner and the player switches to the next CDN / restarts faster on slow networks.
 
 ## Sources
 
