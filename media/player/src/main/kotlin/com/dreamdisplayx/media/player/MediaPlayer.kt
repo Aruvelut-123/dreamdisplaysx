@@ -265,7 +265,6 @@ class MediaPlayer(
         uploaderFactory = env.uploaderFactory,
         gpuYuvActive = env.config.gpuYuvActive,
         audioStage = audioStage,
-        hwAccelCandidates = env.config.hwAccelCandidates,
     )
 
     private val controlExecutor = Executors.newSingleThreadExecutor { daemon(it, "MediaPlayer-ctrl") }

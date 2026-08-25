@@ -79,10 +79,6 @@ internal class LibVlcSessionManager(
     /** Whether the GPU-side planar (I420) render path is active. */
     private val gpuYuvActive: Boolean,
 
-    /** FFmpeg hwaccel backend names to try — not used with libvlc (auto-detects). */
-    @Suppress("UNUSED_PARAMETER")
-    private val hwAccelCandidates: List<String> = emptyList(),
-
     /** Per-display acoustics DSP stage. */
     audioStage: AudioDspStage? = null,
 ) {
