@@ -34,16 +34,8 @@ class Config(private val baseDir: File) {
     /** Whether displays are enabled at all. */
     var displaysEnabled: Boolean = true
 
-    /** Whether to use hardware-accelerated video decoding. */
+    /** Whether to use hardware-accelerated video decoding (libvlc auto-detects). */
     var useHwAccel: Boolean = true
-
-    /**
-     * Preferred video decoder: `"auto"` (auto-detect), `"software"` (disable hardware decode),
-     * or a specific FFmpeg hwaccel backend name (e.g. `"cuda"`, `"qsv"`, `"amf"`, `"d3d11va"`,
-     * `"vaapi"`, `"vulkan"`, `"videotoolbox"`).  Used together with [useHwAccel].
-     * @see com.dreamdisplayx.media.player.process.HwAccelEnumerator.availableBackends
-     */
-    var hwaccelDecoder: String = "auto"
 
     /**
      * Whether to prefer 60 fps streams when the video offers them (e.g. Bilibili 1080p60).
@@ -126,7 +118,6 @@ class Config(private val baseDir: File) {
         data["default-default-display-volume"]?.toDoubleOrNull()?.let { defaultDisplayVolume = it }
         data["displays-enabled"]?.toBooleanStrictOrNull()?.let { displaysEnabled = it }
         data["use-hw-accel"]?.toBooleanStrictOrNull()?.let { useHwAccel = it }
-        data["hwaccel-decoder"]?.let { hwaccelDecoder = it }
         data["prefer-fps60"]?.toBooleanStrictOrNull()?.let { preferFps60 = it }
         data["audio-acoustics"]?.let { token ->
             AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }?.let { audioAcoustics = it }
@@ -147,7 +138,6 @@ class Config(private val baseDir: File) {
         t?.getDouble("default-display-volume")?.let { defaultDisplayVolume = it }
         displaysEnabled = t?.getBoolean("displays-enabled") ?: displaysEnabled
         useHwAccel = t?.getBoolean("use-hw-accel") ?: useHwAccel
-        t?.getString("hwaccel-decoder")?.let { hwaccelDecoder = it }
         preferFps60 = t?.getBoolean("prefer-fps60") ?: preferFps60
         t?.getString("audio-acoustics")?.let { token ->
             AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }?.let { audioAcoustics = it }
@@ -186,13 +176,6 @@ class Config(private val baseDir: File) {
             ConfigEntryType.BOOLEAN,
             get = { useHwAccel },
             apply = { useHwAccel = it; save() },
-        ),
-        ConfigEntry(
-            "hwaccel-decoder", "Video decoder",
-            "Preferred video decoder: auto (auto-detect), software, or a specific FFmpeg hwaccel backend.",
-            ConfigEntryType.STRING,
-            get = { hwaccelDecoder },
-            apply = { hwaccelDecoder = it; save() },
         ),
         ConfigEntry(
             "mute-on-alt-tab", "Mute on alt-tab",
@@ -249,7 +232,6 @@ class Config(private val baseDir: File) {
             appendLine("default-display-volume = $defaultDisplayVolume")
             appendLine("displays-enabled = $displaysEnabled")
             appendLine("use-hw-accel = $useHwAccel")
-            appendLine("hwaccel-decoder = \"${tomlQuote(hwaccelDecoder)}\"")
             appendLine("prefer-fps60 = $preferFps60")
             appendLine("audio-acoustics = \"${audioAcoustics.name.lowercase()}\"")
             appendLine("audio-output-profile = \"${if (audioBinauralOutput) "headphones" else "speakers"}\"")

@@ -4,7 +4,7 @@ package com.dreamdisplayx.platform.client.render
 import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
-import com.dreamdisplayx.media.player.process.JavaCppFrameExtractor
+import com.dreamdisplayx.media.player.process.LibVlcFrameExtractor
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.dreamdisplayx.util.DreamCoroutines
@@ -143,12 +143,12 @@ object ScrubPreview {
         logger.info("Generated $key: ${collected.size} frame(s) ready, $failures extraction failure(s)")
     }
 
-    /** Runs a single-frame JavaCPP extraction at [offsetNanos] and returns the raw JPEG bytes. */
+    /** Runs a single-frame libvlc extraction at [offsetNanos] and returns the raw JPEG bytes. */
     private suspend fun extractFrame(
         key: String, sourceUrl: String, offsetNanos: Long,
     ): ByteArray? =
         withTimeoutOrNull(EXTRACT_TIMEOUT) {
-            JavaCppFrameExtractor.extractJpeg(sourceUrl, offsetNanos, FRAME_WIDTH, FRAME_HEIGHT)
+            LibVlcFrameExtractor.extractJpeg(sourceUrl, offsetNanos, FRAME_WIDTH, FRAME_HEIGHT)
         }
 
     /**

@@ -8,9 +8,8 @@ import net.minecraft.client.gui.components.debug.DebugScreenDisplayer
 import net.minecraft.client.gui.components.debug.DebugScreenEntries
 import net.minecraft.client.gui.components.debug.DebugScreenEntry
 import net.minecraft.resources.Identifier
-import net.minecraft.world.level.Level
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk
-import org.bytedeco.ffmpeg.global.avutil
 
 /**
  * 26.x native [DebugScreenEntry] that displays Dream DisplaysX runtime info
@@ -18,8 +17,15 @@ import org.bytedeco.ffmpeg.global.avutil
  * Uses [addToGroup] to place lines on the right side alongside system specs.
  */
 object DreamDisplaysDebugEntry : DebugScreenEntry {
-    private val ffmpegVersion: String by lazy {
-        runCatching { avutil.av_version_info()?.getString()?.trim() ?: "unknown" }.getOrDefault("unknown")
+    private val libvlcVersion: String by lazy {
+        runCatching {
+            val f = uk.co.caprica.vlcj.factory.MediaPlayerFactory()
+            try {
+                f.application().version() ?: "unknown"
+            } finally {
+                f.release()
+            }
+        }.getOrDefault("unknown")
     }
 
     private val modVersion: String by lazy { GeneralUtil.getPrettyModVersion() }
@@ -37,7 +43,7 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
     ) {
         displayer.addToGroup(groupId, "§bDream DisplaysX §a$modVersion")
         displayer.addToGroup(groupId, "§7Commit: §f$commitId")
-        displayer.addToGroup(groupId, "§7FFmpeg: §f$ffmpegVersion")
+        displayer.addToGroup(groupId, "§7LibVLC: §f$libvlcVersion")
         val screenCount = runCatching {
             com.dreamdisplayx.platform.client.displays.DisplayRegistry.getScreens().size
         }.getOrDefault(0)

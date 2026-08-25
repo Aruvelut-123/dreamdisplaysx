@@ -4,7 +4,6 @@ import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.util.GeneralUtil
 import net.minecraft.client.resources.language.I18n
-import org.bytedeco.ffmpeg.global.avutil
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -12,10 +11,16 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Thread-safe; called from the render thread (or any thread via [getLines]).
  */
 object DebugStats {
-    /** Cached FFmpeg version string, read once. */
-    val ffmpegVersion: String by lazy {
-        runCatching { avutil.av_version_info()?.getString()?.trim() ?: "unknown" }
-            .getOrDefault("unknown")
+    /** Cached LibVLC version string, read once. */
+    val libvlcVersion: String by lazy {
+        runCatching {
+            val f = uk.co.caprica.vlcj.factory.MediaPlayerFactory()
+            try {
+                f.application().version() ?: "unknown"
+            } finally {
+                f.release()
+            }
+        }.getOrDefault("unknown")
     }
 
     /** Cached mod version. */
@@ -34,7 +39,7 @@ object DebugStats {
     fun getLines(): List<String> = buildList {
         add("§bDream DisplaysX §a$modVersion")
         add("§7Commit: §f$commitId")
-        add("§7FFmpeg: §f$ffmpegVersion")
+        add("§7LibVLC: §f$libvlcVersion")
         val screenCount = runCatching { DisplayRegistry.getScreens().size }.getOrDefault(0)
         val gpu = MediaPlayer.framesToGpu.get()
         val dropped = MediaPlayer.framesDropped.get()
