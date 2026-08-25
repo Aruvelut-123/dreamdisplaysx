@@ -26,9 +26,8 @@ velocityApi = "3.1.1"
 bungeecordApi = "1.21-R0.4"
 zxing = "3.5.3"
 checkerQual = "3.42.0"
-javacpp = "1.5.14"
-javacv = "1.5.14"
-ffmpeg = "8.1.2-1.5.14"
+vlcj = "4.8.1"
+libvlc = "3.0.0"
 
 [libraries]
 jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
@@ -59,8 +58,8 @@ slf4jApi = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 luckpermsApi = { module = "net.luckperms:api", version.ref = "luckperms" }
 velocityApi = { module = "com.velocitypowered:velocity-api", version.ref = "velocityApi" }
 bungeecordApi = { module = "net.md-5:bungeecord-api", version.ref = "bungeecordApi" }
-javacv = { module = "org.bytedeco:javacv", version.ref = "javacv" }
-ffmpegPlatform = { module = "org.bytedeco:ffmpeg-platform", version.ref = "ffmpeg" }
+vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
+vlcjNatives = { module = "uk.co.caprica:vlcj-natives", version.ref = "vlcj" }
 
 [plugins]
 paperweight = { id = "io.papermc.paperweight.userdev", version.ref = "paperweight" }
