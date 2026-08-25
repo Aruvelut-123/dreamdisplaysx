@@ -15,7 +15,7 @@ object ConfigScreenText {
     private val KNOWN_DECODER_VALUES = setOf(
         "auto", "software", "cuda", "qsv", "amf", "d3d11va", "vaapi",
         "vulkan", "videotoolbox", "dxva2", "mediacodec", "nvdec", "vdpau",
-        "drm", "d3d12va", "v4l2m2m", "opencl", "v4l2request", "ohcodec",
+        "drm", "d3d12va", "v4l2m2m", "opencl", "v4l2request", "ohcodec", "v3d",
     )
 
     /** Field labels / tooltips shared by the config screens. */

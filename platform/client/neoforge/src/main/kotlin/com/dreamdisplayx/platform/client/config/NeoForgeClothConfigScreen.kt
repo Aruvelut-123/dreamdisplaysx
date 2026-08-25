@@ -67,18 +67,17 @@ internal object NeoForgeClothConfigScreen {
                 .build(),
         )
 
-        // Video decoder selection (dropdown)
+        // Video decoder selection (dropdown with all available FFmpeg hwaccel backends)
         val decoderSelections = buildList {
             add("auto")
             add("software")
             addAll(HwAccelEnumerator.availableBackends())
         }
         general.addEntry(
-            entryBuilder.startDropdownMenu(
+            entryBuilder.startStringDropdownMenu(
                 Component.translatable(ConfigScreenText.Keys.DECODER),
                 config.hwaccelDecoder.ifEmpty { "auto" },
-                { it },
-                { v -> ConfigScreenText.decoderLabel(v) },
+                { v -> ConfigScreenText.decoderLabel(v) }, // String → Component display
             )
                 .setDefaultValue("auto")
                 .setSelections(decoderSelections)

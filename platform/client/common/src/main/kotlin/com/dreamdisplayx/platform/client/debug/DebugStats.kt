@@ -38,7 +38,9 @@ object DebugStats {
         val screenCount = runCatching { DisplayRegistry.getScreens().size }.getOrDefault(0)
         val gpu = MediaPlayer.framesToGpu.get()
         val dropped = MediaPlayer.framesDropped.get()
+        val decoder = MediaPlayer.currentDecoder.get()
         add("Displays: $screenCount active")
         add("Frames: $gpu GPU, $dropped dropped")
+        add("Decoder: $decoder")
     }
 }

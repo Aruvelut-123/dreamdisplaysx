@@ -2,13 +2,6 @@
 
 ## 待修复
 
-### 进行中的 hwaccel 调整（已写部分代码，未验证/未完成）
-- Fabric `ClothConfigScreen`：Video decoder 下拉改用 `startStringDropdownMenu`（正确的 Cloth 15.x 重载，之前 `startDropdownMenu` 4 参重载不存在导致显示 raw key 的文本框）——代码已改，待编译验证
-- NeoForge `NeoForgeClothConfigScreen`：尚未同步同样的 `startStringDropdownMenu` 修复
-- `HwAccelCandidateResolver`：Windows 上即使 Vulkan 渲染后端也**优先厂商解码器**（Intel→qsv / NVIDIA→cuda / AMD→amf，vulkan 仅作尾部 fallback）；Linux 保持 vulkan 优先 vaapi 次之——代码已改，待编译验证
-- F3 调试菜单：显示**当前实际使用**的解码器（auto 实际选中的后端名，非配置文件值），不用翻日志——尚未实现
-- 补全 `dreamdisplayx.config.decoder.*` 翻译 key（auto/software/各 FFmpeg 后端本地化名），当前缺失会显示 raw key
-
 ### 遗留 A/V 同步问题
 - Pinned CatchUp（b53a45a8）仍会跳帧 + 闪屏一次；有时闪 2–3 次后音频消失——catch-up 目标是 decode head（prebuffer 最深层帧）而非播放位置，需改为按实际播放位置对齐
 

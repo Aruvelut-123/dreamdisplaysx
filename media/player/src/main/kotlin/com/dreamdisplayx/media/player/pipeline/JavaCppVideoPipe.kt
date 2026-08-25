@@ -815,6 +815,7 @@ internal class JavaCppVideoPipe(
         g.imageMode = FrameGrabber.ImageMode.RAW
         g.start()
         seekAfterStart(g, seekOffsetNanos)
+        MediaPlayer.currentDecoder.set("software")
         return g
     }
 
@@ -845,6 +846,7 @@ internal class JavaCppVideoPipe(
         // Re-apply the seek target: the probe consumed the first frame(s), so rewind to the
         // intended position so the reader loop presents the same timeline as the software path.
         seekAfterStart(g, seekOffsetNanos)
+        MediaPlayer.currentDecoder.set(hwaccel)
         logger.info("{} Video decode via hwaccel '{}'.", debugLabel, hwaccel)
         return g
     }

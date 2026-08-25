@@ -69,6 +69,14 @@ class MediaPlayer(
         /** Dropped frames. */
         val framesDropped = AtomicLong()
 
+        /**
+         * FFmpeg backend the most recently opened video pipe actually decodes with
+         * (`"software"` or a hwaccel name like `"cuda"` / `"qsv"`). Exposed for the F3
+         * debug overlay so "auto" shows what was really selected without checking logs.
+         * Last-writer-wins across concurrent pipes; good enough for diagnostics.
+         */
+        val currentDecoder = AtomicReference("software")
+
         /** Max fetch retries. */
         private const val MAX_FETCH_RETRIES = 3
 

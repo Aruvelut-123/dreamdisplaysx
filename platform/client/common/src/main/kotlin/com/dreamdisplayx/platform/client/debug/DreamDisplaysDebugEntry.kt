@@ -47,6 +47,8 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
             displayer.addToGroup(groupId, "Displays: $screenCount active")
             displayer.addToGroup(groupId, "Frames: $gpu GPU, $dropped dropped")
         }
+        val decoder = com.dreamdisplayx.media.player.MediaPlayer.currentDecoder.get()
+        displayer.addToGroup(groupId, "Decoder: $decoder")
     }
 
     override fun isAllowed(reducedDebug: Boolean): Boolean = true
