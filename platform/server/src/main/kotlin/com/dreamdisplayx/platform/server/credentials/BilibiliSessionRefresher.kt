@@ -81,11 +81,16 @@ object BilibiliSessionRefresher {
         // percent-encode, otherwise Bilibili rejects the whole POST with "请求错误".
         val encodedCsrf = urlEncode(csrf)
         val encodedRefresh = urlEncode(refreshToken)
-        val form = "csrf=$encodedCsrf&refresh_token=$encodedRefresh"
+
+        // Ensure a buvid3 exists — Bilibili's passport API requires it as both a form parameter
+        // and a cookie.  Generate one on-the-fly if missing (first-time refresh after upgrade).
+        val effectiveBuvid3 = buvid3 ?: extractBuvid3(cookie) ?: generateBuvid3()
+        val encodedBuvid3 = urlEncode(effectiveBuvid3)
+        val form = "csrf=$encodedCsrf&refresh_token=$encodedRefresh&buvid3=$encodedBuvid3"
 
         // Build the cookie header: existing cookie + buvid3 (Bilibili passport API requires it).
-        val cookieWithBuvid = if (buvid3 != null && !cookie.contains("buvid3=")) {
-            "$cookie; buvid3=$buvid3"
+        val cookieWithBuvid = if (!cookie.contains("buvid3=")) {
+            "$cookie; buvid3=$effectiveBuvid3"
         } else {
             cookie
         }
@@ -96,7 +101,7 @@ object BilibiliSessionRefresher {
             // distinguishes expired refresh_token (-400) from a bad csrf (-392) etc.
             val msg = refreshResult?.optString("message") ?: "Unknown error (code=$code)"
             logger.warn("Bilibili session refresh rejected: code={} message={}", code, msg)
-            return RefreshResult(false, cookie, refreshToken, buvid3, "$msg (code=$code)")
+            return RefreshResult(false, cookie, refreshToken, effectiveBuvid3, "$msg (code=$code)")
         }
 
         val newRefreshToken = refreshResult?.obj("data")?.optString("refresh_token") ?: refreshToken
@@ -119,7 +124,7 @@ object BilibiliSessionRefresher {
 
         // Try to extract the new cookie from Set-Cookie headers of the confirm response
         var newCookie = cookie
-        var newBuvid3 = buvid3
+        var newBuvid3 = effectiveBuvid3
         if (confirmResponse != null) {
             val extracted = extractCookieFromHeaders(confirmResponse.headers)
             if (extracted != null) newCookie = extracted
@@ -145,7 +150,13 @@ object BilibiliSessionRefresher {
         if (trimmed.startsWith("bili_jct=")) trimmed.substringAfter("bili_jct=") else null
     }.firstOrNull()
 
-    /** Extracts SESSDATA + bili_jct + DedeUserID from Set-Cookie response headers. */
+    /** Extracts the `buvid3` value from a cookie string, or null if absent. */
+    private fun extractBuvid3(cookie: String): String? = cookie.split(';').mapNotNull { part ->
+        val trimmed = part.trim()
+        if (trimmed.startsWith("buvid3=")) trimmed.substringAfter("buvid3=") else null
+    }.firstOrNull()
+
+    /** Extracts SESSDATA + bili_jct + DedeUserID + buvid3 from Set-Cookie response headers. */
     private fun extractCookieFromHeaders(headers: Map<String, List<String>>): String? {
         val allCookies = linkedSetOf<String>()
         for ((name, values) in headers) {
