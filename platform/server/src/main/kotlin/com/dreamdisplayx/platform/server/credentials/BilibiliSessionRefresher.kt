@@ -20,6 +20,11 @@ import java.nio.charset.StandardCharsets
  * 1. POST `/x/passport-login/web/cookie/refresh` with `csrf=<bili_jct>&refresh_token=<token>`
  * 2. GET `/x/passport-login/web/cookie/refresh/confirm` with the new refresh token + csrf
  * 3. The confirm endpoint sets updated cookies via Set-Cookie headers
+ *
+ * The refresh request **must** include a `buvid3` cookie — Bilibili's passport API uses it as a
+ * device fingerprint. Without it the endpoint returns `-400 请求错误`. The `buvid3` is generated
+ * once on first login (matching PiliPlus's format: `UUIDv4.toUpperCase() + random5digits + "infoc"`)
+ * and persisted alongside the credential.
  */
 object BilibiliSessionRefresher {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliSessionRefresher")
@@ -28,6 +33,7 @@ object BilibiliSessionRefresher {
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "Accept" to "application/json",
         "Referer" to "https://www.bilibili.com",
+        "Origin" to "https://www.bilibili.com",
     )
 
     /** Outcome of a session refresh attempt. */
@@ -38,23 +44,37 @@ object BilibiliSessionRefresher {
         val cookie: String?,
         /** The updated refresh token, or the old one when the response did not roll it. */
         val refreshToken: String?,
+        /** The updated buvid3 (if the server returned a new one), or the old one on failure. */
+        val buvid3: String?,
         /** User-facing message for diagnostics. */
         val message: String,
     )
 
     /**
-     * Refreshes a Bilibili session using the stored [refreshToken] and the current [cookie].
-     * Returns the new cookie string and refresh token, or the old values on failure.
+     * Generates a persistent device fingerprint in the same format PiliPlus uses.
+     * Format: `UUIDv4.toUpperCase() + random5digits + "infoc"`.
+     * Example: `XZ8A6C1E-4B2D-4F6A-8C9E-0F1A2B3C4D5E12345infoc`
      */
-    fun refresh(refreshToken: String, cookie: String): RefreshResult {
-        if (refreshToken.isEmpty()) return RefreshResult(false, cookie, null, "No refresh token stored.")
-        if (cookie.isEmpty()) return RefreshResult(false, cookie, null, "No cookie stored.")
+    fun generateBuvid3(): String =
+        java.util.UUID.randomUUID().toString().uppercase() +
+            String.format("%05d", (0 until 100000).random()) +
+            "infoc"
+
+    /**
+     * Refreshes a Bilibili session using the stored [refreshToken] and the current [cookie].
+     * @param buvid3  a persistent device fingerprint; when provided it is appended to the Cookie
+     *                header of the refresh request, which Bilibili's passport API requires.
+     * Returns the new cookie string, refresh token, and buvid3, or the old values on failure.
+     */
+    fun refresh(refreshToken: String, cookie: String, buvid3: String? = null): RefreshResult {
+        if (refreshToken.isEmpty()) return RefreshResult(false, cookie, null, buvid3, "No refresh token stored.")
+        if (cookie.isEmpty()) return RefreshResult(false, cookie, null, buvid3, "No cookie stored.")
 
         // Step 1: POST /cookie/refresh to get a new refresh token
         val csrf = extractCsrf(cookie)
         if (csrf == null) {
             logger.warn("Cannot refresh Bilibili session: no bili_jct in cookie.")
-            return RefreshResult(false, cookie, refreshToken, "Missing bili_jct in cookie.")
+            return RefreshResult(false, cookie, refreshToken, buvid3, "Missing bili_jct in cookie.")
         }
 
         // Refresh tokens (and CSRF) may carry characters that break form encoding — always
@@ -62,12 +82,21 @@ object BilibiliSessionRefresher {
         val encodedCsrf = urlEncode(csrf)
         val encodedRefresh = urlEncode(refreshToken)
         val form = "csrf=$encodedCsrf&refresh_token=$encodedRefresh"
-        val refreshResult = postForm("https://passport.bilibili.com/x/passport-login/web/cookie/refresh", form, cookie)
+
+        // Build the cookie header: existing cookie + buvid3 (Bilibili passport API requires it).
+        val cookieWithBuvid = if (buvid3 != null && !cookie.contains("buvid3=")) {
+            "$cookie; buvid3=$buvid3"
+        } else {
+            cookie
+        }
+        val refreshResult = postForm("https://passport.bilibili.com/x/passport-login/web/cookie/refresh", form, cookieWithBuvid)
         val code = refreshResult?.optInt("code") ?: -1
         if (code != 0) {
+            // The message alone ("请求错误") hides why the refresh failed; the numeric code
+            // distinguishes expired refresh_token (-400) from a bad csrf (-392) etc.
             val msg = refreshResult?.optString("message") ?: "Unknown error (code=$code)"
-            logger.warn("Bilibili session refresh rejected: {}", msg)
-            return RefreshResult(false, cookie, refreshToken, msg)
+            logger.warn("Bilibili session refresh rejected: code={} message={}", code, msg)
+            return RefreshResult(false, cookie, refreshToken, buvid3, "$msg (code=$code)")
         }
 
         val newRefreshToken = refreshResult?.obj("data")?.optString("refresh_token") ?: refreshToken
@@ -80,7 +109,7 @@ object BilibiliSessionRefresher {
             DreamHttpClient.execute(
                 confirmUrl,
                 DreamHttpClient.RequestOptions(
-                    headers = HEADERS + (if (cookie.isEmpty()) emptyMap() else DreamHttpClient.headersOf("Cookie" to cookie)),
+                    headers = HEADERS + (if (cookieWithBuvid.isEmpty()) emptyMap() else DreamHttpClient.headersOf("Cookie" to cookieWithBuvid)),
                     connectTimeoutMs = 10_000,
                     readTimeoutMs = 10_000,
                     followRedirects = false,
@@ -90,14 +119,24 @@ object BilibiliSessionRefresher {
 
         // Try to extract the new cookie from Set-Cookie headers of the confirm response
         var newCookie = cookie
+        var newBuvid3 = buvid3
         if (confirmResponse != null) {
             val extracted = extractCookieFromHeaders(confirmResponse.headers)
             if (extracted != null) newCookie = extracted
+            // Also capture any buvid3/buvid4 the server may return
+            confirmResponse.headers.entries
+                .filter { it.key.equals("Set-Cookie", ignoreCase = true) }
+                .flatMap { it.value }
+                .mapNotNull { cookieLine ->
+                    val kv = cookieLine.substringBefore(';').trim()
+                    if (kv.startsWith("buvid3=")) kv.substringAfter("buvid3=") else null
+                }
+                .firstOrNull()?.let { newBuvid3 = it }
         }
 
         logger.info("Bilibili session refreshed for stored credential (new refresh token={}, cookie changed={})",
             newRefreshToken != refreshToken, newCookie != cookie)
-        return RefreshResult(true, newCookie, newRefreshToken, "OK")
+        return RefreshResult(true, newCookie, newRefreshToken, newBuvid3, "OK")
     }
 
     /** Extracts the `bili_jct` value from a SESSDATA cookie string. */

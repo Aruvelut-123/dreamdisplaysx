@@ -7,11 +7,13 @@ import org.slf4j.LoggerFactory
  * Shared login/logout logic for the `/display login` and `/display logout` commands, used by both
  * the Paper and vanilla command paths so they can never drift.
  *
- * Bilibili credentials are stored in two keys:
+ * Bilibili credentials are stored in these keys:
  * - `"<uuid>:bilibili"` — the SESSDATA cookie string (per-player)
  * - `"<uuid>:bilibili_refresh"` — the refresh token (empty if not available)
  * - `"__global__:bilibili"` — the global SESSDATA cookie string (shared across all players)
  * - `"__global__:bilibili_refresh"` — the global refresh token
+ * - `"__global__:bilibili_buvid3"` — the device fingerprint the passport API requires for
+ *   session refresh (generated once on first login, same format as PiliPlus)
  *
  * When a global credential is set, it is broadcast to all online players.
  */
@@ -27,6 +29,11 @@ object CredentialActions {
         if (refresh.isNotEmpty()) {
             CredentialStore.setGlobal("${platform}_refresh", refresh)
         }
+        // Generate a persistent buvid3 for the session-refresh flow
+        // (Bilibili's passport API returns -400 请求错误 without this device fingerprint).
+        if (CredentialStore.getGlobal("${platform}_buvid3").isNullOrEmpty()) {
+            CredentialStore.setGlobal("${platform}_buvid3", BilibiliSessionRefresher.generateBuvid3())
+        }
         return globalSnapshot()
     }
 
@@ -34,6 +41,7 @@ object CredentialActions {
     fun globalLogout(platform: String): PlatformCredentials {
         CredentialStore.clearGlobal(platform)
         CredentialStore.clearGlobal("${platform}_refresh")
+        CredentialStore.clearGlobal("${platform}_buvid3")
         return globalSnapshot()
     }
 
@@ -104,8 +112,9 @@ object CredentialActions {
         // Refresh global credential first
         val globalRefreshToken = CredentialStore.getGlobal("bilibili_refresh")
         val globalSessdata = CredentialStore.getGlobal("bilibili")
+        val globalBuvid3 = CredentialStore.getGlobal("bilibili_buvid3")
         if (!globalRefreshToken.isNullOrEmpty() && !globalSessdata.isNullOrEmpty()) {
-            val result = BilibiliSessionRefresher.refresh(globalRefreshToken, globalSessdata)
+            val result = BilibiliSessionRefresher.refresh(globalRefreshToken, globalSessdata, globalBuvid3)
             if (result.success) {
                 if (result.cookie != null && result.cookie != globalSessdata) {
                     CredentialStore.setGlobal("bilibili", result.cookie)
@@ -113,6 +122,10 @@ object CredentialActions {
                 val newRefresh = result.refreshToken
                 if (newRefresh != null && newRefresh != globalRefreshToken) {
                     CredentialStore.setGlobal("bilibili_refresh", newRefresh)
+                }
+                val newBuvid3 = result.buvid3
+                if (newBuvid3 != null && newBuvid3 != globalBuvid3) {
+                    CredentialStore.setGlobal("bilibili_buvid3", newBuvid3)
                 }
                 val fresh = PlatformCredentials(
                     bilibiliSessdata = result.cookie ?: globalSessdata,
