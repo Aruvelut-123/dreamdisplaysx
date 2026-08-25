@@ -8,7 +8,6 @@ import me.shedaniel.clothconfig2.api.ConfigCategory
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
-import java.util.Optional
 
 /**
  * Cloth Config screen for NeoForge — mirrors the Fabric [ClothConfigScreenProvider] exactly
@@ -67,21 +66,21 @@ internal object NeoForgeClothConfigScreen {
                 .build(),
         )
 
-        // Video decoder selection (dropdown with all available FFmpeg hwaccel backends)
+        // Video decoder selection (button-style selector with all available FFmpeg backends)
         val decoderSelections = buildList {
             add("auto")
             add("software")
             addAll(HwAccelEnumerator.availableBackends())
-        }
+        }.toTypedArray()
         general.addEntry(
-            entryBuilder.startStringDropdownMenu(
+            entryBuilder.startSelector(
                 Component.translatable(ConfigScreenText.Keys.DECODER),
+                decoderSelections,
                 config.hwaccelDecoder.ifEmpty { "auto" },
-                { v -> ConfigScreenText.decoderLabel(v) }, // String → Component display
             )
                 .setDefaultValue("auto")
-                .setSelections(decoderSelections)
-                .setTooltip(Optional.of(arrayOf(Component.translatable(ConfigScreenText.Keys.DECODER_TOOLTIP))))
+                .setNameProvider { v -> ConfigScreenText.decoderLabel(v) }
+                .setTooltip(Component.translatable(ConfigScreenText.Keys.DECODER_TOOLTIP))
                 .setSaveConsumer { v: String -> config.hwaccelDecoder = v }
                 .build(),
         )
