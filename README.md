@@ -30,7 +30,7 @@ Compared to the original Dream Displays, this fork adds:
 - **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions.
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
-- **Fully self-contained** — no external FFmpeg binary, no Rust toolchain, no Python. Native FFmpeg decode is bundled via JavaCPP Maven artifacts.
+- **Fully self-contained** — no external FFmpeg binary, no Rust toolchain, no Python. Video decode runs through in-process libvlc (vlcj); the native runtimes are downloaded automatically on first boot.
 - Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.
 
 > If you encounter any error on this version, **do not** submit issues to the original repository — open an issue
@@ -151,9 +151,10 @@ cd dreamdisplaysx
 
 The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; the active version is
 selected in `versions/active.txt`. On the `feat/libvlc` branch, the media pipeline is being ported from JavaCPP/FFmpeg to
-**libvlc** (vlcj). The LibVLC runtime is collected from official pre-built VideoLAN distributions by the CI "Build Natives"
-workflow (`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for macOS and Windows
-x86/x64, and the MSYS2 package for Windows aarch64 — then bundled into the fat jars.
+**libvlc** (vlcj). The LibVLC + SQLite runtimes are collected from official pre-built VideoLAN distributions by the CI
+"Build Natives" workflow (`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for
+macOS and Windows x86/x64, and the MSYS2 package for Windows aarch64 — and **downloaded at runtime** on first boot into
+`./dreamdisplayx/natives/<os>/<arch>/` (never bundled in the jar, keeping it small).
 
 ## Disclaimer
 

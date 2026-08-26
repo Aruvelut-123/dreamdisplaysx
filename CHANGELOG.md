@@ -5,16 +5,20 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > **libvlc migration (feat/libvlc branch)** — the media pipeline is being ported
 > from JavaCPP/FFmpeg to **libvlc** (vlcj). One unified `EmbeddedMediaPlayer`
 > handles video + audio (no split channels); play/pause/seek/A-V sync are all
-> delegated to libvlc instead of reimplemented pacing loops. The bundled LibVLC
-> runtime is **collected from official pre-built VideoLAN distributions** by the
+> delegated to libvlc instead of reimplemented pacing loops. The LibVLC + SQLite
+> runtimes are **collected from official pre-built VideoLAN distributions** by the
 > CI "Build Natives" workflow (7 target platforms: Linux/macOS/Windows ×
-> x86_64/aarch64 + Windows x86) and injected into the fat jars, because
-> `vlcj-natives` ships no native binaries. Collection sources (same strategy as
+> x86_64/aarch64 + Windows x86) and **downloaded at runtime** into
+> `./dreamdisplayx/natives/<os>/<arch>/` on first boot (never bundled in the jar,
+> which would balloon to hundreds of MB). Collection sources (same strategy as
 > VideoPlayer-Library): Flathub flatpak (Linux), official VideoLAN dmg/zip
 > (macOS, Windows x86/x64), MSYS2 package (Windows aarch64, the only pre-built
-> source since VideoLAN ships no win-arm64). A runtime loader
-> (`LibVlcNativesLoader`) extracts the natives from the classpath and wires up
-> `jna.library.path` / `VLC_PLUGIN_PATH`. This work is in progress on the
+> source since VideoLAN ships no win-arm64). A runtime bootstrap
+> (`NativesDownloader`) fetches the pinned release assets (gh-proxy.com mirror
+> with direct GitHub fallback), extracts them, and wires up
+> `jna.library.path` / `VLC_PLUGIN_PATH` / `org.sqlite.lib.path`. On the client
+> both runtimes are fetched at mod init; the dedicated server fetches only the
+> SQLite runtime (it depends only on core+util). This work is in progress on the
 > `feat/libvlc` branch.
 
 ## Highlights
