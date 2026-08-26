@@ -11,9 +11,14 @@
 #   MAKE_JOBS    parallel make jobs (default: nproc)
 #   VLC_SRC_DIR  cache directory holding the VLC source (optional)
 #
-# Each platform installs system-level build dependencies, then runs the
-# standard VLC bootstrap/configure/make chain.  Only libvlc, libvlccore
-# and the built-in plugins are built (no GUI, no Qt, no skins2).
+# Configure strategy: this is a **video player mod**, so every module that
+# contributes to playback is enabled — codecs (avcodec, x264/x265, vpx,
+# a52/dca/faad/twolame DTS/AC-3/MPEG audio), demuxers (mkv/mp4/ts/ps),
+# streaming protocols (live555 RTSP, HTTP(S), SMB, FTP), subtitle renderers
+# (freetype/fontconfig/fribidi/harfbuzz), DVD/Blu-ray navigation. Missing
+# system libraries are installed (apt/brew/pacman). Only modules useless for
+# a headless video player are disabled: GUI (qt/skins2), lua scripting,
+# ncurses.
 #
 # Windows builds MUST run inside a MSYS2 shell (MINGW64 or CLANGARM64).
 set -euo pipefail
@@ -51,6 +56,21 @@ if [[ ! -d "$VLC_SRC_DIR" ]]; then
 fi
 cd "$VLC_SRC_DIR"
 
+# Shared playback-relevant build options. Everything else is left to
+# configure auto-detection (it enables a module when the dependency is
+# present and safely skips it otherwise).
+#
+# Deliberately NOT disabled: avcodec/avformat/swscale, live555 (RTSP),
+# a52/dts/faad/twolame audio, dvdnav/dvdread/bluray, freetype/fontconfig,
+# fribidi/harfbuzz, vorbis/ogg/theora/mad/mpeg2, vpx/x264/x265, opus/flac,
+# sdl2, chromaprint, dcadec, etc. — all are needed for a complete player.
+VC_OPTS_BASE=(
+  --disable-qt --disable-skins2
+  --disable-lua --disable-lua2 --disable-ncurses
+  --disable-fluidsynth
+  --prefix="$OUT_LIBDIR"
+)
+
 # ── 2. Install build dependencies & configure ───────────────────────────────
 case "$OS_NAME" in
   Linux)
@@ -63,8 +83,10 @@ case "$OS_NAME" in
       libx11-xcb-dev libxcb-randr0-dev libxcb-composite0-dev \
       libxcb-shape0-dev libxcb-xfixes0-dev libxcb-render0-dev \
       libasound2-dev libpulse-dev libdbus-1-dev \
-      libfreetype6-dev libfontconfig1-dev libxml2-dev \
-      libavcodec-dev libavformat-dev libswscale-dev \
+      libfreetype6-dev libfontconfig1-dev libfribidi-dev \
+      libharfbuzz-dev libxml2-dev \
+      libavcodec-dev libavformat-dev libswscale-dev libavutil-dev \
+      libpostproc-dev \
       libchromaprint-dev libbluray-dev libgstreamer1.0-dev \
       libgstreamer-plugins-base1.0-dev \
       libgnutls28-dev libgcrypt20-dev \
@@ -72,37 +94,30 @@ case "$OS_NAME" in
       libtheora-dev libdvdnav-dev libdvdread-dev \
       libsamplerate0-dev liba52-0.7.4-dev libmpeg2-4-dev \
       libdca-dev libfaad-dev libtwolame-dev libmpcdec-dev \
-      libvpx-dev libx264-dev libx265-dev
+      libvpx-dev libx264-dev libx265-dev \
+      libopus-dev libflac-dev libsdl2-dev \
+      liblivemedia-dev \
+      libjpeg-dev libpng-dev \
+      zlib1g-dev libbz2-dev
 
     CONFIGURE_HOST=""
-    VLC_BUILD_OPTS=(
-      --enable-libvlc --enable-libvlccore
-      --disable-gui --disable-qt --disable-skins2
-      --disable-lua --disable-ncurses
-      --disable-chromaprint --disable-bluray
-      --disable-a52
-      --prefix="$OUT_LIBDIR"
-    )
+    VLC_BUILD_OPTS=("${VC_OPTS_BASE[@]}")
     ;;
 
   Mac)
     echo ">>> Installing macOS build dependencies"
     brew install autoconf automake libtool pkg-config gettext ragel yasm \
-      freetype fontconfig libxml2 dbus gnutls \
-      lua libmad libogg libvorbis theora \
-      x264 x265 libvpx ffmpeg
+      freetype fontconfig fribidi harfbuzz libxml2 dbus gnutls \
+      libogg libvorbis theora mad \
+      x264 x265 libvpx ffmpeg \
+      a52dec openrtsp libdvdnav libdvdread libbluray \
+      libsamplerate opus flac chromaprint
 
     # Homebrew installs gettext + libtool keg-only; force-link them
     brew link --overwrite gettext libtool 2>/dev/null || true
 
     CONFIGURE_HOST=""
-    VLC_BUILD_OPTS=(
-      --enable-libvlc --enable-libvlccore
-      --disable-gui --disable-qt --disable-skins2
-      --disable-lua --disable-ncurses
-      --disable-chromaprint --disable-bluray
-      --prefix="$OUT_LIBDIR"
-    )
+    VLC_BUILD_OPTS=("${VC_OPTS_BASE[@]}")
     ;;
 
   Windows)
@@ -130,9 +145,10 @@ case "$OS_NAME" in
       ${MINGW_PREFIX}-libtheora \
       ${MINGW_PREFIX}-freetype \
       ${MINGW_PREFIX}-fontconfig \
+      ${MINGW_PREFIX}-fribidi \
+      ${MINGW_PREFIX}-harfbuzz \
       ${MINGW_PREFIX}-libxml2 \
       ${MINGW_PREFIX}-gnutls \
-      ${MINGW_PREFIX}-lua \
       ${MINGW_PREFIX}-libsamplerate \
       ${MINGW_PREFIX}-libbluray \
       ${MINGW_PREFIX}-libdvdnav \
@@ -140,7 +156,10 @@ case "$OS_NAME" in
       ${MINGW_PREFIX}-x264 \
       ${MINGW_PREFIX}-x265 \
       ${MINGW_PREFIX}-libvpx \
-      ${MINGW_PREFIX}-ffmpeg
+      ${MINGW_PREFIX}-ffmpeg \
+      ${MINGW_PREFIX}-opus \
+      ${MINGW_PREFIX}-flac \
+      ${MINGW_PREFIX}-chromaprint
 
     # Set PKG_CONFIG_PATH for the correct mingw prefix
     if [[ "$MSYSTEM" == "CLANGARM64" ]]; then
@@ -157,12 +176,13 @@ case "$OS_NAME" in
       CONFIGURE_HOST="--host=${MINGW_ARCH}-w64-mingw32"
     fi
 
-    VLC_BUILD_OPTS=(
-      --enable-libvlc --enable-libvlccore
-      --disable-gui --disable-qt --disable-skins2
-      --disable-lua --disable-ncurses
-      --disable-chromaprint --disable-bluray
-      --prefix="$OUT_LIBDIR"
+    VLC_BUILD_OPTS=("${VC_OPTS_BASE[@]}")
+
+    # On Windows, liba52 and live555 are not packaged in MSYS2 mingw repos,
+    # so disable them here (AC-3 still works via avcodec; RTSP rarely used).
+    VLC_BUILD_OPTS+=(
+      --disable-a52
+      --disable-live555
     )
     ;;
 
