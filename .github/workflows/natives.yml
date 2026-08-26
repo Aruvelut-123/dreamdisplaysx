@@ -112,12 +112,12 @@ jobs:
       fail-fast: false
       matrix:
         libvlc:
-          - { platform: linux-x64,      os: Linux,   arch: x86_64,  runner: ubuntu-latest }
-          - { platform: linux-aarch64,  os: Linux,   arch: aarch64, runner: ubuntu-24.04-arm }
-          - { platform: macos-x64,      os: Mac,     arch: x86_64,  runner: macos-15-intel }
-          - { platform: macos-aarch64,  os: Mac,     arch: aarch64, runner: macos-14 }
-          - { platform: windows-x64,    os: Windows, arch: x86_64,  runner: windows-latest }
-          - { platform: windows-aarch64,os: Windows, arch: aarch64, runner: windows-11-arm }
+          - { platform: linux-x64,      os: Linux,   arch: x86_64,  runner: ubuntu-latest,          msystem: '' }
+          - { platform: linux-aarch64,  os: Linux,   arch: aarch64, runner: ubuntu-24.04-arm,        msystem: '' }
+          - { platform: macos-x64,      os: Mac,     arch: x86_64,  runner: macos-15-intel,          msystem: '' }
+          - { platform: macos-aarch64,  os: Mac,     arch: aarch64, runner: macos-14,                msystem: '' }
+          - { platform: windows-x64,    os: Windows, arch: x86_64,  runner: windows-latest,          msystem: MINGW64 }
+          - { platform: windows-aarch64,os: Windows, arch: aarch64, runner: windows-11-arm,          msystem: CLANGARM64 }
 
     steps:
       - name: Checkout repository
@@ -138,10 +138,19 @@ jobs:
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: ${{ matrix.libvlc.msystem }}
           update: false
 
+      - name: Build libvlc native runtime from source (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          export OUT_DIR="$PWD/native-artifact/libvlc/${{ matrix.libvlc.platform }}"
+          bash native/libvlc/build.sh ${{ matrix.libvlc.os }} ${{ matrix.libvlc.arch }}
+
       - name: Build libvlc native runtime from source
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail

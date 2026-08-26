@@ -14,6 +14,8 @@
 # Each platform installs system-level build dependencies, then runs the
 # standard VLC bootstrap/configure/make chain.  Only libvlc, libvlccore
 # and the built-in plugins are built (no GUI, no Qt, no skins2).
+#
+# Windows builds MUST run inside a MSYS2 shell (MINGW64 or CLANGARM64).
 set -euo pipefail
 
 OS_NAME="${1:-}"
@@ -53,8 +55,8 @@ cd "$VLC_SRC_DIR"
 case "$OS_NAME" in
   Linux)
     echo ">>> Installing Linux build dependencies"
-    apt-get update -qq
-    apt-get install -y -qq \
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq \
       autoconf automake autopoint libtool pkg-config gettext \
       yasm ragel \
       libxcb-shm0-dev libxcb-xv0-dev libxcb-keysyms1-dev \
@@ -77,8 +79,6 @@ case "$OS_NAME" in
       --enable-libvlc --enable-libvlccore
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
-      --enable-avcodec --enable-avformat --enable-swscale
-      --enable-postproc --enable-avutil
       --disable-chromaprint --disable-bluray
       --enable-dbus --enable-pulse --enable-alsa
       --enable-xcb --enable-xvideo
@@ -97,7 +97,7 @@ case "$OS_NAME" in
     echo ">>> Installing macOS build dependencies"
     brew install autoconf automake libtool pkg-config gettext ragel yasm \
       freetype fontconfig libxml2 dbus gnutls \
-      lua mad libogg libvorbis libtheora \
+      lua libmad libogg libvorbis theora \
       x264 x265 libvpx ffmpeg
 
     # Homebrew installs gettext + libtool keg-only; force-link them
@@ -108,8 +108,6 @@ case "$OS_NAME" in
       --enable-libvlc --enable-libvlccore
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
-      --enable-avcodec --enable-avformat --enable-swscale
-      --enable-postproc --enable-avutil
       --disable-chromaprint --disable-bluray
       --enable-dbus --enable-freetype --enable-fontconfig
       --enable-vorbis --enable-ogg --enable-mad
@@ -121,73 +119,56 @@ case "$OS_NAME" in
 
   Windows)
     echo ">>> Installing Windows (MSYS2/MinGW) build dependencies"
-    # GitHub Actions windows-latest has MSYS2 pre-installed at C:\msys64
-    MSYS2="C:/msys64/usr/bin/bash.exe"
-    if [[ ! -f "$MSYS2" ]]; then
-      # Fallback: try to find msys2
-      MSYS2="$(command -v msys2 2>/dev/null || echo "")"
-      if [[ -z "$MSYS2" ]]; then
-        echo "ERROR: MSYS2 not found; install it first (choco install msys2)"
-        exit 1
-      fi
-    fi
 
-    # Determine MinGW arch prefix
-    MINGW_ARCH="x86_64"
+    # Inside MSYS2 shell: detect which msystem we are running under
     MINGW_PREFIX="mingw-w64-x86_64"
-    if [[ "$OS_ARCH" == "aarch64" ]]; then
-      MINGW_ARCH="aarch64"
+    MINGW_ARCH="x86_64"
+    if [[ "$MSYSTEM" == "CLANGARM64" ]]; then
       MINGW_PREFIX="mingw-w64-clang-aarch64"
+      MINGW_ARCH="aarch64"
     fi
 
-    # Install mingw-w64 toolchain + VLC dependencies via MSYS2 pacman
-    "$MSYS2" -lc "
-      pacman -Syu --noconfirm --needed
-      pacman -S --noconfirm --needed \
-        ${MINGW_PREFIX}-toolchain \
-        ${MINGW_PREFIX}-autotools \
-        ${MINGW_PREFIX}-gettext \
-        ${MINGW_PREFIX}-pkg-config \
-        ${MINGW_PREFIX}-libmad \
-        ${MINGW_PREFIX}-libogg \
-        ${MINGW_PREFIX}-libvorbis \
-        ${MINGW_PREFIX}-libtheora \
-        ${MINGW_PREFIX}-freetype \
-        ${MINGW_PREFIX}-fontconfig \
-        ${MINGW_PREFIX}-libxml2 \
-        ${MINGW_PREFIX}-gnutls \
-        ${MINGW_PREFIX}-lua \
-        ${MINGW_PREFIX}-dbus \
-        ${MINGW_PREFIX}-libsamplerate \
-        ${MINGW_PREFIX}-libbluray \
-        ${MINGW_PREFIX}-libdvdnav \
-        ${MINGW_PREFIX}-libdvdread \
-        ${MINGW_PREFIX}-x264 \
-        ${MINGW_PREFIX}-x265 \
-        ${MINGW_PREFIX}-libvpx \
-        ${MINGW_PREFIX}-ffmpeg \
-        make gettext
-    "
+    # Install build dependencies (MSYS autotools + mingw compiler chain)
+    pacman -Syu --noconfirm --needed
+    pacman -S --noconfirm --needed \
+      autoconf automake libtool make gettext \
+      ${MINGW_PREFIX}-toolchain \
+      ${MINGW_PREFIX}-pkgconf \
+      ${MINGW_PREFIX}-libmad \
+      ${MINGW_PREFIX}-libogg \
+      ${MINGW_PREFIX}-libvorbis \
+      ${MINGW_PREFIX}-libtheora \
+      ${MINGW_PREFIX}-freetype \
+      ${MINGW_PREFIX}-fontconfig \
+      ${MINGW_PREFIX}-libxml2 \
+      ${MINGW_PREFIX}-gnutls \
+      ${MINGW_PREFIX}-lua \
+      ${MINGW_PREFIX}-libsamplerate \
+      ${MINGW_PREFIX}-libbluray \
+      ${MINGW_PREFIX}-libdvdnav \
+      ${MINGW_PREFIX}-libdvdread \
+      ${MINGW_PREFIX}-x264 \
+      ${MINGW_PREFIX}-x265 \
+      ${MINGW_PREFIX}-libvpx \
+      ${MINGW_PREFIX}-ffmpeg
 
-    CONFIGURE_HOST="--host=${MINGW_ARCH}-w64-mingw32"
-    export CC="${MINGW_ARCH}-w64-mingw32-gcc"
-    export CXX="${MINGW_ARCH}-w64-mingw32-g++"
-    # For Clang-based aarch64, mingw-w64-clang-aarch64 uses clang
-    if [[ "$MINGW_ARCH" == "aarch64" ]]; then
-      export CC="${MINGW_ARCH}-w64-mingw32-clang"
-      export CXX="${MINGW_ARCH}-w64-mingw32-clang++"
-    fi
-    export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig"
-    if [[ "$OS_ARCH" == "aarch64" ]]; then
+    # Set PKG_CONFIG_PATH for the correct mingw prefix
+    if [[ "$MSYSTEM" == "CLANGARM64" ]]; then
       export PKG_CONFIG_PATH="/clangarm64/lib/pkgconfig:/clangarm64/share/pkgconfig"
+      export CC="clang"
+      export CXX="clang++"
+      CONFIGURE_HOST="--host=${MINGW_ARCH}-w64-mingw32"
+    else
+      export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig"
+      export CC="x86_64-w64-mingw32-gcc"
+      export CXX="x86_64-w64-mingw32-g++"
+      CONFIGURE_HOST="--host=${MINGW_ARCH}-w64-mingw32"
     fi
 
     VLC_BUILD_OPTS=(
       --enable-libvlc --enable-libvlccore
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
-      --enable-avcodec --enable-avformat --enable-swscale
-      --enable-postproc --enable-avutil
       --disable-chromaprint --disable-bluray
       --enable-freetype --enable-fontconfig
       --enable-vorbis --enable-ogg --enable-mad
