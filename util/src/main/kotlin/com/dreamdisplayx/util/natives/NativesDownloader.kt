@@ -52,24 +52,29 @@ object NativesDownloader {
      * native runtimes, then sets the system properties that LibVLC and SQLite
      * need to discover them.
      *
-     * Safe to call multiple times; subsequent calls are a no-op after the first
-     * successful completion.
+     * Safe to call multiple times; subsequent calls are a no-op for components
+     * that have already been fetched successfully. This allows the dedicated
+     * server to call `ensure(SQLITE)` first and the client to later call
+     * `ensure()` (i.e. LIBVLC+SQLITE) without skipping the unfulfilled ones.
      */
     @JvmStatic
     fun ensure(components: Set<Component> = setOf(Component.LIBVLC, Component.SQLITE)) {
-        if (initialized) return
+        val missing = components - downloadedComponents
+        if (missing.isEmpty()) return
         synchronized(this) {
-            if (initialized) return
+            val stillMissing = missing - downloadedComponents
+            if (stillMissing.isEmpty()) return
             try {
-                downloadAndExtract(components)
-                initialized = true
+                downloadAndExtract(stillMissing)
+                downloadedComponents.addAll(stillMissing)
             } catch (e: Exception) {
                 logger.error("Failed to download natives", e)
             }
         }
     }
 
-    private var initialized = false
+    /** Components that have been successfully downloaded at least once. */
+    private val downloadedComponents = mutableSetOf<Component>()
 
     // ── Platform detection ─────────────────────────────────────────────────
 
