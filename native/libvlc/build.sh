@@ -80,6 +80,7 @@ case "$OS_NAME" in
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
       --disable-chromaprint --disable-bluray
+      --disable-a52
       --prefix="$OUT_LIBDIR"
     )
     ;;
@@ -146,11 +147,13 @@ case "$OS_NAME" in
       export PKG_CONFIG_PATH="/clangarm64/lib/pkgconfig:/clangarm64/share/pkgconfig"
       export CC="clang"
       export CXX="clang++"
+      export BUILDCC="clang"
       CONFIGURE_HOST="--host=${MINGW_ARCH}-w64-mingw32"
     else
       export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig"
       export CC="x86_64-w64-mingw32-gcc"
       export CXX="x86_64-w64-mingw32-g++"
+      export BUILDCC="gcc"
       CONFIGURE_HOST="--host=${MINGW_ARCH}-w64-mingw32"
     fi
 
