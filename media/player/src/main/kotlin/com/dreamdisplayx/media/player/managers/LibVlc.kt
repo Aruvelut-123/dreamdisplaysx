@@ -45,8 +45,9 @@ object LibVlc {
     var useHwAccel: Boolean = true
 
     val lib: LibVlcNative by lazy {
-        if (instance == null) ensureLoaded()
-        if (instance == null) throw IllegalStateException("LibVLC is not available", loadError)
+        // NOTE: do NOT call ensureLoaded() here — ensureLoaded() itself resolves `lib` while
+        // creating the instance, which would deadlock on the lazy initializer. The caller is
+        // expected to call ensureLoaded() (via the session manager) before touching `lib`.
         Native.load("libvlc", LibVlcNative::class.java)
     }
 
