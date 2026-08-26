@@ -95,32 +95,64 @@ case "$OS_NAME" in
     ;;
 
   Windows)
-    echo ">>> Installing MSYS2 VLC package ($OS_ARCH)"
     if [[ "$OS_ARCH" == "aarch64" ]]; then
-      MINGW_PREFIX="mingw-w64-clang-aarch64"
+      # Windows ARM64: no official VLC build exists, so use the MSYS2
+      # clangarm64 package (the only pre-built source for this platform).
+      echo ">>> Installing MSYS2 VLC package (aarch64)"
+      # Official mirror auto-redirects to a fast mirror; default list includes
+      # slow/blocked mirrors (e.g. ftp2.osuosl.org) that time out on runners.
+      echo 'Server = https://mirror.msys2.org/msys/$arch' > /etc/pacman.d/mirrorlist.msys
+      echo 'Server = https://mirror.msys2.org/mingw/$repo' > /etc/pacman.d/mirrorlist.mingw
+      pacman -Sy --noconfirm --needed
+      pacman -S --noconfirm --needed mingw-w64-clang-aarch64-vlc
+
       VLC_LIBDIR="/clangarm64"
+      cp -a "$VLC_LIBDIR/bin"/libvlc*.dll "$OUT_LIBDIR/" 2>/dev/null || true
+      if [[ -d "$VLC_LIBDIR/lib/vlc/plugins" ]]; then
+        cp -a "$VLC_LIBDIR/lib/vlc/plugins" "$OUT_LIBDIR/plugins"
+      elif [[ -d "$VLC_LIBDIR/plugins" ]]; then
+        cp -a "$VLC_LIBDIR/plugins" "$OUT_LIBDIR/plugins"
+      else
+        echo "ERROR: no VLC plugins directory found at $VLC_LIBDIR" >&2
+        ls -la "$VLC_LIBDIR/lib/vlc/" 2>/dev/null || true
+        exit 1
+      fi
     else
-      MINGW_PREFIX="mingw-w64-x86_64"
-      VLC_LIBDIR="/mingw64"
-    fi
+      # Windows x86_64 or x86: download official VideoLAN archive
+      if [[ "$OS_ARCH" == "x86" ]]; then
+        WIN_ARCH="win32"
+      else
+        WIN_ARCH="win64"
+      fi
+      echo ">>> Downloading official VLC $VLC_VER $WIN_ARCH zip"
+      ZIP_URL="https://get.videolan.org/vlc/$VLC_VER/$WIN_ARCH/vlc-$VLC_VER-$WIN_ARCH.zip"
+      ZIP_FILE="vlc-$VLC_VER-$WIN_ARCH.zip"
+      curl -fL --retry 3 --retry-all-errors -o "$ZIP_FILE" "$ZIP_URL"
 
-    # Install the official MSYS2 VLC package (pre-built, already compiled
-    # against a compatible FFmpeg version for the mingw environment).
-    pacman -Sy --noconfirm --needed
-    pacman -S --noconfirm --needed ${MINGW_PREFIX}-vlc
+      echo ">>> Extracting"
+      # MSYS2 shell may not ship unzip; install it or use busybox/tar fallback
+      if ! command -v unzip &>/dev/null; then
+        echo 'Server = https://mirror.msys2.org/msys/$arch' > /etc/pacman.d/mirrorlist.msys
+        echo 'Server = https://mirror.msys2.org/mingw/$repo' > /etc/pacman.d/mirrorlist.mingw
+        pacman -Sy --noconfirm --needed unzip
+      fi
+      unzip -q "$ZIP_FILE" -d vlc-extract
 
-    # Copy runtime DLLs
-    cp -a "$VLC_LIBDIR/bin"/libvlc*.dll "$OUT_LIBDIR/" 2>/dev/null || true
-
-    # Copy plugins
-    if [[ -d "$VLC_LIBDIR/lib/vlc/plugins" ]]; then
-      cp -a "$VLC_LIBDIR/lib/vlc/plugins" "$OUT_LIBDIR/plugins"
-    elif [[ -d "$VLC_LIBDIR/plugins" ]]; then
-      cp -a "$VLC_LIBDIR/plugins" "$OUT_LIBDIR/plugins"
-    else
-      echo "ERROR: no VLC plugins directory found at $VLC_LIBDIR" >&2
-      ls -la "$VLC_LIBDIR/lib/vlc/" 2>/dev/null || true
-      exit 1
+      # The zip contains a top-level directory vlc-<ver>/
+      SRC="vlc-extract/vlc-$VLC_VER"
+      if [[ ! -d "$SRC" ]]; then
+        SRC="$(find vlc-extract -mindepth 1 -maxdepth 1 -type d | head -1)"
+      fi
+      cp -a "$SRC/libvlc.dll" "$OUT_LIBDIR/" 2>/dev/null || true
+      cp -a "$SRC/libvlccore.dll" "$OUT_LIBDIR/" 2>/dev/null || true
+      if [[ -d "$SRC/plugins" ]]; then
+        cp -a "$SRC/plugins" "$OUT_LIBDIR/plugins"
+      else
+        echo "ERROR: no plugins directory in $WIN_ARCH zip at $SRC" >&2
+        ls -la "$SRC/" 2>/dev/null || true
+        exit 1
+      fi
+      rm -rf vlc-extract "$ZIP_FILE"
     fi
     ;;
 

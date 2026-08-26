@@ -116,6 +116,7 @@ jobs:
           - { platform: linux-aarch64,  os: Linux,   arch: aarch64, runner: ubuntu-24.04-arm,        msystem: '' }
           - { platform: macos-x64,      os: Mac,     arch: x86_64,  runner: macos-15-intel,          msystem: '' }
           - { platform: macos-aarch64,  os: Mac,     arch: aarch64, runner: macos-14,                msystem: '' }
+          - { platform: windows-x86,    os: Windows, arch: x86,     runner: windows-latest,          msystem: MINGW32 }
           - { platform: windows-x64,    os: Windows, arch: x86_64,  runner: windows-latest,          msystem: MINGW64 }
           - { platform: windows-aarch64,os: Windows, arch: aarch64, runner: windows-11-arm,          msystem: CLANGARM64 }
 

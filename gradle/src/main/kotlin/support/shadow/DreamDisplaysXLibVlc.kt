@@ -17,6 +17,7 @@ private fun libvlcNativeSubPath(platformKey: String): String? = when (platformKe
     "linux-aarch64" -> "Linux/aarch64"
     "macos-x64" -> "Mac/x86_64"
     "macos-aarch64" -> "Mac/aarch64"
+    "windows-x86" -> "Windows/x86"
     "windows-x64" -> "Windows/x86_64"
     "windows-aarch64" -> "Windows/aarch64"
     else -> null

@@ -124,6 +124,8 @@ object LibVlcNativesLoader {
         }
         val arch = when {
             osArch.contains("aarch64") || osArch.contains("arm64") -> "aarch64"
+            osArch.contains("x86_64") || osArch.contains("amd64") -> "x86_64"
+            osArch.contains("x86") || osArch.contains("i386") || osArch.contains("i686") -> "x86"
             else -> "x86_64"
         }
         return NativePlatform(os, arch)
