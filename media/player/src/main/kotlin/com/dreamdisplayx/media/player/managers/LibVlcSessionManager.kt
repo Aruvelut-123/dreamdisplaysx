@@ -26,6 +26,7 @@ import uk.co.caprica.vlcj.player.base.MediaPlayer as VlcjMediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.base.callback.AudioCallback
 import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
+import uk.co.caprica.vlcj.player.embedded.videosurface.CallbackVideoSurface
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormat
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormatCallback
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.RenderCallback
@@ -93,6 +94,9 @@ internal class LibVlcSessionManager(
 
     @Volatile
     private var mediaPlayer: EmbeddedMediaPlayer? = null
+
+    /** Callback video surface; kept as a field so the JNA callbacks it owns are never GC'd. */
+    private var videoSurface: CallbackVideoSurface? = null
 
     /** EOS monitor thread. */
     @Volatile
@@ -258,6 +262,7 @@ internal class LibVlcSessionManager(
             videoRenderCallback,
             true,
         )
+        this.videoSurface = videoSurface
         // Couldn't set video surface on a non-embedded player... but newEmbeddedMediaPlayer() returns EmbeddedMediaPlayer
         // Actually EmbeddedMediaPlayer HAS videoSurface() method
         mp.videoSurface().set(videoSurface)
@@ -268,7 +273,7 @@ internal class LibVlcSessionManager(
         this.audioPipeOut = audioPipeOut
         this.audioPipeIn = audioPipeIn
 
-        mp.audio().callback("S16N", AudioSink.SAMPLE_RATE, 2, audioCallback(mediaPlayer!!))
+        mp.audio().callback("S16N", AudioSink.SAMPLE_RATE, 2, audioCallback)
 
         // Event listener
         mp.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
@@ -627,7 +632,7 @@ internal class LibVlcSessionManager(
 
     // 鈹€鈹€ Audio callback 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
-    private fun audioCallback(player: EmbeddedMediaPlayer): AudioCallback = object : AudioCallback {
+    private val audioCallback: AudioCallback = object : AudioCallback {
         override fun play(mp: VlcjMediaPlayer, samples: com.sun.jna.Pointer, sampleCount: Int, pts: Long) {
             val out = audioPipeOut ?: return
             if (sampleCount <= 0) return
