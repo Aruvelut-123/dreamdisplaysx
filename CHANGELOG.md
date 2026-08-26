@@ -26,6 +26,15 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > factory alive and only `cleanup()` releases it, so the libvlc instance and its callbacks are
 > never collected mid-flight.
 
+> **libvlc single-player model (feat/libvlc)** — audio still vanished after a few seconds and
+> switching videos produced green/frame flicker then a hard stutter, because every restart rebuilt
+> the `EmbeddedMediaPlayer` and `CallbackVideoSurface` while libvlc's async teardown could still
+> touch the old JNA trampolines, and two players raced the same video surface. Now a single
+> `MediaPlayerFactory` + `EmbeddedMediaPlayer` + `CallbackVideoSurface` is created once for the
+> whole session-manager lifetime (the VideoPlayer single-instance model): switching videos just
+> plays a new media on the existing player, `stop()` only stops playback, and `cleanup()` releases
+> everything. All JNA callbacks are registered exactly once and held strongly until cleanup.
+
 > **libvlc stability fixes (feat/libvlc)** — fixed a class of crash-on-play failures
 > from the libvlc port: every session restart now tears down the previous
 > `EmbeddedMediaPlayer` + video surface first (previously each stall restart leaked
