@@ -17,6 +17,15 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > write end caused `AudioSink: Write end dead` — no audio was heard. Both objects are now held
 > as instance fields and reused across restarts.
 
+> **libvlc callback lifetime fix (feat/libvlc)** — playback still spammed
+> `JNA: callback object has been garbage collected` and stuttered after a while, because every
+> restart rebuilt the `MediaPlayerFactory` (a fresh libvlc instance), the `CallbackVideoSurface`
+> (fresh lock/unlock/display/setup/cleanup trampolines) and a new event listener, dropping the
+> strong references JNA needs (it only holds callbacks weakly). The factory, video surface and
+> event listener are now session-manager singletons reused across restarts; `stop()` keeps the
+> factory alive and only `cleanup()` releases it, so the libvlc instance and its callbacks are
+> never collected mid-flight.
+
 > **libvlc stability fixes (feat/libvlc)** — fixed a class of crash-on-play failures
 > from the libvlc port: every session restart now tears down the previous
 > `EmbeddedMediaPlayer` + video surface first (previously each stall restart leaked
