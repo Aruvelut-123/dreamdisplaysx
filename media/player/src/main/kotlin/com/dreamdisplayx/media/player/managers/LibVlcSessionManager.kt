@@ -215,6 +215,13 @@ internal class LibVlcSessionManager(
         val audioUrl = streamSet.currentAudio.url
         val fps = outputFps(streamSet.currentVideo.fps)
 
+        // Tear down any previous session first: every restart must create exactly one
+        // media player + video surface, otherwise stale libvlc callback threads pile up
+        // and race on the shared render-callback state.
+        stop()
+        videoFirstFrameLatch = CountDownLatch(1)
+        videoFirstFrameFired = false
+
         expectedW = w
         expectedH = h
         eosReached = false
@@ -372,15 +379,20 @@ internal class LibVlcSessionManager(
         runCatching { audioPipeOut?.close() }
         audioPipeOut = null
         audioPipeIn = null
+        // Reap the previous EOS monitor thread so restarts don't leak daemon threads.
+        eosThread?.interrupt()
+        joinSafely(eosThread)
+        eosThread = null
         surface.clear()
     }
 
     /**
-     * Cleans up all resources.
+     * Cleans up all resources. The GPU uploader cleanup touches GL objects, so it is
+     * deferred to the render thread; non-GL teardown ([stop]) runs inline.
      */
     fun cleanup() {
         stop()
-        surface.cleanup()
+        renderExecutor.execute { surface.cleanup() }
     }
 
     // 鈹€鈹€ Quality switch 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -491,7 +503,7 @@ internal class LibVlcSessionManager(
 
     // 鈹€鈹€ Video callbacks 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
-    private val videoFirstFrameLatch = CountDownLatch(1)
+    private var videoFirstFrameLatch = CountDownLatch(1)
     private var videoFirstFrameFired = false
     @Volatile private var sourceW = 0
     @Volatile private var sourceH = 0
@@ -513,83 +525,88 @@ internal class LibVlcSessionManager(
     }
 
     private val videoRenderCallback = RenderCallback { mp, buffers, format ->
-        if (eosReached || buffers.isEmpty()) return@RenderCallback
-        val w = sourceW
-        val h = sourceH
+        // Ignore stale callbacks from a previous (released) player. Every restart tears down the
+        // old session first, so only the currently-active player may write frames.
+        if (mp !== mediaPlayer || eosReached || buffers.isEmpty()) return@RenderCallback
+        val w = format.width
+        val h = format.height
         if (w <= 0 || h <= 0) return@RenderCallback
+        try {
+            val ySize = w * h
+            val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
+            val totalSize = ySize + 2 * uvSize
 
-        val ySize = w * h
-        val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
-        val totalSize = ySize + 2 * uvSize
+            // Pack I420 planes into scratch buffer
+            val i420 = i420Scratch?.takeIf { it.capacity() >= totalSize }?.also { it.clear() }
+                ?: ByteBuffer.allocateDirect(totalSize).also { i420Scratch = it }
+            if (buffers.size > 0) {
+                val y = buffers[0].duplicate(); y.rewind()
+                val n = minOf(ySize, y.remaining())
+                for (i in 0 until n) i420.put(y.get())
+                for (i in n until ySize) i420.put(16.toByte())
+            } else { for (i in 0 until ySize) i420.put(16.toByte()) }
+            if (buffers.size > 1) {
+                val u = buffers[1].duplicate(); u.rewind()
+                val n = minOf(uvSize, u.remaining())
+                for (i in 0 until n) i420.put(u.get())
+                for (i in n until uvSize) i420.put(128.toByte())
+            } else { for (i in 0 until uvSize) i420.put(128.toByte()) }
+            if (buffers.size > 2) {
+                val v = buffers[2].duplicate(); v.rewind()
+                val n = minOf(uvSize, v.remaining())
+                for (i in 0 until n) i420.put(v.get())
+                for (i in n until uvSize) i420.put(128.toByte())
+            } else { for (i in 0 until uvSize) i420.put(128.toByte()) }
+            i420.flip()
 
-        // Pack I420 planes into scratch buffer
-        val i420 = i420Scratch?.takeIf { it.capacity() >= totalSize }?.also { it.clear() }
-            ?: ByteBuffer.allocateDirect(totalSize).also { i420Scratch = it }
-        if (buffers.size > 0) {
-            val y = buffers[0].duplicate(); y.rewind()
-            val n = minOf(ySize, y.remaining())
-            for (i in 0 until n) i420.put(y.get())
-            for (i in n until ySize) i420.put(16.toByte())
-        } else { for (i in 0 until ySize) i420.put(16.toByte()) }
-        if (buffers.size > 1) {
-            val u = buffers[1].duplicate(); u.rewind()
-            val n = minOf(uvSize, u.remaining())
-            for (i in 0 until n) i420.put(u.get())
-            for (i in n until uvSize) i420.put(128.toByte())
-        } else { for (i in 0 until uvSize) i420.put(128.toByte()) }
-        if (buffers.size > 2) {
-            val v = buffers[2].duplicate(); v.rewind()
-            val n = minOf(uvSize, v.remaining())
-            for (i in 0 until n) i420.put(v.get())
-            for (i in n until uvSize) i420.put(128.toByte())
-        } else { for (i in 0 until uvSize) i420.put(128.toByte()) }
-        i420.flip()
+            // Allocate frame buffer
+            val ew = expectedW
+            val eh = expectedH
+            if (ew <= 0 || eh <= 0) return@RenderCallback
+            val frameSize = if (gpuYuvActive) {
+                val c = ((ew + 1) / 2) * ((eh + 1) / 2)
+                ew * eh + 2 * c
+            } else ew * eh * 3
 
-        // Allocate frame buffer
-        val ew = expectedW
-        val eh = expectedH
-        if (ew <= 0 || eh <= 0) return@RenderCallback
-        val frameSize = if (gpuYuvActive) {
-            val c = ((ew + 1) / 2) * ((eh + 1) / 2)
-            ew * eh + 2 * c
-        } else ew * eh * 3
+            var spare = surface.takeOrAllocate(frameSize)
+            spare.clear()
 
-        var spare = surface.takeOrAllocate(frameSize)
-        spare.clear()
-
-        if (w == ew && h == eh) {
-            if (gpuYuvActive) {
-                i420.rewind()
-                for (i in 0 until totalSize) spare.put(i420.get())
+            if (w == ew && h == eh) {
+                if (gpuYuvActive) {
+                    i420.rewind()
+                    for (i in 0 until totalSize) spare.put(i420.get())
+                } else {
+                    i420ToRgb24(i420, w, h, spare)
+                    applyBrightness(spare, frameSize, getBrightness())
+                }
             } else {
-                i420ToRgb24(i420, w, h, spare)
-                applyBrightness(spare, frameSize, getBrightness())
+                if (gpuYuvActive) {
+                    resizeI420(i420, w, h, spare, ew, eh)
+                } else {
+                    val scratch = rgbScratch?.takeIf { it.capacity() >= w * h * 3 }?.also { it.clear() }
+                        ?: ByteBuffer.allocateDirect(w * h * 3).also { rgbScratch = it }
+                    i420ToRgb24(i420, w, h, scratch)
+                    resizeRgb24(scratch, w, h, spare, ew, eh)
+                    applyBrightness(spare, frameSize, getBrightness())
+                }
             }
-        } else {
-            if (gpuYuvActive) {
-                resizeI420(i420, w, h, spare, ew, eh)
-            } else {
-                val scratch = rgbScratch?.takeIf { it.capacity() >= w * h * 3 }?.also { it.clear() }
-                    ?: ByteBuffer.allocateDirect(w * h * 3).also { rgbScratch = it }
-                i420ToRgb24(i420, w, h, scratch)
-                resizeRgb24(scratch, w, h, spare, ew, eh)
-                applyBrightness(spare, frameSize, getBrightness())
+            spare.flip()
+
+            if (parkFlag.get()) return@RenderCallback
+
+            // Popout sink
+            feedSink(spare, ew, eh)
+
+            // Publish to surface
+            surface.publish(spare, frameSize)
+
+            if (!videoFirstFrameFired) {
+                videoFirstFrameFired = true
+                videoFirstFrameLatch.countDown()
+                if (MediaPlayer.DEBUG) logger.debug("$debugLabel First frame $ew x $eh (libvlc).")
             }
-        }
-        spare.flip()
-
-        if (parkFlag.get()) return@RenderCallback
-
-        // Popout sink
-        feedSink(spare, ew, eh)
-
-        // Publish to surface
-        surface.publish(spare, frameSize)
-
-        if (!videoFirstFrameFired) {
-            videoFirstFrameFired = true
-            videoFirstFrameLatch.countDown()
-            if (MediaPlayer.DEBUG) logger.debug("$debugLabel First frame $ew x $eh (libvlc).")
+        } catch (t: Throwable) {
+            if (MediaPlayer.DEBUG) logger.warn("$debugLabel render callback: ${t.message}")
         }
     }
 

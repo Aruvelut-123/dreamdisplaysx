@@ -2,6 +2,18 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **libvlc stability fixes (feat/libvlc)** — fixed a class of crash-on-play failures
+> from the libvlc port: every session restart now tears down the previous
+> `EmbeddedMediaPlayer` + video surface first (previously each stall restart leaked
+> a fresh player, so multiple libvlc callback threads piled up and raced on shared
+> render state → `BufferOverflowException` / `IndexOutOfBoundsException` and a JVM
+> abort from GL cleanup on a non-render thread). The video render callback now reads
+> its dimensions from the per-callback `BufferFormat` instead of shared fields,
+> ignores stale callbacks from released players, and guards the frame path with a
+> try/catch so a bad frame can never escape into JNA. GPU uploader teardown is
+> deferred to the render thread, and the first-frame latch is re-armed per start so
+> restarts genuinely wait for the next frame.
+
 > **libvlc migration (feat/libvlc branch)** — the media pipeline is being ported
 > from JavaCPP/FFmpeg to **libvlc** (vlcj). One unified `EmbeddedMediaPlayer`
 > handles video + audio (no split channels); play/pause/seek/A-V sync are all
