@@ -222,8 +222,9 @@ jobs:
         env:
           # A Personal Access Token (classic or fine-grained with repo: contents write)
           # is required because the default GITHUB_TOKEN cannot trigger downstream
-          # workflows. Create a secret named NATIVES_TOKEN in the repo settings.
-          TOKEN: ${{ secrets.NATIVES_TOKEN }}
+          # workflows. The SQLITE_NATIVES_TOKEN secret was already set up for the
+          # legacy sqlite-natives.yml workflow.
+          TOKEN: ${{ secrets.SQLITE_NATIVES_TOKEN }}
           NATIVES_TAG: ${{ steps.gen_tag.outputs.tag }}
         if: env.TOKEN != ''
         run: |
