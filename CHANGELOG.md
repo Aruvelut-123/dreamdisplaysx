@@ -15,12 +15,18 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > `:input-slave` DASH audio stream is merged into the same player), removing the fragile Java PCM
 > pipe that caused audio to fade after a few seconds. Volume is still controlled through libvlc.
 >
-> **libvlc low-level start fixes (feat/libvlc)** — two first-start defects in the rewrite were
-> fixed: the shared libvlc instance now receives an explicit `--plugin-path` (libvlc does not read
-> the Java `VLC_PLUGIN_PATH` system property that vlcj used, so `libvlc_new` used to return null),
-> and every JNA callback signature was made nullable — libvlc passes a null `opaque`/`userData`
+> **libvlc low-level start fixes (feat/libvlc)** — first-start defects in the rewrite were
+> fixed: every JNA callback signature was made nullable — libvlc passes a null `opaque`/`userData`
 > context on the lock/unlock/display/event trampolines, and Kotlin's non-null checks crashed the
 > callback thread with a JNA NPE until the types matched reality.
+>
+> **libvlc software-decode video fix (feat/libvlc)** — the low-level video callbacks
+> (`libvlc_video_set_callbacks`, the vmem output) are incompatible with hardware-accelerated
+> decoding: libvlc decodes to a GPU texture and never invokes the lock callback, producing audio
+> but a black screen. Hardware decoding (`--avcodec-hw=any` / `:avcodec-hw=any`) is therefore
+> removed and AVCodec stays in software mode, so frames actually reach the triple-buffered pool.
+> The obsolete `--plugin-path` instance option (removed in libvlc 3.0.21, only emitted a warning)
+> was dropped too; libvlc finds its plugins via the default relative layout / `VLC_PLUGIN_PATH`.
 >
 > **libvlc reliability (feat/libvlc)** — removed the FFmpeg-era stall watchdog and
 > CDN-failover recovery from `MediaPlayer`; libvlc now owns buffering, A/V sync and
