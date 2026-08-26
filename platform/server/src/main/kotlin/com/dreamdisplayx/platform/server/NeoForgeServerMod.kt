@@ -12,6 +12,7 @@ import com.dreamdisplayx.platform.server.utils.net.NeoForgeProxyNetworking
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeV2Networking
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import com.dreamdisplayx.platform.server.utils.net.VanillaServerPacketHandler
+import com.dreamdisplayx.util.natives.NativesDownloader
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
 import net.minecraft.core.registries.Registries
 import net.minecraft.server.MinecraftServer
@@ -36,6 +37,11 @@ import org.slf4j.LoggerFactory
 class NeoForgeServer(modEventBus: IEventBus) {
     init {
         logger.info("Initializing server-side mod...")
+
+        // Fetch the SQLite native runtime before any storage open. The dedicated
+        // server only needs SQLite (no LibVLC) and only depends on core+util.
+        NativesDownloader.ensure(setOf(NativesDownloader.Component.SQLITE))
+
         configInstance = VanillaConfig(FMLPaths.CONFIGDIR.get().resolve("dreamdisplayx").toFile())
         VanillaServerState.config = configInstance
         VanillaServerState.serverVersion = serverVersion

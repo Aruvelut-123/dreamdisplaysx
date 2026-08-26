@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.player.util
 
+import com.dreamdisplayx.util.natives.NativesDownloader
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileOutputStream
@@ -7,15 +8,17 @@ import java.net.JarURLConnection
 import java.util.jar.JarFile
 
 /**
- * Loads and extracts the bundled LibVLC native libraries from the classpath
- * (`libvlc/native/<os>/<arch>/...`) to a temporary directory, sets the system
- * properties vlcj needs to discover them, and caches the libvlc version for
- * the F3 debug overlay.
+ * Loads the LibVLC native runtime and sets the system properties vlcj needs to
+ * discover it.
+ *
+ * The primary path is [NativesDownloader], which fetches LibVLC + SQLite into
+ * `./dreamdisplayx/natives/<os>/<arch>/` at startup (the jar no longer bundles
+ * any native binaries). A classpath extraction fallback (`libvlc/native/...`)
+ * is retained for local dev builds that may still place natives on the
+ * classpath.
  *
  * Survival-critical: vlcj 4.8.1's `vlcj-natives` artifact ships no native
- * binaries, so the CI "Build Natives" workflow collects the official LibVLC
- * runtime and the shadow jar bundles it under `libvlc/native/...` (like
- * sqlite-jdbc bundles its natives under `org/sqlite/native/...`).
+ * binaries, so without the runtime download there is nothing to load.
  */
 object LibVlcNativesLoader {
 

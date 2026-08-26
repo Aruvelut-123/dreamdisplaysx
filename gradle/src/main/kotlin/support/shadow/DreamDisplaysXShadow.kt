@@ -73,19 +73,11 @@ val dreamDisplaysShadedPackages = listOf(
     "org.sqlite",
 )
 
-/** Exclude `sqlite-jdbc` native binaries for unsupported platforms. */
+/** Exclude all sqlite-jdbc native binaries (they are downloaded at runtime
+ *  by [NativesDownloader]; the stock JNI symbols do not match the relocated
+ *  NativeDB class). */
 val dreamDisplaysSqliteNativeExcludes = listOf(
-    "org/sqlite/native/Linux-Android/**",
-    "org/sqlite/native/Linux-Musl/x86/**",
-    "org/sqlite/native/FreeBSD/**",
-    "org/sqlite/native/Linux/ppc64/**",
-    "org/sqlite/native/Linux/riscv64/**",
-    "org/sqlite/native/Linux/arm/**",
-    "org/sqlite/native/Linux/armv6/**",
-    "org/sqlite/native/Linux/armv7/**",
-    "org/sqlite/native/Linux/x86/**",
-    "org/sqlite/native/Windows/x86/**",
-    "org/sqlite/native/Windows/armv7/**",
+    "org/sqlite/native/**",
 )
 
 /** Includes the shared `:core`/`:api`/`:util`/`:media:*` modules and third-party dependencies in a fat loader jar. */

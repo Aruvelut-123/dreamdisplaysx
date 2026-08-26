@@ -15,6 +15,7 @@ import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
 import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 import com.dreamdisplayx.util.GeneralUtil
 import com.dreamdisplayx.util.OsInfo
+import com.dreamdisplayx.util.natives.NativesDownloader
 import net.minecraft.client.Minecraft
 //? if >=26 {
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -47,6 +48,10 @@ object Initializer {
             System.setProperty("java.awt.headless", "false")
         }
         ClientPacketManager.bind(dreamDisplaysMod)
+
+        // Fetch the native runtimes (LibVLC + SQLite) into ./dreamdisplayx/natives/
+        // before anything tries to use them. No-ops when already cached.
+        NativesDownloader.ensure()
 
         logger.info("Dream DisplaysX v${GeneralUtil.getPrettyModVersion()} (${GeneralUtil.getCommitId()}) starting...")
         ClientStartupManager.start()

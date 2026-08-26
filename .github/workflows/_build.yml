@@ -351,31 +351,6 @@ jobs:
           python scripts/inject_commit_hash.py "$COMMIT"
           grep 'dreamdisplayx.debug.commit' platform/resources/src/main/resources/assets/dreamdisplayx/lang/client/en_us.json
 
-      - name: Download native archives (sqlite + libvlc)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ needs.download-natives.outputs.natives_release }}"
-          mkdir -p native/build/ci-bundle/dreamdisplayx-natives
-          gh release download "$TAG" --repo "${{ github.repository }}" \
-            --dir native/build/ci-bundle --pattern '*.tar.gz'
-          # sqlite — handles both legacy native-*.tar.gz and unified sqlite-*.tar.gz
-          for f in native/build/ci-bundle/native-*.tar.gz native/build/ci-bundle/sqlite-*.tar.gz; do
-            [[ -f "$f" ]] && tar xzf "$f" -C native/build/ci-bundle/dreamdisplayx-natives
-          done
-          # libvlc — only present in unified release
-          mkdir -p native/build/ci-bundle/libvlc
-          for f in native/build/ci-bundle/libvlc-*.tar.gz; do
-            [[ -f "$f" ]] || continue
-            PLATFORM="$(basename "$f" | sed 's/libvlc-\(.*\)\.tar\.gz/\1/')"
-            mkdir -p "native/build/ci-bundle/libvlc/$PLATFORM"
-            tar xzf "$f" -C "native/build/ci-bundle/libvlc/$PLATFORM"
-          done
-          echo "=== sqlite natives ==="
-          find native/build/ci-bundle/dreamdisplayx-natives -maxdepth 3 -type f -print | sort
-          echo "=== libvlc natives ==="
-          find native/build/ci-bundle/libvlc -maxdepth 4 -type f -print | sort | head -40
-
       - name: Inject natives release tag into manifest
         env:
           NATIVES_TAG: ${{ needs.download-natives.outputs.natives_release }}

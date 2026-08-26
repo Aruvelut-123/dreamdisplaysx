@@ -9,6 +9,7 @@ dependencies {
     api(libs.kotlinxSerializationJson)
     api(libs.kotlinxIoCore)
     implementation(libs.okhttp)
+    implementation(libs.commonsCompress)
     compileOnly(libs.slf4jApi)
     compileOnly(libs.semver4j)
     testImplementation(libs.slf4jApi)
