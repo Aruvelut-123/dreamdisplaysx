@@ -11,6 +11,12 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > `:input-slave=<audioUrl>` instead of playing silently, and hardware-accelerated
 > decoding (`--avcodec-hw=any`) is enabled when the config requests it.
 
+> **libvlc callback GC fix (feat/libvlc)** — the audio callback and `CallbackVideoSurface`
+> were created fresh on every `start()` without any strong reference, so JNA garbage-collected
+> them. libvlc then spammed `JNA: callback object has been garbage collected` and the orphaned
+> write end caused `AudioSink: Write end dead` — no audio was heard. Both objects are now held
+> as instance fields and reused across restarts.
+
 > **libvlc stability fixes (feat/libvlc)** — fixed a class of crash-on-play failures
 > from the libvlc port: every session restart now tears down the previous
 > `EmbeddedMediaPlayer` + video surface first (previously each stall restart leaked
