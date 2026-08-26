@@ -48,18 +48,47 @@ object LibVlcNativesLoader {
     fun load(): Boolean {
         if (loaded) return true
 
-        val platform = detectPlatform()
-        val resourceRoot = "libvlc/native/${platform.os}/${platform.arch}/"
+        // 1. Ensure natives are downloaded (NativesDownloader handles the
+        //    download + system-property setup). This is the primary path.
+        NativesDownloader.ensure()
 
-        // Check if bundled natives exist on the classpath
-        val testResource = javaClass.getResource("/$resourceRoot")
-        if (testResource == null) {
+        // 2. Check whether the download path already has natives ready
+        val downloadDir = resolveDownloadDir()
+        if (downloadDir != null) {
+            System.setProperty("jna.library.path", downloadDir.absolutePath)
+            val pluginsDir = File(downloadDir, "plugins")
+            if (pluginsDir.isDirectory) {
+                System.setProperty("VLC_PLUGIN_PATH", pluginsDir.absolutePath)
+            }
+            loaded = true
+            logger.info("LibVLC natives loaded from download cache: {}", downloadDir)
+            cacheVersionFromExtracted()
+            return true
+        }
+
+        // 3. Fallback: extract bundled natives from classpath (for users who
+        //    run from a fat jar that already has them, or offline mode).
+        val platform = detectPlatform()
+        val os = platform.os
+        val arch = platform.arch
+        val resourceRoot = "libvlc/native/$os/$arch/"
+
+        // Probe a concrete file to detect whether bundled natives exist.
+        // jar: protocol does not reliably resolve directory entries, so we
+        // check for a known file name inside the platform directory.
+        val probeName = when (os) {
+            "Windows" -> "libvlc.dll"
+            "Mac"     -> "libvlc.dylib"
+            else      -> "libvlc.so"
+        }
+        val probeResource = javaClass.getResource("/$resourceRoot$probeName")
+        if (probeResource == null) {
             logger.warn(
-                "No bundled libvlc natives found at $resourceRoot; " +
+                "No bundled libvlc natives found at {} (probed {}); " +
                     "falling back to system-installed VLC. " +
                     "Run the 'Build Natives' workflow to bundle libvlc.",
+                resourceRoot, probeName,
             )
-            // Still try to get version from system VLC
             cacheVersionFromSystem()
             return false
         }
@@ -129,6 +158,25 @@ object LibVlcNativesLoader {
             else -> "x86_64"
         }
         return NativePlatform(os, arch)
+    }
+
+    /**
+     * Resolves the directory where [NativesDownloader] extracts the LibVLC
+     * runtime: `<gameDir>/dreamdisplayx/natives/<os>/<arch>/libvlc`.
+     * Returns null when the download has not produced the expected layout.
+     */
+    private fun resolveDownloadDir(): File? {
+        val platform = detectPlatform()
+        val dir = File(
+            "./dreamdisplayx/natives/${platform.os}/${platform.arch}/libvlc",
+        )
+        val probeName = when (platform.os) {
+            "Windows" -> "libvlc.dll"
+            "Mac"     -> "libvlc.dylib"
+            else      -> "libvlc.so"
+        }
+        if (File(dir, probeName).isFile) return dir
+        return null
     }
 
     /**

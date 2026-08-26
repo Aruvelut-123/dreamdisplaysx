@@ -376,6 +376,23 @@ jobs:
           echo "=== libvlc natives ==="
           find native/build/ci-bundle/libvlc -maxdepth 4 -type f -print | sort | head -40
 
+      - name: Inject natives release tag into manifest
+        env:
+          NATIVES_TAG: ${{ needs.download-natives.outputs.natives_release }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          tag = os.environ["NATIVES_TAG"].strip()
+          repo = os.environ.get("GITHUB_REPOSITORY", "")
+          path = "media/player/src/main/resources/dreamdisplayx/natives-manifest.json"
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
+          data["release_base"] = f"https://github.com/{repo}/releases/download/{tag}"
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2)
+          print("manifest release_base ->", data["release_base"])
+          PY
+
       - name: Build loaders with Gradle
         run: |
           ./gradlew \

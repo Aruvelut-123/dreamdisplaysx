@@ -218,19 +218,40 @@ jobs:
           draft: false
           prerelease: true
 
-      - name: Update tag marker file
+      - name: Update tag marker file and natives manifest
         env:
           # A Personal Access Token (classic or fine-grained with repo: contents write)
           # is required because the default GITHUB_TOKEN cannot trigger downstream
           # workflows. Create a secret named NATIVES_TOKEN in the repo settings.
           TOKEN: ${{ secrets.NATIVES_TOKEN }}
+          NATIVES_TAG: ${{ steps.gen_tag.outputs.tag }}
         if: env.TOKEN != ''
         run: |
           git clone "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" repo
           cd repo
-          echo "${{ steps.gen_tag.outputs.tag }}" > .github/natives-tag.txt
-          git add .github/natives-tag.txt
+          # Checkout the branch that triggered this workflow_dispatch so that
+          # the manifest file (which lives on feat/libvlc, not main) is present.
+          git checkout "${{ github.ref_name }}"
+          # Update the tag marker file
+          echo "$NATIVES_TAG" > .github/natives-tag.txt
+          # Update the manifest JSON with the specific release tag URL
+          MANIFEST="media/player/src/main/resources/dreamdisplayx/natives-manifest.json"
+          if [[ -f "$MANIFEST" ]]; then
+            python3 - "$MANIFEST" "$NATIVES_TAG" "${{ github.repository }}" <<'PY'
+          import json, sys
+          path, tag, repo = sys.argv[1], sys.argv[2], sys.argv[3]
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
+          data["release_base"] = f"https://github.com/{repo}/releases/download/{tag}"
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2)
+          print("manifest release_base ->", data["release_base"])
+          PY
+          else
+            echo "Manifest file not found at $MANIFEST; skipping manifest update."
+          fi
+          git add .github/natives-tag.txt "$MANIFEST" 2>/dev/null || git add .github/natives-tag.txt
           git -c user.name="natives-bot" \
               -c user.email="actions@github.com" \
-              commit -m "chore: update natives tag to ${{ steps.gen_tag.outputs.tag }}"
+              commit -m "chore: update natives tag and manifest to $NATIVES_TAG"
           git push
