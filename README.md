@@ -150,7 +150,9 @@ cd dreamdisplaysx
 ```
 
 The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; the active version is
-selected in `versions/active.txt`. Native FFmpeg libraries are bundled via Maven (`org.bytedeco:ffmpeg-platform`) — no runtime download needed.
+selected in `versions/active.txt`. On the `feat/libvlc` branch, the media pipeline is being ported from JavaCPP/FFmpeg to
+**libvlc** (vlcj). The LibVLC runtime is built from the official VideoLAN source by the CI "Build Natives" workflow
+(`.github/workflows/natives.yml`) and bundled into the fat jars.
 
 ## Disclaimer
 
@@ -159,3 +161,4 @@ Dream DisplaysX is not affiliated with original Dream Display nor Mojang Studio.
 ## Credits
 
 - **[Dream Displays](https://github.com/arnodoelinger/dreamdisplays)** — the original upstream project that this fork is based on.
+- **[VideoPlayer-Library](https://github.com/squi2rel/VideoPlayer-Library)** — reference for libvlc native build and packaging (used during CI workflow development).
