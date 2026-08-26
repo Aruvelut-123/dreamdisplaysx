@@ -71,12 +71,13 @@ object LibVlc {
             val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--quiet",
                 "--no-keyboard-events", "--no-mouse-events", "--network-caching=300",
                 "--file-caching=300", "--live-caching=600", "--audio-filter=scaletempo")
-            // Explicit plugin path is REQUIRED for the low-level binding, otherwise libvlc cannot
-            // find its modules and libvlc_new returns null.
-            System.getProperty("VLC_PLUGIN_PATH")?.takeIf { it.isNotBlank() }?.let { plugins ->
-                opts.add("--plugin-path=$plugins")
-            }
-            if (LibVlc.useHwAccel) opts.add("--avcodec-hw=any")
+            // NOTE: low-level video callbacks (libvlc_video_set_callbacks → vmem) are incompatible
+            // with hardware-accelerated decoding: libvlc decodes to a GPU texture and never calls
+            // the lock callback, which shows audio but no video. VideoPlayer's `--avcodec-hw=any`
+            // only works because it falls back to software decoding on most platforms; on a GPU
+            // where hw succeeds the video vanishes, so we force software AVCodec here.
+            // (libvlc finds its plugins automatically via VLC_PLUGIN_PATH / relative layout;
+            //  `--plugin-path` was removed in libvlc 3.0.21 and only produces a warning.)
             instance = libcCreateInstance(opts)
             loadError = null
             return true

@@ -264,13 +264,14 @@ internal class LibVlcSessionManager(
         firstFrameFired = false
         firstFrameLatch = CountDownLatch(1)
 
-        // Build the media options (UA + referer + input-slave for DASH audio + hw accel).
+        // Build the media options (UA + referer + input-slave for DASH audio).
+        // NOTE: no `:avcodec-hw=any` — hardware decoding never reaches the low-level lock/unlock
+        // video callbacks (vmem), so the video track plays audio-only. AVCodec stays software.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
         val audioUrl = streamSet.currentAudio.url
         if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
             mediaOptions.add(":input-slave=$audioUrl")
         }
-        if (useHwAccel) mediaOptions.add(":avcodec-hw=any")
 
         submit {
             val mp = player()
