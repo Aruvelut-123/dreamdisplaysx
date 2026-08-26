@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "release_base": "https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest/download",
+  "release_base": "https://github.com/Aruvelut-123/dreamdisplaysx/releases/download/natives-7f303c9-1787719531",
   "libvlc": {
     "linux-x64": "libvlc-linux-x64.tar.gz",
     "linux-aarch64": "libvlc-linux-aarch64.tar.gz",
