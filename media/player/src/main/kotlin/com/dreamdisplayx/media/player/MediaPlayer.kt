@@ -14,7 +14,6 @@ import com.dreamdisplayx.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplayx.media.player.events.PlayerEvents
 import com.dreamdisplayx.media.player.managers.LibVlcSessionManager
 import com.dreamdisplayx.media.player.managers.StatsReporter
-import com.dreamdisplayx.media.player.managers.StreamWatchdog
 import com.dreamdisplayx.media.player.managers.WarmTrack
 import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.policy.RetryPolicy
@@ -82,28 +81,8 @@ class MediaPlayer(
         /** Max fetch retries. */
         private const val MAX_FETCH_RETRIES = 3
 
-        /**
-         * In-place audio-half restarts allowed per session before a dead live audio escalates to a full
-         * stall recovery (see [handleAudioFailure]).
-         */
-        private const val MAX_AUDIO_RESTARTS = 3
-
-        private const val AUDIO_RESTART_BUDGET_RESET_NS = 120_000_000_000L
-
         /** How long the "applying quality" hint may stay up before it expires on its own. */
         private const val QUALITY_STATUS_MAX_NS = 30_000_000_000L
-
-        /**
-         * A second stall within this window of the previous one means a plain restart isn't helping (most likely
-         * a stale / throttled resolved URL rather than a transient hiccup), so escalate to a fresh re-resolve.
-         */
-        private const val REPEATED_STALL_WINDOW_NS = 90_000_000_000L
-
-        /**
-         * Audio and video are two independent `FFmpeg` processes decoding the same source, so their EOS timing can drift;
-         * this guards against a premature end-of-stream near the tail.
-         */
-        private const val AUDIO_EOS_NEAR_END_GUARD_NS = 3_000_000_000L
 
         /**
          * When the user drags the seek bar past the very end of the video, clamp the target to this
@@ -111,12 +90,6 @@ class MediaPlayer(
          * EOF) and the player stalls or restarts from the beginning instead of playing the tail.
          */
         private const val SEEK_END_GUARD_NANOS = 500_000_000L
-
-        /**
-         * When the picture falls this far behind the audio clock more than this many times, the
-         * audio decoder's CDN is presumably bad — switch the audio stream to its next backup CDN.
-         */
-        private const val AUDIO_DRIFT_RESYNC_THRESHOLD = 3
 
         /**
          * On reappearance, cached replay resumes this far before the saved position. Default 0 = zero rewind: the saved position itself is the resume point.
@@ -209,44 +182,11 @@ class MediaPlayer(
         isLive = { liveStream },
     )
 
-    /** Timestamp of last stall recovery (0 = none yet). */
-    @Volatile
-    private var lastStallNanos = 0L
-
-    /** Current CDN backup index for the video stream (-1 = primary URL, 0 = first backup, etc.). */
-    @Volatile
-    private var cdnVideoIndex = -1
-
-    /** Current CDN backup index for the audio stream (-1 = primary URL, 0 = first backup, etc.). */
-    @Volatile
-    private var cdnAudioIndex = -1
-
-    /**
-     * How many times the prebuffer has dropped a frame because the video is > 5 s behind the audio
-     * clock. When this reaches [AUDIO_DRIFT_RESYNC_THRESHOLD] the audio stream is switched to the
-     * next backup CDN (if available). Reset on every successful stream start.
-     */
-    private var audioDriftResyncCount = 0
-
-    /** In-place audio restarts used by the current session (see [handleAudioFailure]); reset per session. */
-    private val audioRestartAttempts = AtomicInteger(0)
-
-    @Volatile
-    private var lastAudioFailureNanos = 0L
-
     /** Guards [dispatchInitialize] so at most one resolve is ever in flight for this player. */
     private val initializing = AtomicBoolean(false)
 
     /** Set when a resolve was asked for while one was already running; runs exactly once afterward. */
     private val initQueued = AtomicBoolean(false)
-
-    /** Watchdog. */
-    private val watchdog = StreamWatchdog(
-        debugLabel = debugLabel,
-        isSessionActive = { sessionManager.isPlaying && !sessionManager.isParked() && !terminated.get() },
-        getLastFrameNanos = { sessionManager.lastFrameNanos.get() },
-        onStall = { handleSessionStall("no frames") },
-    )
 
     /** Session manager. */
     private val sessionManager = LibVlcSessionManager(
@@ -259,11 +199,11 @@ class MediaPlayer(
         getStretchMode = { stretchMode },
         onStreamEnd = ::handleStreamEnd,
         onQualitySwitchAborted = { appliedAnyway -> handleQualitySwitchAborted(appliedAnyway) },
-        onAudioFailure = { stderr -> handleAudioFailure(stderr) },
         onAudioTrackSwitchSettled = { audioTrackSwitching.set(false) },
         renderExecutor = env.renderExecutor,
         uploaderFactory = env.uploaderFactory,
         gpuYuvActive = env.config.gpuYuvActive,
+        useHwAccel = env.config.useHwAccel,
         audioStage = audioStage,
     )
 
@@ -326,15 +266,13 @@ class MediaPlayer(
      * No-op (and the caller should fall back to a full stop) when the session is not parkable.
      */
     fun park() = safeExecute {
-        watchdog.stop()
-        if (!sessionManager.suspend()) watchdog.start() // Not parkable after all -> keep playing normally
+        sessionManager.suspend()
     }
 
     /** Resumes a [park]ed player from its frozen position. */
     fun unpark() = safeExecute {
         if (sessionManager.isParked()) {
             sessionManager.resume()
-            watchdog.start()
         }
     }
 
@@ -687,7 +625,7 @@ class MediaPlayer(
     }
 
     /**
-     * Starts session manager and watchdog (control executor thread only).
+     * Starts session manager (control executor thread only).
      */
     private fun startStreams(streamSet: ActiveStreams, offsetNanos: Long) {
         if (terminated.get()) return
@@ -713,8 +651,6 @@ class MediaPlayer(
         // A full restart decodes at the current texture's dimensions, so any staged quality handoff
         // (which expects new dimensions) would never match and must be dropped to avoid a frozen frame.
         host.cancelQualityHandoff()
-        audioRestartAttempts.set(0)
-        lastAudioFailureNanos = 0L
         // CDN speed probe: test all candidate CDN hosts and reorder streams so the fastest
         // edge is used first, reducing the chance of stall-driven failover during playback.
         // Bandwidth measurement (256 KB Range) is used for Bilibili mirror URLs; the fallback
@@ -751,7 +687,6 @@ class MediaPlayer(
         }
         if (sessionManager.isPlaying) {
             state.set(PlaybackState.PLAYING)
-            watchdog.start()
             refreshWarmAudioTracks()
             // Settles the live quality path, which applies by restarting the whole session.
             qualitySwitching.set(false)
@@ -783,7 +718,6 @@ class MediaPlayer(
             return false
         }
         state.set(PlaybackState.PLAYING)
-        watchdog.start()
         logger.debug("$debugLabel Attached live after replay at ${"%.1f".format(liveOffsetNanos / 1_000_000.0)}ms.")
         return true
     }
@@ -800,10 +734,9 @@ class MediaPlayer(
     }
 
     /**
-     * Stops watchdog and session.
+     * Stops the session.
      */
     private fun stopSession() {
-        watchdog.stop()
         sessionManager.stop()
     }
 
@@ -869,154 +802,6 @@ class MediaPlayer(
     }
 
     /**
-     * Handles audio end-of-stream: defers if near VOD end, restarts audio on live, escalates to stall.
-     */
-    private fun handleAudioFailure(stderr: String) {
-        // With JavaCPP in-process decoder, the stderr from the process is empty.
-        // A source with no audio track is detected by the decoder failing to produce samples.
-        // The markSourceSilent path is no longer used (it was specific to FFmpeg CLI stderr output).
-        if (!liveStream && durationHintNanos > 0L && durationHintNanos - clock.currentTime() <= AUDIO_EOS_NEAR_END_GUARD_NS) {
-            logger.debug("$debugLabel Audio pipe ended near VOD end (pos=${clock.currentTime()}, dur=$durationHintNanos); deferring to video EOS.")
-            return
-        }
-        if (liveStream && sessionManager.audioSourceGone()) {
-            handleSessionStall("live audio source stopped serving")
-            return
-        }
-        val now = System.nanoTime()
-        if (lastAudioFailureNanos != 0L && now - lastAudioFailureNanos > AUDIO_RESTART_BUDGET_RESET_NS) {
-            audioRestartAttempts.set(0)
-        }
-        lastAudioFailureNanos = now
-        val attempt = audioRestartAttempts.incrementAndGet()
-        if (liveStream && sessionManager.isPlaying && attempt <= MAX_AUDIO_RESTARTS) {
-            logger.warn(
-                "$debugLabel Live audio ended (${MediaUtil.truncate(stderr)}); " +
-                        "restarting audio only ($attempt/$MAX_AUDIO_RESTARTS), video keeps playing."
-            )
-            RETRY_SCHEDULER.schedule({
-                safeExecute {
-                    val ss = streams
-                    if (terminated.get() || ss == null) return@safeExecute
-                    if (!sessionManager.restartAudio(ss, 0L)) {
-                        handleSessionStall("audio restart not possible in current session state")
-                    }
-                }
-            }, attempt * 1_000L, TimeUnit.MILLISECONDS)
-            return
-        }
-        handleSessionStall("audio ended: ${MediaUtil.truncate(stderr)}.")
-    }
-
-    /**
-     * Recovers from stalled session: first stall retries same streams, second escalates to CDN backup URLs,
-     * then to re-resolve (live immediately escalates to CDN backups).
-     */
-    private fun handleSessionStall(reason: String) {
-        if (terminated.get()) return
-        val ss = streams ?: return
-        val now = System.nanoTime()
-        val repeated = lastStallNanos != 0L && now - lastStallNanos < REPEATED_STALL_WINDOW_NS
-        lastStallNanos = now
-        if (repeated || liveStream) {
-            // Try the next CDN backup URL first (Bilibili and live streams usually expose several).
-            // Only when every CDN has failed do we fall through to a full re-resolve.
-            if (tryNextCdn(ss)) return
-            val kind = if (liveStream) "Live stall" else "Repeated stall"
-            logger.warn("$debugLabel $kind ($reason); invalidating cached URLs and re-resolving.")
-            env.cacheInvalidator.invalidate(youtubeUrl)
-            forgetResolvedStreamUrls()
-            primedStartPositionNanos.set(if (liveStream) 0L else clock.currentTime())
-            state.set(PlaybackState.RESTARTING)
-            dispatchInitialize()
-        } else {
-            logger.warn("$debugLabel Stream stalled ($reason); restarting.")
-            safeExecute {
-                val pos = if (liveStream) 0L else clock.currentTime()
-                // Restart in place when possible: the picture holds its last frame while the new
-                // session connects, instead of blanking through a blocking teardown.
-                if (sessionManager.beginSeek(ss, pos, lastQuality)) {
-                    // The watchdog stops itself when it reports a stall, and this path never goes
-                    // through startStreams, so nothing else would ever watch this session again.
-                    watchdog.start()
-                } else {
-                    startStreams(ss, pos)
-                }
-            }
-        }
-    }
-
-    /**
-     * Switches to the next backup CDN URL for the stalled video (then audio) stream, if any remain.
-     * Returns true when a switch was made (playback restarted with the new URL).
-     */
-    private fun tryNextCdn(ss: ActiveStreams): Boolean {
-        val video = ss.currentVideo
-        val videoBackups = video.backupUrls
-        if (cdnVideoIndex < videoBackups.size - 1) {
-            cdnVideoIndex++
-            val newUrl = videoBackups[cdnVideoIndex]
-            logger.warn("$debugLabel CDN failover: switching video stream to backup CDN #${cdnVideoIndex + 1}.")
-            streams = ss.copy(currentVideo = video.copy(url = newUrl))
-            safeExecute {
-                val pos = clock.currentTime()
-                if (sessionManager.beginSeek(ss.copy(currentVideo = video.copy(url = newUrl)), pos, lastQuality)) {
-                    watchdog.start()
-                } else {
-                    startStreams(ss.copy(currentVideo = video.copy(url = newUrl)), pos)
-                }
-            }
-            return true
-        }
-        val audio = ss.currentAudio
-        val audioBackups = audio.backupUrls
-        if (cdnAudioIndex < audioBackups.size - 1) {
-            cdnAudioIndex++
-            val newUrl = audioBackups[cdnAudioIndex]
-            logger.warn("$debugLabel CDN failover: switching audio stream to backup CDN #${cdnAudioIndex + 1}.")
-            streams = ss.copy(currentAudio = audio.copy(url = newUrl))
-            safeExecute {
-                val pos = clock.currentTime()
-                if (sessionManager.beginSeek(ss.copy(currentAudio = audio.copy(url = newUrl)), pos, lastQuality)) {
-                    watchdog.start()
-                } else {
-                    startStreams(ss.copy(currentAudio = audio.copy(url = newUrl)), pos)
-                }
-            }
-            return true
-        }
-        return false
-    }
-
-    /**
-     * Called from the prebuffer consumer thread when a frame is dropped because the audio clock
-     * is > 5 s ahead of the video PTS (genuine A/V drift, not a normal pacing skip). Counts
-     * consecutive resyncs and switches the audio stream to the next backup CDN once the threshold
-     * is reached. Counter is reset on every successful stream start.
-     */
-    internal fun notifyAudioDriftResync() {
-        if (++audioDriftResyncCount < AUDIO_DRIFT_RESYNC_THRESHOLD) return
-        audioDriftResyncCount = 0
-        safeExecute {
-            val ss = streams ?: return@safeExecute
-            val audio = ss.currentAudio
-            val audioBackups = audio.backupUrls
-            if (cdnAudioIndex < audioBackups.size - 1) {
-                cdnAudioIndex++
-                val newUrl = audioBackups[cdnAudioIndex]
-                logger.warn("$debugLabel A/V drift: switching audio to backup CDN #${cdnAudioIndex + 1}.")
-                streams = ss.copy(currentAudio = audio.copy(url = newUrl))
-                val pos = clock.currentTime()
-                if (sessionManager.beginSeek(ss.copy(currentAudio = audio.copy(url = newUrl)), pos, lastQuality)) {
-                    watchdog.start()
-                } else {
-                    startStreams(ss.copy(currentAudio = audio.copy(url = newUrl)), pos)
-                }
-            }
-        }
-    }
-
-    /**
      * Invalidates SSRF guard memo of stream URL redirects (for re-resolve).
      */
     private fun forgetResolvedStreamUrls() {
@@ -1032,7 +817,6 @@ class MediaPlayer(
         if (isPausedWarm()) {
             sessionManager.resume()
             state.set(PlaybackState.PLAYING)
-            watchdog.start()
             return
         }
         if (sessionManager.isPlaying) return
@@ -1063,7 +847,6 @@ class MediaPlayer(
         pauseRequested.set(true)
         if (!sessionManager.isPlaying) return
         if (!liveStream) {
-            watchdog.stop()
             if (sessionManager.suspend(allowExternalProcess = true, retainBuffered = true)) {
                 state.set(PlaybackState.PAUSED)
                 return

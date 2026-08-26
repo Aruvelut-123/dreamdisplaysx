@@ -66,9 +66,6 @@ internal class LibVlcSessionManager(
     /** Invoked when quality switch fails before promotion. */
     private val onQualitySwitchAborted: (appliedAnyway: Boolean) -> Unit = {},
 
-    /** Invoked when live audio process ends unexpectedly. */
-    private val onAudioFailure: (stderr: String) -> Unit = {},
-
     /** Invoked once an in-flight audio track switch settles. */
     private val onAudioTrackSwitchSettled: () -> Unit = {},
 
@@ -80,6 +77,9 @@ internal class LibVlcSessionManager(
 
     /** Whether the GPU-side planar (I420) render path is active. */
     private val gpuYuvActive: Boolean,
+
+    /** Whether hardware-accelerated decoding is enabled by config. */
+    private val useHwAccel: Boolean,
 
     /** Per-display acoustics DSP stage. */
     audioStage: AudioDspStage? = null,
@@ -212,7 +212,6 @@ internal class LibVlcSessionManager(
     ) {
         val (w, h) = targetDims(streamSet, lastQuality)
         val safeUrl = MediaHostGuard.resolveSafeUrl(streamSet.currentVideo.url)
-        val audioUrl = streamSet.currentAudio.url
         val fps = outputFps(streamSet.currentVideo.fps)
 
         // Tear down any previous session first: every restart must create exactly one
@@ -239,6 +238,10 @@ internal class LibVlcSessionManager(
             "--file-caching=300",
             "--live-caching=600",
         )
+        if (useHwAccel) {
+            // Enable hardware-accelerated decoding when config requests it (same as VideoPlayer).
+            args.add("--avcodec-hw=any")
+        }
 
         // Ensure libvlc natives are loaded before creating the factory
         LibVlcNativesLoader.load()
@@ -289,9 +292,19 @@ internal class LibVlcSessionManager(
             }
         })
 
-        // Start playback (media-level options carry UA + platform referer)
+        // Start playback (media-level options carry UA + platform referer).
+        // Bilibili/YouTube DASH expose video and audio as separate URLs; libvlc attaches the
+        // audio stream via `:input-slave=<url>` (same approach as VideoPlayer), otherwise the
+        // audio callback never fires and there is silence.
+        val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
+        val audioUrl = streamSet.currentAudio.url
+        if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
+            mediaOptions.add(":input-slave=$audioUrl")
+        }
+        if (useHwAccel) mediaOptions.add(":avcodec-hw=any")
+
         isPlaying = true
-        mp.media().play(safeUrl, *LibVlcMediaOptions.forUrl(safeUrl))
+        mp.media().play(safeUrl, *mediaOptions.toTypedArray())
 
         // Wait for first frame
         try {
@@ -463,8 +476,6 @@ internal class LibVlcSessionManager(
 
     // 鈹€鈹€ Audio helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
-    fun audioSourceGone(): Boolean = false
-
     @Suppress("UNUSED_PARAMETER")
     fun restartAudio(streamSet: ActiveStreams, offsetNanos: Long): Boolean = false
 
@@ -599,6 +610,10 @@ internal class LibVlcSessionManager(
 
             // Publish to surface
             surface.publish(spare, frameSize)
+
+            // Stamp the watchdog's last-frame timestamp so it sees live frames and never
+            // mistakes a healthy session for a stall.
+            noFrames.set(System.nanoTime())
 
             if (!videoFirstFrameFired) {
                 videoFirstFrameFired = true
