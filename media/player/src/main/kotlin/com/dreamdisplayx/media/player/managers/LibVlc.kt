@@ -95,6 +95,9 @@ object LibVlc {
         if (msg == null) "" else msg.getString(0)
     } catch (_: RuntimeException) { "" }
 
+    /** Sentinel picture token returned by a lock callback when the frame must be dropped. */
+    fun dropToken(): Pointer = Pointer.createConstant(0x7FFFFFFFL)
+
     // ── Media / instance helpers ─────────────────────────────────────────────
 
     /** Creates a libvlc instance with the given options. */

@@ -2,208 +2,83 @@
 
 package com.dreamdisplayx.media.player.process
 
-import com.dreamdisplayx.api.security.policy.MediaHosts
+import com.dreamdisplayx.media.player.managers.LibVlc
 import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
+import com.sun.jna.Native
+import com.sun.jna.Pointer
 import org.slf4j.LoggerFactory
-import uk.co.caprica.vlcj.factory.MediaPlayerFactory
-import uk.co.caprica.vlcj.player.base.MediaPlayer
-import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
-import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
-import uk.co.caprica.vlcj.player.embedded.videosurface.CallbackVideoSurface
-import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormat
-import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormatCallback
-import uk.co.caprica.vlcj.player.embedded.videosurface.callback.RenderCallback
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 
 /**
- * In-process frame extraction for scrub-preview thumbnails 鈥?replaces [JavaCppFrameExtractor].
- * Opens the media URL via libvlc, seeks to a timestamp, decodes one video frame through
- * libvlc's video callback, and encodes it as a JPEG byte array.
+ * In-process frame extraction for scrub-preview thumbnails, driven by the low-level libvlc binding
+ * (no vlcj). Opens the media URL on a temporary media player, seeks to a timestamp, decodes one
+ * frame through the low-level video callbacks, and encodes it as a JPEG byte array.
+ *
+ * This replaces the old vlcj-based extractor whose `CallbackVideoSurface` was rebuilt per sample
+ * without a strong reference, so JNA garbage-collected the trampolines mid-playback and spammed
+ * `JNA: callback object has been garbage collected` / `Invalid memory access`.
  */
 object LibVlcFrameExtractor {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcFrameExtractor")
 
-    /** libvlc options for headless frame extraction. */
-    private val SHARED_LIBVLC_ARGS = listOf(
-        "--no-video-title-show",
-        "--no-snapshot-preview",
-        "--quiet",
-        "--no-keyboard-events",
-        "--no-mouse-events",
-        "--network-caching=500",
-        "--file-caching=500",
-        "--no-audio",
-        "--intf=dummy",
-    )
+    private const val SETUP_TIMEOUT_MS = 15_000L
 
     /**
      * Extracts a single frame at [offsetNanos] from [url], scales it to [w]x[h] (maintaining aspect),
      * and returns JPEG bytes, or null on any failure.
      */
     fun extractJpeg(url: String, offsetNanos: Long, w: Int, h: Int): ByteArray? {
-        val args = mutableListOf<String>()
-        args.addAll(SHARED_LIBVLC_ARGS)
-
-        // Ensure libvlc natives are loaded
-        com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
-
-        val factory = try {
-            MediaPlayerFactory(args)
-        } catch (e: Exception) {
-            logger.warn("Failed to create MediaPlayerFactory for frame extraction: ${e.message}")
+        if (!LibVlc.ensureLoaded()) {
+            logger.warn("LibVLC not available for frame extraction.")
             return null
         }
+        val lib = LibVlc.lib
+        val mp = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
+            ?: run { logger.warn("libvlc_media_player_new failed: ${LibVlc.errmsg()}"); return null }
 
-        return try {
-            val mp = factory.mediaPlayers().newEmbeddedMediaPlayer()
+        val grab = FrameGrab()
+        try {
+            // Register the low-level format + video callbacks once on this short-lived player.
+            lib.libvlc_video_set_format_callbacks(mp, grab.formatCb, grab.cleanupCb)
+            lib.libvlc_video_set_callbacks(mp, grab.lockCb, grab.unlockCb, grab.displayCb, null)
 
-            // Latch: set when the first frame arrives
-            val frameLatch = CountDownLatch(1)
-            var frameBuffer: ByteBuffer? = null
-            var frameW = 0
-            var frameH = 0
+            val media = LibVlc.createMedia(url, LibVlcMediaOptions.forUrl(url))
+            lib.libvlc_media_player_set_media(mp, media)
+            lib.libvlc_media_release(media)
+            lib.libvlc_media_player_play(mp)
 
-            // Video callbacks: use I420 chroma
-            val bfc = object : BufferFormatCallback {
-                override fun getBufferFormat(width: Int, height: Int): BufferFormat {
-                    frameW = width
-                    frameH = height
-                    return BufferFormat("I420", width, height,
-                        intArrayOf(width, (width + 1) / 2, (width + 1) / 2),
-                        intArrayOf(height, (height + 1) / 2, (height + 1) / 2)
-                    )
-                }
-                override fun allocatedBuffers(buffers: Array<ByteBuffer>) {}
+            // Wait for the first decoded frame (this proves the format + lock/display callbacks ran).
+            if (!grab.setupLatch.await(SETUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                logger.warn("Frame extraction: no video setup for $url@$offsetNanos (err=${LibVlc.errmsg()})")
+                return null
             }
-
-            val rc = RenderCallback { _: MediaPlayer, buffers: Array<ByteBuffer>, _: BufferFormat ->
-                // Only grab the first frame
-                if (frameBuffer != null) return@RenderCallback
-                if (buffers.isEmpty()) return@RenderCallback
-
-                // Pack I420 planes into a single buffer
-                val ySize = frameW * frameH
-                val uvSize = ((frameW + 1) / 2) * ((frameH + 1) / 2)
-                val totalSize = ySize + 2 * uvSize
-                val buf = ByteBuffer.allocateDirect(totalSize)
-                if (buffers.size > 0) {
-                    val y = buffers[0].duplicate(); y.rewind()
-                    val yLimit = minOf(ySize, y.remaining())
-                    for (i in 0 until yLimit) buf.put(y.get())
-                    for (i in yLimit until ySize) buf.put(16.toByte())
-                }
-                if (buffers.size > 1) {
-                    val u = buffers[1].duplicate(); u.rewind()
-                    val uLimit = minOf(uvSize, u.remaining())
-                    for (i in 0 until uLimit) buf.put(u.get())
-                    for (i in uLimit until uvSize) buf.put(128.toByte())
-                } else {
-                    for (i in 0 until uvSize) buf.put(128.toByte())
-                }
-                if (buffers.size > 2) {
-                    val v = buffers[2].duplicate(); v.rewind()
-                    val vLimit = minOf(uvSize, v.remaining())
-                    for (i in 0 until vLimit) buf.put(v.get())
-                    for (i in vLimit until uvSize) buf.put(128.toByte())
-                } else {
-                    for (i in 0 until uvSize) buf.put(128.toByte())
-                }
-                buf.flip()
-                frameBuffer = buf
-                frameLatch.countDown()
-            }
-
-            val videoSurface = factory.videoSurfaces().newVideoSurface(bfc, rc, true)
-            mp.videoSurface().set(videoSurface)
-
-            // Listen for errors
-            mp.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
-                override fun error(mp: MediaPlayer) {
-                    frameLatch.countDown()
-                }
-                override fun finished(mp: MediaPlayer) {
-                    frameLatch.countDown()
-                }
-            })
-
-            // Start playback
-            mp.media().play(url, *LibVlcMediaOptions.forUrl(url))
-
-            // Wait for the first frame (or timeout)
-            if (!frameLatch.await(15, TimeUnit.SECONDS)) {
-                logger.warn("Frame extraction timeout for $url@$offsetNanos")
-                mp.controls().stop()
-                mp.release()
+            if (!grab.firstFrameLatch.await(SETUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                logger.warn("Frame extraction: no first frame for $url@$offsetNanos (err=${LibVlc.errmsg()})")
                 return null
             }
 
-            // Seek to the target offset
+            // Seek to the requested offset and wait for a fresh frame.
             if (offsetNanos > 0) {
-                frameLatch.countDown() // reset... actually create a new one
-                mp.controls().setTime(offsetNanos / 1_000_000L)
-                // Wait for a frame at the new position
                 val seekLatch = CountDownLatch(1)
-                val seekRc = RenderCallback { _, buffers, _ ->
-                    if (buffers.isNotEmpty()) {
-                        val ySize = frameW * frameH
-                        val uvSize = ((frameW + 1) / 2) * ((frameH + 1) / 2)
-                        val totalSize = ySize + 2 * uvSize
-                        val buf = ByteBuffer.allocateDirect(totalSize)
-                        if (buffers.size > 0) {
-                            val y = buffers[0].duplicate(); y.rewind()
-                            val yLimit = minOf(ySize, y.remaining())
-                            for (i in 0 until yLimit) buf.put(y.get())
-                            for (i in yLimit until ySize) buf.put(16.toByte())
-                        }
-                        if (buffers.size > 1) {
-                            val u = buffers[1].duplicate(); u.rewind()
-                            val uLimit = minOf(uvSize, u.remaining())
-                            for (i in 0 until uLimit) buf.put(u.get())
-                            for (i in uLimit until uvSize) buf.put(128.toByte())
-                        } else {
-                            for (i in 0 until uvSize) buf.put(128.toByte())
-                        }
-                        if (buffers.size > 2) {
-                            val v = buffers[2].duplicate(); v.rewind()
-                            val vLimit = minOf(uvSize, v.remaining())
-                            for (i in 0 until vLimit) buf.put(v.get())
-                            for (i in vLimit until uvSize) buf.put(128.toByte())
-                        } else {
-                            for (i in 0 until uvSize) buf.put(128.toByte())
-                        }
-                        buf.flip()
-                        frameBuffer = buf
-                        seekLatch.countDown()
-                    }
+                grab.onFrame = { seekLatch.countDown() }
+                grab.frameSeen = false
+                lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000L) // microseconds
+                if (!seekLatch.await(10, TimeUnit.SECONDS)) {
+                    logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
+                    return null
                 }
-                val seekSurface = factory.videoSurfaces().newVideoSurface(bfc, seekRc, true)
-                // We can't change the callback after the player is started, so the seek
-                // frame comes through the original callback. This approach works but may
-                // need a fresh player for seek-frame extraction.
-                // For now, fall back to the first frame approach.
-                try { seekLatch.await(5, TimeUnit.SECONDS) } catch (_: InterruptedException) { }
             }
 
-            // Convert the frame to JPEG
-            val buf = frameBuffer ?: run {
-                mp.controls().stop()
-                mp.release()
-                return null
-            }
+            val frame = grab.consumeFrame()
+                ?: run { logger.warn("Frame extraction: no frame data for $url@$offsetNanos"); return null }
 
-            // I420 鈫?RGB 鈫?BufferedImage 鈫?JPEG
-            val image = i420ToBufferedImage(buf, frameW, frameH)
-            if (image == null) {
-                mp.controls().stop()
-                mp.release()
-                return null
-            }
-
+            val image = i420ToBufferedImage(frame, grab.frameW, grab.frameH) ?: return null
             val scaled = scale(image, w, h)
             val out = ByteArrayOutputStream()
             if (!ImageIO.write(scaled, "jpg", out)) {
@@ -213,12 +88,105 @@ object LibVlcFrameExtractor {
                     return pngOut.toByteArray()
                 }
             }
-            out.toByteArray()
+            return out.toByteArray()
         } catch (e: Exception) {
             logger.warn("Frame extraction failed for $url@$offsetNanos: ${e.message}")
-            null
+            return null
         } finally {
-            runCatching { factory.release() }
+            runCatching { lib.libvlc_media_player_stop(mp) }
+            runCatching { lib.libvlc_media_player_release(mp) }
+        }
+    }
+
+    /**
+     * Single-frame I420 grabber: the setup callback reports dimensions and the lock callback hands
+     * libvlc a direct buffer; the display callback copies the YUV planes into a private buffer and
+     * latches. All callbacks are held as strong fields for the lifetime of the grab (no vlcj).
+     */
+    private class FrameGrab {
+        // Strong references — never dropped while the player may touch them.
+        val formatCb = LibVlc.VideoFormatCallback { _opaque, chroma, width, height, pitches, lines ->
+            setup(chroma, width, height, pitches, lines)
+        }
+        val cleanupCb = LibVlc.VideoCleanupCallback { }
+        val lockCb = LibVlc.VideoLockCallback { _opaque, planes -> lock(planes) }
+        val unlockCb = LibVlc.VideoUnlockCallback { _, _, _ -> }
+        val displayCb = LibVlc.VideoDisplayCallback { _opaque, picture -> display(picture) }
+
+        @Volatile var frameW = 0
+        @Volatile var frameH = 0
+        private var yPlane: ByteBuffer? = null
+        private var uPlane: ByteBuffer? = null
+        private var vPlane: ByteBuffer? = null
+        private var captured: ByteBuffer? = null
+
+        val setupLatch = CountDownLatch(1)
+        val firstFrameLatch = CountDownLatch(1)
+        @Volatile var frameSeen = false
+        @Volatile var onFrame: () -> Unit = {}
+
+        private fun setup(chroma: Pointer?, width: Pointer?, height: Pointer?, pitches: Pointer?, lines: Pointer?): Int {
+            if (width == null || height == null || chroma == null || pitches == null || lines == null) return 0
+            val w = width.getInt(0)
+            val h = height.getInt(0)
+            if (w <= 0 || h <= 0 || w > 16384 || h > 16384) return 0
+            frameW = w
+            frameH = h
+            // I420 chroma.
+            val i420 = byteArrayOf('I'.code.toByte(), '4'.code.toByte(), '2'.code.toByte(), '0'.code.toByte())
+            chroma.write(0, i420, 0, i420.size)
+            pitches.setInt(0, w)
+            pitches.setInt(4, (w + 1) / 2)
+            pitches.setInt(8, (w + 1) / 2)
+            lines.setInt(0, h)
+            lines.setInt(4, (h + 1) / 2)
+            lines.setInt(8, (h + 1) / 2)
+            setupLatch.countDown()
+            return 1
+        }
+
+        private fun lock(planes: Pointer?): Pointer? {
+            if (planes == null) return LibVlc.dropToken()
+            val w = frameW
+            val h = frameH
+            if (w <= 0 || h <= 0) return LibVlc.dropToken()
+            val ySize = w * h
+            val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
+            val total = ySize + 2 * uvSize
+            val buf = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
+            yPlane = buf
+            uPlane = buf.duplicate()
+            vPlane = buf.duplicate()
+            val ptr = Native.getDirectBufferPointer(buf)
+            planes.setPointer(0, ptr)
+            planes.setPointer(Native.POINTER_SIZE.toLong(), ptr.share(ySize.toLong()))
+            planes.setPointer((2 * Native.POINTER_SIZE).toLong(), ptr.share((ySize + uvSize).toLong()))
+            return Pointer.createConstant(1L)
+        }
+
+        private fun display(picture: Pointer?) {
+            if (picture == null) return
+            val w = frameW
+            val h = frameH
+            if (w <= 0 || h <= 0) return
+            val ySize = w * h
+            val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
+            val total = ySize + 2 * uvSize
+            val base = yPlane ?: return
+            if (base.capacity() < total) return
+            val copy = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
+            base.duplicate().rewind().let { src -> for (i in 0 until total) copy.put(src.get()) }
+            copy.flip()
+            captured = copy
+            frameSeen = true
+            onFrame()
+            firstFrameLatch.countDown()
+        }
+
+        fun consumeFrame(): ByteBuffer? {
+            val f = captured ?: return null
+            captured = null
+            return f
         }
     }
 

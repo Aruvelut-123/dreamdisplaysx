@@ -8,8 +8,7 @@ dependencies {
     api(project(":util"))
     api(libs.commonsCompress)
     api(libs.tukaaniXz)
-    api(libs.vlcj)
-    api(libs.vlcjNatives)
+    api(libs.jna)
     compileOnly(libs.slf4jApi)
     testImplementation(libs.slf4jApi)
 }

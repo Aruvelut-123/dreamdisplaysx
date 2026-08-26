@@ -248,21 +248,17 @@ object LibVlcNativesLoader {
     }
 
     /**
-     * Tries to create a temporary MediaPlayerFactory to read the libvlc version
-     * after extraction. Fails silently if the native library isn't loadable.
+     * Queries the libvlc version through the low-level binding (no vlcj) after the download
+     * cache / extraction is in place. Fails silently if the native library isn't loadable.
      */
     private fun cacheVersionFromExtracted() {
         try {
-            // vlcj factory discovery should now find libvlc via jna.library.path
-            val factory = uk.co.caprica.vlcj.factory.MediaPlayerFactory()
-            try {
-                val ver = factory.application().version()
-                if (ver != null && ver.isNotBlank()) {
-                    libvlcVersion = ver
-                    logger.info("LibVLC version: {}", ver)
-                }
-            } finally {
-                factory.release()
+            val api = com.sun.jna.Native.load("libvlc", com.dreamdisplayx.media.player.managers.LibVlc.LibVlcNative::class.java)
+            val verPtr = api.libvlc_get_version()
+            val ver = if (verPtr == null) null else verPtr.getString(0)
+            if (!ver.isNullOrBlank()) {
+                libvlcVersion = ver
+                logger.info("LibVLC version: {}", ver)
             }
         } catch (e: Exception) {
             logger.warn("Could not query libvlc version after extraction: ${e.message}")
@@ -270,22 +266,10 @@ object LibVlcNativesLoader {
     }
 
     /**
-     * Fallback: tries to get the libvlc version from a system-installed VLC.
+     * Version query for a system-installed VLC fallback. No longer used: libvlc is always loaded
+     * from the downloaded runtime, so this is a no-op retained only for API stability.
      */
     private fun cacheVersionFromSystem() {
-        try {
-            val factory = uk.co.caprica.vlcj.factory.MediaPlayerFactory()
-            try {
-                val ver = factory.application().version()
-                if (ver != null && ver.isNotBlank()) {
-                    libvlcVersion = ver
-                    logger.info("LibVLC version (system): {}", ver)
-                }
-            } finally {
-                factory.release()
-            }
-        } catch (e: Exception) {
-            logger.debug("No system-installed libvlc found: ${e.message}")
-        }
+        logger.debug("No bundled libvlc found; system-installed VLC is not queried via vlcj.")
     }
 }
