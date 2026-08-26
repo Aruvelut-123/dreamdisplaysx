@@ -95,8 +95,43 @@ internal class LibVlcSessionManager(
     @Volatile
     private var mediaPlayer: EmbeddedMediaPlayer? = null
 
-    /** Callback video surface; kept as a field so the JNA callbacks it owns are never GC'd. */
+    /**
+     * Callback video surface, created once and reused across restarts.
+     *
+     * The surface owns the JNA lock/unlock/display/setup/cleanup callbacks registered into the
+     * running libvlc instance; JNA only keeps weak references to callbacks, so a surface that is
+     * rebuilt on every start() would drop the previous instance (and its callbacks) as soon as the
+     * field is overwritten. If libvlc's async teardown still touches the old trampoline, JNA then
+     * spams "callback object has been garbage collected" and playback stutters. Reusing one surface
+     * keeps a strong reference alive for the whole session manager lifetime.
+     */
     private var videoSurface: CallbackVideoSurface? = null
+
+    /**
+     * Shared media-player event listener, created once and reused. vlcj keeps a strong reference to
+     * the registered listener and its native event callback for the life of the player, so this is
+     * primarily a small hygiene improvement (no per-start anonymous objects).
+     */
+    private val mediaPlayerEventListener = object : MediaPlayerEventAdapter() {
+        override fun finished(mp: VlcjMediaPlayer) {
+            logger.debug("$debugLabel libvlc finished.")
+            eosReached = true
+        }
+
+        override fun error(mp: VlcjMediaPlayer) {
+            logger.error("$debugLabel libvlc error.")
+            errorMessage = "libvlc error"
+            eosReached = true
+        }
+
+        override fun playing(mp: VlcjMediaPlayer) {
+            logger.debug("$debugLabel libvlc playing.")
+        }
+
+        override fun paused(mp: VlcjMediaPlayer) {
+            logger.debug("$debugLabel libvlc paused.")
+        }
+    }
 
     /** EOS monitor thread. */
     @Volatile
@@ -250,19 +285,23 @@ internal class LibVlcSessionManager(
         // Ensure libvlc natives are loaded before creating the factory
         LibVlcNativesLoader.load()
 
-        val fact = MediaPlayerFactory(args)
-        factory = fact
+        // Factory is a session-manager singleton: libvlc state and the callback trampolines
+        // registered into this instance must stay alive for the whole session manager lifetime.
+        // Rebuilding the factory (and libvlc instance) on every start() would leave libvlc's async
+        // teardown pointing at a GC'd trampoline, producing "callback object has been garbage
+        // collected" spam and playback stutter.
+        val fact = factory ?: MediaPlayerFactory(args).also { factory = it }
 
         val mp = fact.mediaPlayers().newEmbeddedMediaPlayer()
         mediaPlayer = mp
 
-        // Set up video callbacks
-        val videoSurface = fact.videoSurfaces().newVideoSurface(
+        // Set up video callbacks. The surface is a session-manager singleton: rebuilding it on
+        // every start() would let libvlc's async teardown hit a GC'd trampoline (JNA spam + stutter).
+        val videoSurface = videoSurface ?: fact.videoSurfaces().newVideoSurface(
             videoBufferFormatCb,
             videoRenderCallback,
             true,
-        )
-        this.videoSurface = videoSurface
+        ).also { this.videoSurface = it }
         // Couldn't set video surface on a non-embedded player... but newEmbeddedMediaPlayer() returns EmbeddedMediaPlayer
         // Actually EmbeddedMediaPlayer HAS videoSurface() method
         mp.videoSurface().set(videoSurface)
@@ -276,26 +315,7 @@ internal class LibVlcSessionManager(
         mp.audio().callback("S16N", AudioSink.SAMPLE_RATE, 2, audioCallback)
 
         // Event listener
-        mp.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
-            override fun finished(mp: VlcjMediaPlayer) {
-                logger.debug("$debugLabel libvlc finished.")
-                eosReached = true
-            }
-
-            override fun error(mp: VlcjMediaPlayer) {
-                logger.error("$debugLabel libvlc error.")
-                errorMessage = "libvlc error"
-                eosReached = true
-            }
-
-            override fun playing(mp: VlcjMediaPlayer) {
-                logger.debug("$debugLabel libvlc playing.")
-            }
-
-            override fun paused(mp: VlcjMediaPlayer) {
-                logger.debug("$debugLabel libvlc paused.")
-            }
-        })
+        mp.events().addMediaPlayerEventListener(mediaPlayerEventListener)
 
         // Start playback (media-level options carry UA + platform referer).
         // Bilibili/YouTube DASH expose video and audio as separate URLs; libvlc attaches the
@@ -372,7 +392,9 @@ internal class LibVlcSessionManager(
     }
 
     /**
-     * Stops the session.
+     * Stops the session. The MediaPlayerFactory is kept alive as a session-manager singleton
+     * so that JNA callback trampolines registered into the libvlc instance stay valid across
+     * restarts. Call [cleanup] to release the factory and all session-level resources.
      */
     fun stop() {
         isPlaying = false
@@ -386,13 +408,10 @@ internal class LibVlcSessionManager(
                 mp.release()
             } catch (_: Exception) { }
         }
-        val fact = factory
-        factory = null
-        if (fact != null) {
-            try {
-                fact.release()
-            } catch (_: Exception) { }
-        }
+        // Factory is intentionally NOT released here — it is a singleton that lives for the
+        // whole session manager lifecycle. Releasing and recreating it would leave the old
+        // libvlc instance's async teardown pointing at GC'd JNA callback trampolines.
+        // Factory release happens in cleanup().
         audio.stop()
         runCatching { audioPipeOut?.close() }
         audioPipeOut = null
@@ -406,10 +425,20 @@ internal class LibVlcSessionManager(
 
     /**
      * Cleans up all resources. The GPU uploader cleanup touches GL objects, so it is
-     * deferred to the render thread; non-GL teardown ([stop]) runs inline.
+     * deferred to the render thread; non-GL teardown ([stop]) runs inline. This also
+     * releases the MediaPlayerFactory singleton (and its libvlc instance) that [stop]
+     * deliberately keeps alive across restarts.
      */
     fun cleanup() {
         stop()
+        val fact = factory
+        factory = null
+        if (fact != null) {
+            try {
+                fact.release()
+            } catch (_: Exception) { }
+        }
+        videoSurface = null
         renderExecutor.execute { surface.cleanup() }
     }
 
