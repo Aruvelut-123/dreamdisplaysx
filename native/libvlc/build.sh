@@ -111,7 +111,7 @@ case "$OS_NAME" in
       libogg libvorbis theora mad \
       x264 x265 libvpx ffmpeg \
       a52dec openrtsp libdvdnav libdvdread libbluray \
-      libsamplerate opus flac chromaprint
+      libsamplerate opus flac chromaprint sdl2-compat
 
     # Homebrew installs gettext + libtool keg-only; force-link them
     brew link --overwrite gettext libtool 2>/dev/null || true
