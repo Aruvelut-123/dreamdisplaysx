@@ -2,6 +2,15 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **libvlc reliability (feat/libvlc)** — removed the FFmpeg-era stall watchdog and
+> CDN-failover recovery from `MediaPlayer`; libvlc now owns buffering, A/V sync and
+> network recovery, so a healthy session is no longer misjudged as stalled and
+> force-restarted (the old watchdog read a last-frame timestamp that was never
+> stamped, producing a `No frames for … ms` restart loop that killed live playback).
+> Separated DASH audio (Bilibili/YouTube) is now attached to the libvlc input via
+> `:input-slave=<audioUrl>` instead of playing silently, and hardware-accelerated
+> decoding (`--avcodec-hw=any`) is enabled when the config requests it.
+
 > **libvlc stability fixes (feat/libvlc)** — fixed a class of crash-on-play failures
 > from the libvlc port: every session restart now tears down the previous
 > `EmbeddedMediaPlayer` + video surface first (previously each stall restart leaked
