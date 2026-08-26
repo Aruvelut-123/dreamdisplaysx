@@ -80,15 +80,6 @@ case "$OS_NAME" in
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
       --disable-chromaprint --disable-bluray
-      --enable-dbus --enable-pulse --enable-alsa
-      --enable-xcb --enable-xvideo
-      --enable-freetype --enable-fontconfig
-      --enable-dvdnav --enable-dvdread
-      --enable-vorbis --enable-ogg --enable-mad --enable-mpeg2
-      --enable-dca --enable-faad --enable-twolame --enable-mpc
-      --enable-vpx --enable-x264 --enable-x265
-      --enable-realrtsp --enable-live555
-      --enable-opengl --enable-glx
       --prefix="$OUT_LIBDIR"
     )
     ;;
@@ -109,10 +100,6 @@ case "$OS_NAME" in
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
       --disable-chromaprint --disable-bluray
-      --enable-dbus --enable-freetype --enable-fontconfig
-      --enable-vorbis --enable-ogg --enable-mad
-      --enable-vpx --enable-x264 --enable-x265
-      --enable-realrtsp --enable-live555
       --prefix="$OUT_LIBDIR"
     )
     ;;
@@ -128,8 +115,10 @@ case "$OS_NAME" in
       MINGW_ARCH="aarch64"
     fi
 
-    # Install build dependencies (MSYS autotools + mingw compiler chain)
-    pacman -Syu --noconfirm --needed
+    # Install build dependencies (MSYS autotools + mingw compiler chain).
+    # NOTE: never `pacman -Syu` (sysupgrade) here — upgrading msys2-runtime
+    # forcibly kills the current MSYS2 terminal/process, aborting the build.
+    pacman -Sy --noconfirm --needed
     pacman -S --noconfirm --needed \
       autoconf automake libtool make gettext \
       ${MINGW_PREFIX}-toolchain \
@@ -170,10 +159,6 @@ case "$OS_NAME" in
       --disable-gui --disable-qt --disable-skins2
       --disable-lua --disable-ncurses
       --disable-chromaprint --disable-bluray
-      --enable-freetype --enable-fontconfig
-      --enable-vorbis --enable-ogg --enable-mad
-      --enable-vpx --enable-x264 --enable-x265
-      --enable-realrtsp --enable-live555
       --prefix="$OUT_LIBDIR"
     )
     ;;
