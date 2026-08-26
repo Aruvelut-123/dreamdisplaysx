@@ -527,6 +527,7 @@ internal class LibVlcSessionManager(
                 logger.warn("$debugLabel rejected libvlc frame dimensions ${w}x$h")
                 return 0
             }
+            logger.info("$debugLabel libvlc video setup: {}x{} (expected {}x{})", w, h, expectedW, expectedH)
             // I420 chroma: Y, then U (w/2 x h/2), then V.
             chroma.write(0, I420, 0, I420.size)
             pitches.setInt(0, w)
@@ -636,7 +637,7 @@ internal class LibVlcSessionManager(
                 if (!firstFrameFired) {
                     firstFrameFired = true
                     firstFrameLatch.countDown()
-                    if (MediaPlayer.DEBUG) logger.debug("$debugLabel first frame $ew x $eh (libvlc).")
+                    logger.info("$debugLabel first frame delivered {}x{} (libvlc, yuv={}).", ew, eh, gpuYuvActive)
                 }
             } catch (t: Throwable) {
                 if (MediaPlayer.DEBUG) logger.warn("$debugLabel frame publish: ${t.message}")

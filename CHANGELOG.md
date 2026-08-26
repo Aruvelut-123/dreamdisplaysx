@@ -28,6 +28,17 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > The obsolete `--plugin-path` instance option (removed in libvlc 3.0.21, only emitted a warning)
 > was dropped too; libvlc finds its plugins via the default relative layout / `VLC_PLUGIN_PATH`.
 >
+> **libvlc vlcj removed entirely (feat/libvlc)** — the last two vlcj usages are gone: the
+> scrub-preview `FrameExtractor` is rewritten on the low-level libvlc binding (a short-lived
+> media player with strong-referenced callbacks decodes one frame per thumbnail), and the
+> version probe reads `libvlc_get_version` directly instead of constructing a vlcj
+> `MediaPlayerFactory`. The dead vlcj pipeline classes (`LibVlcAudioDecoder`, `LibVlcVideoPipe`,
+> `LibVlcAudioProcess`) are deleted and vlcj/vlcj-natives removed from the build, shadow config
+> and version catalog (an explicit JNA dependency replaces the transitive one; Minecraft already
+> bundles JNA at runtime). This eliminates every remaining `JNA: callback object has been
+> garbage collected` / `Invalid memory access` spam that the old vlcj `CallbackVideoSurface`
+> produced on scrub requests.
+>
 > **libvlc reliability (feat/libvlc)** — removed the FFmpeg-era stall watchdog and
 > CDN-failover recovery from `MediaPlayer`; libvlc now owns buffering, A/V sync and
 > network recovery, so a healthy session is no longer misjudged as stalled and
