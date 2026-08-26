@@ -82,7 +82,8 @@ object NativesDownloader {
         val arch = when {
             OsInfo.isArm64 -> "aarch64"
             OsInfo.isX86 -> "x86"
-            else -> "x86_64"
+            // CI / manifest uses x64 (not x86_64) in platform keys.
+            else -> "x64"
         }
         "$os-$arch"
     }
