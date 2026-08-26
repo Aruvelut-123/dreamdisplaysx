@@ -65,10 +65,14 @@ object DisplayYuvRenderTypes {
     /**
      * Single decision point for the GPU-YUV mode: the native library must produce planar frames and the runtime must
      * support the YUV pipeline, with no active shader pack.
+     *
+     * NOTE (feat/libvlc): this is forced OFF. The 26.2 YUV fragment-shader path (via Yuv262Reflect) renders black
+     * on the user's Sodium environment, so the display always uses the reliable RGB single-texture path
+     * (buildRgba + uploadInterleaved), matching the VideoPlayer mod's RV32 (RGBA8888) model. The YUV code is kept
+     * for a future fix but is never selected.
      */
     val active: Boolean
-        get() = !ShaderPackCompat.isShaderPackActive
-                && (isSupported || Yuv262Reflect.isAvailable)
+        get() = false
 
     /** Creates one RED8 plane texture through the built-in (26.1-era) or reflective 26.2 API. */
     fun createPlaneTexture(
