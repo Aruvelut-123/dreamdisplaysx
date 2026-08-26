@@ -1,6 +1,5 @@
 package com.dreamdisplayx.platform.client.debug
 
-import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.util.GeneralUtil
@@ -34,11 +33,6 @@ object DebugStats {
         add("§7Commit: §f$commitId")
         add("§7LibVLC: §f$libvlcVersion")
         val screenCount = runCatching { DisplayRegistry.getScreens().size }.getOrDefault(0)
-        val gpu = MediaPlayer.framesToGpu.get()
-        val dropped = MediaPlayer.framesDropped.get()
-        val decoder = MediaPlayer.currentDecoder.get()
         add("Displays: $screenCount active")
-        add("Frames: $gpu GPU, $dropped dropped")
-        add("Decoder: $decoder")
     }
 }

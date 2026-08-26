@@ -3,6 +3,7 @@
 package com.dreamdisplayx.media.player.process
 
 import com.dreamdisplayx.api.security.policy.MediaHosts
+import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
 import org.slf4j.LoggerFactory
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.player.base.MediaPlayer
@@ -20,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 
 /**
- * In-process frame extraction for scrub-preview thumbnails — replaces [JavaCppFrameExtractor].
+ * In-process frame extraction for scrub-preview thumbnails 鈥?replaces [JavaCppFrameExtractor].
  * Opens the media URL via libvlc, seeks to a timestamp, decodes one video frame through
  * libvlc's video callback, and encodes it as a JPEG byte array.
  */
@@ -47,9 +48,6 @@ object LibVlcFrameExtractor {
     fun extractJpeg(url: String, offsetNanos: Long, w: Int, h: Int): ByteArray? {
         val args = mutableListOf<String>()
         args.addAll(SHARED_LIBVLC_ARGS)
-        MediaHosts.refererFor(url)?.let { referer ->
-            args.add("--http-referrer=$referer")
-        }
 
         // Ensure libvlc natives are loaded
         com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
@@ -134,7 +132,7 @@ object LibVlcFrameExtractor {
             })
 
             // Start playback
-            mp.media().play(url)
+            mp.media().play(url, *LibVlcMediaOptions.forUrl(url))
 
             // Wait for the first frame (or timeout)
             if (!frameLatch.await(15, TimeUnit.SECONDS)) {
@@ -198,7 +196,7 @@ object LibVlcFrameExtractor {
                 return null
             }
 
-            // I420 → RGB → BufferedImage → JPEG
+            // I420 鈫?RGB 鈫?BufferedImage 鈫?JPEG
             val image = i420ToBufferedImage(buf, frameW, frameH)
             if (image == null) {
                 mp.controls().stop()

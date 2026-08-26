@@ -14,6 +14,7 @@ import com.dreamdisplayx.media.player.pipeline.FrameSurface
 import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
+import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
 import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
 import com.dreamdisplayx.media.player.util.daemon
 import com.dreamdisplayx.media.player.util.joinSafely
@@ -38,14 +39,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * LibVLC-based session manager — replaces [PlaybackSessionManager].
+ * LibVLC-based session manager 鈥?replaces [PlaybackSessionManager].
  *
  * Uses a single libvlc [EmbeddedMediaPlayer] to handle both video and audio,
  * delivering frames through the video callback ([RenderCallback]) into the
  * FrameSurface, and PCM through the audio callback into a PipedOutputStream
  * consumed by AudioSink.
  *
- * No separate reader thread, no manual pacing, no prebuffer — libvlc handles
+ * No separate reader thread, no manual pacing, no prebuffer 鈥?libvlc handles
  * demuxing, decoding, A/V sync, and hardware acceleration internally.
  */
 internal class LibVlcSessionManager(
@@ -85,7 +86,7 @@ internal class LibVlcSessionManager(
 ) {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcSession")
 
-    // ── libvlc lifecycle ──────────────────────────────────────────────────
+    // 鈹€鈹€ libvlc lifecycle 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     @Volatile
     private var factory: MediaPlayerFactory? = null
@@ -97,14 +98,14 @@ internal class LibVlcSessionManager(
     @Volatile
     private var eosThread: Thread? = null
 
-    /** Audio output pipe — AudioSink reads from the InputStream end. */
+    /** Audio output pipe 鈥?AudioSink reads from the InputStream end. */
     @Volatile
     private var audioPipeOut: PipedOutputStream? = null
 
     @Volatile
     private var audioPipeIn: PipedInputStream? = null
 
-    // ── Frame surface ─────────────────────────────────────────────────────
+    // 鈹€鈹€ Frame surface 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGB24)
 
@@ -121,18 +122,18 @@ internal class LibVlcSessionManager(
     @Volatile
     private var errorMessage = ""
 
-    // ── Audio sink ────────────────────────────────────────────────────────
+    // 鈹€鈹€ Audio sink 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private val audio = AudioSink(debugLabel)
 
-    // ── Park state ────────────────────────────────────────────────────────
+    // 鈹€鈹€ Park state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private val parkFlag = AtomicBoolean(false)
 
     /** Position at which the session was parked (nanos). */
     private var parkPositionNanos = 0L
 
-    // ── Popout / preview sinks ────────────────────────────────────────────
+    // 鈹€鈹€ Popout / preview sinks 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private var popoutSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
     private var previewSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
@@ -169,13 +170,13 @@ internal class LibVlcSessionManager(
         // The pipe's popoutFrameSink is not exposed here; we handle sink in the render callback.
     }
 
-    // ── Volume ────────────────────────────────────────────────────────────
+    // 鈹€鈹€ Volume 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     fun setVolume(volume: Double) {
         audio.setVolume(volume)
     }
 
-    // ── Frame pipe proxy ──────────────────────────────────────────────────
+    // 鈹€鈹€ Frame pipe proxy 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private val noFrames = AtomicLong(0)
 
@@ -199,7 +200,7 @@ internal class LibVlcSessionManager(
 
     fun clearFrame() = surface.clear()
 
-    // ── Session lifecycle ─────────────────────────────────────────────────
+    // 鈹€鈹€ Session lifecycle 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     /**
      * Starts a new playback session with libvlc.
@@ -231,7 +232,6 @@ internal class LibVlcSessionManager(
             "--file-caching=300",
             "--live-caching=600",
         )
-        MediaHosts.refererFor(safeUrl)?.let { args.add("--http-referrer=$it") }
 
         // Ensure libvlc natives are loaded before creating the factory
         LibVlcNativesLoader.load()
@@ -282,9 +282,9 @@ internal class LibVlcSessionManager(
             }
         })
 
-        // Start playback
+        // Start playback (media-level options carry UA + platform referer)
         isPlaying = true
-        mp.media().play(safeUrl)
+        mp.media().play(safeUrl, *LibVlcMediaOptions.forUrl(safeUrl))
 
         // Wait for first frame
         try {
@@ -315,7 +315,7 @@ internal class LibVlcSessionManager(
     }
 
     /**
-     * Starts video-only replay (no audio, no libvlc — just uses the existing surface).
+     * Starts video-only replay (no audio, no libvlc 鈥?just uses the existing surface).
      * Not supported in the initial libvlc port; returns false.
      */
     fun startReplayVideoOnly(
@@ -383,7 +383,7 @@ internal class LibVlcSessionManager(
         surface.cleanup()
     }
 
-    // ── Quality switch ────────────────────────────────────────────────────
+    // 鈹€鈹€ Quality switch 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     /**
      * Begins a quality switch. With libvlc, this is a hard switch: stop current,
@@ -398,7 +398,7 @@ internal class LibVlcSessionManager(
 
     fun promoteIncoming(): Boolean = true // No-op: hard switch already promoted
 
-    // ── Audio track switch ────────────────────────────────────────────────
+    // 鈹€鈹€ Audio track switch 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     fun beginAudioTrackSwitch(streamSet: ActiveStreams): Boolean {
         val mp = mediaPlayer ?: return false
@@ -423,7 +423,7 @@ internal class LibVlcSessionManager(
         // Not needed with libvlc: audio tracks are managed by the player
     }
 
-    // ── Park / suspend / resume ───────────────────────────────────────────
+    // 鈹€鈹€ Park / suspend / resume 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     fun canPark(): Boolean = true
 
@@ -449,7 +449,7 @@ internal class LibVlcSessionManager(
 
     fun parkedPositionNanos(): Long? = parkPositionNanos.takeIf { parkFlag.get() && it >= 0 }
 
-    // ── Audio helpers ─────────────────────────────────────────────────────
+    // 鈹€鈹€ Audio helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     fun audioSourceGone(): Boolean = false
 
@@ -464,13 +464,13 @@ internal class LibVlcSessionManager(
 
     fun captureVideoCacheSnapshot(): ByteArray? = null
 
-    // ── Pacing / clock ────────────────────────────────────────────────────
+    // 鈹€鈹€ Pacing / clock 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     fun currentPacingNanos(): Long = clock.currentTime()
 
     fun activeBridgeEdgeNanos(): Long? = null
 
-    // ── EOS monitor ───────────────────────────────────────────────────────
+    // 鈹€鈹€ EOS monitor 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private fun eosMonitor() {
         while (!terminated.get() && !eosReached) {
@@ -489,7 +489,7 @@ internal class LibVlcSessionManager(
         }
     }
 
-    // ── Video callbacks ───────────────────────────────────────────────────
+    // 鈹€鈹€ Video callbacks 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private val videoFirstFrameLatch = CountDownLatch(1)
     private var videoFirstFrameFired = false
@@ -593,7 +593,7 @@ internal class LibVlcSessionManager(
         }
     }
 
-    // ── Audio callback ────────────────────────────────────────────────────
+    // 鈹€鈹€ Audio callback 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private fun audioCallback(player: EmbeddedMediaPlayer): AudioCallback = object : AudioCallback {
         override fun play(mp: VlcjMediaPlayer, samples: com.sun.jna.Pointer, sampleCount: Int, pts: Long) {
@@ -614,7 +614,7 @@ internal class LibVlcSessionManager(
         override fun setVolume(volume: Float, mute: Boolean) {}
     }
 
-    // ── Frame conversion helpers ──────────────────────────────────────────
+    // 鈹€鈹€ Frame conversion helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private fun i420ToRgb24(i420: ByteBuffer, w: Int, h: Int, rgb: ByteBuffer) {
         val ySize = w * h
@@ -686,7 +686,7 @@ internal class LibVlcSessionManager(
             val rgbaSize = w * h * 4
             val rgba = popoutRgba?.takeIf { it.capacity() >= rgbaSize }?.also { it.clear() }
                 ?: ByteBuffer.allocateDirect(rgbaSize).also { popoutRgba = it }
-            // I420 → RGBA
+            // I420 鈫?RGBA
             val ySize = w * h
             val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
             buf.rewind()
@@ -709,7 +709,7 @@ internal class LibVlcSessionManager(
         }
     }
 
-    // ── Target dimensions ─────────────────────────────────────────────────
+    // 鈹€鈹€ Target dimensions 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private fun targetDims(streamSet: ActiveStreams?, lastQuality: Int = 0): Pair<Int, Int> {
         val (tw, th) = getTextureSize()
@@ -732,7 +732,7 @@ internal class LibVlcSessionManager(
 }
 
 /**
- * Minimal AudioSink for the libvlc PCM pipe — reads S16 stereo PCM from a
+ * Minimal AudioSink for the libvlc PCM pipe 鈥?reads S16 stereo PCM from a
  * [PipedInputStream] and writes it to a [SourceDataLine] for actual audio output.
  * libvlc handles A/V sync internally; this sink just plays the PCM.
  */

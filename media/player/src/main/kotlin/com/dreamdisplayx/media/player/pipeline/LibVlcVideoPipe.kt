@@ -5,6 +5,7 @@ package com.dreamdisplayx.media.player.pipeline
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
+import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
 import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.api.security.policy.MediaHosts
@@ -26,18 +27,18 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * LibVLC (vlcj) based video frame pipe — replaces [JavaCppVideoPipe].
+ * LibVLC (vlcj) based video frame pipe 鈥?replaces [JavaCppVideoPipe].
  *
  * Uses libvlc's built-in playback (play/pause/seek) and delivers frames
  * through the video callback ([RenderCallback]) directly into the shared
  * [FrameSurface] pipeline. No separate reader thread, no manual pacing,
- * no prebuffer — libvlc handles all demuxing, decoding, A/V sync, and
+ * no prebuffer 鈥?libvlc handles all demuxing, decoding, A/V sync, and
  * hardware acceleration internally.
  */
 internal class LibVlcVideoPipe(
     private val debugLabel: String,
     uploaderFactory: FrameUploaderFactory,
-    /** True when frames stay as raw I420 planes; YUV→RGB runs on the GPU. */
+    /** True when frames stay as raw I420 planes; YUV鈫扲GB runs on the GPU. */
     private val planarOutput: Boolean,
 ) : FramePipe {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcVideoPipe")
@@ -57,7 +58,7 @@ internal class LibVlcVideoPipe(
         )
     }
 
-    // ── FramePipe state ───────────────────────────────────────────────────
+    // 鈹€鈹€ FramePipe state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     override val lastFrameReceivedNanos = AtomicLong(0)
 
@@ -88,7 +89,7 @@ internal class LibVlcVideoPipe(
 
     private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGB24)
 
-    // ── LibVLC state ──────────────────────────────────────────────────────
+    // 鈹€鈹€ LibVLC state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     @Volatile
     private var factory: MediaPlayerFactory? = null
@@ -103,11 +104,11 @@ internal class LibVlcVideoPipe(
     @Volatile
     private var eosThread: Thread? = null
 
-    /** Park flag — when set, libvlc is paused. */
+    /** Park flag 鈥?when set, libvlc is paused. */
     @Volatile
     private var parkFlag: AtomicBoolean? = null
 
-    // ── Callback-driven state ─────────────────────────────────────────────
+    // 鈹€鈹€ Callback-driven state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     @Volatile
     private var sourceW = 0
@@ -130,7 +131,7 @@ internal class LibVlcVideoPipe(
     @Volatile
     private var firstFrameFired = false
 
-    // ── EOS / error signals ───────────────────────────────────────────────
+    // 鈹€鈹€ EOS / error signals 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     @Volatile
     private var eosReached = false
@@ -138,7 +139,7 @@ internal class LibVlcVideoPipe(
     @Volatile
     private var errorMessage = ""
 
-    // ── FramePipe interface ───────────────────────────────────────────────
+    // 鈹€鈹€ FramePipe interface 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     override fun textureFilled(): Boolean = surface.textureFilled()
 
@@ -159,7 +160,7 @@ internal class LibVlcVideoPipe(
 
     override fun cleanup() = surface.cleanup()
 
-    // ── Session lifecycle ─────────────────────────────────────────────────
+    // 鈹€鈹€ Session lifecycle 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     /**
      * Opens [url] with libvlc and starts frame delivery via callbacks.
@@ -198,9 +199,6 @@ internal class LibVlcVideoPipe(
         // Build libvlc args
         val args = mutableListOf<String>()
         args.addAll(SHARED_LIBVLC_ARGS)
-        MediaHosts.refererFor(url)?.let { referer ->
-            args.add("--http-referrer=$referer")
-        }
 
         // Ensure libvlc natives are loaded
         LibVlcNativesLoader.load()
@@ -250,8 +248,8 @@ internal class LibVlcVideoPipe(
             }
         })
 
-        // Start playback
-        mp.media().play(url)
+        // Start playback (media-level options carry UA + platform referer)
+        mp.media().play(url, *LibVlcMediaOptions.forUrl(url))
 
         // Wait for the first frame (or timeout) so the caller knows it's alive
         try {
@@ -326,7 +324,7 @@ internal class LibVlcVideoPipe(
         rgbScratch = null
     }
 
-    // ── EOS monitor ───────────────────────────────────────────────────────
+    // 鈹€鈹€ EOS monitor 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     /**
      * Polls for EOS / error and calls [onEos]. Runs on a separate thread so the
@@ -355,7 +353,7 @@ internal class LibVlcVideoPipe(
         }
     }
 
-    // ── LibVLC callbacks ──────────────────────────────────────────────────
+    // 鈹€鈹€ LibVLC callbacks 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private val bufferFormatCallback = object : BufferFormatCallback {
         override fun getBufferFormat(width: Int, height: Int): BufferFormat {
@@ -485,7 +483,7 @@ internal class LibVlcVideoPipe(
         for (i in n until limit) dst.put(pad)
     }
 
-    // ── Frame conversion ──────────────────────────────────────────────────
+    // 鈹€鈹€ Frame conversion 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private fun i420ToRgb24(i420: ByteBuffer, w: Int, h: Int, rgb: ByteBuffer) {
         val ySize = w * h

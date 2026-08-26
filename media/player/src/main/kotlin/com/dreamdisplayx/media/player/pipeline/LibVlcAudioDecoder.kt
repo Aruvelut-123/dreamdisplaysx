@@ -3,6 +3,7 @@
 package com.dreamdisplayx.media.player.pipeline
 
 import com.dreamdisplayx.api.security.policy.MediaHosts
+import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
 import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
 import com.dreamdisplayx.media.player.util.daemon
 import org.slf4j.LoggerFactory
@@ -17,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * LibVLC (vlcj) based audio decoder — replaces [JavaCppAudioDecoder].
+ * LibVLC (vlcj) based audio decoder 鈥?replaces [JavaCppAudioDecoder].
  * Opens a media URL via libvlc, decodes audio with libvlc's audio
  * callbacks (S16N at 44.1 kHz stereo), and writes the PCM into a
  * [PipedInputStream] that [AudioSink] reads from (same interface as the
@@ -35,7 +36,7 @@ internal class LibVlcAudioDecoder(
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcAudioDecoder")
 
     companion object {
-        /** Target sample rate: 44.1 kHz, stereo, S16 — matches [AudioSink.SAMPLE_RATE]. */
+        /** Target sample rate: 44.1 kHz, stereo, S16 鈥?matches [AudioSink.SAMPLE_RATE]. */
         const val SAMPLE_RATE = 44100
         private const val CHANNELS = 2
         private const val BYTES_PER_FRAME = 2 * CHANNELS // S16LE stereo = 4 bytes/frame
@@ -162,9 +163,6 @@ internal class LibVlcAudioDecoder(
         // Build libvlc args
         val args = mutableListOf<String>()
         args.addAll(SHARED_LIBVLC_ARGS)
-        MediaHosts.refererFor(url)?.let { referer ->
-            args.add("--http-referrer=$referer")
-        }
 
         // Ensure libvlc natives are loaded
         LibVlcNativesLoader.load()
@@ -242,7 +240,7 @@ internal class LibVlcAudioDecoder(
 
         // Begin playback (this starts libvlc's internal decoding + audio callback threads)
         val startedOk = try {
-            mp.media().play(url)
+            mp.media().play(url, *LibVlcMediaOptions.forUrl(url))
         } catch (e: Exception) {
             logger.error("$debugLabel [audio] Failed to start libvlc play for $url", e)
             errorMessage = e.message
@@ -323,7 +321,7 @@ internal class LibVlcAudioDecoder(
         started = false
     }
 
-    // ── Control loop ───────────────────────────────────────────────────────
+    // 鈹€鈹€ Control loop 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     /**
      * Monitors the libvlc player state and shuts the pipe down at EOS.
