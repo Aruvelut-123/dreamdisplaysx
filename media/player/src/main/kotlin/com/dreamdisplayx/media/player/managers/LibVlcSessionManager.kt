@@ -1,54 +1,49 @@
 package com.dreamdisplayx.media.player.managers
 
-import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.api.media.player.RenderExecutor
-import com.dreamdisplayx.api.security.policy.MediaHosts
+import com.dreamdisplayx.api.media.audio.service.AudioDspStage
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.events.PlayerEvents
-import com.dreamdisplayx.api.media.audio.service.AudioDspStage
 import com.dreamdisplayx.media.player.pipeline.FrameSurface
 import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
-import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
-import com.dreamdisplayx.media.player.util.daemon
-import com.dreamdisplayx.media.player.util.joinSafely
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
-import kotlinx.io.IOException
+import com.sun.jna.Native
+import com.sun.jna.Pointer
 import org.slf4j.LoggerFactory
-import uk.co.caprica.vlcj.factory.MediaPlayerFactory
-import uk.co.caprica.vlcj.player.base.MediaPlayer as VlcjMediaPlayer
-import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
-import uk.co.caprica.vlcj.player.base.callback.AudioCallback
-import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
-import uk.co.caprica.vlcj.player.embedded.videosurface.CallbackVideoSurface
-import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormat
-import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormatCallback
-import uk.co.caprica.vlcj.player.embedded.videosurface.callback.RenderCallback
-import java.io.ByteArrayOutputStream
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * LibVLC-based session manager 鈥?replaces [PlaybackSessionManager].
+ * LibVLC session manager rebuilt to mirror the VideoPlayer mod's low-level libvlc model:
  *
- * Uses a single libvlc [EmbeddedMediaPlayer] to handle both video and audio,
- * delivering frames through the video callback ([RenderCallback]) into the
- * FrameSurface, and PCM through the audio callback into a PipedOutputStream
- * consumed by AudioSink.
- *
- * No separate reader thread, no manual pacing, no prebuffer 鈥?libvlc handles
- * demuxing, decoding, A/V sync, and hardware acceleration internally.
+ *  - A single libvlc instance and a single media player are created ONCE for the whole
+ *    session-manager lifetime and never rebuilt. Switching videos only replaces the media
+ *    on the existing player (`set_media` + `play`), so no JNA callback trampoline is ever
+ *    dropped while libvlc's async teardown could still touch it ("callback object has been
+ *    garbage collected" spam is gone by construction).
+ *  - Video is delivered through low-level lock/unlock/display/setup/cleanup callbacks into
+ *    a triple-buffered pool (the VideoPlayer `TextureRenderCallback` model). Every callback
+ *    is held by a strong field reference for the life of the manager.
+ *  - All libvlc control operations run on a single control executor, serialised.
+ *  - Playback events (playing/end-reached/error) are delivered through a low-level event
+ *    listener, exactly like VideoPlayer.
+ *  - Audio is left to libvlc's own default output (the `:input-slave` audio stream is merged
+ *    into the same player), which removes the fragile Java PCM pipe that caused "audio fades
+ *    after a few seconds". Volume is still controlled via libvlc.
  */
 internal class LibVlcSessionManager(
     private val debugLabel: String,
@@ -82,69 +77,35 @@ internal class LibVlcSessionManager(
     /** Whether hardware-accelerated decoding is enabled by config. */
     private val useHwAccel: Boolean,
 
-    /** Per-display acoustics DSP stage. */
+    /** Per-display acoustics DSP stage (unused with libvlc default audio output). */
     audioStage: AudioDspStage? = null,
 ) {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcSession")
 
-    // 鈹€鈹€ libvlc lifecycle 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    /** Media-player events we attach to (VideoPlayer's set). */
+    private val MEDIA_PLAYER_EVENTS = intArrayOf(
+        LibVlc.LIBVLC_MEDIA_PLAYER_PLAYING,
+        LibVlc.LIBVLC_MEDIA_PLAYER_PAUSED,
+        LibVlc.LIBVLC_MEDIA_PLAYER_STOPPED,
+        LibVlc.LIBVLC_MEDIA_PLAYER_END_REACHED,
+        LibVlc.LIBVLC_MEDIA_PLAYER_ENCOUNTERED_ERROR,
+        LibVlc.LIBVLC_MEDIA_PLAYER_TIME_CHANGED,
+        LibVlc.LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED,
+    )
+
+    // ── libvlc singleton state (VideoPlayer model) ──────────────────────────
 
     @Volatile
-    private var factory: MediaPlayerFactory? = null
+    private var mediaPlayer: Pointer? = null
 
-    @Volatile
-    private var mediaPlayer: EmbeddedMediaPlayer? = null
+    private val released = AtomicBoolean(false)
+    private val stopped = AtomicBoolean(false)
 
-    /**
-     * Callback video surface, created once and reused across restarts.
-     *
-     * The surface owns the JNA lock/unlock/display/setup/cleanup callbacks registered into the
-     * running libvlc instance; JNA only keeps weak references to callbacks, so a surface that is
-     * rebuilt on every start() would drop the previous instance (and its callbacks) as soon as the
-     * field is overwritten. If libvlc's async teardown still touches the old trampoline, JNA then
-     * spams "callback object has been garbage collected" and playback stutters. Reusing one surface
-     * keeps a strong reference alive for the whole session manager lifetime.
-     */
-    private var videoSurface: CallbackVideoSurface? = null
+    /** Serialises every libvlc control call, mirroring VideoPlayer's control executor. */
+    private val controlExecutor: ExecutorService =
+        Executors.newSingleThreadExecutor { r -> daemonThread(r, "MediaPlayer-vlc-ctrl") }
 
-    /**
-     * Shared media-player event listener, created once and reused. vlcj keeps a strong reference to
-     * the registered listener and its native event callback for the life of the player, so this is
-     * primarily a small hygiene improvement (no per-start anonymous objects).
-     */
-    private val mediaPlayerEventListener = object : MediaPlayerEventAdapter() {
-        override fun finished(mp: VlcjMediaPlayer) {
-            logger.debug("$debugLabel libvlc finished.")
-            eosReached = true
-        }
-
-        override fun error(mp: VlcjMediaPlayer) {
-            logger.error("$debugLabel libvlc error.")
-            errorMessage = "libvlc error"
-            eosReached = true
-        }
-
-        override fun playing(mp: VlcjMediaPlayer) {
-            logger.debug("$debugLabel libvlc playing.")
-        }
-
-        override fun paused(mp: VlcjMediaPlayer) {
-            logger.debug("$debugLabel libvlc paused.")
-        }
-    }
-
-    /** EOS monitor thread. */
-    @Volatile
-    private var eosThread: Thread? = null
-
-    /** Audio output pipe 鈥?AudioSink reads from the InputStream end. */
-    @Volatile
-    private var audioPipeOut: PipedOutputStream? = null
-
-    @Volatile
-    private var audioPipeIn: PipedInputStream? = null
-
-    // 鈹€鈹€ Frame surface 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Frame surface ───────────────────────────────────────────────────────
 
     private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGB24)
 
@@ -154,74 +115,112 @@ internal class LibVlcSessionManager(
     @Volatile
     var expectedH = 0; private set
 
-    /** EOS/error signals from the libvlc event listener. */
+    private val noFrames = AtomicLong(0)
+
+    var isPlaying = false; private set
+
+    val lastFrameNanos: AtomicLong get() = noFrames
+
+    // ── EOS / error signals ─────────────────────────────────────────────────
+
     @Volatile
     private var eosReached = false
 
     @Volatile
     private var errorMessage = ""
 
-    // 鈹€鈹€ Audio sink 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    /** Guards [onStreamEnd] so it fires exactly once per session. */
+    private val eosFired = AtomicBoolean(false)
 
-    private val audio = AudioSink(debugLabel)
-
-    // 鈹€鈹€ Park state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Park state ──────────────────────────────────────────────────────────
 
     private val parkFlag = AtomicBoolean(false)
-
-    /** Position at which the session was parked (nanos). */
     private var parkPositionNanos = 0L
 
-    // 鈹€鈹€ Popout / preview sinks 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Popout / preview sinks ──────────────────────────────────────────────
 
     private var popoutSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
     private var previewSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
 
     var popoutFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
         get() = popoutSink
-        set(value) {
-            popoutSink = value
-            updateRawFrameSink()
-        }
+        set(value) { popoutSink = value }
 
     var previewFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
         get() = previewSink
-        set(value) {
-            previewSink = value
-            updateRawFrameSink()
-        }
+        set(value) { previewSink = value }
 
-    private fun updateRawFrameSink() {
-        val popout = popoutSink
-        val preview = previewSink
-        val sink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = when {
-            popout != null && preview != null -> { buf, w, h, fmt ->
-                val pos = buf.position()
-                val limit = buf.limit()
-                popout(buf, w, h, fmt)
-                buf.limit(limit).position(pos)
-                preview(buf, w, h, fmt)
-            }
-            popout != null -> popout
-            preview != null -> preview
-            else -> null
-        }
-        // The pipe's popoutFrameSink is not exposed here; we handle sink in the render callback.
+    // ── Low-level callbacks (held strongly for life) ───────────────────────
+
+    private val eventCallback = LibVlc.EventCallback { event, _ -> handleEvent(event) }
+
+    /** Triple-buffered video frame pool + callbacks (VideoPlayer TextureRenderCallback model). */
+    private val videoFrames = TextureRenderCallback()
+
+    private val videoFormatCallback = LibVlc.VideoFormatCallback { opaque, chroma, width, height, pitches, lines ->
+        videoFrames.setup(opaque, chroma, width, height, pitches, lines)
     }
 
-    // 鈹€鈹€ Volume 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    private val videoCleanupCallback = LibVlc.VideoCleanupCallback { opaque -> videoFrames.cleanup(opaque) }
+
+    private val videoLockCallback = LibVlc.VideoLockCallback { opaque, planes -> videoFrames.lock(opaque, planes) }
+
+    private val videoUnlockCallback = LibVlc.VideoUnlockCallback { opaque, picture, planes ->
+        videoFrames.unlock(opaque, picture, planes)
+    }
+
+    private val videoDisplayCallback = LibVlc.VideoDisplayCallback { opaque, picture ->
+        videoFrames.display(opaque, picture)
+    }
+
+    // ── Event handling ──────────────────────────────────────────────────────
+
+    private fun handleEvent(event: Pointer?) {
+        if (event == null || released.get() || stopped.get()) return
+        val type = event.getInt(0)
+        when (type) {
+            LibVlc.LIBVLC_MEDIA_PLAYER_PLAYING -> {
+                stopped.set(false)
+                isPlaying = true
+                if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc playing.")
+            }
+            LibVlc.LIBVLC_MEDIA_PLAYER_PAUSED -> {
+                if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc paused.")
+            }
+            LibVlc.LIBVLC_MEDIA_PLAYER_END_REACHED -> {
+                logger.debug("$debugLabel libvlc end reached.")
+                eosReached = true
+                fireStreamEnd()
+            }
+            LibVlc.LIBVLC_MEDIA_PLAYER_ENCOUNTERED_ERROR -> {
+                logger.error("$debugLabel libvlc error: ${LibVlc.errmsg()}")
+                errorMessage = "libvlc error"
+                eosReached = true
+                fireStreamEnd()
+            }
+            else -> {}
+        }
+    }
+
+    /** Fires [onStreamEnd] exactly once per session. */
+    private fun fireStreamEnd() {
+        if (eosFired.compareAndSet(false, true) && !terminated.get()) {
+            isPlaying = false
+            onStreamEnd(errorMessage.ifEmpty { "End of stream" }, errorMessage.isEmpty())
+        }
+    }
+
+    // ── Volume ──────────────────────────────────────────────────────────────
 
     fun setVolume(volume: Double) {
-        audio.setVolume(volume)
+        val v = volume.coerceIn(0.0, 1.0)
+        submit {
+            val mp = mediaPlayer ?: return@submit
+            runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, (v * 100).toInt()) }
+        }
     }
 
-    // 鈹€鈹€ Frame pipe proxy 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
-    private val noFrames = AtomicLong(0)
-
-    var isPlaying = false; private set
-
-    val lastFrameNanos: AtomicLong get() = noFrames
+    // ── Frame pipe proxy ────────────────────────────────────────────────────
 
     fun textureFilled(): Boolean = surface.textureFilled()
 
@@ -231,7 +230,7 @@ internal class LibVlcSessionManager(
     fun updateFramePlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, w: Int, h: Int): Boolean =
         surface.updateFramePlanar(y, u, v, w, h, expectedW, expectedH)
 
-    fun hasIncoming(): Boolean = false // libvlc uses hard quality switch, no parallel channel
+    fun hasIncoming(): Boolean = false // hard quality switch, no parallel channel
 
     fun updateIncomingFrame(texture: GpuTextureRef, w: Int, h: Int): Boolean = false
 
@@ -239,68 +238,28 @@ internal class LibVlcSessionManager(
 
     fun clearFrame() = surface.clear()
 
-    // 鈹€鈹€ Session lifecycle 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Session lifecycle ───────────────────────────────────────────────────
 
     /**
-     * Starts a new playback session with libvlc.
+     * Starts (or restarts) playback of [streamSet] on the single, never-rebuilt player.
+     * Video is delivered via the low-level callbacks; audio is left to libvlc's default output.
      */
-    fun start(
-        streamSet: ActiveStreams,
-        offsetNanos: Long,
-        lastQuality: Int,
-    ) {
+    fun start(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int) {
         val (w, h) = targetDims(streamSet, lastQuality)
         val safeUrl = MediaHostGuard.resolveSafeUrl(streamSet.currentVideo.url)
-        val fps = outputFps(streamSet.currentVideo.fps)
 
-        // Tear down any previous session first: every restart must create exactly one
-        // media player + video surface, otherwise stale libvlc callback threads pile up
-        // and race on the shared render-callback state.
-        stop()
-        videoFirstFrameLatch = CountDownLatch(1)
-        videoFirstFrameFired = false
-
-        expectedW = w
-        expectedH = h
+        // A restart replaces the media on the SAME player; never recreate the player.
+        stopped.set(false)
         eosReached = false
         errorMessage = ""
+        eosFired.set(false)
         parkFlag.set(false)
+        expectedW = w
+        expectedH = h
+        firstFrameFired = false
+        firstFrameLatch = CountDownLatch(1)
 
-        // Build libvlc args
-        val args = mutableListOf(
-            "--no-video-title-show",
-            "--no-snapshot-preview",
-            "--quiet",
-            "--no-keyboard-events",
-            "--no-mouse-events",
-            "--network-caching=300",
-            "--file-caching=300",
-            "--live-caching=600",
-        )
-        if (useHwAccel) {
-            // Enable hardware-accelerated decoding when config requests it (same as VideoPlayer).
-            args.add("--avcodec-hw=any")
-        }
-
-        // One MediaPlayerFactory + EmbeddedMediaPlayer for the whole session-manager lifetime
-        // (the VideoPlayer model). Every JNA callback trampoline is registered exactly once and
-        // held by strong references until cleanup(); switching videos only replaces the media on
-        // the existing player. Rebuilding the player on every start() would let libvlc's async
-        // teardown touch a GC'd trampoline -> "callback object has been garbage collected" spam,
-        // green/frame flicker (two players racing the same video surface) and playback stutter.
-        val mp = playerSingleton(args)
-        mediaPlayer = mp
-
-        // The audio PCM pipe is per-session: it feeds this start()'s AudioSink instance.
-        val audioPipeOut = PipedOutputStream()
-        val audioPipeIn = PipedInputStream(audioPipeOut, 1024 * 1024)
-        this.audioPipeOut = audioPipeOut
-        this.audioPipeIn = audioPipeIn
-
-        // Start playback (media-level options carry UA + platform referer).
-        // Bilibili/YouTube DASH expose video and audio as separate URLs; libvlc attaches the
-        // audio stream via `:input-slave=<url>` (same approach as VideoPlayer), otherwise the
-        // audio callback never fires and there is silence.
+        // Build the media options (UA + referer + input-slave for DASH audio + hw accel).
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
         val audioUrl = streamSet.currentAudio.url
         if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
@@ -308,78 +267,80 @@ internal class LibVlcSessionManager(
         }
         if (useHwAccel) mediaOptions.add(":avcodec-hw=any")
 
-        isPlaying = true
-        mp.media().play(safeUrl, *mediaOptions.toTypedArray())
+        submit {
+            val mp = player()
+            if (mp == null) {
+                errorMessage = "libvlc player unavailable"
+                eosReached = true
+                return@submit
+            }
+            try {
+                val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
+                LibVlc.lib.libvlc_media_player_set_media(mp, media)
+                LibVlc.lib.libvlc_media_release(media) // the player holds its own reference
+                LibVlc.lib.libvlc_media_player_play(mp)
+                isPlaying = true
+            } catch (t: Throwable) {
+                logger.error("$debugLabel failed to start libvlc media: ${t.message}")
+                errorMessage = t.message ?: "libvlc start failed"
+                eosReached = true
+            }
+        }
 
-        // Wait for first frame
+        // Seek if needed (after media is set; performed on the control executor).
+        if (offsetNanos > 0) {
+            submit {
+                val mp = mediaPlayer ?: return@submit
+                runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000L) } // microseconds
+            }
+        }
+
+        // Wait for the first frame so the caller can rely on frames being delivered (with timeout).
+        // The control-executor submit is asynchronous, so unconditionally await the latch.
         try {
-            if (!videoFirstFrameLatch.await(10, TimeUnit.SECONDS)) {
+            if (!firstFrameLatch.await(10, TimeUnit.SECONDS)) {
                 logger.error("$debugLabel libvlc first frame timeout")
-                stop()
-                throw IOException("libvlc first frame timeout")
             }
         } catch (_: InterruptedException) {
-            stop()
-            throw IOException("libvlc start interrupted")
+            Thread.currentThread().interrupt()
         }
-
-        // Seek if needed
-        if (offsetNanos > 0) {
-            mp.controls().setTime(offsetNanos / 1_000_000L)
-        }
-
-        // Start audio matching
-        audio.start(streamSet.currentAudio.url, debugLabel, audioPipeIn, offsetNanos, clock)
-
-        // EOS monitor thread
-        val thread = daemon(
-            { eosMonitor() },
-            "MediaPlayer-eos",
-        ).also { it.start() }
-        eosThread = thread
     }
 
     /**
-     * Returns the single MediaPlayerFactory + EmbeddedMediaPlayer pair for this session manager,
-     * creating it on first use. The player is never rebuilt: switching videos replaces the media
-     * on this same player, so every JNA callback (video surface lock/unlock/display, audio
-     * play/flush, events) is registered exactly once and held strongly until [cleanup]. This is
-     * the same single-instance model used by VideoPlayer.
+     * Returns the single libvlc media player, creating it on first use and never rebuilding it.
      */
-    private fun playerSingleton(args: List<String>): EmbeddedMediaPlayer {
+    private fun player(): Pointer? {
         val existing = mediaPlayer
         if (existing != null) return existing
-
-        // Ensure libvlc natives are loaded before creating the factory
-        LibVlcNativesLoader.load()
-
-        val fact = MediaPlayerFactory(args)
-        factory = fact
-
-        val mp = fact.mediaPlayers().newEmbeddedMediaPlayer()
-        mediaPlayer = mp
-
-        // Set up video callbacks (once). The surface is a session-manager singleton like the
-        // player; rebuilding it would let libvlc's async teardown hit a GC'd trampoline.
-        val videoSurface = fact.videoSurfaces().newVideoSurface(
-            videoBufferFormatCb,
-            videoRenderCallback,
-            true,
-        ).also { this.videoSurface = it }
-        mp.videoSurface().set(videoSurface)
-
-        // Set up audio callbacks (once).
-        mp.audio().callback("S16N", AudioSink.SAMPLE_RATE, 2, audioCallback)
-
-        // Event listener (once).
-        mp.events().addMediaPlayerEventListener(mediaPlayerEventListener)
-
-        return mp
+        return try {
+            LibVlc.ensureLoaded()
+            val lib = LibVlc.lib
+            val mp = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
+            if (mp == null) {
+                logger.error("$debugLabel libvlc_media_player_new returned null: ${LibVlc.errmsg()}")
+                return null
+            }
+            // Video callbacks (once; held strongly).
+            lib.libvlc_video_set_format_callbacks(mp, videoFormatCallback, videoCleanupCallback)
+            lib.libvlc_video_set_callbacks(mp, videoLockCallback, videoUnlockCallback, videoDisplayCallback, null)
+            // Events (once).
+            val em = lib.libvlc_media_player_event_manager(mp)
+            if (em != null) {
+                for (e in MEDIA_PLAYER_EVENTS) {
+                    lib.libvlc_event_attach(em, e, eventCallback, null)
+                }
+            }
+            mediaPlayer = mp
+            if (MediaPlayer.DEBUG) logger.debug("$debugLabel created single libvlc media player.")
+            mp
+        } catch (t: Throwable) {
+            logger.error("$debugLabel failed to create libvlc media player: ${t.message}")
+            null
+        }
     }
 
     /**
-     * Starts video-only replay (no audio, no libvlc 鈥?just uses the existing surface).
-     * Not supported in the initial libvlc port; returns false.
+     * Starts video-only replay (not supported by libvlc port; returns false).
      */
     fun startReplayVideoOnly(
         @Suppress("UNUSED_PARAMETER") snapshot: ByteArray?,
@@ -389,8 +350,7 @@ internal class LibVlcSessionManager(
     ): Boolean = false
 
     /**
-     * Attaches a live stream after a video-only replay.
-     * Not supported in the initial libvlc port; returns false.
+     * Attaches a live stream after a video-only replay (not supported; returns false).
      */
     fun attachLiveAfterReplay(
         @Suppress("UNUSED_PARAMETER") streamSet: ActiveStreams,
@@ -398,113 +358,75 @@ internal class LibVlcSessionManager(
         @Suppress("UNUSED_PARAMETER") lastQuality: Int,
     ): Boolean = false
 
-    /**
-     * Seeks to a new position.
-     */
+    /** Seeks the single player to [offsetNanos]. */
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
-        val mp = mediaPlayer ?: return false
-        mp.controls().setTime(offsetNanos / 1_000_000L)
+        submit {
+            val mp = mediaPlayer ?: return@submit
+            runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000L) } // microseconds
+        }
         logger.debug("$debugLabel libvlc seek to ${offsetNanos / 1_000_000} ms.")
-        // The audio clock resync is handled by AudioSink
         return true
     }
 
     /**
-     * Stops the session. The MediaPlayerFactory is kept alive as a session-manager singleton
-     * so that JNA callback trampolines registered into the libvlc instance stay valid across
-     * restarts. Call [cleanup] to release the factory and all session-level resources.
+     * Stops the session. The single player is kept alive (never released) so its JNA callbacks
+     * stay valid across restarts. Call [cleanup] to release the player and all resources.
      */
     fun stop() {
         isPlaying = false
         parkFlag.set(false)
         eosReached = true
-        // The player is a singleton: do NOT release it or null the field here. Rebuilding it on
-        // every restart would let libvlc's async teardown touch a GC'd JNA trampoline, causing
-        // "callback object has been garbage collected" spam, green/frame flicker and stutter.
-        val mp = mediaPlayer
-        if (mp != null) {
-            try {
-                mp.controls().stop()
-            } catch (_: Exception) { }
+        stopped.set(true)
+        submit {
+            val mp = mediaPlayer
+            if (mp != null) {
+                runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
+            }
         }
-        audio.stop()
-        runCatching { audioPipeOut?.close() }
-        audioPipeOut = null
-        audioPipeIn = null
-        // Reap the previous EOS monitor thread so restarts don't leak daemon threads.
-        eosThread?.interrupt()
-        joinSafely(eosThread)
-        eosThread = null
         surface.clear()
     }
 
     /**
-     * Cleans up all resources. The GPU uploader cleanup touches GL objects, so it is
-     * deferred to the render thread; non-GL teardown ([stop]) runs inline. This also
-     * releases the MediaPlayerFactory singleton (and its libvlc instance) that [stop]
-     * deliberately keeps alive across restarts.
+     * Releases the single player and all resources. GPU teardown is deferred to the render thread.
      */
     fun cleanup() {
         stop()
+        released.set(true)
         val mp = mediaPlayer
         mediaPlayer = null
         if (mp != null) {
             try {
-                mp.release()
+                LibVlc.lib.libvlc_media_player_release(mp)
             } catch (_: Exception) { }
         }
-        val fact = factory
-        factory = null
-        if (fact != null) {
-            try {
-                fact.release()
-            } catch (_: Exception) { }
-        }
-        videoSurface = null
+        runCatching { controlExecutor.shutdownNow() }
         renderExecutor.execute { surface.cleanup() }
     }
 
-    // 鈹€鈹€ Quality switch 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Quality switch ──────────────────────────────────────────────────────
 
-    /**
-     * Begins a quality switch. With libvlc, this is a hard switch: stop current,
-     * start new. The caller must wait for the first frame before promoting.
-     */
+    /** Hard quality switch: stop current media, start new one on the same player. */
     fun beginQualitySwitch(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int) {
-        // Stop current libvlc player
         stop()
-        // Start new session with the new quality URL
         start(streamSet, offsetNanos, lastQuality)
     }
 
-    fun promoteIncoming(): Boolean = true // No-op: hard switch already promoted
+    fun promoteIncoming(): Boolean = true // hard switch already promoted
 
-    // 鈹€鈹€ Audio track switch 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Audio track switch ──────────────────────────────────────────────────
 
     fun beginAudioTrackSwitch(streamSet: ActiveStreams): Boolean {
-        val mp = mediaPlayer ?: return false
-        // libvlc track selection: iterate audio tracks and find the matching one
-        val tracks = mp.audio().trackDescriptions()
-        val targetUrl = streamSet.currentAudio.url
-        // Find the audio track that matches the new URL
-        // Since libvlc doesn't expose URLs per track, we rely on the track description
-        val track = tracks?.firstOrNull { desc ->
-            targetUrl.contains(desc.description(), ignoreCase = true)
-        }
-        if (track != null) {
-            mp.audio().setTrack(track.id())
-            return true
-        }
-        // Fall back: the caller will restart the audio half
+        // libvlc manages audio tracks internally; a restart of the same player re-reads the
+        // stream and picks up the new audio URL. No-op here.
         return false
     }
 
     @Suppress("UNUSED_PARAMETER")
     fun setWarmAudioTracks(tracks: List<WarmTrack>) {
-        // Not needed with libvlc: audio tracks are managed by the player
+        // Not needed with libvlc.
     }
 
-    // 鈹€鈹€ Park / suspend / resume 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Park / suspend / resume ─────────────────────────────────────────────
 
     fun canPark(): Boolean = true
 
@@ -514,195 +436,264 @@ internal class LibVlcSessionManager(
         val mp = mediaPlayer ?: return false
         parkFlag.set(true)
         parkPositionNanos = clock.currentTime()
-        mp.controls().setPause(true)
-        audio.pause()
+        submit { runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) } }
         return true
     }
 
     fun resume() {
         val mp = mediaPlayer ?: return
         parkFlag.set(false)
-        mp.controls().setPause(false)
-        audio.resume()
+        submit { runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 0) } }
     }
 
     fun isParked(): Boolean = parkFlag.get()
 
     fun parkedPositionNanos(): Long? = parkPositionNanos.takeIf { parkFlag.get() && it >= 0 }
 
-    // 鈹€鈹€ Audio helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Audio helpers (unused with libvlc default output) ───────────────────
 
     @Suppress("UNUSED_PARAMETER")
     fun restartAudio(streamSet: ActiveStreams, offsetNanos: Long): Boolean = false
 
-    fun captureAudioPcm(maxNanos: Long): ByteArray? {
-        val maxBytes = (maxNanos / 1_000_000_000.0 * AudioSink.SAMPLE_RATE * 2 * 2).toInt()
-        // Not supported in the initial libvlc port
-        return null
-    }
+    fun captureAudioPcm(maxNanos: Long): ByteArray? = null
 
     fun captureVideoCacheSnapshot(): ByteArray? = null
 
-    // 鈹€鈹€ Pacing / clock 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Pacing / clock ──────────────────────────────────────────────────────
 
     fun currentPacingNanos(): Long = clock.currentTime()
 
     fun activeBridgeEdgeNanos(): Long? = null
 
-    // 鈹€鈹€ EOS monitor 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Control executor ─────────────────────────────────────────────────────
 
-    private fun eosMonitor() {
-        while (!terminated.get() && !eosReached) {
-            // Park: pause libvlc playback
-            if (parkFlag.get()) {
-                while (parkFlag.get() && !terminated.get() && !eosReached) {
-                    try { Thread.sleep(50) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); return }
-                }
-                continue
-            }
-            try { Thread.sleep(100) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); return }
-        }
-        if (!terminated.get() && eosReached) {
-            isPlaying = false
-            onStreamEnd(errorMessage.ifEmpty { "End of stream" }, errorMessage.isEmpty())
-        }
-    }
-
-    // 鈹€鈹€ Video callbacks 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
-    private var videoFirstFrameLatch = CountDownLatch(1)
-    private var videoFirstFrameFired = false
-    @Volatile private var sourceW = 0
-    @Volatile private var sourceH = 0
-    private var i420Scratch: ByteBuffer? = null
-    private var rgbScratch: ByteBuffer? = null
-    private var popoutRgba: ByteBuffer? = null
-
-    private val videoBufferFormatCb = object : BufferFormatCallback {
-        override fun getBufferFormat(width: Int, height: Int): BufferFormat {
-            sourceW = width
-            sourceH = height
-            if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc source: ${width}x${height}")
-            return BufferFormat("I420", width, height,
-                intArrayOf(width, (width + 1) / 2, (width + 1) / 2),
-                intArrayOf(height, (height + 1) / 2, (height + 1) / 2),
-            )
-        }
-        override fun allocatedBuffers(buffers: Array<ByteBuffer>) {}
-    }
-
-    private val videoRenderCallback = RenderCallback { mp, buffers, format ->
-        // Ignore stale callbacks from a previous (released) player. Every restart tears down the
-        // old session first, so only the currently-active player may write frames.
-        if (mp !== mediaPlayer || eosReached || buffers.isEmpty()) return@RenderCallback
-        val w = format.width
-        val h = format.height
-        if (w <= 0 || h <= 0) return@RenderCallback
+    private fun submit(r: () -> Unit) {
+        if (released.get()) return
         try {
-            val ySize = w * h
-            val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
-            val totalSize = ySize + 2 * uvSize
+            controlExecutor.execute { if (!released.get()) r() }
+        } catch (_: RejectedExecutionException) {
+        }
+    }
 
-            // Pack I420 planes into scratch buffer
-            val i420 = i420Scratch?.takeIf { it.capacity() >= totalSize }?.also { it.clear() }
-                ?: ByteBuffer.allocateDirect(totalSize).also { i420Scratch = it }
-            if (buffers.size > 0) {
-                val y = buffers[0].duplicate(); y.rewind()
-                val n = minOf(ySize, y.remaining())
-                for (i in 0 until n) i420.put(y.get())
-                for (i in n until ySize) i420.put(16.toByte())
-            } else { for (i in 0 until ySize) i420.put(16.toByte()) }
-            if (buffers.size > 1) {
-                val u = buffers[1].duplicate(); u.rewind()
-                val n = minOf(uvSize, u.remaining())
-                for (i in 0 until n) i420.put(u.get())
-                for (i in n until uvSize) i420.put(128.toByte())
-            } else { for (i in 0 until uvSize) i420.put(128.toByte()) }
-            if (buffers.size > 2) {
-                val v = buffers[2].duplicate(); v.rewind()
-                val n = minOf(uvSize, v.remaining())
-                for (i in 0 until n) i420.put(v.get())
-                for (i in n until uvSize) i420.put(128.toByte())
-            } else { for (i in 0 until uvSize) i420.put(128.toByte()) }
-            i420.flip()
+    private fun daemonThread(r: Runnable, name: String): Thread =
+        Thread(r, name).also { it.isDaemon = true }
 
-            // Allocate frame buffer
+    // ── Target dimensions ────────────────────────────────────────────────────
+
+    private fun targetDims(streamSet: ActiveStreams?, lastQuality: Int = 0): Pair<Int, Int> {
+        val q = when {
+            lastQuality > 0 -> lastQuality
+            streamSet != null -> MediaStreamSelector.parseQuality(streamSet.currentVideo)
+            else -> 0
+        }
+        if (q <= 0) return 854 to 480
+        return MediaStreamSelector.qualityToDims(q).let { it[0] to it[1] }
+    }
+
+    /**
+     * Triple-buffered video frame pool driven by the low-level libvlc video callbacks
+     * (VideoPlayer's TextureRenderCallback model). libvlc writes into one of three direct
+     * buffers; `display` marks the newest; the render thread copies it into the FrameSurface
+     * and returns the buffer to the pool.
+     */
+    private inner class TextureRenderCallback {
+        private val BUFFER_COUNT = 3
+        private val buffers = arrayOfNulls<ByteBuffer>(BUFFER_COUNT)
+        private val pointers = arrayOfNulls<Pointer>(BUFFER_COUNT)
+        private val inUse = BooleanArray(BUFFER_COUNT)
+
+        private var dropBuffer: ByteBuffer? = null
+        private var dropPointer: Pointer? = null
+        private var frameWidth = 1
+        private var frameHeight = 1
+        private var bufferSize = 4
+        private var nextWrite = 0
+        private var writing = -1
+        private var latest = -1
+
+        @Synchronized
+        fun setup(opaque: com.sun.jna.ptr.PointerByReference, chroma: Pointer, width: Pointer, height: Pointer,
+                  pitches: Pointer, lines: Pointer): Int {
+            val w = width.getInt(0)
+            val h = height.getInt(0)
+            if (w <= 0 || h <= 0 || w > 16384 || h > 16384) {
+                logger.warn("$debugLabel rejected libvlc frame dimensions ${w}x$h")
+                return 0
+            }
+            // I420 chroma: Y, then U (w/2 x h/2), then V.
+            chroma.write(0, I420, 0, I420.size)
+            pitches.setInt(0, w)
+            pitches.setInt(4, (w + 1) / 2)
+            pitches.setInt(8, (w + 1) / 2)
+            lines.setInt(0, h)
+            lines.setInt(4, (h + 1) / 2)
+            lines.setInt(8, (h + 1) / 2)
+            if (frameWidth != w || frameHeight != h) resize(w, h)
+            return 1
+        }
+
+        @Synchronized
+        fun cleanup(opaque: Pointer) {
+            clear()
+        }
+
+        @Synchronized
+        fun lock(opaque: Pointer, planes: Pointer): Pointer {
+            if (buffers[0] == null || bufferSize <= 0) {
+                ensureDropBuffer()
+                planes.setPointer(0, dropPointer!!)
+                return DROP_TOKEN
+            }
+            val index = acquireWriteBuffer()
+            if (index < 0) {
+                ensureDropBuffer()
+                planes.setPointer(0, dropPointer!!)
+                return DROP_TOKEN
+            }
+            writing = index
+            // I420: three planes.
+            val y = pointers[index]!!
+            val total = frameWidth * frameHeight
+            val uv = (frameWidth + 1) / 2 * ((frameHeight + 1) / 2)
+            planes.setPointer(0, y)
+            planes.setPointer(Native.POINTER_SIZE.toLong(), y.share(total.toLong()))
+            planes.setPointer((2 * Native.POINTER_SIZE).toLong(), y.share((total + uv).toLong()))
+            return Pointer.createConstant((index + 1).toLong())
+        }
+
+        @Synchronized
+        fun unlock(opaque: Pointer, picture: Pointer, planes: Pointer) {
+        }
+
+        @Synchronized
+        fun display(opaque: Pointer, picture: Pointer) {
+            val token = Pointer.nativeValue(picture)
+            if (token == DROP_TOKEN_VALUE) return
+            val index = (token - 1).toInt()
+            if (index < 0 || index >= BUFFER_COUNT) return
+            if (writing == index) writing = -1
+            if (released.get() || stopped.get() || buffers[index] == null) return
+            latest = index
+            // Publish the newest frame into the surface for the render thread.
+            publishFrame(index)
+        }
+
+        private fun publishFrame(index: Int) {
+            val buf = buffers[index] ?: return
             val ew = expectedW
             val eh = expectedH
-            if (ew <= 0 || eh <= 0) return@RenderCallback
-            val frameSize = if (gpuYuvActive) {
-                val c = ((ew + 1) / 2) * ((eh + 1) / 2)
-                ew * eh + 2 * c
-            } else ew * eh * 3
-
-            var spare = surface.takeOrAllocate(frameSize)
-            spare.clear()
-
-            if (w == ew && h == eh) {
-                if (gpuYuvActive) {
-                    i420.rewind()
-                    for (i in 0 until totalSize) spare.put(i420.get())
-                } else {
-                    i420ToRgb24(i420, w, h, spare)
-                    applyBrightness(spare, frameSize, getBrightness())
-                }
-            } else {
-                if (gpuYuvActive) {
-                    resizeI420(i420, w, h, spare, ew, eh)
-                } else {
-                    val scratch = rgbScratch?.takeIf { it.capacity() >= w * h * 3 }?.also { it.clear() }
-                        ?: ByteBuffer.allocateDirect(w * h * 3).also { rgbScratch = it }
-                    i420ToRgb24(i420, w, h, scratch)
-                    resizeRgb24(scratch, w, h, spare, ew, eh)
-                    applyBrightness(spare, frameSize, getBrightness())
-                }
-            }
-            spare.flip()
-
-            if (parkFlag.get()) return@RenderCallback
-
-            // Popout sink
-            feedSink(spare, ew, eh)
-
-            // Publish to surface
-            surface.publish(spare, frameSize)
-
-            // Stamp the watchdog's last-frame timestamp so it sees live frames and never
-            // mistakes a healthy session for a stall.
-            noFrames.set(System.nanoTime())
-
-            if (!videoFirstFrameFired) {
-                videoFirstFrameFired = true
-                videoFirstFrameLatch.countDown()
-                if (MediaPlayer.DEBUG) logger.debug("$debugLabel First frame $ew x $eh (libvlc).")
-            }
-        } catch (t: Throwable) {
-            if (MediaPlayer.DEBUG) logger.warn("$debugLabel render callback: ${t.message}")
-        }
-    }
-
-    // 鈹€鈹€ Audio callback 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
-    private val audioCallback: AudioCallback = object : AudioCallback {
-        override fun play(mp: VlcjMediaPlayer, samples: com.sun.jna.Pointer, sampleCount: Int, pts: Long) {
-            val out = audioPipeOut ?: return
-            if (sampleCount <= 0) return
-            val byteCount = sampleCount * 4 // S16 stereo = 4 bytes per frame
+            if (ew <= 0 || eh <= 0) return
             try {
-                val bytes = samples.getByteArray(0, byteCount)
-                out.write(bytes, 0, byteCount)
-            } catch (e: Exception) {
-                if (MediaPlayer.DEBUG) logger.warn("$debugLabel [audio] pipe write: ${e.message}")
+                val i420 = buf.duplicate().order(ByteOrder.nativeOrder()); i420.rewind()
+                val total = frameWidth * frameHeight + 2 * ((frameWidth + 1) / 2) * ((frameHeight + 1) / 2)
+                val frameSize = if (gpuYuvActive) {
+                    val c = ((ew + 1) / 2) * ((eh + 1) / 2)
+                    ew * eh + 2 * c
+                } else ew * eh * 3
+
+                var spare = surface.takeOrAllocate(frameSize)
+                spare.clear()
+
+                if (frameWidth == ew && frameHeight == eh) {
+                    if (gpuYuvActive) {
+                        for (i in 0 until total) spare.put(i420.get())
+                    } else {
+                        i420ToRgb24(i420, frameWidth, frameHeight, spare)
+                        applyBrightness(spare, frameSize, getBrightness())
+                    }
+                } else {
+                    if (gpuYuvActive) {
+                        resizeI420(i420, frameWidth, frameHeight, spare, ew, eh)
+                    } else {
+                        val scratch = rgbScratch?.takeIf { it.capacity() >= frameWidth * frameHeight * 3 }?.also { it.clear() }
+                            ?: ByteBuffer.allocateDirect(frameWidth * frameHeight * 3).also { rgbScratch = it }
+                        i420ToRgb24(i420, frameWidth, frameHeight, scratch)
+                        resizeRgb24(scratch, frameWidth, frameHeight, spare, ew, eh)
+                        applyBrightness(spare, frameSize, getBrightness())
+                    }
+                }
+                spare.flip()
+
+                if (parkFlag.get()) return
+
+                // Popout / preview sinks (RGB frame always converted above for the non-planar path).
+                val sink = popoutSink ?: previewSink
+                if (sink != null) sink(spare, ew, eh, FramePixelFormat.RGB24)
+
+                // Publish to the GPU surface for the render thread.
+                surface.publish(spare, frameSize)
+                noFrames.set(System.nanoTime())
+
+                if (!firstFrameFired) {
+                    firstFrameFired = true
+                    firstFrameLatch.countDown()
+                    if (MediaPlayer.DEBUG) logger.debug("$debugLabel first frame $ew x $eh (libvlc).")
+                }
+            } catch (t: Throwable) {
+                if (MediaPlayer.DEBUG) logger.warn("$debugLabel frame publish: ${t.message}")
             }
         }
-        override fun pause(mp: VlcjMediaPlayer, pts: Long) {}
-        override fun resume(mp: VlcjMediaPlayer, pts: Long) {}
-        override fun flush(mp: VlcjMediaPlayer, pts: Long) {}
-        override fun drain(mp: VlcjMediaPlayer) {}
-        override fun setVolume(volume: Float, mute: Boolean) {}
+
+        private fun matches(w: Int, h: Int) = buffers[0] != null && frameWidth == w && frameHeight == h
+
+        private fun resize(w: Int, h: Int) {
+            frameWidth = w
+            frameHeight = h
+            bufferSize = w * h + 2 * ((w + 1) / 2) * ((h + 1) / 2)
+            for (i in 0 until BUFFER_COUNT) {
+                buffers[i] = ByteBuffer.allocateDirect(bufferSize).order(ByteOrder.nativeOrder())
+                pointers[i] = com.sun.jna.Native.getDirectBufferPointer(buffers[i]!!)
+                inUse[i] = false
+            }
+            dropBuffer = ByteBuffer.allocateDirect(bufferSize.coerceAtLeast(4)).order(ByteOrder.nativeOrder())
+            dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
+            nextWrite = 0
+            writing = -1
+            latest = -1
+        }
+
+        @Synchronized
+        private fun clear() {
+            for (i in 0 until BUFFER_COUNT) {
+                buffers[i] = null
+                pointers[i] = null
+                inUse[i] = false
+            }
+            dropBuffer = null
+            dropPointer = null
+            bufferSize = 0
+            nextWrite = 0
+            writing = -1
+            latest = -1
+        }
+
+        private fun acquireWriteBuffer(): Int {
+            for (i in 0 until BUFFER_COUNT) {
+                val index = (nextWrite + i) % BUFFER_COUNT
+                if (!inUse[index] && index != writing) {
+                    nextWrite = (index + 1) % BUFFER_COUNT
+                    return index
+                }
+            }
+            return -1
+        }
+
+        private fun ensureDropBuffer() {
+            if (dropBuffer != null && dropPointer != null && dropBuffer!!.capacity() == bufferSize.coerceAtLeast(4)) return
+            val size = bufferSize.coerceAtLeast(4)
+            dropBuffer = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
+            dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
+        }
     }
 
-    // 鈹€鈹€ Frame conversion helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── First-frame latch ───────────────────────────────────────────────────
+
+    private var firstFrameLatch = CountDownLatch(1)
+    private var firstFrameFired = false
+
+    // ── Frame conversion helpers ────────────────────────────────────────────
+
+    private var rgbScratch: ByteBuffer? = null
 
     private fun i420ToRgb24(i420: ByteBuffer, w: Int, h: Int, rgb: ByteBuffer) {
         val ySize = w * h
@@ -757,164 +748,20 @@ internal class LibVlcSessionManager(
     private fun applyBrightness(buf: ByteBuffer, size: Int, brightness: Double) {
         val factor = brightness.coerceIn(0.0, 2.0)
         if (factor == 1.0) return
-        val savedPos = buf.position()
-        val savedLim = buf.limit()
         buf.flip()
         for (i in 0 until size) {
             val v = ((buf.get(i).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
             buf.put(i, v.toByte())
         }
-        buf.limit(savedLim)
-        buf.position(savedPos)
     }
 
-    private fun feedSink(buf: ByteBuffer, w: Int, h: Int) {
-        val sink = popoutSink ?: previewSink ?: return
-        if (gpuYuvActive) {
-            val rgbaSize = w * h * 4
-            val rgba = popoutRgba?.takeIf { it.capacity() >= rgbaSize }?.also { it.clear() }
-                ?: ByteBuffer.allocateDirect(rgbaSize).also { popoutRgba = it }
-            // I420 鈫?RGBA
-            val ySize = w * h
-            val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
-            buf.rewind()
-            for (row in 0 until h) {
-                for (col in 0 until w) {
-                    val y = buf.get(row * w + col).toInt() and 0xFF
-                    val u = buf.get(ySize + (row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
-                    val v = buf.get(ySize + uvSize + (row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
-                    rgba.put(((y + 1.402 * (v - 128)).toInt().coerceIn(0, 255)).toByte())
-                    rgba.put(((y - 0.344 * (u - 128) - 0.714 * (v - 128)).toInt().coerceIn(0, 255)).toByte())
-                    rgba.put(((y + 1.772 * (u - 128)).toInt().coerceIn(0, 255)).toByte())
-                    rgba.put(0xFF.toByte())
-                }
-            }
-            buf.rewind()
-            rgba.flip()
-            sink(rgba, w, h, FramePixelFormat.RGBA32)
-        } else {
-            sink(buf, w, h, FramePixelFormat.RGB24)
-        }
-    }
-
-    // 鈹€鈹€ Target dimensions 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
-    private fun targetDims(streamSet: ActiveStreams?, lastQuality: Int = 0): Pair<Int, Int> {
-        val (tw, th) = getTextureSize()
-        if (tw > 0 && th > 0) return tw to th
-        val q = when {
-            lastQuality > 0 -> lastQuality
-            streamSet != null -> MediaStreamSelector.parseQuality(streamSet.currentVideo)
-            else -> 0
-        }
-        if (q <= 0) return 854 to 480
-        return MediaStreamSelector.qualityToDims(q).let { it[0] to it[1] }
-    }
-
-    /** Frame rate assumption for sources without a valid FPS. */
     companion object {
+        private const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
         private const val REPLAY_FPS = 30.0
+        private val I420 = byteArrayOf('I'.code.toByte(), '4'.code.toByte(), '2'.code.toByte(), '0'.code.toByte())
+        private val DROP_TOKEN = Pointer.createConstant(0x7FFFFFFFL)
+        private val DROP_TOKEN_VALUE = 0x7FFFFFFFL
         private fun outputFps(sourceFps: Double?): Double =
             sourceFps?.takeIf { it.isFinite() && it > 1.0 && it <= 240.0 } ?: REPLAY_FPS
-    }
-}
-
-/**
- * Minimal AudioSink for the libvlc PCM pipe 鈥?reads S16 stereo PCM from a
- * [PipedInputStream] and writes it to a [SourceDataLine] for actual audio output.
- * libvlc handles A/V sync internally; this sink just plays the PCM.
- */
-internal class AudioSink(private val debugLabel: String) {
-    companion object {
-        const val SAMPLE_RATE = 44100
-        const val BYTES_PER_FRAME = 4 // S16 stereo
-        private const val CHUNK_BYTES = SAMPLE_RATE * 2 * 2 / 20 // ~0.05s
-    }
-
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/AudioSink")
-    private var stream: java.io.InputStream? = null
-    private var thread: Thread? = null
-    private var line: javax.sound.sampled.SourceDataLine? = null
-    @Volatile private var running = false
-    @Volatile private var paused = false
-    private var readBuffer = ByteArray(CHUNK_BYTES)
-
-    fun start(url: String, debugLabel: String, pipeIn: java.io.InputStream, offsetNanos: Long, clock: PlaybackClock) {
-        stop()
-        stream = pipeIn
-        running = true
-
-        // Open the audio line
-        val audioFormat = javax.sound.sampled.AudioFormat(
-            SAMPLE_RATE.toFloat(), 16, 2, true, false // S16LE stereo
-        )
-        val info = javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine::class.java, audioFormat)
-        try {
-            val audioLine = javax.sound.sampled.AudioSystem.getLine(info) as javax.sound.sampled.SourceDataLine
-            audioLine.open(audioFormat, CHUNK_BYTES * 8)
-            audioLine.start()
-            line = audioLine
-        } catch (e: Exception) {
-            logger.warn("$debugLabel Audio line unavailable: ${e.message}")
-        }
-
-        val st = pipeIn
-        thread = daemon({
-            try {
-                while (running && !Thread.currentThread().isInterrupted) {
-                    if (paused) {
-                        line?.stop()
-                        try { Thread.sleep(20) } catch (_: InterruptedException) { break }
-                        continue
-                    }
-                    if (line != null && !line!!.isRunning) line!!.start()
-                    val n = st.read(readBuffer)
-                    if (n < 0) break
-                    if (n > 0) {
-                        line?.write(readBuffer, 0, n)
-                    }
-                }
-            } catch (e: Exception) {
-                if (running) logger.warn("$debugLabel AudioSink: ${e.message}")
-            } finally {
-                runCatching { line?.drain(); line?.stop(); line?.close() }
-                line = null
-            }
-        }, "MediaPlayer-audio").also { it.start() }
-    }
-
-    fun stop() {
-        running = false
-        paused = false
-        thread?.interrupt()
-        thread = null
-        stream = null
-        runCatching { line?.drain(); line?.stop(); line?.close() }
-        line = null
-    }
-
-    fun pause() {
-        paused = true
-        thread?.interrupt()
-    }
-
-    fun resume() {
-        paused = false
-        thread?.interrupt()
-    }
-
-    fun setVolume(volume: Double) {
-        val gain = (volume * 6.0 - 80.0).coerceIn(-80.0, 6.0) // dB
-        try {
-            line?.let {
-                if (it.isControlSupported(javax.sound.sampled.FloatControl.Type.MASTER_GAIN)) {
-                    (it.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN) as javax.sound.sampled.FloatControl).value = gain.toFloat()
-                }
-            }
-        } catch (_: Exception) { }
-    }
-
-    fun requestResync() {
-        // No-op: libvlc handles A/V sync
     }
 }
