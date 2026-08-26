@@ -66,9 +66,14 @@ cd "$VLC_SRC_DIR"
 # sdl2, chromaprint, dcadec, etc. — all are needed for a complete player.
 VC_OPTS_BASE=(
   --disable-qt --disable-skins2
-  --disable-lua --disable-lua2 --disable-ncurses
+  --disable-lua --disable-ncurses
   --disable-fluidsynth
   --prefix="$OUT_LIBDIR"
+)
+
+# Sparkle is VLC's auto-update framework; useless for a bundled player lib
+VC_OPTS_MACOS=(
+  --disable-sparkle
 )
 
 # ── 2. Install build dependencies & configure ───────────────────────────────
@@ -96,9 +101,47 @@ case "$OS_NAME" in
       libdca-dev libfaad-dev libtwolame-dev libmpcdec-dev \
       libvpx-dev libx264-dev libx265-dev \
       libopus-dev libflac-dev libsdl2-dev \
-      liblivemedia-dev \
       libjpeg-dev libpng-dev \
       zlib1g-dev libbz2-dev
+
+    # live555 is not available in Ubuntu 24.04 repos, so build it from source
+    echo ">>> Building live555 from source (RTSP support)"
+    LIVE555_DIR="$ROOT/.build-cache/live555"
+    if [[ ! -f "/usr/local/lib/pkgconfig/live555.pc" ]]; then
+      mkdir -p "$(dirname "$LIVE555_DIR")"
+      cd "$(dirname "$LIVE555_DIR")"
+      if [[ ! -d "$LIVE555_DIR" ]]; then
+        curl -fL --retry 3 --retry-all-errors -o live555.tar.gz \
+          "https://www.live555.com/liveMedia/public/live555-latest.tar.gz"
+        tar xzf live555.tar.gz
+        mv live "$LIVE555_DIR"
+      fi
+      cd "$LIVE555_DIR"
+      ./genMakefiles linux
+      make -j"${MAKE_JOBS}"
+      sudo mkdir -p /usr/local/include /usr/local/lib /usr/local/lib/pkgconfig
+      sudo cp -r BasicUsageEnvironment/include/* /usr/local/include/
+      sudo cp -r groupsock/include/* /usr/local/include/
+      sudo cp -r liveMedia/include/* /usr/local/include/liveMedia/
+      sudo cp -r UsageEnvironment/include/* /usr/local/include/
+      sudo cp -r BasicUsageEnvironment/libBasicUsageEnvironment.a /usr/local/lib/
+      sudo cp -r groupsock/libgroupsock.a /usr/local/lib/
+      sudo cp -r liveMedia/libliveMedia.a /usr/local/lib/
+      sudo cp -r UsageEnvironment/libUsageEnvironment.a /usr/local/lib/
+      sudo tee /usr/local/lib/pkgconfig/live555.pc > /dev/null <<'PKGCONFIG'
+prefix=/usr/local
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: live555
+Description: LIVE555 Streaming Media
+Version: 2023.11.30
+Libs: -L${libdir} -lliveMedia -lBasicUsageEnvironment -lUsageEnvironment -lgroupsock
+Cflags: -I${includedir} -I${includedir}/liveMedia
+PKGCONFIG
+    fi
+    cd "$VLC_SRC_DIR"
+    export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
 
     CONFIGURE_HOST=""
     VLC_BUILD_OPTS=("${VC_OPTS_BASE[@]}")
@@ -117,7 +160,7 @@ case "$OS_NAME" in
     brew link --overwrite gettext libtool 2>/dev/null || true
 
     CONFIGURE_HOST=""
-    VLC_BUILD_OPTS=("${VC_OPTS_BASE[@]}")
+    VLC_BUILD_OPTS=("${VC_OPTS_BASE[@]}" "${VC_OPTS_MACOS[@]}")
     ;;
 
   Windows)
