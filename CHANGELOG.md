@@ -6,9 +6,13 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > from JavaCPP/FFmpeg to **libvlc** (vlcj). One unified `EmbeddedMediaPlayer`
 > handles video + audio (no split channels); play/pause/seek/A-V sync are all
 > delegated to libvlc instead of reimplemented pacing loops. The bundled LibVLC
-> runtime is collected by the CI "Build Natives" workflow (like sqlite-jdbc) and
-> injected into the fat jars, because `vlcj-natives` ships no native binaries.
-> This work is in progress on the `feat/libvlc` branch.
+> runtime is **built from the official VideoLAN source** by the CI "Build
+> Natives" workflow (6 target platforms: Linux/macOS/Windows × x86_64/aarch64)
+> and injected into the fat jars, because `vlcj-natives` ships no native
+> binaries and official pre-built libvlc does not cover all platforms. A
+> runtime loader (`LibVlcNativesLoader`) extracts the natives from the classpath
+> and wires up `jna.library.path` / `VLC_PLUGIN_PATH`. This work is in progress
+> on the `feat/libvlc` branch.
 
 ## Highlights
 
