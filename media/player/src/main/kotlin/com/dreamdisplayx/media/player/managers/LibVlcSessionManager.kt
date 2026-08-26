@@ -159,7 +159,6 @@ internal class LibVlcSessionManager(
     // ── Low-level callbacks (held strongly for life) ───────────────────────
 
     private val eventCallback = LibVlc.EventCallback { event, _ -> handleEvent(event) }
-
     /** Triple-buffered video frame pool + callbacks (VideoPlayer TextureRenderCallback model). */
     private val videoFrames = TextureRenderCallback()
 
@@ -518,8 +517,9 @@ internal class LibVlcSessionManager(
         private var latest = -1
 
         @Synchronized
-        fun setup(opaque: com.sun.jna.ptr.PointerByReference, chroma: Pointer, width: Pointer, height: Pointer,
-                  pitches: Pointer, lines: Pointer): Int {
+        fun setup(opaque: com.sun.jna.ptr.PointerByReference?, chroma: Pointer?, width: Pointer?, height: Pointer?,
+                  pitches: Pointer?, lines: Pointer?): Int {
+            if (width == null || height == null || chroma == null || pitches == null || lines == null) return 0
             val w = width.getInt(0)
             val h = height.getInt(0)
             if (w <= 0 || h <= 0 || w > 16384 || h > 16384) {
@@ -539,12 +539,13 @@ internal class LibVlcSessionManager(
         }
 
         @Synchronized
-        fun cleanup(opaque: Pointer) {
+        fun cleanup(opaque: Pointer?) {
             clear()
         }
 
         @Synchronized
-        fun lock(opaque: Pointer, planes: Pointer): Pointer {
+        fun lock(opaque: Pointer?, planes: Pointer?): Pointer? {
+            if (planes == null) return DROP_TOKEN
             if (buffers[0] == null || bufferSize <= 0) {
                 ensureDropBuffer()
                 planes.setPointer(0, dropPointer!!)
@@ -568,11 +569,12 @@ internal class LibVlcSessionManager(
         }
 
         @Synchronized
-        fun unlock(opaque: Pointer, picture: Pointer, planes: Pointer) {
+        fun unlock(opaque: Pointer?, picture: Pointer?, planes: Pointer?) {
         }
 
         @Synchronized
-        fun display(opaque: Pointer, picture: Pointer) {
+        fun display(opaque: Pointer?, picture: Pointer?) {
+            if (picture == null) return
             val token = Pointer.nativeValue(picture)
             if (token == DROP_TOKEN_VALUE) return
             val index = (token - 1).toInt()

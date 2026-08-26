@@ -16,6 +16,8 @@ import java.nio.charset.StandardCharsets
  */
 object LibVlc {
 
+    private val logger = org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
+
     // ── Event constants ──────────────────────────────────────────────────────
 
     const val LIBVLC_MEDIA_PLAYER_PLAYING = 0x104
@@ -61,18 +63,26 @@ object LibVlc {
         loadAttempted = true
         try {
             // NativesDownloader.ensure() is called by LibVlcNativesLoader.load() which sets up
-            // jna.library.path and VLC_PLUGIN_PATH. We just need to load the library.
+            // jna.library.path and the VLC_PLUGIN_PATH system property. The low-level binding must
+            // pass the plugin path explicitly to libvlc_new (vlcj does this internally; libvlc does
+            // NOT read the Java system property).
             com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
             Native.load("libvlc", LibVlcNative::class.java)
             val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--quiet",
                 "--no-keyboard-events", "--no-mouse-events", "--network-caching=300",
                 "--file-caching=300", "--live-caching=600", "--audio-filter=scaletempo")
+            // Explicit plugin path is REQUIRED for the low-level binding, otherwise libvlc cannot
+            // find its modules and libvlc_new returns null.
+            System.getProperty("VLC_PLUGIN_PATH")?.takeIf { it.isNotBlank() }?.let { plugins ->
+                opts.add("--plugin-path=$plugins")
+            }
             if (LibVlc.useHwAccel) opts.add("--avcodec-hw=any")
             instance = libcCreateInstance(opts)
             loadError = null
             return true
         } catch (t: Throwable) {
             loadError = t
+            logger.warn("LibVLC low-level load failed: ${t.message}")
             return false
         }
     }
@@ -137,61 +147,65 @@ object LibVlc {
     }
 
     // ── Callback interfaces ──────────────────────────────────────────────────
+    // The Pointer parameters are nullable because libvlc passes a null `opaque` (and null
+    // `userData` for events) when we registered the callbacks with a null context. Kotlin would
+    // otherwise insert a non-null check on a null native argument and throw an NPE inside the
+    // JNA callback trampoline.
 
     fun interface EventCallback : Callback {
-        fun invoke(event: Pointer, userData: Pointer)
+        fun invoke(event: Pointer?, userData: Pointer?)
     }
 
     fun interface VideoLockCallback : Callback {
-        fun invoke(opaque: Pointer, planes: Pointer): Pointer
+        fun invoke(opaque: Pointer?, planes: Pointer?): Pointer?
     }
 
     fun interface VideoUnlockCallback : Callback {
-        fun invoke(opaque: Pointer, picture: Pointer, planes: Pointer)
+        fun invoke(opaque: Pointer?, picture: Pointer?, planes: Pointer?)
     }
 
     fun interface VideoDisplayCallback : Callback {
-        fun invoke(opaque: Pointer, picture: Pointer)
+        fun invoke(opaque: Pointer?, picture: Pointer?)
     }
 
     fun interface VideoFormatCallback : Callback {
-        fun invoke(opaque: PointerByReference, chroma: Pointer, width: Pointer, height: Pointer, pitches: Pointer, lines: Pointer): Int
+        fun invoke(opaque: PointerByReference?, chroma: Pointer?, width: Pointer?, height: Pointer?, pitches: Pointer?, lines: Pointer?): Int
     }
 
     fun interface VideoCleanupCallback : Callback {
-        fun invoke(opaque: Pointer)
+        fun invoke(opaque: Pointer?)
     }
 
     fun interface AudioPlayCallback : Callback {
-        fun invoke(data: Pointer, samples: Pointer, count: Int, pts: Long)
+        fun invoke(data: Pointer?, samples: Pointer?, count: Int, pts: Long)
     }
 
     fun interface AudioPauseCallback : Callback {
-        fun invoke(data: Pointer, pts: Long)
+        fun invoke(data: Pointer?, pts: Long)
     }
 
     fun interface AudioResumeCallback : Callback {
-        fun invoke(data: Pointer, pts: Long)
+        fun invoke(data: Pointer?, pts: Long)
     }
 
     fun interface AudioFlushCallback : Callback {
-        fun invoke(data: Pointer, pts: Long)
+        fun invoke(data: Pointer?, pts: Long)
     }
 
     fun interface AudioDrainCallback : Callback {
-        fun invoke(data: Pointer)
+        fun invoke(data: Pointer?)
     }
 
     fun interface AudioSetVolumeCallback : Callback {
-        fun invoke(data: Pointer, volume: Float, mute: Int)
+        fun invoke(data: Pointer?, volume: Float, mute: Int)
     }
 
     fun interface AudioSetupCallback : Callback {
-        fun invoke(data: PointerByReference, format: Pointer, rate: Pointer, channels: Pointer): Int
+        fun invoke(data: PointerByReference?, format: Pointer?, rate: Pointer?, channels: Pointer?): Int
     }
 
     fun interface AudioCleanupCallback : Callback {
-        fun invoke(data: Pointer)
+        fun invoke(data: Pointer?)
     }
 
     // ── Low-level libvlc native API ──────────────────────────────────────────
