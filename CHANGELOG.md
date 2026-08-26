@@ -2,6 +2,19 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **libvlc full VideoPlayer-model rewrite (feat/libvlc)** — the whole playback pipeline was
+> rebuilt to mirror the VideoPlayer mod's low-level libvlc architecture, dropping the fragile
+> vlcj wrapper entirely. A single libvlc instance + single media player are created once for the
+> whole session-manager lifetime and never rebuilt; switching videos only calls `set_media` +
+> `play` on the existing player, so no JNA callback trampoline is ever dropped while libvlc's
+> async teardown could still touch it — `JNA: callback object has been garbage collected` spam,
+> the green/frame flicker on switch, and the stutter are all eliminated by construction. Video is
+> delivered through low-level lock/unlock/display/setup/cleanup callbacks into a triple-buffered
+> pool (the VideoPlayer `TextureRenderCallback` model), and every libvlc control operation is
+> serialised on one control executor. Audio is now left to libvlc's own default output (the
+> `:input-slave` DASH audio stream is merged into the same player), removing the fragile Java PCM
+> pipe that caused audio to fade after a few seconds. Volume is still controlled through libvlc.
+>
 > **libvlc reliability (feat/libvlc)** — removed the FFmpeg-era stall watchdog and
 > CDN-failover recovery from `MediaPlayer`; libvlc now owns buffering, A/V sync and
 > network recovery, so a healthy session is no longer misjudged as stalled and

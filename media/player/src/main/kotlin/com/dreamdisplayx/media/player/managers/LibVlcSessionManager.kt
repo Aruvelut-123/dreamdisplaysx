@@ -82,6 +82,12 @@ internal class LibVlcSessionManager(
 ) {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcSession")
 
+    init {
+        // Mirror the config's hw-accel preference onto the shared libvlc instance before it is
+        // created (the singleton instance is built on first use, so this must be set up front).
+        LibVlc.useHwAccel = useHwAccel
+    }
+
     /** Media-player events we attach to (VideoPlayer's set). */
     private val MEDIA_PLAYER_EVENTS = intArrayOf(
         LibVlc.LIBVLC_MEDIA_PLAYER_PLAYING,
