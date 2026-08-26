@@ -732,11 +732,23 @@ class MediaPlayer(
             )
         } else streamSet
 
-        sessionManager.start(
-            probedStreamSet,
-            offsetNanos,
-            lastQuality,
-        )
+        try {
+            sessionManager.start(
+                probedStreamSet,
+                offsetNanos,
+                lastQuality,
+            )
+        } catch (e: Exception) {
+            // startStreams runs on the control executor (via safeExecute), which only guards
+            // the submit() itself — an async failure here would otherwise be silently swallowed
+            // by the executor and never reach the UI. Surface it so the display shows the error
+            // (red) state instead of hanging on the loading placeholder forever.
+            logger.error("$debugLabel Failed to start media session: ${e.message}")
+            state.set(PlaybackState.ERROR)
+            host.mediaError = e as? DreamMediaException
+                ?: DreamMediaException.Decode(e.message ?: "failed to start media session", isFatal = true)
+            return
+        }
         if (sessionManager.isPlaying) {
             state.set(PlaybackState.PLAYING)
             watchdog.start()
