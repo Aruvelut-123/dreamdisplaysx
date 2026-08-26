@@ -140,6 +140,7 @@ case "$OS_NAME" in
       ${MINGW_PREFIX}-toolchain \
       ${MINGW_PREFIX}-pkgconf \
       ${MINGW_PREFIX}-libmad \
+      ${MINGW_PREFIX}-a52dec \
       ${MINGW_PREFIX}-libogg \
       ${MINGW_PREFIX}-libvorbis \
       ${MINGW_PREFIX}-libtheora \
@@ -159,7 +160,8 @@ case "$OS_NAME" in
       ${MINGW_PREFIX}-ffmpeg \
       ${MINGW_PREFIX}-opus \
       ${MINGW_PREFIX}-flac \
-      ${MINGW_PREFIX}-chromaprint
+      ${MINGW_PREFIX}-chromaprint \
+      ${MINGW_PREFIX}-live-media
 
     # Set PKG_CONFIG_PATH for the correct mingw prefix
     if [[ "$MSYSTEM" == "CLANGARM64" ]]; then
@@ -177,13 +179,6 @@ case "$OS_NAME" in
     fi
 
     VLC_BUILD_OPTS=("${VC_OPTS_BASE[@]}")
-
-    # On Windows, liba52 and live555 are not packaged in MSYS2 mingw repos,
-    # so disable them here (AC-3 still works via avcodec; RTSP rarely used).
-    VLC_BUILD_OPTS+=(
-      --disable-a52
-      --disable-live555
-    )
     ;;
 
   *)
