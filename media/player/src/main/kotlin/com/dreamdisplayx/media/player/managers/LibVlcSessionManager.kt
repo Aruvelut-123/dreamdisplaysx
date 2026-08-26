@@ -282,40 +282,20 @@ internal class LibVlcSessionManager(
             args.add("--avcodec-hw=any")
         }
 
-        // Ensure libvlc natives are loaded before creating the factory
-        LibVlcNativesLoader.load()
-
-        // Factory is a session-manager singleton: libvlc state and the callback trampolines
-        // registered into this instance must stay alive for the whole session manager lifetime.
-        // Rebuilding the factory (and libvlc instance) on every start() would leave libvlc's async
-        // teardown pointing at a GC'd trampoline, producing "callback object has been garbage
-        // collected" spam and playback stutter.
-        val fact = factory ?: MediaPlayerFactory(args).also { factory = it }
-
-        val mp = fact.mediaPlayers().newEmbeddedMediaPlayer()
+        // One MediaPlayerFactory + EmbeddedMediaPlayer for the whole session-manager lifetime
+        // (the VideoPlayer model). Every JNA callback trampoline is registered exactly once and
+        // held by strong references until cleanup(); switching videos only replaces the media on
+        // the existing player. Rebuilding the player on every start() would let libvlc's async
+        // teardown touch a GC'd trampoline -> "callback object has been garbage collected" spam,
+        // green/frame flicker (two players racing the same video surface) and playback stutter.
+        val mp = playerSingleton(args)
         mediaPlayer = mp
 
-        // Set up video callbacks. The surface is a session-manager singleton: rebuilding it on
-        // every start() would let libvlc's async teardown hit a GC'd trampoline (JNA spam + stutter).
-        val videoSurface = videoSurface ?: fact.videoSurfaces().newVideoSurface(
-            videoBufferFormatCb,
-            videoRenderCallback,
-            true,
-        ).also { this.videoSurface = it }
-        // Couldn't set video surface on a non-embedded player... but newEmbeddedMediaPlayer() returns EmbeddedMediaPlayer
-        // Actually EmbeddedMediaPlayer HAS videoSurface() method
-        mp.videoSurface().set(videoSurface)
-
-        // Set up audio callbacks
+        // The audio PCM pipe is per-session: it feeds this start()'s AudioSink instance.
         val audioPipeOut = PipedOutputStream()
         val audioPipeIn = PipedInputStream(audioPipeOut, 1024 * 1024)
         this.audioPipeOut = audioPipeOut
         this.audioPipeIn = audioPipeIn
-
-        mp.audio().callback("S16N", AudioSink.SAMPLE_RATE, 2, audioCallback)
-
-        // Event listener
-        mp.events().addMediaPlayerEventListener(mediaPlayerEventListener)
 
         // Start playback (media-level options carry UA + platform referer).
         // Bilibili/YouTube DASH expose video and audio as separate URLs; libvlc attaches the
@@ -360,6 +340,44 @@ internal class LibVlcSessionManager(
     }
 
     /**
+     * Returns the single MediaPlayerFactory + EmbeddedMediaPlayer pair for this session manager,
+     * creating it on first use. The player is never rebuilt: switching videos replaces the media
+     * on this same player, so every JNA callback (video surface lock/unlock/display, audio
+     * play/flush, events) is registered exactly once and held strongly until [cleanup]. This is
+     * the same single-instance model used by VideoPlayer.
+     */
+    private fun playerSingleton(args: List<String>): EmbeddedMediaPlayer {
+        val existing = mediaPlayer
+        if (existing != null) return existing
+
+        // Ensure libvlc natives are loaded before creating the factory
+        LibVlcNativesLoader.load()
+
+        val fact = MediaPlayerFactory(args)
+        factory = fact
+
+        val mp = fact.mediaPlayers().newEmbeddedMediaPlayer()
+        mediaPlayer = mp
+
+        // Set up video callbacks (once). The surface is a session-manager singleton like the
+        // player; rebuilding it would let libvlc's async teardown hit a GC'd trampoline.
+        val videoSurface = fact.videoSurfaces().newVideoSurface(
+            videoBufferFormatCb,
+            videoRenderCallback,
+            true,
+        ).also { this.videoSurface = it }
+        mp.videoSurface().set(videoSurface)
+
+        // Set up audio callbacks (once).
+        mp.audio().callback("S16N", AudioSink.SAMPLE_RATE, 2, audioCallback)
+
+        // Event listener (once).
+        mp.events().addMediaPlayerEventListener(mediaPlayerEventListener)
+
+        return mp
+    }
+
+    /**
      * Starts video-only replay (no audio, no libvlc 鈥?just uses the existing surface).
      * Not supported in the initial libvlc port; returns false.
      */
@@ -400,18 +418,15 @@ internal class LibVlcSessionManager(
         isPlaying = false
         parkFlag.set(false)
         eosReached = true
+        // The player is a singleton: do NOT release it or null the field here. Rebuilding it on
+        // every restart would let libvlc's async teardown touch a GC'd JNA trampoline, causing
+        // "callback object has been garbage collected" spam, green/frame flicker and stutter.
         val mp = mediaPlayer
-        mediaPlayer = null
         if (mp != null) {
             try {
                 mp.controls().stop()
-                mp.release()
             } catch (_: Exception) { }
         }
-        // Factory is intentionally NOT released here — it is a singleton that lives for the
-        // whole session manager lifecycle. Releasing and recreating it would leave the old
-        // libvlc instance's async teardown pointing at GC'd JNA callback trampolines.
-        // Factory release happens in cleanup().
         audio.stop()
         runCatching { audioPipeOut?.close() }
         audioPipeOut = null
@@ -431,6 +446,13 @@ internal class LibVlcSessionManager(
      */
     fun cleanup() {
         stop()
+        val mp = mediaPlayer
+        mediaPlayer = null
+        if (mp != null) {
+            try {
+                mp.release()
+            } catch (_: Exception) { }
+        }
         val fact = factory
         factory = null
         if (fact != null) {
