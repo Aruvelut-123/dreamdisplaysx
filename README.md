@@ -151,8 +151,9 @@ cd dreamdisplaysx
 
 The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; the active version is
 selected in `versions/active.txt`. On the `feat/libvlc` branch, the media pipeline is being ported from JavaCPP/FFmpeg to
-**libvlc** (vlcj). The LibVLC runtime is built from the official VideoLAN source by the CI "Build Natives" workflow
-(`.github/workflows/natives.yml`) and bundled into the fat jars.
+**libvlc** (vlcj). The LibVLC runtime is collected from official pre-built VideoLAN distributions by the CI "Build Natives"
+workflow (`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for macOS and Windows
+x86/x64, and the MSYS2 package for Windows aarch64 — then bundled into the fat jars.
 
 ## Disclaimer
 
