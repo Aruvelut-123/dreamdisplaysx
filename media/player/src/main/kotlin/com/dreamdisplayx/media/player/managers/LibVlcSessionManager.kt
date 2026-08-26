@@ -231,7 +231,7 @@ internal class LibVlcSessionManager(
             "--file-caching=300",
             "--live-caching=600",
         )
-        MediaHosts.refererFor(safeUrl)?.let { args.add("--http-referer=$it") }
+        MediaHosts.refererFor(safeUrl)?.let { args.add("--http-referrer=$it") }
 
         // Ensure libvlc natives are loaded before creating the factory
         LibVlcNativesLoader.load()

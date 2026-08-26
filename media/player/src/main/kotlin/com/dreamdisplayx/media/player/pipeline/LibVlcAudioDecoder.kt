@@ -163,7 +163,7 @@ internal class LibVlcAudioDecoder(
         val args = mutableListOf<String>()
         args.addAll(SHARED_LIBVLC_ARGS)
         MediaHosts.refererFor(url)?.let { referer ->
-            args.add("--http-referer=$referer")
+            args.add("--http-referrer=$referer")
         }
 
         // Ensure libvlc natives are loaded
