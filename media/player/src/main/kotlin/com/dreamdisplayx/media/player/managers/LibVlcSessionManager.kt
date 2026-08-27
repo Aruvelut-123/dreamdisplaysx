@@ -229,11 +229,32 @@ internal class LibVlcSessionManager(
 
     fun textureFilled(): Boolean = surface.textureFilled()
 
-    fun updateFrame(texture: GpuTextureRef, w: Int, h: Int): Boolean =
-        surface.updateFrame(texture, w, h, expectedW, expectedH)
+    fun updateFrame(texture: GpuTextureRef, w: Int, h: Int): Boolean {
+        if (w != expectedW || h != expectedH) {
+            // Render thread drives the authoritative texture size. Adopt it (the old JavaCPP
+            // pipeline did the same via getTextureSize()) and drop the stale-size ready frame;
+            // the next publish scales to the new size and uploads match from then on.
+            if (w > 0 && h > 0) {
+                expectedW = w
+                expectedH = h
+            }
+            surface.clear()
+            return false
+        }
+        return surface.updateFrame(texture, w, h, expectedW, expectedH)
+    }
 
-    fun updateFramePlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, w: Int, h: Int): Boolean =
-        surface.updateFramePlanar(y, u, v, w, h, expectedW, expectedH)
+    fun updateFramePlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, w: Int, h: Int): Boolean {
+        if (w != expectedW || h != expectedH) {
+            if (w > 0 && h > 0) {
+                expectedW = w
+                expectedH = h
+            }
+            surface.clear()
+            return false
+        }
+        return surface.updateFramePlanar(y, u, v, w, h, expectedW, expectedH)
+    }
 
     fun hasIncoming(): Boolean = false // hard quality switch, no parallel channel
 
