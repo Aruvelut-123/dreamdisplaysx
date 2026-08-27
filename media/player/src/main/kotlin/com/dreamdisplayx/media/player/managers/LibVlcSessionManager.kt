@@ -187,7 +187,13 @@ internal class LibVlcSessionManager(
             LibVlc.LIBVLC_MEDIA_PLAYER_PLAYING -> {
                 stopped.set(false)
                 isPlaying = true
-                if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc playing.")
+                // Audio diagnostics: log track count and current volume.
+                val player = mediaPlayer
+                if (player != null) {
+                    val tracks = LibVlc.lib.libvlc_audio_get_track_count(player)
+                    val vol = LibVlc.lib.libvlc_audio_get_volume(player)
+                    logger.info("$debugLabel libvlc playing: audioTracks={} volume={}.", tracks, vol)
+                }
             }
             LibVlc.LIBVLC_MEDIA_PLAYER_PAUSED -> {
                 if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc paused.")
@@ -198,13 +204,14 @@ internal class LibVlcSessionManager(
                 fireStreamEnd()
             }
             LibVlc.LIBVLC_MEDIA_PLAYER_TIME_CHANGED -> {
-                // libvlc is the authoritative playback clock; rebase ours so the progress bar,
-                // F3 debug, and seek math follow the real stream position.
-                if (isPlaying) {
-                    submit {
-                        val mp = mediaPlayer ?: return@submit
-                        val us = LibVlc.lib.libvlc_media_player_get_time(mp)
-                        if (us >= 0) clock.rebaseTo(us * 1_000L) // µs -> ns
+                // Time-changed log is useful for debugging but we never rebase the clock:
+                // currentPacingNanos() reads libvlc_media_player_get_time() directly, and
+                // rebasing would corrupt clock.originNanos used by doRestart's offset.
+                if (MediaPlayer.DEBUG) {
+                    val player = mediaPlayer
+                    if (player != null) {
+                        val us = LibVlc.lib.libvlc_media_player_get_time(player)
+                        if (us >= 0) logger.debug("$debugLabel TIME_CHANGED {} ms.", us / 1000)
                     }
                 }
             }
@@ -306,6 +313,10 @@ internal class LibVlcSessionManager(
         val audioUrl = streamSet.currentAudio.url
         if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
             mediaOptions.add(":input-slave=$audioUrl")
+            logger.info("$debugLabel audio slave merged ({} bytes of options).", mediaOptions.size)
+        } else {
+            logger.warn("$debugLabel audio slave NOT merged: audioUrl='{}' equalsVideo={}.",
+                audioUrl.ifBlank { "<blank>" }, audioUrl.equals(safeUrl, ignoreCase = true))
         }
 
         submit {
@@ -502,7 +513,14 @@ internal class LibVlcSessionManager(
 
     // ── Pacing / clock ──────────────────────────────────────────────────────
 
-    fun currentPacingNanos(): Long = clock.currentTime()
+    fun currentPacingNanos(): Long {
+        // libvlc is the authoritative playback clock: ask it directly (µs -> ns) instead of
+        // extrapolating from the wall clock, so the progress bar / timeline follow the real
+        // stream position exactly (including seeks). Falls back to the local clock when not playing.
+        val mp = mediaPlayer ?: return clock.currentTime()
+        val us = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+        return if (us >= 0) us * 1_000L else clock.currentTime()
+    }
 
     fun activeBridgeEdgeNanos(): Long? = null
 

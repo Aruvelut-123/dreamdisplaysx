@@ -309,7 +309,8 @@ class MediaPlayer(
     fun getCurrentTime(): Long {
         sessionManager.parkedPositionNanos()?.let { return it }
         if (!isReady || !sessionManager.isPlaying) return clock.originNanos
-        return clock.currentTime()
+        // libvlc is the authoritative clock: read the real stream position directly (µs -> ns).
+        return sessionManager.currentPacingNanos()
     }
 
     /**

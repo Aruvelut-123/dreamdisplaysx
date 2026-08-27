@@ -257,6 +257,9 @@ object LibVlc {
         // Audio
         fun libvlc_audio_set_volume(player: Pointer, volume: Int): Int
         fun libvlc_audio_get_volume(player: Pointer): Int
+        fun libvlc_audio_get_track_count(player: Pointer): Int
+        fun libvlc_audio_get_track(player: Pointer): Int
+        fun libvlc_audio_set_track(player: Pointer, track: Int): Int
         fun libvlc_audio_set_callbacks(player: Pointer, play: AudioPlayCallback, pause: AudioPauseCallback,
                                        resume: AudioResumeCallback, flush: AudioFlushCallback,
                                        drain: AudioDrainCallback, opaque: Pointer)
