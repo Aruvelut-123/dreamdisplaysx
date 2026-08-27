@@ -68,7 +68,8 @@ object LibVlcFrameExtractor {
                 val seekLatch = CountDownLatch(1)
                 grab.onFrame = { seekLatch.countDown() }
                 grab.frameSeen = false
-                lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000L) // microseconds
+                // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
+                lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L)
                 if (!seekLatch.await(10, TimeUnit.SECONDS)) {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null

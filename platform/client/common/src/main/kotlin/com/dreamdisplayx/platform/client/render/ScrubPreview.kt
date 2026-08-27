@@ -29,7 +29,7 @@ import javax.imageio.ImageIO
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.seconds
 
-/** Generates and caches seek-bar scrub-preview thumbnails: sparse frames sampled across video duration via JavaCPP. */
+/** Generates and caches seek-bar scrub-preview thumbnails: sparse frames sampled across video duration via libvlc. */
 object ScrubPreview {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/ScrubPreview")
 
