@@ -2,6 +2,37 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **libvlc audio split: 3D DSP + Java Sound line restored (feat/libvlc)** — libvlc was playing
+> audio through its default system-audio output, which bypassed the per-display 3D DSP chain
+> (`AudioDspStage` / `AcousticsEngine`) entirely. That silently broke three features the old
+> pipeline had: directional audio (facing west with a display to the north no longer panned to the
+> right speaker — it came out both), occlusion (blocking the display with blocks no longer
+> muffled/attenuated the sound), and own pacing (libvlc's default output often stopped the audio a
+> couple of seconds before the video ended). The player now registers
+> `libvlc_audio_set_format_callbacks` + `libvlc_audio_set_callbacks`, which delivers decoded PCM
+> to a new `LibVlcAudioOutput` instead of the system speaker: every block is run through the
+> display's `AudioDspStage` (direction-aware panning / binaural, occlusion filter + gain, reverb)
+> and written to a Java Sound `SourceDataLine` on our own clock. Volume is applied as a PCM gain
+> (`setVolume` stores the effective gain; the audio thread picks it up on every play callback)
+> since libvlc's software volume is a no-op under audio callbacks. Also fixes the reported F3
+> decoder line: `libvlc_media_player_get_video_decoder_info` is queried on PLAYING with a 500ms
+> retry (it is often unavailable at the very first event), so the overlay shows the real decoder
+> name (e.g. D3D11VA H.264) instead of a stale "software".
+>
+> **Stretch-mode black screen fixed (feat/libvlc)** — the LETTERBOX/CROP scaling path in frame
+> publish had two bugs that made non-STRETCH modes render black: `spare.clear()` only resets the
+> buffer position (it does NOT zero the memory, so letterbox bars showed garbage), and CROP's
+> negative centring offset made `dst.position()` throw — which publishFrame's catch swallowed,
+> dropping the whole frame. `fitFrame` now zero-fills the destination first (reusable chunk), clamps
+> the blit coordinates so negative offsets are handled, and leaves the position at frameSize so the
+> caller's `flip()` exposes every byte — LETTERBOX pads with true black bars, CROP center-crops, and
+> STRETCH stays full-screen.
+>
+> **Loop/replay after end-of-stream fixed (feat/libvlc)** — a playback loop or replay after ENDED
+> did nothing because libvlc's ENDED state ignores `set_time`: `beginSeek` now checks the player
+> state and calls `play()` first (then waits 50ms for the new timeline) when the media has reached
+> its end, so loop/replay restarts from 0 instead of freezing on the last frame.
+>
 > **libvlc audio-slave + clock + seek fixes (feat/libvlc)** — three playback defects resolved:
 > DASH audio is now attached with `libvlc_media_player_add_slave` (full URI) instead of the
 > string `:input-slave=URL` media option, whose option parsing truncated Bilibili audio URLs at

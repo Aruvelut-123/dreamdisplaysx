@@ -512,6 +512,17 @@ internal class LibVlcSessionManager(
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         submit {
             val mp = mediaPlayer ?: return@submit
+            // libvlc's ENDED state (6) ignores set_time — need to play() first to restart the
+            // media.  This is the normal path for loop/replay after end-of-stream.
+            try {
+                val state = LibVlc.lib.libvlc_media_player_get_state(mp)
+                if (state == LibVlc.LIBVLC_ENDED) {
+                    LibVlc.lib.libvlc_media_player_play(mp)
+                    // Give the new timeline a moment to settle so the subsequent set_time
+                    // is not silently ignored (no keyframe yet).
+                    Thread.sleep(50)
+                }
+            } catch (_: Throwable) { }
             // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
             runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
         }
