@@ -113,7 +113,7 @@ internal class LibVlcSessionManager(
 
     // ── Frame surface ───────────────────────────────────────────────────────
 
-    private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGB24)
+    private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGBA32)
 
     @Volatile
     var expectedW = 0; private set
@@ -549,14 +549,10 @@ internal class LibVlcSessionManager(
                 return 0
             }
             logger.info("$debugLabel libvlc video setup: {}x{} (expected {}x{})", w, h, expectedW, expectedH)
-            // I420 chroma: Y, then U (w/2 x h/2), then V.
-            chroma.write(0, I420, 0, I420.size)
-            pitches.setInt(0, w)
-            pitches.setInt(4, (w + 1) / 2)
-            pitches.setInt(8, (w + 1) / 2)
+            // RV32 chroma (VideoPlayer model): single RGBA8888 plane, 4 bytes/px.
+            chroma.write(0, RV32, 0, RV32.size)
+            pitches.setInt(0, w * 4)
             lines.setInt(0, h)
-            lines.setInt(4, (h + 1) / 2)
-            lines.setInt(8, (h + 1) / 2)
             if (frameWidth != w || frameHeight != h) resize(w, h)
             return 1
         }
@@ -581,13 +577,8 @@ internal class LibVlcSessionManager(
                 return DROP_TOKEN
             }
             writing = index
-            // I420: three planes.
-            val y = pointers[index]!!
-            val total = frameWidth * frameHeight
-            val uv = (frameWidth + 1) / 2 * ((frameHeight + 1) / 2)
-            planes.setPointer(0, y)
-            planes.setPointer(Native.POINTER_SIZE.toLong(), y.share(total.toLong()))
-            planes.setPointer((2 * Native.POINTER_SIZE).toLong(), y.share((total + uv).toLong()))
+            // RV32: single RGBA8888 plane.
+            planes.setPointer(0, pointers[index]!!)
             return Pointer.createConstant((index + 1).toLong())
         }
 
@@ -615,41 +606,30 @@ internal class LibVlcSessionManager(
             val eh = expectedH
             if (ew <= 0 || eh <= 0) return
             try {
-                val i420 = buf.duplicate().order(ByteOrder.nativeOrder()); i420.rewind()
-                val total = frameWidth * frameHeight + 2 * ((frameWidth + 1) / 2) * ((frameHeight + 1) / 2)
-                val frameSize = if (gpuYuvActive) {
-                    val c = ((ew + 1) / 2) * ((eh + 1) / 2)
-                    ew * eh + 2 * c
-                } else ew * eh * 3
+                val rgba = buf.duplicate().order(ByteOrder.nativeOrder()); rgba.rewind()
+                val total = frameWidth * frameHeight * 4
+                val frameSize = ew * eh * 4
 
                 var spare = surface.takeOrAllocate(frameSize)
                 spare.clear()
 
                 if (frameWidth == ew && frameHeight == eh) {
-                    if (gpuYuvActive) {
-                        for (i in 0 until total) spare.put(i420.get())
-                    } else {
-                        i420ToRgb24(i420, frameWidth, frameHeight, spare)
-                        applyBrightness(spare, frameSize, getBrightness())
-                    }
+                    // Direct copy: libvlc already produced RV32 (RGBA8888) — no colour conversion.
+                    for (i in 0 until total) spare.put(rgba.get())
                 } else {
-                    if (gpuYuvActive) {
-                        resizeI420(i420, frameWidth, frameHeight, spare, ew, eh)
-                    } else {
-                        val scratch = rgbScratch?.takeIf { it.capacity() >= frameWidth * frameHeight * 3 }?.also { it.clear() }
-                            ?: ByteBuffer.allocateDirect(frameWidth * frameHeight * 3).also { rgbScratch = it }
-                        i420ToRgb24(i420, frameWidth, frameHeight, scratch)
-                        resizeRgb24(scratch, frameWidth, frameHeight, spare, ew, eh)
-                        applyBrightness(spare, frameSize, getBrightness())
-                    }
+                    val scratch = rgbScratch?.takeIf { it.capacity() >= frameWidth * frameHeight * 4 }?.also { it.clear() }
+                        ?: ByteBuffer.allocateDirect(frameWidth * frameHeight * 4).also { rgbScratch = it }
+                    for (i in 0 until frameWidth * frameHeight * 4) scratch.put(rgba.get())
+                    resizeRgba(scratch, frameWidth, frameHeight, spare, ew, eh)
                 }
+                applyBrightness(spare, frameSize, getBrightness())
                 spare.flip()
 
                 if (parkFlag.get()) return
 
-                // Popout / preview sinks (RGB frame always converted above for the non-planar path).
+                // Popout / preview sinks (RV32 / RGBA8888 frames).
                 val sink = popoutSink ?: previewSink
-                if (sink != null) sink(spare, ew, eh, FramePixelFormat.RGB24)
+                if (sink != null) sink(spare, ew, eh, FramePixelFormat.RGBA32)
 
                 // Publish to the GPU surface for the render thread.
                 surface.publish(spare, frameSize)
@@ -670,7 +650,7 @@ internal class LibVlcSessionManager(
         private fun resize(w: Int, h: Int) {
             frameWidth = w
             frameHeight = h
-            bufferSize = w * h + 2 * ((w + 1) / 2) * ((h + 1) / 2)
+            bufferSize = w * h * 4 // RV32: 4 bytes per pixel
             for (i in 0 until BUFFER_COUNT) {
                 buffers[i] = ByteBuffer.allocateDirect(bufferSize).order(ByteOrder.nativeOrder())
                 pointers[i] = com.sun.jna.Native.getDirectBufferPointer(buffers[i]!!)
@@ -726,51 +706,14 @@ internal class LibVlcSessionManager(
 
     private var rgbScratch: ByteBuffer? = null
 
-    private fun i420ToRgb24(i420: ByteBuffer, w: Int, h: Int, rgb: ByteBuffer) {
-        val ySize = w * h
-        val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
-        i420.rewind()
-        for (row in 0 until h) {
-            for (col in 0 until w) {
-                val y = i420.get(row * w + col).toInt() and 0xFF
-                val u = i420.get(ySize + (row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
-                val v = i420.get(ySize + uvSize + (row / 2) * ((w + 1) / 2) + (col / 2)).toInt() and 0xFF
-                val r = (y + 1.402 * (v - 128)).toInt().coerceIn(0, 255)
-                val g = (y - 0.344 * (u - 128) - 0.714 * (v - 128)).toInt().coerceIn(0, 255)
-                val b = (y + 1.772 * (u - 128)).toInt().coerceIn(0, 255)
-                rgb.put(r.toByte()); rgb.put(g.toByte()); rgb.put(b.toByte())
-            }
-        }
-        i420.rewind()
-    }
-
-    private fun resizeI420(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
-        val srcYSize = srcW * srcH
-        val srcUVSize = ((srcW + 1) / 2) * ((srcH + 1) / 2)
-        src.rewind()
-        for (dy in 0 until dstH) {
-            val sy = (dy * srcH / dstH).coerceIn(0, srcH - 1)
-            for (dx in 0 until dstW) { dst.put(src.get(sy * srcW + (dx * srcW / dstW).coerceIn(0, srcW - 1))) }
-        }
-        for (dy in 0 until (dstH + 1) / 2) {
-            val sy = (dy * ((srcH + 1) / 2) / ((dstH + 1) / 2)).coerceIn(0, ((srcH + 1) / 2) - 1)
-            for (dx in 0 until (dstW + 1) / 2) { dst.put(src.get(srcYSize + sy * ((srcW + 1) / 2) + (dx * ((srcW + 1) / 2) / ((dstW + 1) / 2)).coerceIn(0, ((srcW + 1) / 2) - 1))) }
-        }
-        for (dy in 0 until (dstH + 1) / 2) {
-            val sy = (dy * ((srcH + 1) / 2) / ((dstH + 1) / 2)).coerceIn(0, ((srcH + 1) / 2) - 1)
-            for (dx in 0 until (dstW + 1) / 2) { dst.put(src.get(srcYSize + srcUVSize + sy * ((srcW + 1) / 2) + (dx * ((srcW + 1) / 2) / ((dstW + 1) / 2)).coerceIn(0, ((srcW + 1) / 2) - 1))) }
-        }
-        src.rewind()
-    }
-
-    private fun resizeRgb24(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
+    private fun resizeRgba(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
         src.rewind()
         for (dy in 0 until dstH) {
             val sy = (dy * srcH / dstH).coerceIn(0, srcH - 1)
             for (dx in 0 until dstW) {
                 val sx = (dx * srcW / dstW).coerceIn(0, srcW - 1)
-                val p = (sy * srcW + sx) * 3
-                dst.put(src.get(p)); dst.put(src.get(p + 1)); dst.put(src.get(p + 2))
+                val p = (sy * srcW + sx) * 4
+                dst.put(src.get(p)); dst.put(src.get(p + 1)); dst.put(src.get(p + 2)); dst.put(src.get(p + 3))
             }
         }
         src.rewind()
@@ -780,16 +723,21 @@ internal class LibVlcSessionManager(
         val factor = brightness.coerceIn(0.0, 2.0)
         if (factor == 1.0) return
         buf.flip()
-        for (i in 0 until size) {
-            val v = ((buf.get(i).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
-            buf.put(i, v.toByte())
+        var i = 0
+        while (i + 3 < size) {
+            val r = ((buf.get(i).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
+            val g = ((buf.get(i + 1).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
+            val b = ((buf.get(i + 2).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
+            buf.put(i, r.toByte()); buf.put(i + 1, g.toByte()); buf.put(i + 2, b.toByte())
+            // keep alpha (i+3) untouched
+            i += 4
         }
     }
 
     companion object {
         private const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
         private const val REPLAY_FPS = 30.0
-        private val I420 = byteArrayOf('I'.code.toByte(), '4'.code.toByte(), '2'.code.toByte(), '0'.code.toByte())
+        private val RV32 = byteArrayOf('R'.code.toByte(), 'V'.code.toByte(), '3'.code.toByte(), '2'.code.toByte())
         private val DROP_TOKEN = Pointer.createConstant(0x7FFFFFFFL)
         private val DROP_TOKEN_VALUE = 0x7FFFFFFFL
         private fun outputFps(sourceFps: Double?): Double =
