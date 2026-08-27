@@ -349,10 +349,11 @@ internal class LibVlcSessionManager(
         }
 
         // Seek if needed (after media is set; performed on the control executor).
+        // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
         if (offsetNanos > 0) {
             submit {
                 val mp = mediaPlayer ?: return@submit
-                runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000L) } // microseconds
+                runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
             }
         }
 
@@ -423,7 +424,8 @@ internal class LibVlcSessionManager(
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         submit {
             val mp = mediaPlayer ?: return@submit
-            runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000L) } // microseconds
+            // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
+            runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
         }
         logger.debug("$debugLabel libvlc seek to ${offsetNanos / 1_000_000} ms.")
         return true
@@ -523,12 +525,12 @@ internal class LibVlcSessionManager(
     // ── Pacing / clock ──────────────────────────────────────────────────────
 
     fun currentPacingNanos(): Long {
-        // libvlc is the authoritative playback clock: ask it directly (µs -> ns) instead of
-        // extrapolating from the wall clock, so the progress bar / timeline follow the real
-        // stream position exactly (including seeks). Falls back to the local clock when not playing.
+        // libvlc is the authoritative playback clock: ask it directly and convert ms -> ns.
+        // libvlc_media_player_get_time returns MILLISECONDS (not µs); the progress bar and seek
+        // math work in nanos, so multiply by 1e6.
         val mp = mediaPlayer ?: return clock.currentTime()
-        val us = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-        return if (us >= 0) us * 1_000L else clock.currentTime()
+        val ms = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+        return if (ms >= 0) ms * 1_000_000L else clock.currentTime()
     }
 
     fun activeBridgeEdgeNanos(): Long? = null
