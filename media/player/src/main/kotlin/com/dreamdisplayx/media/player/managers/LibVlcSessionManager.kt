@@ -82,6 +82,13 @@ internal class LibVlcSessionManager(
 ) {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcSession")
 
+    /**
+     * Owns the Java Sound audio line + 3D DSP feeding for this display. libvlc is configured with
+     * audio callbacks so decoded PCM reaches us instead of libvlc's default output; this restores
+     * directional 3D audio (panning), occlusion and our own audio pacing.
+     */
+    private val audioOutput = LibVlcAudioOutput(debugLabel, audioStage)
+
     init {
         // Mirror the config's hw-accel preference onto the shared libvlc instance before it is
         // created (the singleton instance is built on first use, so this must be set up front).
@@ -162,6 +169,36 @@ internal class LibVlcSessionManager(
     /** Triple-buffered video frame pool + callbacks (VideoPlayer TextureRenderCallback model). */
     private val videoFrames = TextureRenderCallback()
 
+    // ── Audio callbacks (held strongly; feed the 3D DSP + Java Sound line) ───
+
+    private val audioFormatSetupCallback = LibVlc.AudioSetupCallback { data, format, rate, channels ->
+        audioOutput.onFormatSetup(data, format, rate, channels)
+    }
+
+    private val audioFormatCleanupCallback = LibVlc.AudioCleanupCallback { data ->
+        audioOutput.onFormatCleanup(data)
+    }
+
+    private val audioPlayCallback = LibVlc.AudioPlayCallback { data, samples, count, pts ->
+        audioOutput.onPlay(data, samples, count, pts)
+    }
+
+    private val audioPauseCallback = LibVlc.AudioPauseCallback { data, pts ->
+        audioOutput.onPause(data, pts)
+    }
+
+    private val audioResumeCallback = LibVlc.AudioResumeCallback { data, pts ->
+        audioOutput.onResume(data, pts)
+    }
+
+    private val audioFlushCallback = LibVlc.AudioFlushCallback { data, pts ->
+        audioOutput.onFlush(data, pts)
+    }
+
+    private val audioDrainCallback = LibVlc.AudioDrainCallback { data ->
+        audioOutput.onDrain(data)
+    }
+
     private val videoFormatCallback = LibVlc.VideoFormatCallback { opaque, chroma, width, height, pitches, lines ->
         videoFrames.setup(opaque, chroma, width, height, pitches, lines)
     }
@@ -193,12 +230,9 @@ internal class LibVlcSessionManager(
                     val tracks = LibVlc.lib.libvlc_audio_get_track_count(player)
                     val vol = LibVlc.lib.libvlc_audio_get_volume(player)
                     logger.info("$debugLabel libvlc playing: audioTracks={} volume={}.", tracks, vol)
-                    // Update F3 decoder info so the debug overlay shows the real decoder name
-                    // (e.g. "D3D11VA H.264" / "FFmpeg H.264") instead of always "software".
-                    LibVlc.videoDecoderName(player)?.let { name ->
-                        MediaPlayer.currentDecoder.set(name)
-                        logger.debug("$debugLabel video decoder: {}.", name)
-                    }
+                    // Update F3 decoder info — query immediately, and retry if the decoder isn't
+                    // initialised yet (the info may not be available at the very first PLAYING event).
+                    updateDecoderName(player, immediate = true)
                 }
             }
             LibVlc.LIBVLC_MEDIA_PLAYER_PAUSED -> {
@@ -241,14 +275,47 @@ internal class LibVlcSessionManager(
 
     // ── Volume ──────────────────────────────────────────────────────────────
 
+    /**
+     * Applies the effective volume as a PCM gain on our own audio line. With audio callbacks set,
+     * libvlc's software volume (libvlc_audio_set_volume) would be a no-op — the decoded samples are
+     * delivered to us raw, so volume is applied here (and by the 3D DSP chain).
+     */
     fun setVolume(volume: Double) {
-        // libvlc's software volume scale is much quieter than the old JavaCPP pipeline: users had
-        // to push the UI to 150% (~0.75) just to hear what 50% used to be. Compensate by mapping the
-        // 0..1 fraction to 0..300% (libvlc accepts >100 as amplification), so 0.5 ≈ previous 50%.
-        val v = volume.coerceIn(0.0, 1.0)
+        audioOutput.setVolume(volume)
+    }
+
+    /** Opens (or reuses) the shared Java Sound audio line for this display. */
+    private fun openAudioLine() {
+        runCatching { audioOutput.openLine() }
+    }
+
+    /**
+     * Refreshes [MediaPlayer.currentDecoder] (F3 overlay) from libvlc's decoder info. The value is
+     * only available once the decoder thread has started, so the first PLAYING event often reports
+     * nothing yet; retry shortly afterwards on the control executor.
+     */
+    private fun updateDecoderName(player: Pointer, immediate: Boolean) {
+        val update = {
+            try {
+                val name = LibVlc.videoDecoderName(player)
+                if (!name.isNullOrBlank()) {
+                    val old = MediaPlayer.currentDecoder.getAndSet(name)
+                    if (old != name) logger.info("$debugLabel video decoder: {}.", name)
+                } else {
+                    logger.debug("$debugLabel video decoder info not ready yet.")
+                }
+            } catch (t: Throwable) {
+                logger.debug("$debugLabel video decoder query failed: ${t.message}")
+            }
+        }
+        if (immediate) update()
         submit {
-            val mp = mediaPlayer ?: return@submit
-            runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, (v * 300).toInt().coerceAtMost(300)) }
+            try {
+                Thread.sleep(500)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+            update()
         }
     }
 
@@ -314,6 +381,8 @@ internal class LibVlcSessionManager(
         // Reset the playback clock to the requested offset so the progress bar starts at the
         // right second instead of inheriting a stale origin from the previous session.
         clock.reset(offsetNanos)
+        // Reset the audio output for this new session (re-prime the 3D DSP chain, flush the line).
+        runCatching { audioOutput.reset() }
 
         // Build the media options (UA + referer + optional hw decode). Audio is merged via
         // libvlc_media_player_add_slave with the full URI — the string `:input-slave=URL` option
@@ -397,6 +466,13 @@ internal class LibVlcSessionManager(
             // Video callbacks (once; held strongly).
             lib.libvlc_video_set_format_callbacks(mp, videoFormatCallback, videoCleanupCallback)
             lib.libvlc_video_set_callbacks(mp, videoLockCallback, videoUnlockCallback, videoDisplayCallback, null)
+            // Audio callbacks (once; held strongly). libvlc then delivers decoded PCM to us instead
+            // of playing through its default output — we run it through the 3D DSP and Java Sound
+            // line (LibVlcAudioOutput) so spatialisation / occlusion / pacing are under our control.
+            openAudioLine()
+            lib.libvlc_audio_set_format_callbacks(mp, audioFormatSetupCallback, audioFormatCleanupCallback)
+            lib.libvlc_audio_set_callbacks(mp, audioPlayCallback, audioPauseCallback,
+                audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
             // Events (once).
             val em = lib.libvlc_media_player_event_manager(mp)
             if (em != null) {
@@ -475,6 +551,7 @@ internal class LibVlcSessionManager(
             } catch (_: Exception) { }
         }
         runCatching { controlExecutor.shutdownNow() }
+        audioOutput.close()
         renderExecutor.execute { surface.cleanup() }
     }
 
@@ -769,51 +846,78 @@ internal class LibVlcSessionManager(
     /** Reusable buffer for the intermediate (fit-to-aspect) scale step of LETTERBOX/CROP. */
     private var fitScratch: ByteBuffer? = null
 
+    /** Reusable zero-fill chunk for clearing letterbox/crop bars. */
+    private var zeroChunk: ByteArray? = null
+
     /**
      * Fits a source RGBA frame into the display-sized [dst] buffer honouring the active [getStretchMode]:
      * STRETCH scales to fill exactly (may distort); LETTERBOX scales to fit keeping aspect and pads the
-     * remainder black; CROP scales to cover keeping aspect and centers-crops the overflow. [dst] must
-     * already be cleared (black) so letterbox bars are correct.
+     * remainder black; CROP scales to cover keeping aspect and centers-crops the overflow.
      */
     private fun fitFrame(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
         val mode = getStretchMode()
         if (mode == StretchMode.STRETCH) {
             resizeRgba(src, srcW, srcH, dst, dstW, dstH)
+            dst.position(dstW * dstH * 4)
             return
         }
         val srcAspect = srcW.toDouble() / srcH
         val dstAspect = dstW.toDouble() / dstH
-        val (fitW, fitH) = when (mode) {
-            StretchMode.LETTERBOX -> {
-                // scale to fit inside
-                val scale = if (srcAspect > dstAspect) dstW.toDouble() / srcW else dstH.toDouble() / srcH
-                (srcW * scale).toInt().coerceAtLeast(1) to (srcH * scale).toInt().coerceAtLeast(1)
-            }
-            StretchMode.CROP -> {
-                // scale to cover
-                val scale = if (srcAspect > dstAspect) dstH.toDouble() / srcH else dstW.toDouble() / srcW
-                (srcW * scale).toInt().coerceAtLeast(1) to (srcH * scale).toInt().coerceAtLeast(1)
-            }
-            StretchMode.STRETCH -> dstW to dstH
+        val fitW: Int
+        val fitH: Int
+        if (mode == StretchMode.LETTERBOX) {
+            // scale to fit inside
+            val scale = if (srcAspect > dstAspect) dstW.toDouble() / srcW else dstH.toDouble() / srcH
+            fitW = (srcW * scale).toInt().coerceAtLeast(1)
+            fitH = (srcH * scale).toInt().coerceAtLeast(1)
+        } else { // CROP: scale to cover
+            val scale = if (srcAspect > dstAspect) dstH.toDouble() / srcH else dstW.toDouble() / srcW
+            fitW = (srcW * scale).toInt().coerceAtLeast(1)
+            fitH = (srcH * scale).toInt().coerceAtLeast(1)
         }
         // Scale the source into the fit-sized intermediate.
         val scratch = fitScratch?.takeIf { it.capacity() >= fitW * fitH * 4 }?.also { it.clear() }
             ?: ByteBuffer.allocateDirect(fitW * fitH * 4).also { fitScratch = it }
         resizeRgba(src, srcW, srcH, scratch, fitW, fitH)
         scratch.flip()
-        // Center the fit-sized frame in the destination.
+
+        // Clear the whole destination to black first (spare.clear() only resets position — it does
+        // NOT zero the buffer, so letterbox bars would otherwise show stale pixels).
+        dst.clear()
+        fillZero(dst, dstW * dstH * 4)
+        dst.clear()
+
+        // Center the fit-sized frame, clipping to the destination bounds (CROP has negative offsets).
         val offX = (dstW - fitW) / 2
         val offY = (dstH - fitH) / 2
-        for (row in 0 until fitH) {
-            val dy = offY + row
-            if (dy < 0 || dy >= dstH) continue
-            scratch.position(row * fitW * 4)
-            scratch.limit(row * fitW * 4 + fitW * 4)
-            val srcSlice = scratch.slice()
-            dst.position(dy * dstW * 4 + offX * 4)
-            dst.put(srcSlice)
+        val x0 = maxOf(0, offX)
+        val x1 = minOf(dstW, offX + fitW)
+        val y0 = maxOf(0, offY)
+        val y1 = minOf(dstH, offY + fitH)
+        for (dy in y0 until y1) {
+            val sy = dy - offY
+            val srcOff = sy * fitW * 4 + (x0 - offX) * 4
+            val len = (x1 - x0) * 4
+            scratch.position(srcOff)
+            scratch.limit(srcOff + len)
+            dst.position(dy * dstW * 4 + x0 * 4)
+            dst.put(scratch)
         }
+        // Leave position at the full frame size so the caller's flip() exposes every byte.
+        dst.position(dstW * dstH * 4)
         scratch.rewind()
+    }
+
+    /** Fills [bytes] of [buf] with zeros from its current position (using a reusable chunk). */
+    private fun fillZero(buf: ByteBuffer, bytes: Int) {
+        if (zeroChunk == null) zeroChunk = ByteArray(8192)
+        val chunk = zeroChunk!!
+        var left = bytes
+        while (left > 0) {
+            val n = minOf(left, chunk.size)
+            buf.put(chunk, 0, n)
+            left -= n
+        }
     }
 
     private fun resizeRgba(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
