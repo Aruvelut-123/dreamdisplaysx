@@ -109,8 +109,22 @@ object ScrubPreview {
             val mid = (lo + hi + 1) / 2
             if (frames[mid].timestampNanos <= positionNanos) lo = mid else hi = mid - 1
         }
+        // Diagnostic: if hover keeps resolving to the same frame while the position moves, surface
+        // it once so we can tell whether extraction content is identical or the lookup is stuck.
+        if (frames.size > 1) {
+            val chosen = frames[lo].timestampNanos
+            val last = lastReturnedTs.put(key, chosen)
+            if (last != null && last != chosen) {
+                logger.debug("ScrubPreview: hover {}ns -> frame @{}ns ({} frames).",
+                    positionNanos / 1_000_000L, chosen / 1_000_000L, frames.size)
+            }
+        }
         return frames[lo].texture
     }
+
+    /** Tracks the most recent frame timestamp returned per key, for [frameAt] diagnostics. */
+    private val lastReturnedTs: java.util.concurrent.ConcurrentHashMap<String, Long> =
+        java.util.concurrent.ConcurrentHashMap()
 
     /** Extracts sample frames via JavaCPP at [EXTRACT_CONCURRENCY] limit, publishing to [FRAMES] as each completes. */
     private suspend fun generate(key: String, sourceUrl: String, durationNanos: Long, seekByDecoding: Boolean) {

@@ -2,29 +2,40 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
-> **Reload crash, pause position and scrub-preview frame fixes (feat/libvlc)** — follow-up fixes
-> for the native crash when reloading a video, the pause regression, and the preview thumbnails.
+> **Reload crash root cause, F3 decoder name and deterministic scrub frames (feat/libvlc)** —
+> the follow-up fixes for the pause/resume crash, the "software decoder" F3 readout and the
+> hover thumbnails still showing the opening frame.
 >
-> **Native crash on video reload (0xC0000005, no Java logs)** — the vmem buffer pool was rebuilt
-> (`resize()`) on every format setup. During a reload the previous media's asynchronous frame
-> callbacks can still be in flight, holding pointers into the direct buffers that were just
-> replaced and freed — an access violation in native libvlc that kills the game with no stack
-> trace (exit code -1073741819). Mirror the VideoPlayer model: the pool is now grow-only and never
-> rebuilt for the same dimensions, so a reload (pause→resume or seek-triggered restart) reuses the
-> registered buffers and the crash is eliminated.
+> **Pause/resume still crashed (EXCEPTION_ACCESS_VIOLATION, no Java logs)** — the reload path
+> called `libvlc_media_player_set_media` + `play()` directly on the still-playing player, so the
+> old vout/aout threads raced the new format setup and faulted right after "libvlc video setup"
+> (exit 0xC0000005, multiple threads erroring). `start()` now stops the previous media first
+> (synchronous `libvlc_media_player_stop` on the control executor), giving libvlc a clean teardown
+> before the new media is attached — the same single-player, never-rebuilt model VideoPlayer uses
+> for restarts.
 >
-> **Pause threw the progress bar back to the beginning (and stuck on loading)** — suspend()
-> persisted `clock.currentTime()`, a wall-clock estimate that drifts from libvlc's audio-driven
-> position; pausing could therefore jump the bar to a stale/zero offset. It now records the
-> authoritative libvlc position (`get_time` via `currentPacingNanos()`) so pause/resume holds the
-> exact stream time.
+> **F3 always said "software decoder"** — the decoder-info JNA binding passed the struct by value,
+> but `libvlc_media_player_get_video_decoder_info` takes pointer-to-pointer and libvlc allocates
+> the result (which must be released with `libvlc_media_decoder_info_release`). The old call read
+> garbage, always returned null, and the F3 overlay kept the "software" default. The binding now
+> uses `PointerByReference` and correctly frees the libvlc-allocated structs, so the real decoder
+> name (e.g. the avcodec module reporting GPU copy-back) can be shown.
 >
-> **Scrub previews still grabbed the opening frame** — after `set_time` the player clock reaches
-> the target immediately, but the display callback may still emit stale pre-seek frames that
-> satisfied the frame latch before the seek actually rendered. The extractor now waits for
-> `get_time` to reach the target (and bails if it never does, instead of "successfully" capturing
-> the opening frame), discards anything captured pre-seek, and waits for two post-seek displayed
-> frames before grabbing, so hover thumbnails reflect the hovered timestamp.
+> **Scrub previews still showed the opening frame everywhere** — seeking while playing is racy:
+> `get_time` jumps to the target instantly while the vout keeps emitting stale pre-seek pictures,
+> so a display latch was satisfied by those old frames. Extraction now pauses the player first
+> (waiting for the Paused state), then seeks — libvlc renders the exact target frame into the
+> next display callback, which is grabbed deterministically (the standard seek-while-paused
+> technique). The grabber also switched from a single overwritten Y plane to a token-addressed
+> buffer pool, so lock/display on different threads always copy the picture actually decoded.
+>
+> **Reload crash on video reload (0xC0000005)** — the vmem buffer pool is now grow-only and never
+> rebuilt for the same dimensions, so a reload reuses the registered buffers and in-flight frame
+> callbacks never point at freed memory.
+>
+> **Pause threw the progress bar back to the beginning** — suspend() records the authoritative
+> libvlc position (`get_time` via `currentPacingNanos()`) instead of a drifting wall-clock
+> estimate.
 >
 > **Scrub preview, seek-stick and loop/replay fixes (feat/libvlc)** — three follow-up playback
 > defects after the audio-split work.

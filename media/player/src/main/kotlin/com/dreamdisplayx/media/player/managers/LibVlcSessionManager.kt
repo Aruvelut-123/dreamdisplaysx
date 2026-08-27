@@ -409,6 +409,12 @@ internal class LibVlcSessionManager(
                 return@submit
             }
             try {
+                // Reload safety: tear down the PREVIOUS media before attaching the new one. Setting
+                // media on a player whose old vout/aout threads are still draining races the new
+                // format setup and crashes natively (EXCEPTION_ACCESS_VIOLATION right after the new
+                // "libvlc video setup" line, before the first frame). libvlc_media_player_stop is
+                // synchronous on the control executor, so the old input fully releases first.
+                runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
                 val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
                 LibVlc.lib.libvlc_media_player_set_media(mp, media)
                 LibVlc.lib.libvlc_media_release(media) // the player holds its own reference

@@ -172,20 +172,25 @@ object LibVlc {
 
     // ── Media decoder info (F3 diagnostics) ─────────────────────────────────
 
-    /** `libvlc_media_decoder_info_t`: decoder name + description + type (libvlc_media_decoder_type). */
-    @Structure.FieldOrder("name", "description", "type")
-    class MediaDecoderInfo : Structure() {
-        @JvmField var name: Pointer? = null
-        @JvmField var description: Pointer? = null
-        @JvmField var type: Int = 0
-    }
-
-    /** Reads the active video decoder's human-readable name via `libvlc_media_player_get_video_decoder_info`. */
+    /**
+     * Reads the active video decoder's human-readable name via
+     * `libvlc_media_player_get_video_decoder_info`. libvlc allocates a
+     * `libvlc_media_decoder_info_t {char *psz_name; char *psz_description; int i_type;}` and we must
+     * release it with `libvlc_media_decoder_info_release`. The API takes a pointer-to-pointer, so the
+     * JNA binding uses [PointerByReference] (a struct-by-value binding would read garbage and never
+     * report a name). Returns null when unavailable (e.g. decoder not started yet, or the symbol is
+     * absent from this libvlc build) — the F3 overlay then keeps the previous value.
+     */
     fun videoDecoderName(player: Pointer): String? = try {
-        val dec = MediaDecoderInfo()
-        val enc = MediaDecoderInfo()
+        val dec = PointerByReference()
+        val enc = PointerByReference()
         if (lib.libvlc_media_player_get_video_decoder_info(player, dec, enc) != 0) return null
-        dec.name?.getString(0, "UTF-8")?.takeIf { it.isNotBlank() }
+        val d = dec.value ?: return null
+        val name = runCatching { d.getPointer(0)?.getString(0, "UTF-8")?.takeIf { it.isNotBlank() } }
+            .getOrNull()
+        runCatching { lib.libvlc_media_decoder_info_release(d) }
+        runCatching { enc.value?.let { lib.libvlc_media_decoder_info_release(it) } }
+        name
     } catch (_: Throwable) { null }
 
     // ── Callback interfaces ──────────────────────────────────────────────────
@@ -290,8 +295,10 @@ object LibVlc {
         // :input-slave=... mangles URLs containing '&' (query params get truncated), which silently
         // breaks Bilibili DASH audio streams and the master clock with them.
         fun libvlc_media_player_add_slave(player: Pointer, type: Int, uri: String, select: Boolean): Int
-        // Decoder info for F3 diagnostics (added in libvlc 3.0.7).
-        fun libvlc_media_player_get_video_decoder_info(player: Pointer, decoder: MediaDecoderInfo, encoder: MediaDecoderInfo): Int
+        // Decoder info for F3 diagnostics (added in libvlc 3.0.7; libvlc allocates the structs,
+        // released via libvlc_media_decoder_info_release).
+        fun libvlc_media_player_get_video_decoder_info(player: Pointer, decoder: PointerByReference, encoder: PointerByReference): Int
+        fun libvlc_media_decoder_info_release(decoder: Pointer)
 
         // Audio
         fun libvlc_audio_set_volume(player: Pointer, volume: Int): Int

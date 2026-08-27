@@ -63,30 +63,33 @@ object LibVlcFrameExtractor {
                 return null
             }
 
-            // Seek to the requested offset and wait for a fresh frame.
+            // Seek to the requested offset and grab the resulting frame.
             if (offsetNanos > 0) {
                 // libvlc silently ignores set_time while the media is not yet seekable (the player
                 // keeps playing from 0, so every sample would grab an opening frame). Wait for
                 // seekability first — bounded, because some URLs never report it.
                 pollSeekable(lib, mp)
                 val targetMs = offsetNanos / 1_000_000L
-                // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
-                lib.libvlc_media_player_set_time(mp, targetMs)
-                // The seek is asynchronous: get_time jumps to the target quickly, but the display
-                // callback may still emit a couple of stale pre-seek frames while libvlc spins up
-                // the new position. If the position never reaches the target (seek ignored /
-                // failed) bail outright — otherwise the video keeps playing from 0 and we'd return
-                // an opening frame.
+                // Pause FIRST, then seek: while paused, set_time flushes the pipeline and renders
+                // the exact target frame, which arrives as the next display callback. Seeking while
+                // playing is racy — get_time jumps to the target instantly (so awaitPosition
+                // succeeds) but the vout keeps emitting stale PRE-seek pictures for a moment, so a
+                // display latch would be satisfied by those old opening frames (every thumbnail
+                // came out as the opening frame). Paused seek is the standard deterministic way to
+                // grab a frame at a position.
+                runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
+                // set_pause is asynchronous: wait until the player actually reports Paused (bounded)
+                // so the subsequent set_time is applied to a settled, paused vout.
+                awaitPaused(lib, mp)
+                // Install the latch BEFORE set_time so the seeked frame's display is never missed.
+                grab.clearCaptured()
+                val seekLatch = CountDownLatch(1)
+                grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
+                LibVlc.lib.libvlc_media_player_set_time(mp, targetMs)
                 if (!awaitPosition(lib, mp, targetMs)) {
                     logger.warn("Frame extraction: seek did not reach target for $url@$offsetNanos")
                     return null
                 }
-                // Discard anything captured before the seek, then latch the next TWO displayed
-                // frames (the first may still be a stale pre-seek frame; the second is post-seek)
-                // so the grabbed frame reflects the requested timestamp.
-                grab.clearCaptured()
-                val seekLatch = CountDownLatch(2)
-                grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
                 if (!seekLatch.await(10, TimeUnit.SECONDS)) {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null
@@ -95,6 +98,16 @@ object LibVlcFrameExtractor {
 
             val frame = grab.consumeFrame()
                 ?: run { logger.warn("Frame extraction: no frame data for $url@$offsetNanos"); return null }
+
+            if (offsetNanos > 0) {
+                // Diagnostic: confirm the seek actually landed near the target and that the grabbed
+                // frame came from a post-seek position rather than a stale opening frame.
+                val actualMs = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                logger.info(
+                    "Frame extraction: {}@{} grabbed at get_time={}ms (target={}ms).",
+                    url, offsetNanos / 1_000_000L, actualMs, offsetNanos / 1_000_000L,
+                )
+            }
 
             val image = i420ToBufferedImage(frame, grab.frameW, grab.frameH) ?: return null
             val scaled = scale(image, w, h)
@@ -138,6 +151,28 @@ object LibVlcFrameExtractor {
     }
 
     /**
+     * Polls [libvlc_media_player_get_state] until it reports Paused, so a subsequent seek is applied
+     * to a settled, paused vout (deterministic frame render). Bounded because set_pause is async and
+     * the state may briefly stay Buffering/Playing; never fails the extraction.
+     */
+    private fun awaitPaused(lib: LibVlc.LibVlcNative, mp: Pointer) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (System.nanoTime() < deadline) {
+            try {
+                if (lib.libvlc_media_player_get_state(mp) == LibVlc.LIBVLC_STATE_PAUSED) return
+            } catch (_: Throwable) {
+                return
+            }
+            try {
+                Thread.sleep(20)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+        }
+    }
+
+    /**
      * Polls [libvlc_media_player_get_time] until it reaches within [toleranceMs] of [targetMs].
      * Returns true when the position actually reached the target region (a successful seek), or
      * false when it timed out (seek was ignored / failed — the caller must not grab a frame).
@@ -166,8 +201,17 @@ object LibVlcFrameExtractor {
      * Single-frame I420 grabber: the setup callback reports dimensions and the lock callback hands
      * libvlc a direct buffer; the display callback copies the YUV planes into a private buffer and
      * latches. All callbacks are held as strong fields for the lifetime of the grab (no vlcj).
+     *
+     * libvlc's vmem runs lock/unlock/display on different threads with several pictures in flight,
+     * so each lock is given its own buffer from a small pool and the lock token is echoed back to
+     * display so it copies the buffer that THIS picture was actually decoded into — never a buffer
+     * reused by a later lock.
      */
     private class FrameGrab {
+        companion object {
+            private const val POOL_SIZE = 4
+        }
+
         // Strong references — never dropped while the player may touch them.
         val formatCb = LibVlc.VideoFormatCallback { _opaque, chroma, width, height, pitches, lines ->
             setup(chroma, width, height, pitches, lines)
@@ -179,9 +223,8 @@ object LibVlcFrameExtractor {
 
         @Volatile var frameW = 0
         @Volatile var frameH = 0
-        private var yPlane: ByteBuffer? = null
-        private var uPlane: ByteBuffer? = null
-        private var vPlane: ByteBuffer? = null
+        private val yPlanes = arrayOfNulls<ByteBuffer>(POOL_SIZE)
+        private var nextBuffer = 0
         private var captured: ByteBuffer? = null
 
         val setupLatch = CountDownLatch(1)
@@ -217,26 +260,39 @@ object LibVlcFrameExtractor {
             val ySize = w * h
             val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
             val total = ySize + 2 * uvSize
-            val buf = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
-            yPlane = buf
-            uPlane = buf.duplicate()
-            vPlane = buf.duplicate()
+            val index = nextBuffer
+            nextBuffer = (nextBuffer + 1) % POOL_SIZE
+            val buf = yPlanes[index]
+                ?: ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder()).also { yPlanes[index] = it }
+            // Reallocate if a later format changed the frame size larger.
+            if (buf.capacity() < total) {
+                val bigger = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
+                yPlanes[index] = bigger
+                val ptr = Native.getDirectBufferPointer(bigger)
+                planes.setPointer(0, ptr)
+                planes.setPointer(Native.POINTER_SIZE.toLong(), ptr.share(ySize.toLong()))
+                planes.setPointer((2 * Native.POINTER_SIZE).toLong(), ptr.share((ySize + uvSize).toLong()))
+                return Pointer.createConstant((index + 1).toLong())
+            }
             val ptr = Native.getDirectBufferPointer(buf)
             planes.setPointer(0, ptr)
             planes.setPointer(Native.POINTER_SIZE.toLong(), ptr.share(ySize.toLong()))
             planes.setPointer((2 * Native.POINTER_SIZE).toLong(), ptr.share((ySize + uvSize).toLong()))
-            return Pointer.createConstant(1L)
+            return Pointer.createConstant((index + 1).toLong())
         }
 
         private fun display(picture: Pointer?) {
             if (picture == null) return
+            val token = Pointer.nativeValue(picture)
+            if (token <= 0 || token > POOL_SIZE) return
+            val index = (token - 1).toInt()
             val w = frameW
             val h = frameH
             if (w <= 0 || h <= 0) return
             val ySize = w * h
             val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
             val total = ySize + 2 * uvSize
-            val base = yPlane ?: return
+            val base = yPlanes[index] ?: return
             if (base.capacity() < total) return
             val copy = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
             base.duplicate().rewind().let { src -> for (i in 0 until total) copy.put(src.get()) }
