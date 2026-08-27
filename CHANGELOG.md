@@ -2,6 +2,30 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Reload crash, pause position and scrub-preview frame fixes (feat/libvlc)** — follow-up fixes
+> for the native crash when reloading a video, the pause regression, and the preview thumbnails.
+>
+> **Native crash on video reload (0xC0000005, no Java logs)** — the vmem buffer pool was rebuilt
+> (`resize()`) on every format setup. During a reload the previous media's asynchronous frame
+> callbacks can still be in flight, holding pointers into the direct buffers that were just
+> replaced and freed — an access violation in native libvlc that kills the game with no stack
+> trace (exit code -1073741819). Mirror the VideoPlayer model: the pool is now grow-only and never
+> rebuilt for the same dimensions, so a reload (pause→resume or seek-triggered restart) reuses the
+> registered buffers and the crash is eliminated.
+>
+> **Pause threw the progress bar back to the beginning (and stuck on loading)** — suspend()
+> persisted `clock.currentTime()`, a wall-clock estimate that drifts from libvlc's audio-driven
+> position; pausing could therefore jump the bar to a stale/zero offset. It now records the
+> authoritative libvlc position (`get_time` via `currentPacingNanos()`) so pause/resume holds the
+> exact stream time.
+>
+> **Scrub previews still grabbed the opening frame** — after `set_time` the player clock reaches
+> the target immediately, but the display callback may still emit stale pre-seek frames that
+> satisfied the frame latch before the seek actually rendered. The extractor now waits for
+> `get_time` to reach the target (and bails if it never does, instead of "successfully" capturing
+> the opening frame), discards anything captured pre-seek, and waits for two post-seek displayed
+> frames before grabbing, so hover thumbnails reflect the hovered timestamp.
+>
 > **Scrub preview, seek-stick and loop/replay fixes (feat/libvlc)** — three follow-up playback
 > defects after the audio-split work.
 >

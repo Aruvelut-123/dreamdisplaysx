@@ -607,7 +607,9 @@ internal class LibVlcSessionManager(
     fun suspend(allowExternalProcess: Boolean = false, retainBuffered: Boolean = false): Boolean {
         val mp = mediaPlayer ?: return false
         parkFlag.set(true)
-        parkPositionNanos = clock.currentTime()
+        // Persist the authoritative libvlc position (get_time, ms) rather than the wall-clock
+        // estimate, so the progress bar resumes exactly where the stream was paused.
+        parkPositionNanos = currentPacingNanos().takeIf { it >= 0 } ?: clock.currentTime()
         submit { runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) } }
         return true
     }
@@ -805,16 +807,24 @@ internal class LibVlcSessionManager(
         private fun matches(w: Int, h: Int) = buffers[0] != null && frameWidth == w && frameHeight == h
 
         private fun resize(w: Int, h: Int) {
+            // Reuse the pool when the size is unchanged: the pool is registered with libvlc via
+            // vmem callbacks and the previous media's frame callbacks may still be in flight during
+            // a reload — replacing the direct buffers under them is exactly the native
+            // ACCESS_VIOLATION (0xC0000005) crash seen when reloading a video. Only reallocate when
+            // this frame needs more room than the pool already has (grow-only, never shrink).
+            if (buffers[0] != null && frameWidth == w && frameHeight == h) return
             frameWidth = w
             frameHeight = h
             bufferSize = w * h * 4 // RV32: 4 bytes per pixel
-            for (i in 0 until BUFFER_COUNT) {
-                buffers[i] = ByteBuffer.allocateDirect(bufferSize).order(ByteOrder.nativeOrder())
-                pointers[i] = com.sun.jna.Native.getDirectBufferPointer(buffers[i]!!)
-                inUse[i] = false
+            if (buffers[0] == null || buffers[0]!!.capacity() < bufferSize) {
+                for (i in 0 until BUFFER_COUNT) {
+                    buffers[i] = ByteBuffer.allocateDirect(bufferSize).order(ByteOrder.nativeOrder())
+                    pointers[i] = com.sun.jna.Native.getDirectBufferPointer(buffers[i]!!)
+                    inUse[i] = false
+                }
+                dropBuffer = ByteBuffer.allocateDirect(bufferSize.coerceAtLeast(4)).order(ByteOrder.nativeOrder())
+                dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
             }
-            dropBuffer = ByteBuffer.allocateDirect(bufferSize.coerceAtLeast(4)).order(ByteOrder.nativeOrder())
-            dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
             nextWrite = 0
             writing = -1
             latest = -1

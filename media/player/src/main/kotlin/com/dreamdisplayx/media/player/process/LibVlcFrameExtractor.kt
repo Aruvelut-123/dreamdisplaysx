@@ -72,13 +72,21 @@ object LibVlcFrameExtractor {
                 val targetMs = offsetNanos / 1_000_000L
                 // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
                 lib.libvlc_media_player_set_time(mp, targetMs)
-                // The seek is asynchronous: pre-seek frames that were already in flight will still
-                // hit the display callback (and satisfy a naïve latch with a stale frame, which is
-                // why every thumbnail used to be the opening frame). Wait until the player clock
-                // actually reaches the target region before latching the next displayed frame.
-                awaitPosition(lib, mp, targetMs)
-                val seekLatch = CountDownLatch(1)
-                grab.onFrame = { seekLatch.countDown() }
+                // The seek is asynchronous: get_time jumps to the target quickly, but the display
+                // callback may still emit a couple of stale pre-seek frames while libvlc spins up
+                // the new position. If the position never reaches the target (seek ignored /
+                // failed) bail outright — otherwise the video keeps playing from 0 and we'd return
+                // an opening frame.
+                if (!awaitPosition(lib, mp, targetMs)) {
+                    logger.warn("Frame extraction: seek did not reach target for $url@$offsetNanos")
+                    return null
+                }
+                // Discard anything captured before the seek, then latch the next TWO displayed
+                // frames (the first may still be a stale pre-seek frame; the second is post-seek)
+                // so the grabbed frame reflects the requested timestamp.
+                grab.clearCaptured()
+                val seekLatch = CountDownLatch(2)
+                grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
                 if (!seekLatch.await(10, TimeUnit.SECONDS)) {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null
@@ -130,27 +138,28 @@ object LibVlcFrameExtractor {
     }
 
     /**
-     * Polls [libvlc_media_player_get_time] until it reaches within [toleranceMs] of [targetMs]
-     * (or times out), so the next displayed frame is guaranteed to come from the seeked region
-     * rather than a stale pre-seek frame.
+     * Polls [libvlc_media_player_get_time] until it reaches within [toleranceMs] of [targetMs].
+     * Returns true when the position actually reached the target region (a successful seek), or
+     * false when it timed out (seek was ignored / failed — the caller must not grab a frame).
      */
-    private fun awaitPosition(lib: LibVlc.LibVlcNative, mp: Pointer, targetMs: Long) {
+    private fun awaitPosition(lib: LibVlc.LibVlcNative, mp: Pointer, targetMs: Long): Boolean {
         val tolerance = 600L
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
         while (System.nanoTime() < deadline) {
             try {
                 val t = lib.libvlc_media_player_get_time(mp)
-                if (t >= targetMs - tolerance) return
+                if (t >= targetMs - tolerance) return true
             } catch (_: Throwable) {
-                return
+                return false
             }
             try {
                 Thread.sleep(50)
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
-                return
+                return false
             }
         }
+        return false
     }
 
     /**
@@ -242,6 +251,12 @@ object LibVlcFrameExtractor {
             val f = captured ?: return null
             captured = null
             return f
+        }
+
+        /** Discards any frame captured so far (used right after a seek). */
+        fun clearCaptured() {
+            captured = null
+            frameSeen = false
         }
     }
 
