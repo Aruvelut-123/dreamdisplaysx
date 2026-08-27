@@ -24,7 +24,11 @@ internal class VolumeController(
      * the effective volume only when the attenuation changed materially.
      */
     fun updateAttenuation(distance: Double, maxRadius: Double) {
-        val attenuation = (1.0 - minOf(1.0, distance / maxRadius)).let { it * it }
+        // Gentle linear-ish rolloff with a floor so audio never becomes inaudible: the old
+        // quadratic curve dropped volume to ~8% at moderate distances, which made libvlc audio
+        // seem completely broken (and libvlc's master clock hangs when a track is silent).
+        val t = (1.0 - minOf(1.0, distance / maxRadius)).coerceAtLeast(0.0)
+        val attenuation = 0.25 + 0.75 * (t * t)
         if (abs(attenuation - lastAttenuation) > 1e-5) {
             lastAttenuation = attenuation
             applyVolume(userVolume * attenuation)

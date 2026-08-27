@@ -29,6 +29,9 @@ object LibVlc {
     const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
     const val LIBVLC_ENDED = 6
 
+    // libvlc_media_slave_type_t (libvlc_media.h)
+    const val LIBVLC_MEDIA_SLAVE_TYPE_AUDIO = 1
+
     private val RV32 = byteArrayOf('R'.code.toByte(), 'V'.code.toByte(), '3'.code.toByte(), '2'.code.toByte())
 
     // ── Singleton libvlc instance ────────────────────────────────────────────
@@ -253,6 +256,10 @@ object LibVlc {
         fun libvlc_media_player_get_fps(player: Pointer): Float
         fun libvlc_media_player_set_rate(player: Pointer, rate: Float): Int
         fun libvlc_media_player_get_rate(player: Pointer): Float
+        // Slave (merged audio/video) inputs by full URI — added in libvlc 3.0.6; the string-option
+        // :input-slave=... mangles URLs containing '&' (query params get truncated), which silently
+        // breaks Bilibili DASH audio streams and the master clock with them.
+        fun libvlc_media_player_add_slave(player: Pointer, type: Int, uri: String, select: Boolean): Int
 
         // Audio
         fun libvlc_audio_set_volume(player: Pointer, volume: Int): Int

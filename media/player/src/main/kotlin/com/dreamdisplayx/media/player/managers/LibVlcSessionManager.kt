@@ -306,14 +306,15 @@ internal class LibVlcSessionManager(
         // right second instead of inheriting a stale origin from the previous session.
         clock.reset(offsetNanos)
 
-        // Build the media options (UA + referer + input-slave for DASH audio).
+        // Build the media options (UA + referer). Audio is merged via libvlc_media_player_add_slave
+        // with the full URI — the string `:input-slave=URL` option truncates URLs containing '&'
+        // (Bilibili DASH query params), silently killing the audio stream and the master clock.
         // NOTE: no `:avcodec-hw=any` — hardware decoding never reaches the low-level lock/unlock
         // video callbacks (vmem), so the video track plays audio-only. AVCodec stays software.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
         val audioUrl = streamSet.currentAudio.url
         if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
-            mediaOptions.add(":input-slave=$audioUrl")
-            logger.info("$debugLabel audio slave merged ({} bytes of options).", mediaOptions.size)
+            logger.info("$debugLabel audio slave will be merged via add_slave.")
         } else {
             logger.warn("$debugLabel audio slave NOT merged: audioUrl='{}' equalsVideo={}.",
                 audioUrl.ifBlank { "<blank>" }, audioUrl.equals(safeUrl, ignoreCase = true))
@@ -330,6 +331,14 @@ internal class LibVlcSessionManager(
                 val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
                 LibVlc.lib.libvlc_media_player_set_media(mp, media)
                 LibVlc.lib.libvlc_media_release(media) // the player holds its own reference
+                // Merge the DASH audio stream as a real slave input with its full URI (see above).
+                if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
+                    val rc = runCatching {
+                        LibVlc.lib.libvlc_media_player_add_slave(mp, LibVlc.LIBVLC_MEDIA_SLAVE_TYPE_AUDIO, audioUrl, true)
+                    }.getOrElse { -1 }
+                    if (rc != 0) logger.error("$debugLabel add_slave audio failed (rc={}) {}.", rc, LibVlc.errmsg())
+                    else logger.info("$debugLabel add_slave audio attached.")
+                }
                 LibVlc.lib.libvlc_media_player_play(mp)
                 isPlaying = true
             } catch (t: Throwable) {
