@@ -2,6 +2,25 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Audio-clock follow-ups: libvlc is the position clock again, and a bigger surface offset (feat/libvlc)**
+> — the audio-line-authoritative clock still lagged the video by *seconds*, and the display still
+> z-fought on AMD.
+>
+> **Timeline was still off by several seconds after the stale-anchor fix** — the remaining error
+> was the audio line itself: `SourceDataLine.open(fmt, requestedBytes)` only *requests* a buffer
+> size, and the audio hardware rounds it up (commonly to seconds), so a clock derived from the
+> line's real playback position always lags the displayed frames by that whole internal buffer.
+> libvlc's `get_time` tracks the frames libvlc actually *displays*, so it is the authoritative
+> player clock again (as it was before the audio split). The line position is still measured and
+> logged every ~10 s at INFO ("A/V sync: audioLine=…ms libvlc=…ms") so real drift is visible in
+> the log while the buffer's constant offset no longer moves the timeline.
+>
+> **Display still z-fought on the block (flicker)** — the world-space LETTERBOX lift separated the
+> video quad from its backdrop, but the whole display still sat only 0.008 blocks off the block
+> face, relying on a GPU polygon-offset bias that some drivers (AMD/OpenGL) silently ignore.
+> The surface offset is now 0.02 blocks (0.04 with shaders), clearing the block face even without
+> the depth-bias trick — the same world-space lift the placeholder layers already used.
+>
 > **GPU-scale + audio-sync follow-ups: runaway player clock and LETTERBOX z-fighting (feat/libvlc)**
 > — two regressions from the GPU-scaling / audio-sync work.
 >

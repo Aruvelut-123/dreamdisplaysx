@@ -645,33 +645,28 @@ internal class LibVlcSessionManager(
     // ── Pacing / clock ──────────────────────────────────────────────────────
 
     fun currentPacingNanos(): Long {
-        // The audio line's REAL playback position is the authoritative clock after the audio split:
-        // libvlc's own clock advances as samples are delivered to us, which runs ahead of the line
-        // by the ring-buffer latency. Anchoring to what the viewer actually hears keeps the player
-        // position, seek math and saved-resume point in lockstep with the audible audio.
-        if (isPlaying) {
-            val audible = audioOutput.playedPositionNanos()
-            if (audible != null) {
-                // Rate-limited A/V sync diagnostic: log the offset between the two clocks once per
-                // ~5 s so the user can verify the line clock is tracking correctly.
-                val now = System.nanoTime()
-                val last = lastSyncDiagNanos.get()
-                if (MediaPlayer.DEBUG && now - last > 5_000_000_000L && lastSyncDiagNanos.compareAndSet(last, now)) {
-                    val mp = mediaPlayer
-                    val libvlcMs = if (mp != null)
-                        runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L) else -1L
-                    logger.debug(
-                        "$debugLabel A/V sync: audioClock={}ms libvlcClock={}ms ({}ms ahead).",
-                        audible / 1_000_000L, libvlcMs, if (libvlcMs >= 0) libvlcMs * 1_000_000L - audible else 0L
-                    )
-                }
-                return audible
-            }
-        }
-        // Fallback (no audible audio yet / pure video): libvlc is the clock. Ask it directly and
-        // convert ms -> ns.
+        // libvlc is the authoritative player clock: get_time returns MILLISECONDS (×1e6 → nanos), and
+        // it tracks the frames libvlc actually DISPLAYS. Do NOT use the Java Sound line position here:
+        // the line's real internal ring buffer rounds the requested size up (often to seconds on some
+        // hardware), so an audio-line-authoritative clock reported the video as lagging by that whole
+        // buffer — first a stale-anchor 109:53:50 blow-up, then a steady multi-second skew. The line
+        // position is still measured below for the sync diagnostic.
         val mp = mediaPlayer ?: return clock.currentTime()
         val ms = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+        // Rate-limited A/V sync health diagnostic (INFO, ~10 s): audio line's real audible position vs
+        // libvlc's display clock. A constant difference is the line's buffer latency; a growing one is
+        // real drift and worth investigating.
+        val now = System.nanoTime()
+        val last = lastSyncDiagNanos.get()
+        if (now - last > 10_000_000_000L && lastSyncDiagNanos.compareAndSet(last, now)) {
+            val audible = audioOutput.playedPositionNanos()
+            if (audible != null) {
+                logger.info(
+                    "{} A/V sync: audioLine={}ms libvlc={}ms (line lags video by {}ms).",
+                    debugLabel, audible / 1_000_000L, ms, (ms * 1_000_000L - audible) / 1_000_000L
+                )
+            }
+        }
         return if (ms >= 0) ms * 1_000_000L else clock.currentTime()
     }
 
