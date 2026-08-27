@@ -28,7 +28,16 @@ object LibVlc {
     const val LIBVLC_MEDIA_PLAYER_ENCOUNTERED_ERROR = 0x10A
     const val LIBVLC_MEDIA_PLAYER_TIME_CHANGED = 0x10B
     const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
-    const val LIBVLC_ENDED = 6
+    /**
+     * libvlc_state_t values returned by libvlc_media_player_get_state — these are tiny integers
+     * (Playing=3, Paused=4, Stopped=5, Ended=6), NOT the libvlc_event_e constants above (0x1xx).
+     * Never compare a state against the event constants.
+     */
+    const val LIBVLC_STATE_PLAYING = 3
+    const val LIBVLC_STATE_PAUSED = 4
+    const val LIBVLC_STATE_STOPPED = 5
+    const val LIBVLC_STATE_ENDED = 6
+    const val LIBVLC_ENDED = 6 // legacy alias for LIBVLC_STATE_ENDED
 
     // libvlc_media_slave_type_t (libvlc_media.h)
     const val LIBVLC_MEDIA_SLAVE_TYPE_AUDIO = 1

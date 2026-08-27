@@ -512,19 +512,28 @@ internal class LibVlcSessionManager(
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         submit {
             val mp = mediaPlayer ?: return@submit
-            // libvlc's ENDED state (6) ignores set_time — need to play() first to restart the
-            // media.  This is the normal path for loop/replay after end-of-stream.
-            try {
-                val state = LibVlc.lib.libvlc_media_player_get_state(mp)
-                if (state == LibVlc.LIBVLC_ENDED) {
+            // ENDED state ignores set_time and a bare play() is not guaranteed to restart in libvlc
+            // 3.0 — stop() first, then play() restarts from the beginning (loop/replay path).
+            val state = try { LibVlc.lib.libvlc_media_player_get_state(mp) } catch (_: Throwable) { -1 }
+            if (state == LibVlc.LIBVLC_STATE_ENDED) {
+                try {
+                    LibVlc.lib.libvlc_media_player_stop(mp)
                     LibVlc.lib.libvlc_media_player_play(mp)
-                    // Give the new timeline a moment to settle so the subsequent set_time
-                    // is not silently ignored (no keyframe yet).
-                    Thread.sleep(50)
+                } catch (_: Throwable) { }
+            } else {
+                // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
+                runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
+            }
+            // If a seek left the player in a dead state (stopped/ended — e.g. a backwards seek
+            // into an already-released region dropping it out of PLAYING), resume it. Buffering(2)
+            // is a normal transient after a backwards seek and MUST NOT be play()ed — that would
+            // interrupt the seek and freeze the picture (the "backwards seek sometimes sticks" bug).
+            try {
+                val after = LibVlc.lib.libvlc_media_player_get_state(mp)
+                if (after == LibVlc.LIBVLC_STATE_STOPPED || after == LibVlc.LIBVLC_STATE_ENDED) {
+                    LibVlc.lib.libvlc_media_player_play(mp)
                 }
             } catch (_: Throwable) { }
-            // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
-            runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
         }
         logger.debug("$debugLabel libvlc seek to ${offsetNanos / 1_000_000} ms.")
         return true

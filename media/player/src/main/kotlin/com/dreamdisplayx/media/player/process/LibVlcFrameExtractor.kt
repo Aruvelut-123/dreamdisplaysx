@@ -48,7 +48,7 @@ object LibVlcFrameExtractor {
             lib.libvlc_video_set_format_callbacks(mp, grab.formatCb, grab.cleanupCb)
             lib.libvlc_video_set_callbacks(mp, grab.lockCb, grab.unlockCb, grab.displayCb, null)
 
-            val media = LibVlc.createMedia(url, LibVlcMediaOptions.forUrl(url))
+            val media = LibVlc.createMedia(url, LibVlcMediaOptions.forUrl(url) + arrayOf(":no-audio"))
             lib.libvlc_media_player_set_media(mp, media)
             lib.libvlc_media_release(media)
             lib.libvlc_media_player_play(mp)
@@ -65,11 +65,20 @@ object LibVlcFrameExtractor {
 
             // Seek to the requested offset and wait for a fresh frame.
             if (offsetNanos > 0) {
+                // libvlc silently ignores set_time while the media is not yet seekable (the player
+                // keeps playing from 0, so every sample would grab an opening frame). Wait for
+                // seekability first — bounded, because some URLs never report it.
+                pollSeekable(lib, mp)
+                val targetMs = offsetNanos / 1_000_000L
+                // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
+                lib.libvlc_media_player_set_time(mp, targetMs)
+                // The seek is asynchronous: pre-seek frames that were already in flight will still
+                // hit the display callback (and satisfy a naïve latch with a stale frame, which is
+                // why every thumbnail used to be the opening frame). Wait until the player clock
+                // actually reaches the target region before latching the next displayed frame.
+                awaitPosition(lib, mp, targetMs)
                 val seekLatch = CountDownLatch(1)
                 grab.onFrame = { seekLatch.countDown() }
-                grab.frameSeen = false
-                // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
-                lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L)
                 if (!seekLatch.await(10, TimeUnit.SECONDS)) {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null
@@ -96,6 +105,51 @@ object LibVlcFrameExtractor {
         } finally {
             runCatching { lib.libvlc_media_player_stop(mp) }
             runCatching { lib.libvlc_media_player_release(mp) }
+        }
+    }
+
+    /**
+     * Polls [libvlc_media_player_is_seekable] until true or a bounded timeout, so a subsequent
+     * [libvlc_media_player_set_time] is not silently ignored. Returns when seekable or timed out.
+     */
+    private fun pollSeekable(lib: LibVlc.LibVlcNative, mp: Pointer) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (System.nanoTime() < deadline) {
+            try {
+                if (lib.libvlc_media_player_is_seekable(mp) != 0) return
+            } catch (_: Throwable) {
+                return
+            }
+            try {
+                Thread.sleep(50)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+        }
+    }
+
+    /**
+     * Polls [libvlc_media_player_get_time] until it reaches within [toleranceMs] of [targetMs]
+     * (or times out), so the next displayed frame is guaranteed to come from the seeked region
+     * rather than a stale pre-seek frame.
+     */
+    private fun awaitPosition(lib: LibVlc.LibVlcNative, mp: Pointer, targetMs: Long) {
+        val tolerance = 600L
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (System.nanoTime() < deadline) {
+            try {
+                val t = lib.libvlc_media_player_get_time(mp)
+                if (t >= targetMs - tolerance) return
+            } catch (_: Throwable) {
+                return
+            }
+            try {
+                Thread.sleep(50)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
         }
     }
 

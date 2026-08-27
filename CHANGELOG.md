@@ -2,6 +2,29 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview, seek-stick and loop/replay fixes (feat/libvlc)** — three follow-up playback
+> defects after the audio-split work.
+>
+> **Scrub preview showed only the first frame everywhere** — `LibVlcFrameExtractor` issued
+> `libvlc_media_player_set_time` without waiting for the media to become seekable, so on many URLs
+> the seek was silently ignored and the player just kept playing from 0 — every sample therefore
+> captured the same opening frame. The extractor now polls `libvlc_media_player_is_seekable` before
+> seeking, waits until `get_time` actually reaches the target region (so stale pre-seek frames can't
+> satisfy the frame latch), and runs the media with `:no-audio` so the video clock alone drives the
+> seek. Progress-bar thumbnails now reflect the hovered timestamp.
+>
+> **Backwards seek could stick (forwards was fine)** — after a seek the session manager force-called
+> `play()` whenever the player was not in Playing, but a backwards seek legitimately drops into
+> Buffering while it re-acquires the target region; calling `play()` mid-buffer interrupted the seek
+> and froze the picture. It now only resumes on the dead Stopped/Ended states and leaves Buffering
+> alone. (The old check also compared the player *state* against libvlc *event* constants — 0x104
+> Playing — which never matched; dedicated `LIBVLC_STATE_*` constants are added.)
+>
+> **Video didn't replay after finishing** — libvlc's ENDED state ignores `set_time`, and a bare
+> `play()` in libvlc 3.0 is not guaranteed to restart the finished media. `beginSeek` now calls
+> `stop()` first (returning the player to STOPPED) then `play()` for the loop/replay path, so a
+> finished video reliably restarts from the beginning instead of freezing on the last frame.
+>
 > **libvlc audio split: 3D DSP + Java Sound line restored (feat/libvlc)** — libvlc was playing
 > audio through its default system-audio output, which bypassed the per-display 3D DSP chain
 > (`AudioDspStage` / `AcousticsEngine`) entirely. That silently broke three features the old
