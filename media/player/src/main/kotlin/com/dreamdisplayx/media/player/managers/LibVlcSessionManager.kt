@@ -113,7 +113,7 @@ internal class LibVlcSessionManager(
 
     // ── Frame surface ───────────────────────────────────────────────────────
 
-    private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.RGBA32)
+    private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.BGRA32)
 
     @Volatile
     var expectedW = 0; private set
@@ -196,6 +196,17 @@ internal class LibVlcSessionManager(
                 logger.debug("$debugLabel libvlc end reached.")
                 eosReached = true
                 fireStreamEnd()
+            }
+            LibVlc.LIBVLC_MEDIA_PLAYER_TIME_CHANGED -> {
+                // libvlc is the authoritative playback clock; rebase ours so the progress bar,
+                // F3 debug, and seek math follow the real stream position.
+                if (isPlaying) {
+                    submit {
+                        val mp = mediaPlayer ?: return@submit
+                        val us = LibVlc.lib.libvlc_media_player_get_time(mp)
+                        if (us >= 0) clock.rebaseTo(us * 1_000L) // µs -> ns
+                    }
+                }
             }
             LibVlc.LIBVLC_MEDIA_PLAYER_ENCOUNTERED_ERROR -> {
                 logger.error("$debugLabel libvlc error: ${LibVlc.errmsg()}")
@@ -284,6 +295,9 @@ internal class LibVlcSessionManager(
         expectedH = h
         firstFrameFired = false
         firstFrameLatch = CountDownLatch(1)
+        // Reset the playback clock to the requested offset so the progress bar starts at the
+        // right second instead of inheriting a stale origin from the previous session.
+        clock.reset(offsetNanos)
 
         // Build the media options (UA + referer + input-slave for DASH audio).
         // NOTE: no `:avcodec-hw=any` — hardware decoding never reaches the low-level lock/unlock
@@ -615,11 +629,15 @@ internal class LibVlcSessionManager(
 
                 if (frameWidth == ew && frameHeight == eh) {
                     // Direct copy: libvlc already produced RV32 (RGBA8888) — no colour conversion.
-                    for (i in 0 until total) spare.put(rgba.get())
+                    // Bulk copy: one range PUT instead of per-byte loops (up to 33MB on 4K).
+                    rgba.limit(rgba.position() + total)
+                    spare.put(rgba)
                 } else {
                     val scratch = rgbScratch?.takeIf { it.capacity() >= frameWidth * frameHeight * 4 }?.also { it.clear() }
                         ?: ByteBuffer.allocateDirect(frameWidth * frameHeight * 4).also { rgbScratch = it }
-                    for (i in 0 until frameWidth * frameHeight * 4) scratch.put(rgba.get())
+                    rgba.limit(rgba.position() + frameWidth * frameHeight * 4)
+                    scratch.put(rgba)
+                    scratch.flip()
                     resizeRgba(scratch, frameWidth, frameHeight, spare, ew, eh)
                 }
                 applyBrightness(spare, frameSize, getBrightness())
@@ -627,9 +645,9 @@ internal class LibVlcSessionManager(
 
                 if (parkFlag.get()) return
 
-                // Popout / preview sinks (RV32 / RGBA8888 frames).
+                // Popout / preview sinks (RV32 / BGRA8888 frames).
                 val sink = popoutSink ?: previewSink
-                if (sink != null) sink(spare, ew, eh, FramePixelFormat.RGBA32)
+                if (sink != null) sink(spare, ew, eh, FramePixelFormat.BGRA32)
 
                 // Publish to the GPU surface for the render thread.
                 surface.publish(spare, frameSize)
@@ -638,6 +656,7 @@ internal class LibVlcSessionManager(
                 if (!firstFrameFired) {
                     firstFrameFired = true
                     firstFrameLatch.countDown()
+                    clock.markFirstFrame() // start the playback position clock on the first decoded frame
                     logger.info("$debugLabel first frame delivered {}x{} (libvlc, yuv={}).", ew, eh, gpuYuvActive)
                 }
             } catch (t: Throwable) {
@@ -708,11 +727,23 @@ internal class LibVlcSessionManager(
 
     private fun resizeRgba(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
         src.rewind()
+        val srcRow = srcW * 4
+        val dstRow = dstW * 4
+        if (srcW == dstW) {
+            // Same row width: bulk-copy whole rows (fast path, common when the texture only
+            // differs in height from the decoded frame).
+            for (dy in 0 until dstH) {
+                val sy = (dy * srcH / dstH).coerceIn(0, srcH - 1)
+                src.position(sy * srcRow).limit(sy * srcRow + srcRow)
+                dst.put(src)
+            }
+            return
+        }
         for (dy in 0 until dstH) {
             val sy = (dy * srcH / dstH).coerceIn(0, srcH - 1)
             for (dx in 0 until dstW) {
                 val sx = (dx * srcW / dstW).coerceIn(0, srcW - 1)
-                val p = (sy * srcW + sx) * 4
+                val p = sy * srcW * 4 + sx * 4
                 dst.put(src.get(p)); dst.put(src.get(p + 1)); dst.put(src.get(p + 2)); dst.put(src.get(p + 3))
             }
         }

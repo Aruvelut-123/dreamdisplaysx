@@ -71,6 +71,11 @@ object LibVlc {
             val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--quiet",
                 "--no-keyboard-events", "--no-mouse-events", "--network-caching=300",
                 "--file-caching=300", "--live-caching=600", "--audio-filter=scaletempo")
+            // Instance-level browser UA so EVERY http request (including the :input-slave audio
+            // stream, which is a separate HTTP transaction from the video) carries a browser-shaped
+            // User-Agent. Bilibili/YouTube CDNs reject libvlc's default UA, and media-level options
+            // only apply to the primary video URL — the merged audio slave would still be 401/403'd.
+            opts.add("--http-user-agent=${com.dreamdisplayx.media.player.util.LibVlcMediaOptions.BROWSER_USER_AGENT}")
             // NOTE: low-level video callbacks (libvlc_video_set_callbacks → vmem) are incompatible
             // with hardware-accelerated decoding: libvlc decodes to a GPU texture and never calls
             // the lock callback, which shows audio but no video. VideoPlayer's `--avcodec-hw=any`
