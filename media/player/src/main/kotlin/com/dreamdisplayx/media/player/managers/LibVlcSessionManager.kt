@@ -89,6 +89,9 @@ internal class LibVlcSessionManager(
      */
     private val audioOutput = LibVlcAudioOutput(debugLabel, audioStage)
 
+    /** Rate-limits the A/V sync diagnostic (audio line clock vs libvlc clock) to once per few seconds. */
+    private val lastSyncDiagNanos = java.util.concurrent.atomic.AtomicLong(0L)
+
     init {
         // Mirror the config's hw-accel preference onto the shared libvlc instance before it is
         // created (the singleton instance is built on first use, so this must be set up front).
@@ -642,9 +645,31 @@ internal class LibVlcSessionManager(
     // ── Pacing / clock ──────────────────────────────────────────────────────
 
     fun currentPacingNanos(): Long {
-        // libvlc is the authoritative playback clock: ask it directly and convert ms -> ns.
-        // libvlc_media_player_get_time returns MILLISECONDS (not µs); the progress bar and seek
-        // math work in nanos, so multiply by 1e6.
+        // The audio line's REAL playback position is the authoritative clock after the audio split:
+        // libvlc's own clock advances as samples are delivered to us, which runs ahead of the line
+        // by the ring-buffer latency. Anchoring to what the viewer actually hears keeps the player
+        // position, seek math and saved-resume point in lockstep with the audible audio.
+        if (isPlaying) {
+            val audible = audioOutput.playedPositionNanos()
+            if (audible != null) {
+                // Rate-limited A/V sync diagnostic: log the offset between the two clocks once per
+                // ~5 s so the user can verify the line clock is tracking correctly.
+                val now = System.nanoTime()
+                val last = lastSyncDiagNanos.get()
+                if (MediaPlayer.DEBUG && now - last > 5_000_000_000L && lastSyncDiagNanos.compareAndSet(last, now)) {
+                    val mp = mediaPlayer
+                    val libvlcMs = if (mp != null)
+                        runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L) else -1L
+                    logger.debug(
+                        "$debugLabel A/V sync: audioClock={}ms libvlcClock={}ms ({}ms ahead).",
+                        audible / 1_000_000L, libvlcMs, if (libvlcMs >= 0) libvlcMs * 1_000_000L - audible else 0L
+                    )
+                }
+                return audible
+            }
+        }
+        // Fallback (no audible audio yet / pure video): libvlc is the clock. Ask it directly and
+        // convert ms -> ns.
         val mp = mediaPlayer ?: return clock.currentTime()
         val ms = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
         return if (ms >= 0) ms * 1_000_000L else clock.currentTime()

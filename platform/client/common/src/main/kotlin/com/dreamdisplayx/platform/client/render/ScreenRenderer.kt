@@ -13,6 +13,7 @@ import net.minecraft.client.renderer.rendertype.RenderType
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.dreamdisplayx.api.display.model.property.DisplayId
+import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.render.backend.service.RenderContext
 import com.dreamdisplayx.api.render.texture.model.TextureHandle
 import com.dreamdisplayx.api.runtime.registry.service.getOrNull
@@ -122,15 +123,72 @@ object ScreenRenderer : ClientRenderService {
         }
     }
 
-    /** Draws a unit quad using the screen's GPU texture, ramping up the first-appear fade. */
+    /** Draws a unit quad using the screen's GPU texture, ramping up the first-appear fade.
+     *  The texture is allocated at the video's NATIVE aspect (see [com.dreamdisplayx.platform.client.render.DisplayTextureResource]),
+     *  so the quad maps it onto the block face per the active stretch mode: STRETCH fills the block
+     *  (distorting when aspects differ), LETTERBOX draws a black backdrop and fits the video inside
+     *  with bars, CROP covers the block sampling the centered sub-rectangle of the texture. The GPU
+     *  sampler does the scaling, keeping the vout thread on a direct bulk copy. */
     private fun renderGpuTexture(drawQuad: QuadRenderer, displayScreen: DisplayScreen) {
         val appear = displayScreen.appearProgress()
         val base = if (displayScreen.isYuvTexture) displayScreen.brightness.coerceIn(0f, 1f) * 255f else 255f
         val c = (base * appear).toInt().coerceIn(0, 255)
+        val blockAspect = displayScreen.width.toDouble() / displayScreen.height.coerceAtLeast(1)
+        val contentAspect = displayScreen.videoContentAspect
+        val mode = if (contentAspect <= 0.0) StretchMode.STRETCH else displayScreen.stretchMode
+
+        if (mode == StretchMode.LETTERBOX && contentAspect > 0.0) {
+            // Black backdrop covers the whole block face; the video quad sits on top, so the
+            // letterbox bars show the same black the CPU path baked into the old block-aspect texture.
+            drawQuad(DisplayYuvRenderTypes.solidColorType()) { pose, builder ->
+                appendQuad(pose, builder, 0, 0, 0, displayScreen.rotation)
+            }
+        }
+
+        // Content rect (fractions of the block face) and UV rect (fractions of the video texture).
+        val (qx0, qy0, qx1, qy1, u0, v0, u1, v1) = fitRect(blockAspect, contentAspect, mode)
         drawQuad(displayScreen.renderType!!) { pose, builder ->
-            appendQuad(pose, builder, c, c, c, displayScreen.rotation)
+            appendQuad(pose, builder, c, c, c, displayScreen.rotation, qx0, qy0, qx1, qy1, u0, v0, u1, v1)
         }
     }
+
+    /** Computes the quad rect (block-face fractions) and UV rect (texture fractions) for [mode]. */
+    private fun fitRect(blockAspect: Double, contentAspect: Double, mode: StretchMode): FitRect {
+        if (contentAspect <= 0.0 || mode == StretchMode.STRETCH) {
+            return FitRect(0f, 0f, 1f, 1f, 0f, 0f, 1f, 1f)
+        }
+        return when (mode) {
+            StretchMode.LETTERBOX -> {
+                if (contentAspect > blockAspect) {
+                    // Video wider than block: fills the width, bars top & bottom.
+                    val frac = (blockAspect / contentAspect).toFloat()
+                    FitRect(0f, (1f - frac) / 2f, 1f, (1f + frac) / 2f, 0f, 0f, 1f, 1f)
+                } else {
+                    // Block wider than video: fills the height, bars left & right.
+                    val frac = (contentAspect / blockAspect).toFloat()
+                    FitRect((1f - frac) / 2f, 0f, (1f + frac) / 2f, 1f, 0f, 0f, 1f, 1f)
+                }
+            }
+            StretchMode.CROP -> {
+                if (contentAspect > blockAspect) {
+                    // Video wider than block: fills the height, crops left & right of the texture.
+                    val frac = (blockAspect / contentAspect).toFloat()
+                    FitRect(0f, 0f, 1f, 1f, (1f - frac) / 2f, 0f, (1f + frac) / 2f, 1f)
+                } else {
+                    // Block wider than video: fills the width, crops top & bottom of the texture.
+                    val frac = (contentAspect / blockAspect).toFloat()
+                    FitRect(0f, 0f, 1f, 1f, 0f, (1f - frac) / 2f, 1f, (1f + frac) / 2f)
+                }
+            }
+            StretchMode.STRETCH -> FitRect(0f, 0f, 1f, 1f, 0f, 0f, 1f, 1f)
+        }
+    }
+
+    /** Quad sub-rect (block-face fractions) + UV sub-rect (texture fractions). */
+    private data class FitRect(
+        val qx0: Float, val qy0: Float, val qx1: Float, val qy1: Float,
+        val u0: Float, val v0: Float, val u1: Float, val v1: Float,
+    )
 
     /** Depth-layer spacing between placeholder elements, in blocks toward the viewer (see [drawLayer]). */
     private const val OVERLAY_LIFT = 0.01f
@@ -213,7 +271,11 @@ object ScreenRenderer : ClientRenderService {
     /** Texture corners in vertex order; rotating the list by [rotation] spins the image. */
     private val baseUv = arrayOf(0f to 1f, 1f to 1f, 1f to 0f, 0f to 0f)
 
-    /** Appends a quad with the given [rotation] and color [[r], [g], [b] (0..255). */
+    /**
+     * Appends a quad with the given [rotation] and color [[r], [g], [b] (0..255), covering the
+     * sub-rectangle [[qx0],[qy0]]..[[qx1],[qy1]] of the block face (defaults to the full face) and
+     * sampling the sub-rectangle [[u0],[v0]]..[[u1],[v1]] of the texture (defaults to the full UV).
+     */
     private fun appendQuad(
         pose: PoseStack.Pose,
         builder: VertexConsumer,
@@ -221,13 +283,27 @@ object ScreenRenderer : ClientRenderService {
         g: Int,
         b: Int,
         rotation: DisplayRotation,
+        qx0: Float = 0f,
+        qy0: Float = 0f,
+        qx1: Float = 1f,
+        qy1: Float = 1f,
+        u0: Float = 0f,
+        v0: Float = 0f,
+        u1: Float = 1f,
+        v1: Float = 1f,
     ) {
         val rot = rotation.quarterTurns
-        val uv = Array(4) { baseUv[(it + rot) % 4] }
-        addVertex(pose, builder, 0f, 0f, 0f, r, g, b, uv[0].first, uv[0].second)
-        addVertex(pose, builder, 1f, 0f, 0f, r, g, b, uv[1].first, uv[1].second)
-        addVertex(pose, builder, 1f, 1f, 0f, r, g, b, uv[2].first, uv[2].second)
-        addVertex(pose, builder, 0f, 1f, 0f, r, g, b, uv[3].first, uv[3].second)
+        // Corner UVs in vertex order (0,0),(1,0),(1,1),(0,1); rotating the list by [rotation] spins the image.
+        val uv = arrayOf(
+            u0 to v1,
+            u1 to v1,
+            u1 to v0,
+            u0 to v0,
+        )
+        addVertex(pose, builder, qx0, qy0, 0f, r, g, b, uv[rot % 4].first, uv[rot % 4].second)
+        addVertex(pose, builder, qx1, qy0, 0f, r, g, b, uv[(1 + rot) % 4].first, uv[(1 + rot) % 4].second)
+        addVertex(pose, builder, qx1, qy1, 0f, r, g, b, uv[(2 + rot) % 4].first, uv[(2 + rot) % 4].second)
+        addVertex(pose, builder, qx0, qy1, 0f, r, g, b, uv[(3 + rot) % 4].first, uv[(3 + rot) % 4].second)
     }
 
     /** Adds a vertex with the given [r,g,b] (0..255) and [u,v] (0..1) coordinates. */

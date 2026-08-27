@@ -87,6 +87,11 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         screen.applyEffectiveVolume()
         mp.setBrightness(screen.brightness)
         mp.setStretchMode(screen.stretchMode)
+        // By now the stream has resolved, so videoContentAspect is known. Re-allocate the GPU texture at
+        // the video's native aspect (rather than the block aspect used during the pre-resolve sizing) so
+        // the vout thread uploads native-size frames with a direct bulk copy and the GPU does the scaling
+        // — otherwise every frame would be CPU-rescaled on the vout thread (the 10-20fps regression).
+        Minecraft.getInstance().execute { screen.reloadTexture() }
         if (screen.paused) mp.pause() else {
             mp.play()
             screen.paused = false

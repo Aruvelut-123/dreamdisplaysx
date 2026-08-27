@@ -2,6 +2,27 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **GPU-scaled video + re-synced audio clock (feat/libvlc)** — fixes the in-game ~10-20 fps after
+> the libvlc port and re-locks the player clock to what the speakers actually emit.
+>
+> **In-game video dropped to ~10-20 fps** — the root cause was an expensive CPU per-pixel resize on
+> the libvlc vout thread: the vmem callback CPU-scaled every delivered frame to the display-texture
+> block size (e.g. 3840×2160 → 3600×2160 is ~7.78M pixels × 4 read + 4 write byte-ops ≈ 62M byte
+> ops/frame, ~60-90 ms/frame). The texture is now allocated at the video's NATIVE aspect
+> (`videoContentAspect` from the stream metadata), so `publishFrame` direct-copies the frame
+> (srcW == dstW) and the GPU does the scaling when mapping the texture onto the block face. The
+> texture is re-allocated to the native aspect before `play()` once the stream is resolved, and the
+> renderer maps it to the block via per-stretch-mode UVs (STRETCH fills, LETTERBOX letterboxes with
+> a solid-color backdrop, CROP centers with a UV sub-rect).
+>
+> **Audio drifted from the video after the split** — libvlc's own clock advances as samples are
+> *delivered* to the play callback, which runs ahead of the Java Sound line (decoded PCM sits in the
+> ring buffer before the speaker). The authoritative clock is now the line's real playback position
+> (`SourceDataLine.getLongFramePosition` anchored to the audio callback's µs pts), so the progress
+> bar, seek math and saved resume point stay glued to what the viewer actually hears. The line
+> buffer is also halved (0.4 s → 0.2 s) so libvlc's delivery — and hence video pacing — can't
+> outrun the audible audio by a perceptible margin.
+>
 > **Reload crash root cause, F3 decoder name and deterministic scrub frames (feat/libvlc)** —
 > the follow-up fixes for the pause/resume crash, the "software decoder" F3 readout and the
 > hover thumbnails still showing the opening frame.

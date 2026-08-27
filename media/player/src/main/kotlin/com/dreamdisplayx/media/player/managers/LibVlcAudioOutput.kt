@@ -37,8 +37,18 @@ internal class LibVlcAudioOutput(
         private const val BYTES_PER_SAMPLE = 2
         private const val BYTES_PER_FRAME = CHANNELS * BYTES_PER_SAMPLE
 
-        /** Line buffer bytes (~0.4 s of stereo S16; matches the old AudioSink's pacing ceiling). */
-        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME / 20 * 8
+        /** Nanoseconds per decoded frame; the blip of one stereo S16 sample pair. */
+        private const val FRAME_NANOS = 1_000_000_000L / SAMPLE_RATE
+
+        /**
+         * Line buffer bytes (~0.2 s of stereo S16). Deliberately moderate: after the audio split the
+         * line's *actual* playback position is the authoritative audio clock, and libvlc throttles its
+         * audio thread on our blocking [SourceDataLine.write] — so the ring capacity upper-bounds how
+         * far video (paced by libvlc's delivery clock) can run ahead of what you hear. 0.2 s keeps lip
+         * sync tight while still absorbing game hitches so the line rarely underruns. (The old JavaCPP
+         * sink's 0.4 s ceiling let video lead the audible audio by a perceptible margin.)
+         */
+        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 2 / 10
     }
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -53,12 +63,43 @@ internal class LibVlcAudioOutput(
     /** Reusable PCM buffer, read on the libvlc audio thread only (play callbacks are serialised). */
     private var pcmBuffer = ByteArray(0)
 
+    // ── A/V sync clock ───────────────────────────────────────────────────────
+    //
+    // After the audio split, libvlc's own clock advances as samples are *delivered* to our play
+    // callback, but the sound only reaches the speakers after the line's ring buffer drains. Using
+    // the line's real playback position (frames actually emitted) keeps the player clock and any
+    // downstream sync glued to what the viewer can actually hear, instead of drifting by the line
+    // latency. The anchor maps "media nanos of the first sample of a written block" to the line's
+    // frame counter, so [playedPositionNanos] stays exact after seeks (flush re-anchors on the next
+    // block, whose pts libvlc sets to the new position).
+
+    /**
+     * Media time (nanos) of the block handed to the line at the moment the clock was (re)anchored,
+     * paired with the line's actual *played* frame counter at that same instant. The line consumes
+     * frames at the speaker's real rate, so `position = anchorPts + (played - anchorPlayedFrames) *
+     * FRAME_NANOS` tracks the audible output drift-free — the blocking [SourceDataLine.write] keeps
+     * libvlc's delivery (and hence video pacing) locked to this same consumption rate.
+     */
+    @Volatile
+    private var playAnchorPtsNanos = Long.MIN_VALUE
+
+    /** Line frame counter (frames actually emitted to the speakers) at anchor time. */
+    @Volatile
+    private var anchorPlayedFrames = 0L
+
+    /** True once the anchor is set (a block arrived after flush/reset/open). */
+    @Volatile
+    private var clockLive = false
+
     // ── Control ──────────────────────────────────────────────────────────────
 
     /** Resets per-session state and re-primes the DSP chain (called at the start of every playback). */
     fun reset() {
         runCatching { dspStage?.reset() }
         runCatching { line?.flush() }
+        clockLive = false
+        playAnchorPtsNanos = Long.MIN_VALUE
+        anchorPlayedFrames = 0L
     }
 
     /** Updates the gain applied to the PCM (user volume × distance attenuation). */
@@ -102,15 +143,42 @@ internal class LibVlcAudioOutput(
     /**
      * Receives [samples] (count per-channel frames of S16 PCM), runs it through the 3D DSP stage
      * and writes it to the line. Blocking on the line write naturally paces libvlc's audio thread,
-     * which is the audio clock our video rendering follows.
+     * which is the audio clock our video rendering follows. Also re-anchors the A/V clock: the
+     * first sample of this block (libvlc audio-callback pts, in µs) corresponds to the line's frame
+     * counter as it stands, so [playedPositionNanos] can map line position -> media position.
      */
     fun onPlay(data: Pointer?, samples: Pointer?, count: Int, pts: Long) {
         if (samples == null || count <= 0) return
         val ln = line ?: return
+        // On the first block after a flush/seek we (re)anchor: the block's pts (libvlc audio-callback
+        // pts is µs) is mapped to the line's current played-frame counter, so the audio clock tracks
+        // the real speaker output from here on.
+        if (!clockLive) {
+            playAnchorPtsNanos = pts * 1000L
+            anchorPlayedFrames = ln.getLongFramePosition()
+            clockLive = true
+        }
         val bytes = count * BYTES_PER_FRAME
         if (pcmBuffer.size < bytes) pcmBuffer = ByteArray(bytes)
         samples.read(0, pcmBuffer, 0, bytes)
         feed(pcmBuffer, bytes, ln)
+    }
+
+    /**
+     * The authoritative audio playback position in nanos: media time of the block whose samples are
+     * currently being emitted by the speaker, derived from the line's real frame counter. Returns
+     * [null] until the line has actually played some audio.
+     *
+     * This keeps the player clock glued to what the viewer *hears* after the audio split — libvlc's
+     * own clock advances when samples are *delivered* to us, which runs ahead of the line.
+     */
+    fun playedPositionNanos(): Long? {
+        val ln = line ?: return null
+        if (!clockLive || playAnchorPtsNanos == Long.MIN_VALUE) return null
+        val frames = ln.getLongFramePosition()
+        val deltaFrames = frames - anchorPlayedFrames
+        if (deltaFrames < 0) return playAnchorPtsNanos
+        return playAnchorPtsNanos + deltaFrames * FRAME_NANOS
     }
 
     private fun feed(buf: ByteArray, bytes: Int, ln: SourceDataLine) {
@@ -144,10 +212,12 @@ internal class LibVlcAudioOutput(
         runCatching { line?.start() }
     }
 
-    /** Discards buffered PCM (seek / stop). */
+    /** Discards buffered PCM (seek / stop). The next play block re-anchors the clock at its pts. */
     @Suppress("UNUSED_PARAMETER")
     fun onFlush(data: Pointer?, pts: Long) {
         runCatching { line?.flush() }
+        clockLive = false
+        playAnchorPtsNanos = Long.MIN_VALUE
     }
 
     /** Drains buffered PCM (end of stream). */
@@ -178,6 +248,8 @@ internal class LibVlcAudioOutput(
             newLine.open(fmt, LINE_BUFFER_BYTES)
             newLine.start()
             line = newLine
+            clockLive = false
+            playAnchorPtsNanos = Long.MIN_VALUE
             logger.info("$debugLabel audio line opened ({} Hz, {} ch).", SAMPLE_RATE, CHANNELS)
         } catch (e: LineUnavailableException) {
             logger.warn("$debugLabel audio line unavailable: ${e.message}.")

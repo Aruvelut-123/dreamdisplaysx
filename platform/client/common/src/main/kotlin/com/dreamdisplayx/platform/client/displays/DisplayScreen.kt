@@ -546,7 +546,7 @@ class DisplayScreen(
 
     /** Sizes the GPU texture buffers for the current dimensions and quality before the first frame. */
     internal fun prepareTextureDimensions() {
-        textureResource.prepareDimensions(width, height, effectiveTextureHeight())
+        textureResource.prepareDimensions(width, height, effectiveTextureHeight(), videoContentAspect)
     }
 
     /** Re-attaches the popout sink chain to a freshly created [player]. */
@@ -934,12 +934,12 @@ class DisplayScreen(
     fun createTexture() {
         hasEverRendered = false
         firstFrameNanos = 0L
-        textureResource.allocate(width, height, effectiveTextureHeight())
+        textureResource.allocate(width, height, effectiveTextureHeight(), videoContentAspect)
     }
 
     /** Stages new-resolution texture; live frame renders until first new frame (render thread only). */
     fun beginQualityHandoff() {
-        textureResource.allocatePending(width, height, effectiveTextureHeight())
+        textureResource.allocatePending(width, height, effectiveTextureHeight(), videoContentAspect)
     }
 
     /** Drops any staged quality-handoff texture (e.g. when a full session restart supersedes it). */
