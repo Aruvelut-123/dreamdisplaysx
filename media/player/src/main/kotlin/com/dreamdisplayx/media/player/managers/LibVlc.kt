@@ -79,13 +79,15 @@ object LibVlc {
             // User-Agent. Bilibili/YouTube CDNs reject libvlc's default UA, and media-level options
             // only apply to the primary video URL — the merged audio slave would still be 401/403'd.
             opts.add("--http-user-agent=${com.dreamdisplayx.media.player.util.LibVlcMediaOptions.BROWSER_USER_AGENT}")
-            // NOTE: low-level video callbacks (libvlc_video_set_callbacks → vmem) are incompatible
-            // with hardware-accelerated decoding: libvlc decodes to a GPU texture and never calls
-            // the lock callback, which shows audio but no video. VideoPlayer's `--avcodec-hw=any`
-            // only works because it falls back to software decoding on most platforms; on a GPU
-            // where hw succeeds the video vanishes, so we force software AVCodec here.
-            // (libvlc finds its plugins automatically via VLC_PLUGIN_PATH / relative layout;
-            //  `--plugin-path` was removed in libvlc 3.0.21 and only produces a warning.)
+            // Hardware-accelerated decoding. libvlc 3.0's vmem callbacks DO work together with
+            // --avcodec-hw: the avcodec module decodes on the GPU then copies the frame back to
+            // system memory before handing it to the lock callback (copy-back). VideoPlayer enables
+            // it on BOTH the instance (--avcodec-hw=any) and the media (:avcodec-hw=any) so that
+            // 4K H.264/HEVC streams decode on the GPU instead of starving the CPU. Gate it on config
+            // so users on machines where hw surfaces fail to copy back can disable it.
+            if (useHwAccel) {
+                opts.add("--avcodec-hw=any")
+            }
             instance = libcCreateInstance(opts)
             loadError = null
             return true

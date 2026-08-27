@@ -236,10 +236,13 @@ internal class LibVlcSessionManager(
     // ── Volume ──────────────────────────────────────────────────────────────
 
     fun setVolume(volume: Double) {
+        // libvlc's software volume scale is much quieter than the old JavaCPP pipeline: users had
+        // to push the UI to 150% (~0.75) just to hear what 50% used to be. Compensate by mapping the
+        // 0..1 fraction to 0..300% (libvlc accepts >100 as amplification), so 0.5 ≈ previous 50%.
         val v = volume.coerceIn(0.0, 1.0)
         submit {
             val mp = mediaPlayer ?: return@submit
-            runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, (v * 100).toInt()) }
+            runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, (v * 300).toInt().coerceAtMost(300)) }
         }
     }
 
@@ -306,12 +309,15 @@ internal class LibVlcSessionManager(
         // right second instead of inheriting a stale origin from the previous session.
         clock.reset(offsetNanos)
 
-        // Build the media options (UA + referer). Audio is merged via libvlc_media_player_add_slave
-        // with the full URI — the string `:input-slave=URL` option truncates URLs containing '&'
-        // (Bilibili DASH query params), silently killing the audio stream and the master clock.
-        // NOTE: no `:avcodec-hw=any` — hardware decoding never reaches the low-level lock/unlock
-        // video callbacks (vmem), so the video track plays audio-only. AVCodec stays software.
+        // Build the media options (UA + referer + optional hw decode). Audio is merged via
+        // libvlc_media_player_add_slave with the full URI — the string `:input-slave=URL` option
+        // truncates URLs containing '&' (Bilibili DASH query params), silently killing the audio
+        // stream and the master clock. Hardware decode is enabled BOTH here (media-level) and at
+        // instance-level (--avcodec-hw=any); VLC copies the GPU-decoded frame back to system
+        // memory before handing it to the vmem lock callback, so vmem and hw coexist and 4K
+        // H.264/HEVC decodes on the GPU instead of starving the CPU.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
+        if (LibVlc.useHwAccel) mediaOptions.add(":avcodec-hw=any")
         val audioUrl = streamSet.currentAudio.url
         if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
             logger.info("$debugLabel audio slave will be merged via add_slave.")

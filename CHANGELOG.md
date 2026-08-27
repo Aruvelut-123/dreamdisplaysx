@@ -2,6 +2,19 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **libvlc audio-slave + clock + seek fixes (feat/libvlc)** — three playback defects resolved:
+> DASH audio is now attached with `libvlc_media_player_add_slave` (full URI) instead of the
+> string `:input-slave=URL` media option, whose option parsing truncated Bilibili audio URLs at
+> `&` and left the audio track silent — which in turn stalled libvlc's audio-driven master clock,
+> freezing both the video and the progress bar at a random 6–8s. libvlc `get_time`/`set_time`
+> units were corrected to **milliseconds** (the port treated them as µs, so the progress bar sat
+> near zero and seeks overshot by 1000×). Distance volume attenuation was eased (quadratic → 25%
+> floor) and the libvlc software-volume mapping amplified 3× (`v*100` → `v*300`) to match the
+> old pipeline's loudness. Hardware decoding (`--avcodec-hw=any` on instance and media, the
+> VideoPlayer model) is re-enabled with copy-back: VLC decodes on the GPU and copies frames back
+> to system memory for the vmem callbacks, so 4K H.264/HEVC no longer starves the CPU — the
+> earlier "hw never reaches vmem" assumption was wrong and is retracted.
+>
 > **libvlc full VideoPlayer-model rewrite (feat/libvlc)** — the whole playback pipeline was
 > rebuilt to mirror the VideoPlayer mod's low-level libvlc architecture, dropping the fragile
 > vlcj wrapper entirely. A single libvlc instance + single media player are created once for the
@@ -20,13 +33,14 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > context on the lock/unlock/display/event trampolines, and Kotlin's non-null checks crashed the
 > callback thread with a JNA NPE until the types matched reality.
 >
-> **libvlc software-decode video fix (feat/libvlc)** — the low-level video callbacks
-> (`libvlc_video_set_callbacks`, the vmem output) are incompatible with hardware-accelerated
-> decoding: libvlc decodes to a GPU texture and never invokes the lock callback, producing audio
-> but a black screen. Hardware decoding (`--avcodec-hw=any` / `:avcodec-hw=any`) is therefore
-> removed and AVCodec stays in software mode, so frames actually reach the triple-buffered pool.
+> **libvlc software-decode video fix (feat/libvlc, superseded)** — an early attempt claimed the
+> low-level video callbacks (`libvlc_video_set_callbacks`, the vmem output) were incompatible
+> with hardware-accelerated decoding and removed `--avcodec-hw`. That assumption proved wrong:
+> VLC's avcodec module decodes on the GPU and copies the frame back to system memory for the vmem
+> lock callback, exactly how the VideoPlayer mod runs. Hardware decoding is re-enabled (see the
+> audio-slave/clock/seek section above); this paragraph only records the superseded interim fix.
 > The obsolete `--plugin-path` instance option (removed in libvlc 3.0.21, only emitted a warning)
-> was dropped too; libvlc finds its plugins via the default relative layout / `VLC_PLUGIN_PATH`.
+> stays dropped; libvlc finds its plugins via the default relative layout / `VLC_PLUGIN_PATH`.
 >
 > **libvlc vlcj removed entirely (feat/libvlc)** — the last two vlcj usages are gone: the
 > scrub-preview `FrameExtractor` is rewritten on the low-level libvlc binding (a short-lived
