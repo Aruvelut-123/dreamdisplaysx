@@ -106,7 +106,13 @@ object ScreenRenderer : ClientRenderService {
         val h = displayScreen.height
 
         if (displayScreen.isVideoStarted && displayScreen.hasTexture && displayScreen.renderType != null) {
+            // In LETTERBOX mode a black backdrop quad shares the block face with the video quad; lift
+            // the video one toward the viewer in WORLD space (before the transform's z-flattening
+            // scale) so the two coplanar quads don't z-fight over the overlapping area.
+            val contentAspect = displayScreen.videoContentAspect
+            val letterbox = contentAspect > 0.0 && displayScreen.stretchMode == StretchMode.LETTERBOX
             stack.pushPose()
+            if (letterbox) DisplayGeometry.liftTowardViewer(stack, facing, OVERLAY_LIFT)
             DisplayGeometry.applyScreenTransform(stack, facing, w, h)
             renderGpuTexture(drawQuad, displayScreen)
             stack.popPose()

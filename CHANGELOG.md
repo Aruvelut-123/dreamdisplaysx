@@ -2,6 +2,24 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **GPU-scale + audio-sync follow-ups: runaway player clock and LETTERBOX z-fighting (feat/libvlc)**
+> — two regressions from the GPU-scaling / audio-sync work.
+>
+> **Player clock jumped to ~109:53:50 at the first second** — the A/V clock anchored once per
+> segment to the Java Sound line's *cumulative* frame counter (which never resets across videos in
+> one game session). If that anchor ever survived a session change (a missed flush), the position
+> extrapolated from a long-dead anchor over the line's whole lifetime frame count → ~100 hours at
+> the very first second. The clock now recomputes the position on every audio block from that
+> block's own pts minus the frames still buffered in the line, so no stale anchor can persist —
+> the position is always "newest written sample minus queued frames".
+>
+> **Display z-fighting on the block (flickering) in LETTERBOX mode** — the GPU-scaled renderer
+> draws a black backdrop quad plus the video quad, both on the same block face. A vertex-level z
+> offset was silently flattened by the display transform's `scale(width, height, 0)`, leaving the
+> two quads coplanar → z-fighting where they overlap. The video quad's pose is now lifted toward the
+> viewer in *world* space (before the z-flattening scale), the same trick the loading/error
+> placeholder layers already used, so it cleanly clears the backdrop.
+>
 > **GPU-scaled video + re-synced audio clock (feat/libvlc)** — fixes the in-game ~10-20 fps after
 > the libvlc port and re-locks the player clock to what the speakers actually emit.
 >

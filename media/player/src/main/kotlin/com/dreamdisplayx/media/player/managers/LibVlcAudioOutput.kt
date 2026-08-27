@@ -66,28 +66,23 @@ internal class LibVlcAudioOutput(
     // ── A/V sync clock ───────────────────────────────────────────────────────
     //
     // After the audio split, libvlc's own clock advances as samples are *delivered* to our play
-    // callback, but the sound only reaches the speakers after the line's ring buffer drains. Using
-    // the line's real playback position (frames actually emitted) keeps the player clock and any
-    // downstream sync glued to what the viewer can actually hear, instead of drifting by the line
-    // latency. The anchor maps "media nanos of the first sample of a written block" to the line's
-    // frame counter, so [playedPositionNanos] stays exact after seeks (flush re-anchors on the next
-    // block, whose pts libvlc sets to the new position).
+    // callback, but the sound only reaches the speakers after the line's ring buffer drains. The
+    // authoritative position is therefore computed from the line's REAL playback cursor each time:
+    // the media time of the newest sample we've written, minus the frames still sitting in the line
+    // buffer (frames written but not yet emitted). This self-heals on every audio block — no
+    // long-lived anchor to go stale — so seeks, restarts and live streams can't make the position
+    // extrapolate wildly (which a single anchor did, reading the line's cumulative counter as if it
+    // were media time and jumping to ~100 hours on a long-running game).
 
-    /**
-     * Media time (nanos) of the block handed to the line at the moment the clock was (re)anchored,
-     * paired with the line's actual *played* frame counter at that same instant. The line consumes
-     * frames at the speaker's real rate, so `position = anchorPts + (played - anchorPlayedFrames) *
-     * FRAME_NANOS` tracks the audible output drift-free — the blocking [SourceDataLine.write] keeps
-     * libvlc's delivery (and hence video pacing) locked to this same consumption rate.
-     */
+    /** Cumulative frames written to the line since it opened (or since the last flush). */
     @Volatile
-    private var playAnchorPtsNanos = Long.MIN_VALUE
+    private var totalWrittenFrames = 0L
 
-    /** Line frame counter (frames actually emitted to the speakers) at anchor time. */
+    /** Media time (nanos) of the newest sample handed to the line so far in this run. */
     @Volatile
-    private var anchorPlayedFrames = 0L
+    private var lastWrittenMediaNanos = 0L
 
-    /** True once the anchor is set (a block arrived after flush/reset/open). */
+    /** True once at least one audio block has been written since the last flush. */
     @Volatile
     private var clockLive = false
 
@@ -97,9 +92,9 @@ internal class LibVlcAudioOutput(
     fun reset() {
         runCatching { dspStage?.reset() }
         runCatching { line?.flush() }
+        totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
+        lastWrittenMediaNanos = 0L
         clockLive = false
-        playAnchorPtsNanos = Long.MIN_VALUE
-        anchorPlayedFrames = 0L
     }
 
     /** Updates the gain applied to the PCM (user volume × distance attenuation). */
@@ -150,14 +145,13 @@ internal class LibVlcAudioOutput(
     fun onPlay(data: Pointer?, samples: Pointer?, count: Int, pts: Long) {
         if (samples == null || count <= 0) return
         val ln = line ?: return
-        // On the first block after a flush/seek we (re)anchor: the block's pts (libvlc audio-callback
-        // pts is µs) is mapped to the line's current played-frame counter, so the audio clock tracks
-        // the real speaker output from here on.
-        if (!clockLive) {
-            playAnchorPtsNanos = pts * 1000L
-            anchorPlayedFrames = ln.getLongFramePosition()
-            clockLive = true
-        }
+        // Register this block's newest sample against the running write counter, so
+        // [playedPositionNanos] can subtract the still-buffered frames. libvlc audio-callback pts
+        // is in µs; convert to ns here (the first sample of the block, hence +(count-1) * frame).
+        val countL = count.toLong()
+        totalWrittenFrames += countL
+        lastWrittenMediaNanos = pts * 1000L + (countL - 1) * FRAME_NANOS
+        clockLive = true
         val bytes = count * BYTES_PER_FRAME
         if (pcmBuffer.size < bytes) pcmBuffer = ByteArray(bytes)
         samples.read(0, pcmBuffer, 0, bytes)
@@ -165,20 +159,26 @@ internal class LibVlcAudioOutput(
     }
 
     /**
-     * The authoritative audio playback position in nanos: media time of the block whose samples are
-     * currently being emitted by the speaker, derived from the line's real frame counter. Returns
-     * [null] until the line has actually played some audio.
+     * The authoritative audio playback position in nanos — media time of the block whose samples are
+     * currently being emitted by the speaker. Computed fresh every call from the newest written
+     * sample's media time and the line's actual emitted-frame count:
      *
-     * This keeps the player clock glued to what the viewer *hears* after the audio split — libvlc's
-     * own clock advances when samples are *delivered* to us, which runs ahead of the line.
+     * ```
+     * position = lastWrittenMediaNanos - (totalWrittenFrames - line.getLongFramePosition()) * FRAME_NANOS
+     * ```
+     *
+     * `totalWrittenFrames - emitted` is exactly the number of frames still queued in the line's ring
+     * buffer (written but not yet audible), so subtracting them maps the write head back to what the
+     * speaker is playing right now. Returns [null] until audio has actually been delivered, and is
+     * self-healing: every block re-bases the math on its own pts, so no stale anchor can linger.
      */
     fun playedPositionNanos(): Long? {
         val ln = line ?: return null
-        if (!clockLive || playAnchorPtsNanos == Long.MIN_VALUE) return null
-        val frames = ln.getLongFramePosition()
-        val deltaFrames = frames - anchorPlayedFrames
-        if (deltaFrames < 0) return playAnchorPtsNanos
-        return playAnchorPtsNanos + deltaFrames * FRAME_NANOS
+        if (!clockLive) return null
+        val emitted = ln.getLongFramePosition()
+        val buffered = (totalWrittenFrames - emitted).coerceAtLeast(0L)
+        val position = lastWrittenMediaNanos - buffered * FRAME_NANOS
+        return position.coerceAtLeast(0L)
     }
 
     private fun feed(buf: ByteArray, bytes: Int, ln: SourceDataLine) {
@@ -212,12 +212,13 @@ internal class LibVlcAudioOutput(
         runCatching { line?.start() }
     }
 
-    /** Discards buffered PCM (seek / stop). The next play block re-anchors the clock at its pts. */
+    /** Discards buffered PCM (seek / stop): pretend only the already-emitted frames exist. */
     @Suppress("UNUSED_PARAMETER")
     fun onFlush(data: Pointer?, pts: Long) {
         runCatching { line?.flush() }
+        totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
+        lastWrittenMediaNanos = 0L
         clockLive = false
-        playAnchorPtsNanos = Long.MIN_VALUE
     }
 
     /** Drains buffered PCM (end of stream). */
@@ -248,8 +249,9 @@ internal class LibVlcAudioOutput(
             newLine.open(fmt, LINE_BUFFER_BYTES)
             newLine.start()
             line = newLine
+            totalWrittenFrames = 0L
+            lastWrittenMediaNanos = 0L
             clockLive = false
-            playAnchorPtsNanos = Long.MIN_VALUE
             logger.info("$debugLabel audio line opened ({} Hz, {} ch).", SAMPLE_RATE, CHANNELS)
         } catch (e: LineUnavailableException) {
             logger.warn("$debugLabel audio line unavailable: ${e.message}.")
