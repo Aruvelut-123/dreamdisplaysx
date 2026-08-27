@@ -5,6 +5,7 @@ import com.sun.jna.Library
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+import com.sun.jna.Structure
 import com.sun.jna.ptr.PointerByReference
 import java.nio.charset.StandardCharsets
 
@@ -160,6 +161,24 @@ object LibVlc {
         return mem
     }
 
+    // ── Media decoder info (F3 diagnostics) ─────────────────────────────────
+
+    /** `libvlc_media_decoder_info_t`: decoder name + description + type (libvlc_media_decoder_type). */
+    @Structure.FieldOrder("name", "description", "type")
+    class MediaDecoderInfo : Structure() {
+        @JvmField var name: Pointer? = null
+        @JvmField var description: Pointer? = null
+        @JvmField var type: Int = 0
+    }
+
+    /** Reads the active video decoder's human-readable name via `libvlc_media_player_get_video_decoder_info`. */
+    fun videoDecoderName(player: Pointer): String? = try {
+        val dec = MediaDecoderInfo()
+        val enc = MediaDecoderInfo()
+        if (lib.libvlc_media_player_get_video_decoder_info(player, dec, enc) != 0) return null
+        dec.name?.getString(0, "UTF-8")?.takeIf { it.isNotBlank() }
+    } catch (_: Throwable) { null }
+
     // ── Callback interfaces ──────────────────────────────────────────────────
     // The Pointer parameters are nullable because libvlc passes a null `opaque` (and null
     // `userData` for events) when we registered the callbacks with a null context. Kotlin would
@@ -262,6 +281,8 @@ object LibVlc {
         // :input-slave=... mangles URLs containing '&' (query params get truncated), which silently
         // breaks Bilibili DASH audio streams and the master clock with them.
         fun libvlc_media_player_add_slave(player: Pointer, type: Int, uri: String, select: Boolean): Int
+        // Decoder info for F3 diagnostics (added in libvlc 3.0.7).
+        fun libvlc_media_player_get_video_decoder_info(player: Pointer, decoder: MediaDecoderInfo, encoder: MediaDecoderInfo): Int
 
         // Audio
         fun libvlc_audio_set_volume(player: Pointer, volume: Int): Int

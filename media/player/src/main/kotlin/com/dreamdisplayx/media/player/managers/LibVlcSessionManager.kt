@@ -193,6 +193,12 @@ internal class LibVlcSessionManager(
                     val tracks = LibVlc.lib.libvlc_audio_get_track_count(player)
                     val vol = LibVlc.lib.libvlc_audio_get_volume(player)
                     logger.info("$debugLabel libvlc playing: audioTracks={} volume={}.", tracks, vol)
+                    // Update F3 decoder info so the debug overlay shows the real decoder name
+                    // (e.g. "D3D11VA H.264" / "FFmpeg H.264") instead of always "software".
+                    LibVlc.videoDecoderName(player)?.let { name ->
+                        MediaPlayer.currentDecoder.set(name)
+                        logger.debug("$debugLabel video decoder: {}.", name)
+                    }
                 }
             }
             LibVlc.LIBVLC_MEDIA_PLAYER_PAUSED -> {
@@ -673,7 +679,7 @@ internal class LibVlcSessionManager(
                     rgba.limit(rgba.position() + frameWidth * frameHeight * 4)
                     scratch.put(rgba)
                     scratch.flip()
-                    resizeRgba(scratch, frameWidth, frameHeight, spare, ew, eh)
+                    fitFrame(scratch, frameWidth, frameHeight, spare, ew, eh)
                 }
                 applyBrightness(spare, frameSize, getBrightness())
                 spare.flip()
@@ -759,6 +765,56 @@ internal class LibVlcSessionManager(
     // ── Frame conversion helpers ────────────────────────────────────────────
 
     private var rgbScratch: ByteBuffer? = null
+
+    /** Reusable buffer for the intermediate (fit-to-aspect) scale step of LETTERBOX/CROP. */
+    private var fitScratch: ByteBuffer? = null
+
+    /**
+     * Fits a source RGBA frame into the display-sized [dst] buffer honouring the active [getStretchMode]:
+     * STRETCH scales to fill exactly (may distort); LETTERBOX scales to fit keeping aspect and pads the
+     * remainder black; CROP scales to cover keeping aspect and centers-crops the overflow. [dst] must
+     * already be cleared (black) so letterbox bars are correct.
+     */
+    private fun fitFrame(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
+        val mode = getStretchMode()
+        if (mode == StretchMode.STRETCH) {
+            resizeRgba(src, srcW, srcH, dst, dstW, dstH)
+            return
+        }
+        val srcAspect = srcW.toDouble() / srcH
+        val dstAspect = dstW.toDouble() / dstH
+        val (fitW, fitH) = when (mode) {
+            StretchMode.LETTERBOX -> {
+                // scale to fit inside
+                val scale = if (srcAspect > dstAspect) dstW.toDouble() / srcW else dstH.toDouble() / srcH
+                (srcW * scale).toInt().coerceAtLeast(1) to (srcH * scale).toInt().coerceAtLeast(1)
+            }
+            StretchMode.CROP -> {
+                // scale to cover
+                val scale = if (srcAspect > dstAspect) dstH.toDouble() / srcH else dstW.toDouble() / srcW
+                (srcW * scale).toInt().coerceAtLeast(1) to (srcH * scale).toInt().coerceAtLeast(1)
+            }
+            StretchMode.STRETCH -> dstW to dstH
+        }
+        // Scale the source into the fit-sized intermediate.
+        val scratch = fitScratch?.takeIf { it.capacity() >= fitW * fitH * 4 }?.also { it.clear() }
+            ?: ByteBuffer.allocateDirect(fitW * fitH * 4).also { fitScratch = it }
+        resizeRgba(src, srcW, srcH, scratch, fitW, fitH)
+        scratch.flip()
+        // Center the fit-sized frame in the destination.
+        val offX = (dstW - fitW) / 2
+        val offY = (dstH - fitH) / 2
+        for (row in 0 until fitH) {
+            val dy = offY + row
+            if (dy < 0 || dy >= dstH) continue
+            scratch.position(row * fitW * 4)
+            scratch.limit(row * fitW * 4 + fitW * 4)
+            val srcSlice = scratch.slice()
+            dst.position(dy * dstW * 4 + offX * 4)
+            dst.put(srcSlice)
+        }
+        scratch.rewind()
+    }
 
     private fun resizeRgba(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
         src.rewind()
