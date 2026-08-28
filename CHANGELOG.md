@@ -2,6 +2,14 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: wait for playback to advance PAST the seek target before grabbing (feat/libvlc)**
+> — the earlier fixed-settle approach was racy: on network seeks get_time jumps to the target
+> instantly while the vout still shows stale pre-seek pictures until the new fragments arrive, so a
+> fixed 300ms sleep sometimes caught the correct frame and sometimes a stale one (CRC of the
+> captured frame differed between re-extractions of the same position). The extractor now keeps
+> playing after the seek and waits for position >= target + 300ms — by the time playback has
+> advanced past the target, the target frame has definitely been decoded and displayed.
+
 > **Scrub preview: extractor forces software decode (feat/libvlc)**
 > — the temporary extractor player shared the global libvlc instance's `--avcodec-hw=dxva2`, so it
 > decoded on the GPU too; DXVA2 + vmem copy-back on libvlc 3.0 can hand back a stale GPU surface
