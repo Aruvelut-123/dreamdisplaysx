@@ -38,11 +38,12 @@ object LibVlcFrameExtractor {
     private const val SETUP_TIMEOUT_MS = 15_000L
 
     /**
-     * How long a [ScrubSession] briefly plays after a paused seek before grabbing the frame. Playing
-     * a couple of frames forces the decoder to actually decode into the target region and the vout to
-     * display the target frame — a paused-only seek leaves the vout on a stale pre-seek picture.
+     * How far past the seek target the player must advance before the frame is grabbed. Waiting for
+     * position >= target + this value is the reliable signal that the decoder has decoded into the
+     * target region and the vout has displayed the target frame (network seeks must load new
+     * fragments first). ~300ms per extraction is fine because the player is reused across hovers.
      */
-    private const val RENDER_FRAMES_MS = 60L
+    private const val RENDER_FRAMES_MS = 300L
 
     /**
      * One-shot extraction: creates a short-lived player, extracts the frame at [offsetNanos], scales
@@ -135,34 +136,29 @@ object LibVlcFrameExtractor {
             pollSeekable(player)
             val targetMs = offsetNanos / 1_000_000L
 
-            // Pause first, then seek. While paused, get_time jumps to the target instantly but the
-            // vout can still be showing a stale PRE-seek picture; a brief play (RENDER_FRAMES_MS)
-            // forces the decoder to actually decode into the target region and display it, after
-            // which we pause again and grab the latest captured frame.
-            runCatching { lib.libvlc_media_player_set_pause(player, 1) }
-            awaitPaused(player)
+            // Seek while PLAYING, then wait for the position to advance PAST the target by
+            // RENDER_FRAMES_MS. This is the reliable signal that the decoder has actually decoded
+            // into the target region and the vout has displayed the target frame. A paused seek +
+            // brief 60ms play is NOT reliable on network streams: get_time jumps to the target
+            // instantly but the new fragments aren't loaded yet, so the vout keeps showing the
+            // PREVIOUS seek's frame (which is why the left half of the video showed the right
+            // half's frame). Waiting for position >= target + settle lets the fragments load and
+            // the vout render the true target frame — at ~300ms per extraction this is still fast
+            // now that the player is reused across hovers.
             grab.clearCaptured()
             val seekLatch = CountDownLatch(1)
             grab.acceptAfterMs = (targetMs - 400L).coerceAtLeast(0L)
             grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
             lib.libvlc_media_player_set_time(player, targetMs)
-            // Wait for the seek to land on the target.
-            if (!awaitPast(player, targetMs - 300L, 5_000L)) {
+            if (!awaitPast(player, targetMs + RENDER_FRAMES_MS, 8_000L)) {
                 logger.warn("ScrubSession: seek did not reach target for $url@$offsetNanos")
                 return null
             }
-            // Brief play to force the vout to display the target-region frame.
-            runCatching { lib.libvlc_media_player_set_pause(player, 0) }
-            if (!seekLatch.await(1_500L, TimeUnit.MILLISECONDS)) {
+            if (!seekLatch.await(2_000L, TimeUnit.MILLISECONDS)) {
                 logger.warn("ScrubSession: frame timeout for $url@$offsetNanos")
                 return null
             }
-            // Brief settle so later (correct) displays overwrite the capture.
-            try {
-                Thread.sleep(RENDER_FRAMES_MS)
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-            }
+            // Pause the player so it stops consuming resources while we encode the frame.
             runCatching { lib.libvlc_media_player_set_pause(player, 1) }
             grab.acceptAfterMs = -1L
 
