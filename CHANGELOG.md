@@ -2,6 +2,14 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Loop/replay: re-arm eosFired on beginSeek(0) from ENDED (feat/libvlc)**
+> — after the first replay ended and restarted from the beginning, a second replay froze on the
+> last frame. Root cause: `beginSeek` (the loop/replay restart path) calls stop()+play() from the
+> ENDED state but does NOT reset `eosFired`, so the second `END_REACHED` event is swallowed by
+> `fireStreamEnd`'s `compareAndSet(false, true)` — the player never sees the second end, no
+> restart is scheduled, and it stays frozen on the last frame. Now `eosFired.set(false)` is called
+> right after stop()+play() in the ENDED branch.
+
 > **Scrub preview: fix 0xC0000005 crash on long videos + exact settle past the seek target (feat/libvlc)**
 > — opening a longer video crashed the game with exit code -1073741819 (0xC0000005, access
 > violation) and no error log. Root cause: after a seek changed the video size, `captured` could
