@@ -41,15 +41,19 @@ internal class LibVlcAudioOutput(
         private const val FRAME_NANOS = 1_000_000_000L / SAMPLE_RATE
 
         /**
-         * Line buffer bytes (~0.3 s of stereo S16). A balance between lip sync and stability: the ring
-         * capacity upper-bounds how far video (paced by libvlc's delivery clock) runs ahead of the
-         * audible audio, because libvlc assumes a sample starts playing the instant it is handed to us
-         * while the sound only leaves the speakers after this buffer drains. A tiny buffer (0.2 s) made
-         * the line underrun on game hitches (stutter + video stalls); 0.5 s kept it stable but left the
-         * video ~0.5 s ahead of the lips. 0.3 s is the middle ground — small enough that mouth and voice
-         * stay close, large enough to absorb scheduling jitter.
+         * Line buffer bytes (~0.15 s of stereo S16). This is the whole A/V story on libvlc 3.0's custom
+         * audio output: libvlc drives the video from its own clock, which advances the instant a sample
+         * is handed to us, while the sound only leaves the speakers after this ring drains. The video is
+         * therefore ahead of the audible audio by (roughly) the buffer size — and that lead is baked into
+         * the architecture, because libvlc gives no public way to inject the real playback position (its
+         * clock callback is notification-only). Auto-sync still holds: `SourceDataLine.write` blocks when
+         * the ring is full, so libvlc's audio thread — and with it the video — can never run more than
+         * this far ahead; the lead stays bounded at the buffer instead of drifting. A tiny buffer (0.2 s)
+         * underran on game hitches (stutter + stalls); 0.15 s keeps lips even closer while the bounded
+         * backpressure still absorbs scheduling jitter. The diagnostic logs the lead directly
+         * ("video=Xms, audioBuffered=Yms"); a steady Y ≈ buffer size is healthy, a growing one is drift.
          */
-        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 3 / 10
+        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 15 / 100
     }
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -160,12 +164,19 @@ internal class LibVlcAudioOutput(
      * frames queued but not yet heard. Stable & small (~the buffer size) means healthy sync; growing
      * steadily means real A/V drift. Returns `null` until audio has been delivered at least once.
      */
-    fun bufferedNanos(): Long? {
+    fun bufferedNanos(): Long? = leadNanos()?.coerceAtLeast(0L)
+
+    /**
+     * Signed video-vs-audio lead in nanos. Positive = video ahead of the audible audio (samples queued
+     * but not yet heard), negative = the audible audio has already played past the newest delivered
+     * sample (video rendering fell behind, e.g. while Minecraft hitches and the vout drops frames while
+     * the sound keeps flowing). The diagnostic uses the sign to pick which direction to correct.
+     */
+    fun leadNanos(): Long? {
         val ln = line ?: return null
         if (!clockLive) return null
         val emitted = ln.getLongFramePosition()
-        val buffered = (totalWrittenFrames - emitted).coerceAtLeast(0L)
-        return buffered * FRAME_NANOS
+        return (totalWrittenFrames - emitted) * FRAME_NANOS
     }
 
     /**
@@ -223,6 +234,21 @@ internal class LibVlcAudioOutput(
     @Suppress("UNUSED_PARAMETER")
     fun onDrain(data: Pointer?) {
         runCatching { line?.drain() }
+    }
+
+    /**
+     * Force audio back into sync with the video by discarding whatever has piled up in the line's ring
+     * buffer and re-anchoring the clock to the current playback cursor. This is the auto-recovery half
+     * of A/V sync: on a real drift (audio stalls while video keeps going) the offset balloons well past
+     * the buffer size; flushing snaps the audible audio forward to the delivered clock instead of
+     * waiting for backpressure to drain it over many seconds. Called from the control/UI thread when the
+     * sync diagnostic sees the lead exceed a hard threshold. Safe to call repeatedly — after a flush the
+     * lead is ~0 and [bufferedNanos] climbs back to the buffer size on the next blocks.
+     */
+    fun forceResync() {
+        runCatching { line?.flush() }
+        totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
+        clockLive = false
     }
 
     // ── Line lifecycle ───────────────────────────────────────────────────────

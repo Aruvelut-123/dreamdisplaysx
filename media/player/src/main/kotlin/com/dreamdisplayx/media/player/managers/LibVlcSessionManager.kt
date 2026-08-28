@@ -92,6 +92,13 @@ internal class LibVlcSessionManager(
     /** Rate-limits the A/V sync diagnostic (audio line clock vs libvlc clock) to once per few seconds. */
     private val lastSyncDiagNanos = java.util.concurrent.atomic.AtomicLong(0L)
 
+    /**
+     * A/V drift threshold (1 s): when the audio queued in the line exceeds this, audio has genuinely
+     * stalled behind the video (the line buffer is only ~0.15 s; healthy leads stay ~the buffer size).
+     * Crossing it triggers an automatic audio flush so the audible sound snaps back to the video clock.
+     */
+    private val AUTO_RESYNC_THRESHOLD_NANOS = 1_000_000_000L
+
     init {
         // Mirror the config's hw-accel preference onto the shared libvlc instance before it is
         // created (the singleton instance is built on first use, so this must be set up front).
@@ -662,12 +669,25 @@ internal class LibVlcSessionManager(
         val now = System.nanoTime()
         val last = lastSyncDiagNanos.get()
         if (now - last > 10_000_000_000L && lastSyncDiagNanos.compareAndSet(last, now)) {
-            val buffered = audioOutput.bufferedNanos()
-            if (buffered != null) {
+            // Signed lead: positive = video ahead of the audible audio (sample queued but not heard),
+            // negative = audible audio already played past the newest delivered sample (video rendering
+            // fell behind, typically while the vout drops frames through a Minecraft hitch). Small and
+            // steady is healthy in either direction; auto-recovery flushes queued audio when video runs
+            // far ahead (audio catches up instantly). Audio-ahead self-resolves as the vout catches up.
+            val lead = audioOutput.leadNanos()
+            if (lead != null) {
+                val leadMs = lead / 1_000_000L
                 logger.info(
-                    "{} A/V sync: video={}ms, audioBuffered={}ms (video leads audible audio by ~{}ms).",
-                    debugLabel, ms, buffered / 1_000_000L, buffered / 1_000_000L
+                    "{} A/V sync: video={}ms, audioLead={}ms ({})",
+                    debugLabel, ms, leadMs, if (lead < 0) "audio ahead" else "video ahead"
                 )
+                if (lead > AUTO_RESYNC_THRESHOLD_NANOS) {
+                    logger.warn(
+                        "{} A/V drift: audio {}ms behind video (>{}ms) — flushing audio to re-sync.",
+                        debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
+                    )
+                    audioOutput.forceResync()
+                }
             }
         }
         return if (ms >= 0) ms * 1_000_000L else clock.currentTime()

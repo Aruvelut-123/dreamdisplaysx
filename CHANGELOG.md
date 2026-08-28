@@ -2,6 +2,23 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Auto-recovering bidirectional A/V sync + smaller audio buffer (feat/libvlc)**
+> — the video ran a fixed step ahead of the lips and a real drift, once it happened, never pulled itself back.
+>
+> **The video always led the audible audio by the buffer size** — libvlc 3.0 paces the video from its own
+> clock, which advances the instant a sample is handed to us, while the sound leaves the speakers only
+> after the Java Sound ring drains. There is no public way to inject the real playback position (the
+> clock callback is notification-only), so the lead is bounded — never drifting — but equal to the line
+> buffer. The buffer is now ~0.15 s (was 0.3 s): lips stay together while the `SourceDataLine.write`
+> backpressure still caps how far the video can run ahead.
+>
+> **A real drift didn't recover by itself** — the diagnostic now reports a signed lead (`audioLead=+Xms`
+> video ahead / `-Xms` audio ahead) so both directions are visible, and auto-recovery replaces the old
+> "wait and hope": if the video runs more than ~1 s ahead of the audible audio, the queued audio is
+> flushed and the clock re-anchored, snapping the sound back to the picture instantly. Audio-ahead (the
+> picture falls behind through a Minecraft hitch and the vout drops frames) self-resolves as the video
+> catches up.
+
 > **Z-fighting layering fix-up: lift before the flattening scale, dynamic scrub previews (feat/libvlc)**
 > — the previous LETTERBOX depth-layering was inert, and long-film previews still stalled on one still.
 >

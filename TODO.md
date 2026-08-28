@@ -8,16 +8,16 @@
 1. **z-fighting 真修复（`5a8377b6` 后新提交）**：
    - `DisplayGeometry.kt`：surfaceOffset 0.02→0.05（光影 0.08）
    - `ScreenRenderer.kt`：改为 `renderVideo` + 每个 quad 独立 `drawLayer`——**lift 在 `applyScreenTransform` 之前**。首版把 lift 放在 transform 内侧（被 `scale(w,h,0)` 的 z×0 吃掉=失效），backdrop 与 video 仍共面。现在用与 loading placeholder 相同的逐层分离，两 LETTERBOX quad 真正分深度
-2. **A/V 缓冲**：`LINE_BUFFER_BYTES` 0.5s→**0.3s**——video-ahead=line 缓冲量（恒定），0.5s 让嘴型落后半秒，0.3s 平衡防卡+嘴型
+2. **A/V 缓冲 + 双向 auto-sync**：`LINE_BUFFER_BYTES` 0.3s→**0.15s**——video-ahead=line 缓冲量（libvlc 3.0 无注入真实音频位置的公开 API，靠减小缓冲+backpressure 限速）；`LibVlcAudioOutput` 新增 `leadNanos()`（带符号，正=视频领先/负=音频领先）与 `forceResync()`；`LibVlcSessionManager` 诊断报带符号 `audioLead=±Xms`，视频领先>1s 自动 flush 音频追平（真 auto-recover）
 3. **ScrubPreview 动态采样**：固定 20 帧→按时长自适应（≤45 帧，约 8s 间隔）——长电影 hover 不再卡在一帧/首帧
-4. **A/V 诊断**：libvlc 3.0.21 的 audio-callback `pts` 是单调时钟非媒体时间→改报 `video=Xms audioBuffered=Yms`（Y 小稳定=健康）
+4. **A/V 诊断**：libvlc 3.0.21 的 audio-callback `pts` 是单调时钟非媒体时间→改报带符号领先量（正=视频领先/负=音频领先）
 
 ### 用户已测 / 待验证的反馈（活跃问题）
-- [ ] **z-fighting**：首版 lift 顺序错没修好，已重写 renderVideo（等待用户复测核实是否消失）
-- [ ] **hover 预览部分仍显示首帧**：已把采样改动态（长视频更密），待用户复测；仍可能有个别 ts 提取失败→frameAt 回退
-- [ ] **预览不按 LETTERBOX 显示（变形填满）**：extractor 的 `scale` 已正确带黑边，但用户看到拉伸——待查 blit/box 比例 mismatch，或 hover 显示的是 live 纹理而非 ScrubPreview
-- [ ] **帧向左偏移 ~1px**（用户标红框）：待查 fitRect/appendQuad 或 texture UV 边界
-- [ ] **A/V: video 领先 audio≈缓冲量，不会自动归零**：本质是 line 缓冲固有延迟；已把缓冲降到 0.3s。真正 0 偏移需 libvlc `clock_cb`（3.0 无公开 API）——暂以减小缓冲为解，向用户说明
+- [x] **z-fighting**：首版 lift 顺序错没修好，已重写 renderVideo（**用户确认已全部修复！**）
+- [x] **帧向左偏移 ~1px**（用户标红框）：**用户确认已修好**
+- [ ] **A/V 双向 auto-sync**：缓冲降到 0.15s + 视频领先>1s 自动 flush 音频；用户反馈"音频有时比视频快"→诊断现在能报负值（audio ahead），待用户复测确认
+- [ ] **hover 预览首帧 / 提取不够快**：采样已改动态（长视频更密），但"鼠标移开再回来才显示正确帧"——待查：frameAt 首次命中时帧还没就绪/缓存冷启动，或提取异步延迟导致首次显示默认首帧
+- [ ] **PreviewSection 视频预览偏下/顶留白（不按 LETTERBOX）**：`videoContentAspect` 为 0 时 fallback 到 16:9 且 contentRect 不裁剪→变形/偏位；待查 `videoContentAspect` 在播放时是否总是正确设置，以及 fitRatio/contentRect 配合
 
 ### 历史遗留需求（未处理）
 - fps 诊断（publishFrame 每 N 帧日志，验证 GPU scaling 恢复 60fps）
