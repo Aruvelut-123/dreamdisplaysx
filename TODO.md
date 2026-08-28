@@ -8,7 +8,7 @@
 1. **z-fighting 真修复（`5a8377b6` 后新提交）**：
    - `DisplayGeometry.kt`：surfaceOffset 0.02→0.05（光影 0.08）
    - `ScreenRenderer.kt`：改为 `renderVideo` + 每个 quad 独立 `drawLayer`——**lift 在 `applyScreenTransform` 之前**。首版把 lift 放在 transform 内侧（被 `scale(w,h,0)` 的 z×0 吃掉=失效），backdrop 与 video 仍共面。现在用与 loading placeholder 相同的逐层分离，两 LETTERBOX quad 真正分深度
-2. **A/V 缓冲 + 双向 auto-sync + 崩溃修复**：`LINE_BUFFER_BYTES` 降到 **45ms**（主人要的小 gap）；`LibVlcAudioOutput` 新增 `leadNanos()`（带符号）与 `forceResync()`；**lineLock 同步所有 line 操作**（写/stop/start/flush/读）——修 pause/resume 时 Render thread flush line 与 libvlc 音频线程竞态导致的 `EXCEPTION_ACCESS_VIOLATION`（jvm.dll）崩溃；`AUTO_RESYNC_THRESHOLD` 设 **300ms**（45ms 阈值会频繁 flush line 导致崩溃，恢复合理值只在真漂移时触发）
+2. **A/V buffer + bidirectional auto-sync + crash hardening**：`LINE_BUFFER_BYTES`=**100ms**（45ms 试过导致 six/有 seek 栈溢出风险，回退安全值）；**所有 line 访问移到 libvlc 音频线程**——`leadNanos`/`bufferedNanos` 返回音频线程缓存的 @Volatile 字段，`forceResync` 只设标记、实际 `line.flush()` 在 `onPlay`(音频线程) 执行；`onPlay` 加 `count` 上限防御 seek 后异常大块（防栈溢出）；`AUTO_RESYNC_THRESHOLD`=**300ms**。修 pause/resume 时 Render thread 跨线程访问 Java Sound line 导致的**堆损坏**（0xC0000374/退出-1073740940）
 3. **ScrubPreview 动态采样**：固定 20 帧→按时长自适应（≤45 帧，约 8s 间隔）——长电影 hover 不再卡在一帧/首帧
 4. **A/V 诊断**：libvlc 3.0.21 的 audio-callback `pts` 是单调时钟非媒体时间→改报带符号领先量（正=视频领先/负=音频领先）
 
