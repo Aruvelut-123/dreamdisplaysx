@@ -102,16 +102,8 @@ object LibVlc {
             //   Linux   → vaapi (drm copy-back works with vmem)
             //   Mac     → videotoolbox
             // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. d3d11va, any, or "" to disable).
-            if (useHwAccel && !LibVlcDiagnostics.noHardwareAccel) {
-                val backend = System.getProperty("dreamdisplayx.hwDecode")
-                    ?: when {
-                        com.dreamdisplayx.util.OsInfo.isWindows -> "dxva2"
-                        com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
-                        com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
-                        else -> "any"
-                    }
-                if (backend.isNotBlank()) opts.add("--avcodec-hw=$backend")
-            }
+            val backend = configuredHwBackend()
+            if (backend != null) opts.add("--avcodec-hw=$backend")
             // Verbose libvlc logging (diagnostic): lets us see which decoder/backend libvlc actually
             // selects and why it might fall back to software. Off by default (noise).
             if (System.getProperty("dreamdisplayx.verboseLibvlc", "false").equals("true", ignoreCase = true)) {
@@ -193,23 +185,42 @@ object LibVlc {
     // ── Media decoder info (F3 diagnostics) ─────────────────────────────────
 
     /**
+     * The hardware-decode backend passed to libvlc (instance + media), resolved per-OS unless
+     * overridden with `-Ddreamdisplayx.hwDecode`. Returns null when hw decode is disabled
+     * (config off, or `-Ddreamdisplayx.noHardwareAccel=true`).
+     */
+    fun configuredHwBackend(): String? {
+        if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
+        return System.getProperty("dreamdisplayx.hwDecode")?.takeIf { it.isNotBlank() }
+            ?: when {
+                com.dreamdisplayx.util.OsInfo.isWindows -> "dxva2"
+                com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
+                com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
+                else -> "any"
+            }
+    }
+
+    /**
      * Reads the active video decoder's human-readable name via
      * `libvlc_media_player_get_video_decoder_info`. libvlc allocates a
      * `libvlc_media_decoder_info_t {char *psz_name; char *psz_description; int i_type;}` and we must
      * release it with `libvlc_media_decoder_info_release`. The API takes a pointer-to-pointer, so the
      * JNA binding uses [PointerByReference] (a struct-by-value binding would read garbage and never
-     * report a name). Returns null when unavailable (e.g. decoder not started yet, or the symbol is
-     * absent from this libvlc build) — the F3 overlay then keeps the previous value.
+     * report a name).
+     *
+     * When the API is unavailable on this libvlc build (returns non-zero / null) we fall back to
+     * [configuredHwBackend] so the F3 overlay reports the intended backend ("dxva2") instead of
+     * staying at the default "software" even though decoding IS on the GPU.
      */
     fun videoDecoderName(player: Pointer): String? = try {
         val dec = PointerByReference()
         val enc = PointerByReference()
         if (lib.libvlc_media_player_get_video_decoder_info(player, dec, enc) != 0) {
             org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
-                .debug("get_video_decoder_info returned non-zero for player.")
-            return null
+                .debug("get_video_decoder_info returned non-zero for player; falling back to configured backend.")
+            return configuredHwBackend()
         }
-        val d = dec.value ?: return null
+        val d = dec.value ?: return configuredHwBackend()
         // libvlc_media_decoder_info_t { char *psz_name; char *psz_description; int i_type; }
         // psz_name is usually just the module ("avcodec"); psz_description carries the concrete
         // backend (e.g. "H.264/AVC (DXVA2.0 by AMD)" or "FFmpeg..."). Prefer the description and
@@ -221,8 +232,8 @@ object LibVlc {
             .getOrNull()?.takeIf { it.isNotBlank() }
         runCatching { lib.libvlc_media_decoder_info_release(d) }
         runCatching { enc.value?.let { lib.libvlc_media_decoder_info_release(it) } }
-        description ?: name
-    } catch (_: Throwable) { null }
+        description ?: name ?: configuredHwBackend()
+    } catch (_: Throwable) { configuredHwBackend() }
 
     // ── Callback interfaces ──────────────────────────────────────────────────
     // The Pointer parameters are nullable because libvlc passes a null `opaque` (and null
