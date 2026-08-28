@@ -127,6 +127,19 @@ internal class LibVlcAudioOutput(
         cachedLeadNanos = null
     }
 
+    /**
+     * Lightweight seek-time state reset. Called from the control thread when a seek is set up; must NOT
+     * touch the line (the libvlc audio thread may be mid-callback and the line is that thread's alone).
+     * libvlc itself flushes the audio pipeline around a seek ([onFlush]), so here we only clear our own
+     * flags and cache so a pause-then-resume immediately after a seek starts from a clean slate.
+     */
+    fun onSeekReset() {
+        paused = false
+        resyncPending = false
+        clockLive = false
+        cachedLeadNanos = null
+    }
+
     /** Updates the gain applied to the PCM (user volume × distance attenuation). */
     fun setVolume(volume: Double) {
         gain = volume.coerceIn(0.0, 2.0)
@@ -189,9 +202,14 @@ internal class LibVlcAudioOutput(
         val countL = count.toLong()
         totalWrittenFrames += countL
         clockLive = true
-        // While paused, do not touch the line at all (see [onPause]) — just track frames and let the
-        // caller's samples be dropped. The line keeps running but drains to silence; resume flows again.
-        if (paused) return
+        // While paused, do not touch the line at all (see [onPause]) — drop the samples and, crucially,
+        // do NOT accumulate them into [totalWrittenFrames] (they were never handed to the line, so the
+        // written-vs-emitted delta would balloon and desync the A/V clock after seek→pause→resume). The
+        // line keeps running and drains to silence; resume flows again.
+        if (paused) {
+            totalWrittenFrames -= countL
+            return
+        }
         val bytes = count * BYTES_PER_FRAME
         if (pcmBuffer.size < bytes) pcmBuffer = ByteArray(bytes)
         samples.read(0, pcmBuffer, 0, bytes)

@@ -2,6 +2,16 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Seek→pause→resume no longer desyncs or crashes (feat/libvlc)**
+> — the crash reproduced deterministically as seek → pause → resume.
+>
+> Two follow-ups to the no-stop pause change: while paused, dropped samples are no longer accumulated
+> into the written-frame counter (they were never handed to the line, so the written-vs-emitted delta
+> ballooned and the A/V clock desynced after seek→pause→resume), and a seek now resets the audio flags
+> (pause/resync/clock) before libvlc's own flush so a pause immediately after seek starts clean. The
+> seek-time reset deliberately does not touch the line — libvlc flushes the audio pipeline itself around
+> a seek, and the line belongs to the audio thread.
+
 > **Pause/resume no longer calls SourceDataLine.stop()/start() — fixes native crash (feat/libvlc)**
 > — pause/resume crashed with 0xC0000409 / 0xC0000005 (no JVM log, native layer) on Windows.
 >

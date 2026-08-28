@@ -532,6 +532,8 @@ internal class LibVlcSessionManager(
 
     /** Seeks the single player to [offsetNanos]. */
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
+        // Reset audio flags before the seek so a pause-then-resume immediately after seek starts clean.
+        audioOutput.onSeekReset()
         submit {
             val mp = mediaPlayer ?: return@submit
             // ENDED state ignores set_time and a bare play() is not guaranteed to restart in libvlc
