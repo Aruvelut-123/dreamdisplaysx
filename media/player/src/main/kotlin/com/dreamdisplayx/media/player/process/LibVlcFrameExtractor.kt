@@ -82,15 +82,22 @@ object LibVlcFrameExtractor {
                 grab.timeProvider = { runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L) }
                 grab.acceptAfterMs = (targetMs - 400L).coerceAtLeast(0L)
                 grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
+                val preSeekTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
                 LibVlc.lib.libvlc_media_player_set_time(mp, targetMs)
                 if (!awaitPosition(lib, mp, targetMs)) {
                     logger.warn("Frame extraction: seek did not reach target for $url@$offsetNanos")
                     return null
                 }
+                val postSeekTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
                 if (!seekLatch.await(10, TimeUnit.SECONDS)) {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null
                 }
+                val frameTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                logger.info(
+                    "SCRUB-DEBUG target={}ms preSeek={}ms postSeek={}ms frameTime={}ms",
+                    targetMs, preSeekTime, postSeekTime, frameTime
+                )
                 // Pause the player so it stops consuming resources while we encode the frame.
                 runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
                 grab.acceptAfterMs = -1L
