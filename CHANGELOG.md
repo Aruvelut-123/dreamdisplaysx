@@ -2,6 +2,13 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: extractor forces software decode (feat/libvlc)**
+> — the temporary extractor player shared the global libvlc instance's `--avcodec-hw=dxva2`, so it
+> decoded on the GPU too; DXVA2 + vmem copy-back on libvlc 3.0 can hand back a stale GPU surface
+> after a seek (get_time reaches the target but the copied-back pixels are still an old frame),
+> which made every scrub thumbnail the opening frame. The extractor now passes `:avcodec-hw=none`,
+> forcing software decode, which has no stale-surface path and is plenty fast for a single thumbnail.
+
 > **Scrub preview: settle window after seek before grabbing the frame (feat/libvlc)**
 > — the seek itself works (get_time reaches the target) but the very first display(s) after a seek
 > can be stale pre-seek pictures — get_time already reports the target while the pixels are still an
