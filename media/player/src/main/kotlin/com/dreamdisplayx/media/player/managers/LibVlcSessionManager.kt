@@ -485,16 +485,21 @@ internal class LibVlcSessionManager(
                 logger.error("$debugLabel libvlc_media_player_new returned null: ${LibVlc.errmsg()}")
                 return null
             }
-            // Video callbacks (once; held strongly).
-            lib.libvlc_video_set_format_callbacks(mp, videoFormatCallback, videoCleanupCallback)
-            lib.libvlc_video_set_callbacks(mp, videoLockCallback, videoUnlockCallback, videoDisplayCallback, null)
+            // Video callbacks (once; held strongly). Skippable via diagnostic switch for bisection.
+            if (!LibVlcDiagnostics.noVideoCallback) {
+                lib.libvlc_video_set_format_callbacks(mp, videoFormatCallback, videoCleanupCallback)
+                lib.libvlc_video_set_callbacks(mp, videoLockCallback, videoUnlockCallback, videoDisplayCallback, null)
+            }
             // Audio callbacks (once; held strongly). libvlc then delivers decoded PCM to us instead
             // of playing through its default output — we run it through the 3D DSP and Java Sound
             // line (LibVlcAudioOutput) so spatialisation / occlusion / pacing are under our control.
+            // Skippable via diagnostic switch for bisection (libvlc then uses its own audio handling).
             openAudioLine()
-            lib.libvlc_audio_set_format_callbacks(mp, audioFormatSetupCallback, audioFormatCleanupCallback)
-            lib.libvlc_audio_set_callbacks(mp, audioPlayCallback, audioPauseCallback,
-                audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
+            if (!LibVlcDiagnostics.noAudioCallback) {
+                lib.libvlc_audio_set_format_callbacks(mp, audioFormatSetupCallback, audioFormatCleanupCallback)
+                lib.libvlc_audio_set_callbacks(mp, audioPlayCallback, audioPauseCallback,
+                    audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
+            }
             // Events (once).
             val em = lib.libvlc_media_player_event_manager(mp)
             if (em != null) {
@@ -682,19 +687,22 @@ internal class LibVlcSessionManager(
             // fell behind, typically while the vout drops frames through a Minecraft hitch). Small and
             // steady is healthy in either direction; auto-recovery flushes queued audio when video runs
             // far ahead (audio catches up instantly). Audio-ahead self-resolves as the vout catches up.
-            val lead = audioOutput.leadNanos()
-            if (lead != null) {
-                val leadMs = lead / 1_000_000L
-                logger.info(
-                    "{} A/V sync: video={}ms, audioLead={}ms ({})",
-                    debugLabel, ms, leadMs, if (lead < 0) "audio ahead" else "video ahead"
-                )
-                if (lead > AUTO_RESYNC_THRESHOLD_NANOS) {
-                    logger.warn(
-                        "{} A/V drift: audio {}ms behind video (>{}ms) — flushing audio to re-sync.",
-                        debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
+            // The whole diagnostic + auto-resync can be disabled for bisection (-Ddreamdisplayx.noAutoResync).
+            if (!LibVlcDiagnostics.noAutoResync) {
+                val lead = audioOutput.leadNanos()
+                if (lead != null) {
+                    val leadMs = lead / 1_000_000L
+                    logger.info(
+                        "{} A/V sync: video={}ms, audioLead={}ms ({})",
+                        debugLabel, ms, leadMs, if (lead < 0) "audio ahead" else "video ahead"
                     )
-                    audioOutput.forceResync()
+                    if (lead > AUTO_RESYNC_THRESHOLD_NANOS) {
+                        logger.warn(
+                            "{} A/V drift: audio {}ms behind video (>{}ms) — flushing audio to re-sync.",
+                            debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
+                        )
+                        audioOutput.forceResync()
+                    }
                 }
             }
         }
@@ -842,13 +850,17 @@ internal class LibVlcSessionManager(
 
                 if (parkFlag.get()) return
 
-                // Popout / preview sinks (RV32 / BGRA8888 frames).
-                val sink = popoutSink ?: previewSink
-                if (sink != null) sink(spare, ew, eh, FramePixelFormat.BGRA32)
+                // Popout / preview sinks (RV32 / BGRA8888 frames). Skippable via diagnostic switch.
+                if (!LibVlcDiagnostics.noFrameSink) {
+                    val sink = popoutSink ?: previewSink
+                    if (sink != null) sink(spare, ew, eh, FramePixelFormat.BGRA32)
+                }
 
-                // Publish to the GPU surface for the render thread.
-                surface.publish(spare, frameSize)
-                noFrames.set(System.nanoTime())
+                // Publish to the GPU surface for the render thread. Skippable via diagnostic switch.
+                if (!LibVlcDiagnostics.noVideoPublish) {
+                    surface.publish(spare, frameSize)
+                    noFrames.set(System.nanoTime())
+                }
 
                 if (!firstFrameFired) {
                     firstFrameFired = true

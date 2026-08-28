@@ -2,6 +2,19 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Add JVM diagnostic switches to bisect the remaining pause/resume native crash (feat/libvlc)**
+> — the heap corruption (0xC0000374) persists after all audio-callback line access was removed, so
+> per-subsystem switches let us isolate which path corrupts the heap.
+>
+> Each switch is `-Ddreamdisplayx.<name>=true` and can be combined:
+> - `silentAudio` — never open the line, drop all audio blocks (no Java Sound at all)
+> - `noAudioCallback` — don't register libvlc's custom audio callbacks (libvlc handles audio itself)
+> - `noVideoCallback` — don't register the custom video callbacks (libvlc uses its default vout)
+> - `noFrameSink` — skip preview/popout frame sinks (no frame copy to the GUI)
+> - `noVideoPublish` — skip the GPU surface publish (video frozen, audio only)
+> - `noAutoResync` — disable the A/V diagnostic + auto-resync entirely
+> - `noHardwareAccel` — don't pass `--avcodec-hw=any` to libvlc
+
 > **libvlc audio callbacks no longer touch the line at all — fixes pause/resume heap corruption (feat/libvlc)**
 > — pause/resume still crashed with 0xC0000374 even after stop/start removal.
 >

@@ -191,6 +191,10 @@ internal class LibVlcAudioOutput(
     fun onPlay(data: Pointer?, samples: Pointer?, count: Int, pts: Long) {
         if (samples == null || count <= 0) return
         val ln = line ?: return
+        // Silent-mode diagnostic switch: with -Ddreamdisplayx.silentAudio=true the line is never created
+        // and every block is dropped here, so we can bisect whether the pause/resume heap corruption is
+        // in the audio path or elsewhere (video / libvlc itself).
+        if (LibVlcDiagnostics.silentAudio) return
         // Track only how many frames we've written vs. how many the line has emitted; the ring-buffer
         // delta is the A/V lead (see [bufferedNanos]). We deliberately ignore `pts`: on libvlc 3.0.21
         // the custom-audio-callback pts is a system monotonic clock (~uptime) rather than media time,
@@ -354,6 +358,7 @@ internal class LibVlcAudioOutput(
      * starts; a failure here only silences audio, video keeps working.
      */
     fun openLine() {
+        if (LibVlcDiagnostics.silentAudio) return
         val existing = line
         if (existing != null && existing.isOpen) return
         val fmt = AudioFormat(

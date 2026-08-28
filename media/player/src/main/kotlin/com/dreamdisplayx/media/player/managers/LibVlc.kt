@@ -95,7 +95,7 @@ object LibVlc {
             // it on BOTH the instance (--avcodec-hw=any) and the media (:avcodec-hw=any) so that
             // 4K H.264/HEVC streams decode on the GPU instead of starving the CPU. Gate it on config
             // so users on machines where hw surfaces fail to copy back can disable it.
-            if (useHwAccel) {
+            if (useHwAccel && !LibVlcDiagnostics.noHardwareAccel) {
                 opts.add("--avcodec-hw=any")
             }
             instance = libcCreateInstance(opts)
