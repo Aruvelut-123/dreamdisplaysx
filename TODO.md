@@ -2,21 +2,24 @@
 
 ## ✅ 已完成（feat/libvlc，活跃会话）
 
-> **z-fighting 分层 + A/V 诊断修正已实现、编译通过，待提交推送+构建验证。**
+> **Z-fighting 真修复（lift 放对位置）+ A/V 缓冲调优 + 长视频预览动态采样，已提交推送、CI 通过。**
 
-### 本次已完成的修复（下一提交内容）
-1. **z-fighting（两个根因都修了）**：
-   - `DisplayGeometry.kt`：surfaceOffset 0.02→**0.05**（光影 0.08）——显示 quad 彻底离开方块面，AMD 上 polygon offset 失效也不闪
-   - `ScreenRenderer.kt`：`renderGpuTexture` 改为接收 stack+facing，**LETTERBOX backdrop 与 video 分不同深度层**（video 额外 lift OVERLAY_LIFT）——即 loading screen 逐层分离的深度方法；backdrop 画黑条、video 单独抬一层，两共面 quad 不再 z-fight
-2. **A/V 诊断爆炸（audioLine=399923909ms≈uptime）**：libvlc 3.0.21 的 audio-callback `pts` 是单调时钟非媒体时间 → `playedPositionNanos(pts*1000)` 爆掉。**已改**：`LibVlcAudioOutput` 新增 `bufferedNanos()`（写帧−播放帧 = 缓冲延迟），`playedPositionNanos` 改为接受可信 reference；诊断日志改为 `video=Xms audioBuffered=Yms`（Y 小且稳定=健康，增长=漂移）。`lastWrittenMediaNanos` 字段已删
-3. **音画卡住**：`LINE_BUFFER_BYTES` 0.2s→**0.5s**（`*5/10`）防 line.write 阻塞拖垮 libvlc 音频线程→视频卡住
+### 最近两轮已提交的修复
+1. **z-fighting 真修复（`5a8377b6` 后新提交）**：
+   - `DisplayGeometry.kt`：surfaceOffset 0.02→0.05（光影 0.08）
+   - `ScreenRenderer.kt`：改为 `renderVideo` + 每个 quad 独立 `drawLayer`——**lift 在 `applyScreenTransform` 之前**。首版把 lift 放在 transform 内侧（被 `scale(w,h,0)` 的 z×0 吃掉=失效），backdrop 与 video 仍共面。现在用与 loading placeholder 相同的逐层分离，两 LETTERBOX quad 真正分深度
+2. **A/V 缓冲**：`LINE_BUFFER_BYTES` 0.5s→**0.3s**——video-ahead=line 缓冲量（恒定），0.5s 让嘴型落后半秒，0.3s 平衡防卡+嘴型
+3. **ScrubPreview 动态采样**：固定 20 帧→按时长自适应（≤45 帧，约 8s 间隔）——长电影 hover 不再卡在一帧/首帧
+4. **A/V 诊断**：libvlc 3.0.21 的 audio-callback `pts` 是单调时钟非媒体时间→改报 `video=Xms audioBuffered=Yms`（Y 小稳定=健康）
 
-### 待提交推送（改动文件）
-- `DisplayGeometry.kt`、`ScreenRenderer.kt`、`LibVlcAudioOutput.kt`、`LibVlcSessionManager.kt`、`CHANGELOG.md`
-- 下一步：git add/commit/push → gh CI 验证 → 要用户测试，看日志 `A/V sync: video=… audioBuffered=…ms` 是否小且稳定
+### 用户已测 / 待验证的反馈（活跃问题）
+- [ ] **z-fighting**：首版 lift 顺序错没修好，已重写 renderVideo（等待用户复测核实是否消失）
+- [ ] **hover 预览部分仍显示首帧**：已把采样改动态（长视频更密），待用户复测；仍可能有个别 ts 提取失败→frameAt 回退
+- [ ] **预览不按 LETTERBOX 显示（变形填满）**：extractor 的 `scale` 已正确带黑边，但用户看到拉伸——待查 blit/box 比例 mismatch，或 hover 显示的是 live 纹理而非 ScrubPreview
+- [ ] **帧向左偏移 ~1px**（用户标红框）：待查 fitRect/appendQuad 或 texture UV 边界
+- [ ] **A/V: video 领先 audio≈缓冲量，不会自动归零**：本质是 line 缓冲固有延迟；已把缓冲降到 0.3s。真正 0 偏移需 libvlc `clock_cb`（3.0 无公开 API）——暂以减小缓冲为解，向用户说明
 
 ### 历史遗留需求（未处理）
-- hover 预览首帧（extraction 已确证正确，display 层未解决）
 - fps 诊断（publishFrame 每 N 帧日志，验证 GPU scaling 恢复 60fps）
 
 ---

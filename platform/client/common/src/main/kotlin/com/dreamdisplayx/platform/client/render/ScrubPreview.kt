@@ -37,8 +37,15 @@ object ScrubPreview {
     const val FRAME_WIDTH = 256
     const val FRAME_HEIGHT = 144
 
-    /** Target number of sampled frames across the full duration. */
-    private const val SAMPLE_COUNT = 20
+    /**
+     * Target time span between neighbouring samples, so long films get a fine-grained preview instead of
+     * a handful of stills many minutes apart. Combined with [MIN_SAMPLE_SPACING_NANOS] and
+     * [MAX_SAMPLE_COUNT] it makes the sample count adapt to the video length.
+     */
+    private const val TARGET_SAMPLE_SPACING_NANOS = 8_000_000_000L
+
+    /** Upper bound on samples generated for one video (each is its own connection and its own texture). */
+    private const val MAX_SAMPLE_COUNT = 45
 
     /**
      * Samples taken from a host nobody vouched for. Each sample is its own connection and its own
@@ -129,9 +136,14 @@ object ScrubPreview {
     /** Extracts sample frames via JavaCPP at [EXTRACT_CONCURRENCY] limit, publishing to [FRAMES] as each completes. */
     private suspend fun generate(key: String, sourceUrl: String, durationNanos: Long, seekByDecoding: Boolean) {
         val firstParty = MediaHosts.isFirstParty(sourceUrl)
-        val samples = if (firstParty) SAMPLE_COUNT else THIRD_PARTY_SAMPLE_COUNT
+        // Sample count adapts to length: short clips get a handful of frames, a two-hour film gets up to
+        // MAX_SAMPLE_COUNT spaced ~TARGET_SAMPLE_SPACING_NANOS apart, so hovering anywhere lands on a
+        // frame close to the cursor instead of the nearest of a sparse dozen. Third-party hosts stay coarse.
+        val requested = if (firstParty)
+            ((durationNanos / TARGET_SAMPLE_SPACING_NANOS).coerceIn(1L, MAX_SAMPLE_COUNT.toLong()))
+        else THIRD_PARTY_SAMPLE_COUNT.toLong()
         val concurrency = if (firstParty) EXTRACT_CONCURRENCY else THIRD_PARTY_CONCURRENCY
-        val spacing = (durationNanos / samples).coerceAtLeast(MIN_SAMPLE_SPACING_NANOS)
+        val spacing = (durationNanos / requested).coerceAtLeast(MIN_SAMPLE_SPACING_NANOS)
         val timestamps = generateSequence(spacing / 2) { it + spacing }.takeWhile { it < durationNanos }.toList()
         logger.info("Generating $key: ${timestamps.size} sample(s), concurrency=$concurrency")
 

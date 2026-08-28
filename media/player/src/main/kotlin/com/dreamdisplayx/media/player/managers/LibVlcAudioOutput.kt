@@ -41,13 +41,15 @@ internal class LibVlcAudioOutput(
         private const val FRAME_NANOS = 1_000_000_000L / SAMPLE_RATE
 
         /**
-         * Line buffer bytes (~0.5 s of stereo S16). Moderately generous so the line rarely underruns even
-         * across game hitches: when [SourceDataLine.write] blocks, libvlc's audio thread stalls and with
-         * it the video (paced by libvlc's delivery clock), so a too-tight ring (0.2 s) showed up as
-         * audible stutter and occasional video hitches. ~0.5 s still bounds how far video can run ahead
-         * of what you hear while absorbing scheduling jitter.
+         * Line buffer bytes (~0.3 s of stereo S16). A balance between lip sync and stability: the ring
+         * capacity upper-bounds how far video (paced by libvlc's delivery clock) runs ahead of the
+         * audible audio, because libvlc assumes a sample starts playing the instant it is handed to us
+         * while the sound only leaves the speakers after this buffer drains. A tiny buffer (0.2 s) made
+         * the line underrun on game hitches (stutter + video stalls); 0.5 s kept it stable but left the
+         * video ~0.5 s ahead of the lips. 0.3 s is the middle ground — small enough that mouth and voice
+         * stay close, large enough to absorb scheduling jitter.
          */
-        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 5 / 10
+        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 3 / 10
     }
 
     // ── State ────────────────────────────────────────────────────────────────

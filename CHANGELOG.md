@@ -2,6 +2,28 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Z-fighting layering fix-up: lift before the flattening scale, dynamic scrub previews (feat/libvlc)**
+> — the previous LETTERBOX depth-layering was inert, and long-film previews still stalled on one still.
+>
+> **Z-fighting was still visible** — the first layering attempt called `liftTowardViewer` *after*
+> `applyScreenTransform`, i.e. inside the transform's `scale(w, h, 0)`, so the lift's z got multiplied by
+> zero and the backdrop and video quads stayed exactly coplanar (still flickering). The video is now
+> drawn through its own `drawLayer`, which lifts it *before* the transform (matching the loading
+> placeholder), so the two LETTERBOX quads genuinely hold distinct depths. The whole screen also floats
+> 0.05 blocks off the face (0.08 with a shader pack).
+>
+> **Audio still ran ahead of the lips** — the video is paced by libvlc's delivery clock while the sound
+> only leaves the speakers after the Java Sound ring buffer drains, so the video leads the audible audio
+> by roughly the buffer size. Bumping the buffer to 0.5 s to stop stutter left the lips ~0.5 s behind.
+> The buffer is now ~0.3 s — still stable enough to absorb game hitches, small enough that mouth and
+> voice stay together. The INFO diagnostic reports the lead directly ("video=Xms, audioBuffered=Yms"); a
+> small steady Y is healthy, a growing one is real drift.
+>
+> **Scrub-preview hover stalled on one frame for long films** — sampling used a fixed 20 frames regardless
+> of length, so a two-hour film had a still every ~6 minutes and hovering in between showed the nearest
+> (often the opening) frame. Sample count now adapts to duration (up to 45, ~8 s apart), so hovering
+> anywhere lands on a frame close to the cursor.
+>
 > **Z-fighting layering + A/V sync diagnostics (feat/libvlc)**
 > — the display still flickered on AMD and the audio-clock diagnostic was reading a non-media clock.
 >

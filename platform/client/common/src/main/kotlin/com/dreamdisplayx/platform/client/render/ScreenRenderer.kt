@@ -106,12 +106,10 @@ object ScreenRenderer : ClientRenderService {
         val h = displayScreen.height
 
         if (displayScreen.isVideoStarted && displayScreen.hasTexture && displayScreen.renderType != null) {
-            // Lift the two LETTERBOX quads from each other inside renderGpuTexture; here we only apply the
-            // base screen transform (which already carries the world-space surface offset away from the block).
-            stack.pushPose()
-            DisplayGeometry.applyScreenTransform(stack, facing, w, h)
-            renderGpuTexture(stack, facing, drawQuad, displayScreen)
-            stack.popPose()
+            // Each quad is drawn through its own drawLayer so the backdrop and video can sit at distinct
+            // z-depths: liftTowardViewer MUST be applied BEFORE the transform's z-flattening scale, and
+            // drawLayer does exactly that (the same per-layer separation the loading placeholder uses).
+            renderVideo(stack, displayScreen, drawQuad)
         } else {
             renderPlaceholder(
                 stack,
@@ -131,11 +129,27 @@ object ScreenRenderer : ClientRenderService {
      *  (distorting when aspects differ), LETTERBOX draws a black backdrop and fits the video inside
      *  with bars, CROP covers the block sampling the centered sub-rectangle of the texture. The GPU
      *  sampler does the scaling, keeping the vout thread on a direct bulk copy. */
-    private fun renderGpuTexture(stack: PoseStack, facing: DisplayFacing, drawQuad: QuadRenderer, displayScreen: DisplayScreen) {
+    /** Draws the video (and, in LETTERBOX, its backdrop) using the screen's GPU texture, ramping up the
+     *  first-appear fade. The texture is allocated at the video's NATIVE aspect (see
+     *  [com.dreamdisplayx.platform.client.render.DisplayTextureResource]), so the quad maps it onto the
+     *  block face per the active stretch mode: STRETCH fills the block (distorting when aspects differ),
+     *  LETTERBOX draws a black backdrop and fits the video inside with bars, CROP covers the block
+     *  sampling the centered sub-rectangle of the texture. The GPU sampler does the scaling, keeping the
+     *  vout thread on a direct bulk copy.
+     *
+     *  Each quad is drawn through its own [drawLayer], which applies `liftTowardViewer` BEFORE the
+     *  transform's z-flattening scale. Lifting after the transform would be flattened to z=0 (dead), which
+     *  is exactly why the backdrop and video previously sat coplanar and z-fought. Here the video is lifted
+     *  one extra layer above the backdrop so the two LETTERBOX quads hold distinct depths — the same
+     *  per-layer separation the loading placeholder already uses. */
+    private fun renderVideo(stack: PoseStack, displayScreen: DisplayScreen, drawQuad: QuadRenderer) {
         val appear = displayScreen.appearProgress()
         val base = if (displayScreen.isYuvTexture) displayScreen.brightness.coerceIn(0f, 1f) * 255f else 255f
         val c = (base * appear).toInt().coerceIn(0, 255)
-        val blockAspect = displayScreen.width.toDouble() / displayScreen.height.coerceAtLeast(1)
+        val facing = displayScreen.facing
+        val w = displayScreen.width
+        val h = displayScreen.height
+        val blockAspect = w.toDouble() / h.coerceAtLeast(1)
         val contentAspect = displayScreen.videoContentAspect
         val mode = if (contentAspect <= 0.0) StretchMode.STRETCH else displayScreen.stretchMode
         val letterbox = mode == StretchMode.LETTERBOX && contentAspect > 0.0
@@ -143,24 +157,22 @@ object ScreenRenderer : ClientRenderService {
         // Content rect (fractions of the block face) and UV rect (fractions of the video texture).
         val (qx0, qy0, qx1, qy1, u0, v0, u1, v1) = fitRect(blockAspect, contentAspect, mode)
 
-        // LETTERBOX keeps black bars by drawing a full-face backdrop quad. The base screen transform
-        // already carries the world-space surface offset away from the block; here the video quad is
-        // lifted one extra layer on top of the backdrop so the two coplanar quads hold distinct depths
-        // and never z-fight — the same per-layer separation the loading placeholder already uses.
         if (letterbox) {
-            stack.pushPose()
-            drawQuad(DisplayYuvRenderTypes.solidColorType()) { pose, builder ->
-                appendQuad(pose, builder, 0, 0, 0, displayScreen.rotation)
+            // Black backdrop covers the whole block face at the base depth.
+            drawLayer(stack, facing, w, h, 0f) {
+                drawQuad(DisplayYuvRenderTypes.solidColorType()) { pose, builder ->
+                    appendQuad(pose, builder, 0, 0, 0, displayScreen.rotation)
+                }
             }
-            stack.popPose()
         }
 
-        stack.pushPose()
-        if (letterbox) DisplayGeometry.liftTowardViewer(stack, facing, OVERLAY_LIFT)
-        drawQuad(displayScreen.renderType!!) { pose, builder ->
-            appendQuad(pose, builder, c, c, c, displayScreen.rotation, qx0, qy0, qx1, qy1, u0, v0, u1, v1)
+        // Video quad: in LETTERBOX it is lifted one extra layer above the backdrop; otherwise it sits at
+        // the base depth (single quad, no coplanar neighbour).
+        drawLayer(stack, facing, w, h, if (letterbox) OVERLAY_LIFT else 0f) {
+            drawQuad(displayScreen.renderType!!) { pose, builder ->
+                appendQuad(pose, builder, c, c, c, displayScreen.rotation, qx0, qy0, qx1, qy1, u0, v0, u1, v1)
+            }
         }
-        stack.popPose()
     }
 
     /** Computes the quad rect (block-face fractions) and UV rect (texture fractions) for [mode]. */
