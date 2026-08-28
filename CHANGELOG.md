@@ -2,6 +2,14 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Narrow the audio callback read window to stop the pause/resume stack-buffer-overrun (feat/libvlc)**
+> — pause/resume crashed with exit code -1073740791 (0xC0000409, stack buffer overrun) and no JVM log.
+>
+> The audio play callback now clamps the block size to ~0.25 s (down from ~1 s). A post-pause pathological
+> `count` backed by a smaller native sample region would otherwise make us read further into native memory
+> than libvlc intends, which was the stack-buffer-overrun on pause/resume. Combined with the earlier video
+> pool padding (which stopped the seek-time heap corruption), the read window is now bounded on both paths.
+
 > **Fix heap-corruption crash on pause/resume (render thread no longer touches the audio line) (feat/libvlc)**
 > — the game crashed with exit code -1073740940 (0xC0000374, STATUS_HEAP_CORRUPTION) after pause/resume.
 >

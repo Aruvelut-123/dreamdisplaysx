@@ -40,8 +40,10 @@ internal class LibVlcAudioOutput(
         /** Nanoseconds per decoded frame; the blip of one stereo S16 sample pair. */
         private const val FRAME_NANOS = 1_000_000_000L / SAMPLE_RATE
 
-        /** Upper bound on frames per audio callback (~1 s). Guards against a pathological post-seek count. */
-        private const val MAX_COUNT_PER_BLOCK = SAMPLE_RATE
+        /** Upper bound on frames per audio callback (~0.25 s). A post-seek/pause pathological count that is
+         * actually backed by a smaller native sample region must not make us read further than libvlc intends —
+         * over-reading native memory was the stack-buffer-overrun crash (0xC0000409) on seek/pause. */
+        private const val MAX_COUNT_PER_BLOCK = SAMPLE_RATE / 4
 
         /**
          * Line buffer bytes (~0.1 s of stereo S16). Tight enough that the constant video-ahead (libvlc
