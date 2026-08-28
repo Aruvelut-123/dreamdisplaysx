@@ -30,6 +30,14 @@ object LibVlcFrameExtractor {
     private const val SETUP_TIMEOUT_MS = 15_000L
 
     /**
+     * How long to keep the temporary player playing after a seek before consuming the frame. The
+     * first display(s) after a seek can be stale pre-seek pictures (get_time already reports the
+     * target but the pixels are an old frame); letting the vout settle lets later displays overwrite
+     * the capture with the true target frame. Too large makes hover laggy, too small misses the frame.
+     */
+    private const val SCRUB_SETTLE_MS = 300L
+
+    /**
      * Extracts a single frame at [offsetNanos] from [url], scales it to [w]x[h] (maintaining aspect),
      * and returns JPEG bytes, or null on any failure.
      */
@@ -89,9 +97,21 @@ object LibVlcFrameExtractor {
                     return null
                 }
                 val postSeekTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-                if (!seekLatch.await(10, TimeUnit.SECONDS)) {
+                // Keep the player PLAYING after the seek so the decoder actually decodes up to the
+                // target. The very first display(s) after a seek can be stale PRE-seek pictures —
+                // get_time already reports the target (so the gate passes) but the pixels are still
+                // an old frame; this is especially true on network seeks, which must re-request
+                // fragments before the real target frame appears. Every subsequent display overwrites
+                // `captured`, so wait for the first gated display, then a short settle window, then
+                // consume the LATEST captured frame (the true target frame).
+                if (!seekLatch.await(2, TimeUnit.SECONDS)) {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null
+                }
+                try {
+                    Thread.sleep(SCRUB_SETTLE_MS)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
                 }
                 val frameTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
                 logger.info(
