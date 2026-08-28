@@ -2,6 +2,20 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: fix 0xC0000005 crash on long videos + exact settle past the seek target (feat/libvlc)**
+> — opening a longer video crashed the game with exit code -1073741819 (0xC0000005, access
+> violation) and no error log. Root cause: after a seek changed the video size, `captured` could
+> still be a STALE frame from the previous (smaller) format while `frameW/frameH` already reported
+> the new (larger) size — `i420ToBufferedImage` then indexed out of bounds. It now refuses to
+> convert when the buffer is smaller than the current format needs (dropping the stale frame with a
+> warning instead of crashing).
+>
+> Also: the settle wait now uses a new `awaitPast` with NO tolerance. The previous attempt used
+> `awaitPosition`, whose 600ms tolerance defeated the "wait until just past the target" intent
+> (get_time already reports the target right after a seek, so target+300−600=target−300 was
+> satisfied instantly), so every extraction still grabbed the pre-seek opening frame. `awaitPast`
+> waits for playback to actually advance past the target — deterministic on network seeks.
+
 > **Scrub preview: wait for playback to advance PAST the seek target before grabbing (feat/libvlc)**
 > — the earlier fixed-settle approach was racy: on network seeks get_time jumps to the target
 > instantly while the vout still shows stale pre-seek pictures until the new fragments arrive, so a
