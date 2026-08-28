@@ -136,6 +136,22 @@ object LibVlcFrameExtractor {
             val frame = grab.consumeFrame()
                 ?: run { logger.warn("Frame extraction: no frame data for $url@$offsetNanos"); return null }
 
+            // Diagnostic: hash the captured pixels so we can tell whether different hover positions
+            // produce different frame content (extraction working) or the same content every time
+            // (the vout is handing back a stale pre-seek picture despite reporting the target time).
+            if (offsetNanos > 0) {
+                val crc = java.util.zip.CRC32()
+                frame.duplicate().rewind().let { src ->
+                    val arr = ByteArray(1024)
+                    while (src.hasRemaining()) {
+                        val n = minOf(1024, src.remaining())
+                        src.get(arr, 0, n)
+                        crc.update(arr, 0, n)
+                    }
+                }
+                logger.info("SCRUB-CRC target={}ms crc={} bytes={}", offsetNanos / 1_000_000L, crc.value, frame.remaining())
+            }
+
             val image = i420ToBufferedImage(frame, grab.frameW, grab.frameH) ?: return null
             val scaled = scale(image, w, h)
             val out = ByteArrayOutputStream()
