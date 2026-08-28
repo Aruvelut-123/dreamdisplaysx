@@ -219,6 +219,32 @@ object LibVlcFrameExtractor {
     }
 
     /**
+     * Polls [libvlc_media_player_get_time] until it is at least [minMs] with NO tolerance.
+     * Unlike [awaitPosition] (whose 600ms tolerance defeats a "wait until we're just past the
+     * target" intent — get_time already reports the target right after a seek), this waits for the
+     * player to actually play INTO the target region, which for a network seek means waiting for the
+     * new fragments to be requested and decoded. Returns false on timeout; the caller must not grab.
+     */
+    private fun awaitPast(lib: LibVlc.LibVlcNative, mp: Pointer, minMs: Long, timeoutMs: Long = 8_000L): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (System.nanoTime() < deadline) {
+            try {
+                val t = lib.libvlc_media_player_get_time(mp)
+                if (t >= minMs) return true
+            } catch (_: Throwable) {
+                return false
+            }
+            try {
+                Thread.sleep(30)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
+        return false
+    }
+
+    /**
      * Polls [libvlc_media_player_get_time] until it reaches within [toleranceMs] of [targetMs].
      * Returns true when the position actually reached the target region (a successful seek), or
      * false when it timed out (seek was ignored / failed — the caller must not grab a frame).
@@ -389,9 +415,18 @@ object LibVlcFrameExtractor {
     /** Converts packed I420 buffer to a BufferedImage (RGB). */
     private fun i420ToBufferedImage(i420: ByteBuffer, w: Int, h: Int): BufferedImage? {
         if (w <= 0 || h <= 0) return null
-        val image = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         val ySize = w * h
         val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
+        val needed = ySize + 2 * uvSize
+        // HARD SAFETY: the buffer may be a STALE capture from an earlier (smaller) format after a
+        // seek changed the video size — reading it with the current w/h would index out of bounds
+        // (BufferUnderflowException at best, a native access violation at worst, which crashed the
+        // game with 0xC0000005 when a long video was opened). Refuse to convert instead of crashing.
+        if (i420.capacity() < needed) {
+            logger.warn("Scrub frame size mismatch: buffer={} needed={} for {}x{} — dropping stale frame.", i420.capacity(), needed, w, h)
+            return null
+        }
+        val image = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         i420.rewind()
         for (row in 0 until h) {
             for (col in 0 until w) {
