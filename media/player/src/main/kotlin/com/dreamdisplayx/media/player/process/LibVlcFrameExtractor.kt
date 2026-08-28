@@ -99,16 +99,6 @@ object LibVlcFrameExtractor {
             val frame = grab.consumeFrame()
                 ?: run { logger.warn("Frame extraction: no frame data for $url@$offsetNanos"); return null }
 
-            if (offsetNanos > 0) {
-                // Diagnostic: confirm the seek actually landed near the target and that the grabbed
-                // frame came from a post-seek position rather than a stale opening frame.
-                val actualMs = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-                logger.info(
-                    "Frame extraction: {}@{} grabbed at get_time={}ms (target={}ms).",
-                    url, offsetNanos / 1_000_000L, actualMs, offsetNanos / 1_000_000L,
-                )
-            }
-
             val image = i420ToBufferedImage(frame, grab.frameW, grab.frameH) ?: return null
             val scaled = scale(image, w, h)
             val out = ByteArrayOutputStream()

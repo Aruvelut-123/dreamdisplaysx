@@ -2,6 +2,16 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview now extracts frames on demand + A/V auto-resync is bidirectional (feat/libvlc)**
+> — the scrub bar no longer pre-generates up to 45 sample frames across the whole video (which
+> spawned libvlc players on the IO pool and caused game frame drops); instead each hover position
+> that isn't already cached queues a single extraction for exactly that timestamp, coalesced so a
+> fast drag never runs more than one extraction per video. The extraction info log was removed.
+>
+> A/V auto-resync now fires on BOTH directions: previously only video-ahead (audio behind) flushed
+> the audio line; audio-ahead (audio playing past the newest delivered video sample) was assumed to
+> self-resolve but did not — now `abs(lead) > threshold` flushes and re-anchors the clock either way.
+
 > **Fix video freeze on resume after multiple seeks: cleanup no longer nulls the frame buffers (feat/libvlc)**
 > — after the drop-buffer overflow fix, seek → seek → pause → resume no longer crashes, but the video
 > froze on a stale frame while audio kept playing.

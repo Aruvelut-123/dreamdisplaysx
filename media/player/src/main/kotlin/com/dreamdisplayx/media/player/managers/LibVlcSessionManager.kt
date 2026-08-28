@@ -685,8 +685,9 @@ internal class LibVlcSessionManager(
             // Signed lead: positive = video ahead of the audible audio (sample queued but not heard),
             // negative = audible audio already played past the newest delivered sample (video rendering
             // fell behind, typically while the vout drops frames through a Minecraft hitch). Small and
-            // steady is healthy in either direction; auto-recovery flushes queued audio when video runs
-            // far ahead (audio catches up instantly). Audio-ahead self-resolves as the vout catches up.
+            // steady is healthy in either direction; auto-recovery flushes queued audio when either
+            // side drifts far from the other — flushing discards the stale buffered PCM and re-anchors
+            // the clock, which pulls the audio back onto the video whether it was behind or ahead.
             // The whole diagnostic + auto-resync can be disabled for bisection (-Ddreamdisplayx.noAutoResync).
             if (!LibVlcDiagnostics.noAutoResync) {
                 val lead = audioOutput.leadNanos()
@@ -696,10 +697,11 @@ internal class LibVlcSessionManager(
                         "{} A/V sync: video={}ms, audioLead={}ms ({})",
                         debugLabel, ms, leadMs, if (lead < 0) "audio ahead" else "video ahead"
                     )
-                    if (lead > AUTO_RESYNC_THRESHOLD_NANOS) {
+                    if (kotlin.math.abs(lead) > AUTO_RESYNC_THRESHOLD_NANOS) {
+                        val aheadSide = if (lead < 0) "audio is ahead" else "audio is behind"
                         logger.warn(
-                            "{} A/V drift: audio {}ms behind video (>{}ms) — flushing audio to re-sync.",
-                            debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
+                            "{} A/V drift: {} video by {}ms (>{}ms) — flushing audio to re-sync.",
+                            debugLabel, aheadSide, kotlin.math.abs(leadMs), AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
                         )
                         audioOutput.forceResync()
                     }

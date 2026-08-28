@@ -7,7 +7,7 @@
 - [x] **A/V 缓冲/同步加固**：`LINE_BUFFER_BYTES`=100ms、line 访问移到 libvlc 音频线程、`onPlay` count 上限、`AUTO_RESYNC_THRESHOLD`=300ms、pause/resume 不 stop/start line、seek→pause→resume 时钟一致
 - [x] **libvlc 3.0.21 → 3.0.22**：build.sh/collect.sh/natives.yml 版本升级 + Build Natives 重建（natives-de826bd-1787899222）
 - [x] **JVM 诊断开关**（`LibVlcDiagnostics`）：silentAudio / noAudioCallback / noVideoCallback / noFrameSink / noVideoPublish / noAutoResync / noHardwareAccel——留作以后排查
-- [x] **PreviewSection 视频预览偏下/顶留白**：用户反馈已自行修复（疑似与 videoContentAspect 时序有关，崩溃修复后不再出现）
+- [x] **PreviewSection 视频预览偏位/空隙（部分）**：16:9 视频正常；**电影（宽幅/带黑边）上下都有空隙——"居中但没缩放"**，仍在排查中
 - [x] **z-fighting**：lift 放对位置 + renderVideo 逐层分离——用户确认已修复
 - [x] **帧向左偏移 ~1px**——用户确认已修复
 
