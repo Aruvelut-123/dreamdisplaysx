@@ -653,17 +653,20 @@ internal class LibVlcSessionManager(
         // position is still measured below for the sync diagnostic.
         val mp = mediaPlayer ?: return clock.currentTime()
         val ms = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-        // Rate-limited A/V sync health diagnostic (INFO, ~10 s): audio line's real audible position vs
-        // libvlc's display clock. A constant difference is the line's buffer latency; a growing one is
-        // real drift and worth investigating.
+        // Rate-limited A/V sync health diagnostic (INFO, ~10 s): how far the audio still queued in the
+        // line's ring buffer trails the video. libvlc's `get_time` is the display clock; the line
+        // buffer latency is the gap between the displayed frame and what you hear. A small, steady
+        // value (~the buffer size, a few hundred ms) means healthy sync; a value that keeps growing
+        // is real A/V drift. (libvlc 3.0.21's audio-callback pts is a monotonic clock, not media time,
+        // so we deliberately report buffer latency instead of an absolute line position.)
         val now = System.nanoTime()
         val last = lastSyncDiagNanos.get()
         if (now - last > 10_000_000_000L && lastSyncDiagNanos.compareAndSet(last, now)) {
-            val audible = audioOutput.playedPositionNanos()
-            if (audible != null) {
+            val buffered = audioOutput.bufferedNanos()
+            if (buffered != null) {
                 logger.info(
-                    "{} A/V sync: audioLine={}ms libvlc={}ms (line lags video by {}ms).",
-                    debugLabel, audible / 1_000_000L, ms, (ms * 1_000_000L - audible) / 1_000_000L
+                    "{} A/V sync: video={}ms, audioBuffered={}ms (video leads audible audio by ~{}ms).",
+                    debugLabel, ms, buffered / 1_000_000L, buffered / 1_000_000L
                 )
             }
         }

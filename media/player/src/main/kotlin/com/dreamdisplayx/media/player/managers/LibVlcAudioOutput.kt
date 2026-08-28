@@ -41,14 +41,13 @@ internal class LibVlcAudioOutput(
         private const val FRAME_NANOS = 1_000_000_000L / SAMPLE_RATE
 
         /**
-         * Line buffer bytes (~0.2 s of stereo S16). Deliberately moderate: after the audio split the
-         * line's *actual* playback position is the authoritative audio clock, and libvlc throttles its
-         * audio thread on our blocking [SourceDataLine.write] — so the ring capacity upper-bounds how
-         * far video (paced by libvlc's delivery clock) can run ahead of what you hear. 0.2 s keeps lip
-         * sync tight while still absorbing game hitches so the line rarely underruns. (The old JavaCPP
-         * sink's 0.4 s ceiling let video lead the audible audio by a perceptible margin.)
+         * Line buffer bytes (~0.5 s of stereo S16). Moderately generous so the line rarely underruns even
+         * across game hitches: when [SourceDataLine.write] blocks, libvlc's audio thread stalls and with
+         * it the video (paced by libvlc's delivery clock), so a too-tight ring (0.2 s) showed up as
+         * audible stutter and occasional video hitches. ~0.5 s still bounds how far video can run ahead
+         * of what you hear while absorbing scheduling jitter.
          */
-        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 2 / 10
+        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 5 / 10
     }
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -78,10 +77,6 @@ internal class LibVlcAudioOutput(
     @Volatile
     private var totalWrittenFrames = 0L
 
-    /** Media time (nanos) of the newest sample handed to the line so far in this run. */
-    @Volatile
-    private var lastWrittenMediaNanos = 0L
-
     /** True once at least one audio block has been written since the last flush. */
     @Volatile
     private var clockLive = false
@@ -93,7 +88,6 @@ internal class LibVlcAudioOutput(
         runCatching { dspStage?.reset() }
         runCatching { line?.flush() }
         totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
-        lastWrittenMediaNanos = 0L
         clockLive = false
     }
 
@@ -145,12 +139,12 @@ internal class LibVlcAudioOutput(
     fun onPlay(data: Pointer?, samples: Pointer?, count: Int, pts: Long) {
         if (samples == null || count <= 0) return
         val ln = line ?: return
-        // Register this block's newest sample against the running write counter, so
-        // [playedPositionNanos] can subtract the still-buffered frames. libvlc audio-callback pts
-        // is in µs; convert to ns here (the first sample of the block, hence +(count-1) * frame).
+        // Track only how many frames we've written vs. how many the line has emitted; the ring-buffer
+        // delta is the A/V lead (see [bufferedNanos]). We deliberately ignore `pts`: on libvlc 3.0.21
+        // the custom-audio-callback pts is a system monotonic clock (~uptime) rather than media time,
+        // so anchoring a media position on it produced ~100-hour readings.
         val countL = count.toLong()
         totalWrittenFrames += countL
-        lastWrittenMediaNanos = pts * 1000L + (countL - 1) * FRAME_NANOS
         clockLive = true
         val bytes = count * BYTES_PER_FRAME
         if (pcmBuffer.size < bytes) pcmBuffer = ByteArray(bytes)
@@ -159,26 +153,29 @@ internal class LibVlcAudioOutput(
     }
 
     /**
-     * The authoritative audio playback position in nanos — media time of the block whose samples are
-     * currently being emitted by the speaker. Computed fresh every call from the newest written
-     * sample's media time and the line's actual emitted-frame count:
-     *
-     * ```
-     * position = lastWrittenMediaNanos - (totalWrittenFrames - line.getLongFramePosition()) * FRAME_NANOS
-     * ```
-     *
-     * `totalWrittenFrames - emitted` is exactly the number of frames still queued in the line's ring
-     * buffer (written but not yet audible), so subtracting them maps the write head back to what the
-     * speaker is playing right now. Returns [null] until audio has actually been delivered, and is
-     * self-healing: every block re-bases the math on its own pts, so no stale anchor can linger.
+     * How far the audio that's still sitting in the line's ring buffer trails the video, in nanos —
+     * i.e. video-leading-audible-audio. Computed as `(written - emitted) * FRAME_NANOS`, the number of
+     * frames queued but not yet heard. Stable & small (~the buffer size) means healthy sync; growing
+     * steadily means real A/V drift. Returns `null` until audio has been delivered at least once.
      */
-    fun playedPositionNanos(): Long? {
+    fun bufferedNanos(): Long? {
         val ln = line ?: return null
         if (!clockLive) return null
         val emitted = ln.getLongFramePosition()
         val buffered = (totalWrittenFrames - emitted).coerceAtLeast(0L)
-        val position = lastWrittenMediaNanos - buffered * FRAME_NANOS
-        return position.coerceAtLeast(0L)
+        return buffered * FRAME_NANOS
+    }
+
+    /**
+     * Best-effort audio playback position. libvlc's audio-callback `pts` is *not* trustworthy media time
+     * on 3.0.21 (it reads as a monotonic clock), so this reconstructs the position from the delivered
+     * playback clock instead: whatever the caller supplies. Returning the line buffer latency via
+     * [bufferedNanos] is the preferred, unit-clean signal for tuning; this helper is kept for callers
+     * that need an absolute position and can pass a trusted reference (e.g. libvlc `get_time`).
+     */
+    fun playedPositionNanos(referenceNanos: Long): Long? {
+        val buf = bufferedNanos() ?: return null
+        return (referenceNanos - buf).coerceAtLeast(0L)
     }
 
     private fun feed(buf: ByteArray, bytes: Int, ln: SourceDataLine) {
@@ -217,7 +214,6 @@ internal class LibVlcAudioOutput(
     fun onFlush(data: Pointer?, pts: Long) {
         runCatching { line?.flush() }
         totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
-        lastWrittenMediaNanos = 0L
         clockLive = false
     }
 
@@ -250,7 +246,6 @@ internal class LibVlcAudioOutput(
             newLine.start()
             line = newLine
             totalWrittenFrames = 0L
-            lastWrittenMediaNanos = 0L
             clockLive = false
             logger.info("$debugLabel audio line opened ({} Hz, {} ch).", SAMPLE_RATE, CHANNELS)
         } catch (e: LineUnavailableException) {

@@ -106,15 +106,11 @@ object ScreenRenderer : ClientRenderService {
         val h = displayScreen.height
 
         if (displayScreen.isVideoStarted && displayScreen.hasTexture && displayScreen.renderType != null) {
-            // In LETTERBOX mode a black backdrop quad shares the block face with the video quad; lift
-            // the video one toward the viewer in WORLD space (before the transform's z-flattening
-            // scale) so the two coplanar quads don't z-fight over the overlapping area.
-            val contentAspect = displayScreen.videoContentAspect
-            val letterbox = contentAspect > 0.0 && displayScreen.stretchMode == StretchMode.LETTERBOX
+            // Lift the two LETTERBOX quads from each other inside renderGpuTexture; here we only apply the
+            // base screen transform (which already carries the world-space surface offset away from the block).
             stack.pushPose()
-            if (letterbox) DisplayGeometry.liftTowardViewer(stack, facing, OVERLAY_LIFT)
             DisplayGeometry.applyScreenTransform(stack, facing, w, h)
-            renderGpuTexture(drawQuad, displayScreen)
+            renderGpuTexture(stack, facing, drawQuad, displayScreen)
             stack.popPose()
         } else {
             renderPlaceholder(
@@ -135,27 +131,36 @@ object ScreenRenderer : ClientRenderService {
      *  (distorting when aspects differ), LETTERBOX draws a black backdrop and fits the video inside
      *  with bars, CROP covers the block sampling the centered sub-rectangle of the texture. The GPU
      *  sampler does the scaling, keeping the vout thread on a direct bulk copy. */
-    private fun renderGpuTexture(drawQuad: QuadRenderer, displayScreen: DisplayScreen) {
+    private fun renderGpuTexture(stack: PoseStack, facing: DisplayFacing, drawQuad: QuadRenderer, displayScreen: DisplayScreen) {
         val appear = displayScreen.appearProgress()
         val base = if (displayScreen.isYuvTexture) displayScreen.brightness.coerceIn(0f, 1f) * 255f else 255f
         val c = (base * appear).toInt().coerceIn(0, 255)
         val blockAspect = displayScreen.width.toDouble() / displayScreen.height.coerceAtLeast(1)
         val contentAspect = displayScreen.videoContentAspect
         val mode = if (contentAspect <= 0.0) StretchMode.STRETCH else displayScreen.stretchMode
-
-        if (mode == StretchMode.LETTERBOX && contentAspect > 0.0) {
-            // Black backdrop covers the whole block face; the video quad sits on top, so the
-            // letterbox bars show the same black the CPU path baked into the old block-aspect texture.
-            drawQuad(DisplayYuvRenderTypes.solidColorType()) { pose, builder ->
-                appendQuad(pose, builder, 0, 0, 0, displayScreen.rotation)
-            }
-        }
+        val letterbox = mode == StretchMode.LETTERBOX && contentAspect > 0.0
 
         // Content rect (fractions of the block face) and UV rect (fractions of the video texture).
         val (qx0, qy0, qx1, qy1, u0, v0, u1, v1) = fitRect(blockAspect, contentAspect, mode)
+
+        // LETTERBOX keeps black bars by drawing a full-face backdrop quad. The base screen transform
+        // already carries the world-space surface offset away from the block; here the video quad is
+        // lifted one extra layer on top of the backdrop so the two coplanar quads hold distinct depths
+        // and never z-fight — the same per-layer separation the loading placeholder already uses.
+        if (letterbox) {
+            stack.pushPose()
+            drawQuad(DisplayYuvRenderTypes.solidColorType()) { pose, builder ->
+                appendQuad(pose, builder, 0, 0, 0, displayScreen.rotation)
+            }
+            stack.popPose()
+        }
+
+        stack.pushPose()
+        if (letterbox) DisplayGeometry.liftTowardViewer(stack, facing, OVERLAY_LIFT)
         drawQuad(displayScreen.renderType!!) { pose, builder ->
             appendQuad(pose, builder, c, c, c, displayScreen.rotation, qx0, qy0, qx1, qy1, u0, v0, u1, v1)
         }
+        stack.popPose()
     }
 
     /** Computes the quad rect (block-face fractions) and UV rect (texture fractions) for [mode]. */

@@ -2,6 +2,22 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Z-fighting layering + A/V sync diagnostics (feat/libvlc)**
+> — the display still flickered on AMD and the audio-clock diagnostic was reading a non-media clock.
+>
+> **Display still z-fought on the block** — the whole screen now floats a solid 0.05 blocks off the
+> face (0.08 with a shader pack) so it clears the block even on drivers that ignore the pipeline's
+> GPU polygon-offset bias. LETTERBOX also renders its black backdrop and the video quad on *separate*
+> world-space depth layers (the video lifted one extra layer), exactly like the loading placeholder
+> stacks its layers — so the two coplanar quads no longer z-fight over the bars.
+>
+> **A/V sync diagnostic read ~100 hours** — libvlc 3.0.21's custom-audio-callback `pts` is a monotonic
+> clock (≈ uptime), not media time, so the old diagnostic's absolute line position blew up to ~111 h.
+> The player clock correctly ignores it (libvlc `get_time` stays authoritative); the INFO diagnostic
+> now reports the *line buffer latency* directly ("video=Xms, audioBuffered=Yms") — a small, steady Y
+> is healthy sync, a growing one is real drift. The line ring buffer also grew to ~0.5 s so libvlc's
+> audio thread (and the video it paces) stops stalling on tight underruns.
+>
 > **Audio-clock follow-ups: libvlc is the position clock again, and a bigger surface offset (feat/libvlc)**
 > — the audio-line-authoritative clock still lagged the video by *seconds*, and the display still
 > z-fought on AMD.
