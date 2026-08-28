@@ -2,6 +2,17 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Fix the real pause/resume native crash: libvlc drop buffer was 4 bytes instead of a full frame (feat/libvlc)**
+> — after `clear()` (called from video cleanup on pause/seek) set `bufferSize=0`, `ensureDropBuffer()`
+> allocated only 4 bytes. libvlc then wrote a whole w×h×4 frame into a 4-byte direct buffer →
+> massive heap overflow (0xC0000374, random-thread crash). The audio-path isolation was a
+> red herring all along.
+>
+> Fix: `ensureDropBuffer()` now always allocates at least `frameWidth * frameHeight * 4 +
+> VIDEO_BUFFER_PADDING` (the last known full frame size), so even after a cleanup the drop buffer
+> can safely absorb a full frame write. `frameWidth`/`frameHeight` survive `clear()` because they
+> are only reset by a new `setup()`.
+
 > **Add JVM diagnostic switches to bisect the remaining pause/resume native crash (feat/libvlc)**
 > — the heap corruption (0xC0000374) persists after all audio-callback line access was removed, so
 > per-subsystem switches let us isolate which path corrupts the heap.

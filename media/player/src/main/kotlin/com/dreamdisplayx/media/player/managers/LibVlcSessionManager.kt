@@ -934,8 +934,15 @@ internal class LibVlcSessionManager(
         }
 
         private fun ensureDropBuffer() {
-            if (dropBuffer != null && dropPointer != null && dropBuffer!!.capacity() == bufferSize.coerceAtLeast(4)) return
-            val size = bufferSize.coerceAtLeast(4)
+            // libvlc can call lock() after a cleanup (pause/seek/resume) has nulled the buffers; it
+            // then hands the decoded frame to the pointer we return here. If we hand back a tiny
+            // buffer (e.g. 4 bytes) libvlc writes a whole w*h*4 frame into it → massive heap
+            // corruption (0xC0000374, surfacing on random threads) — the pause/resume crash that
+            // persisted after the audio path was isolated. So the drop buffer must ALWAYS be at
+            // least a full padded frame. frameWidth/frameHeight survive clear(), so they still hold
+            // the last known dimensions here.
+            val size = ((frameWidth * frameHeight * 4) + VIDEO_BUFFER_PADDING).coerceAtLeast(4)
+            if (dropBuffer != null && dropPointer != null && dropBuffer!!.capacity() >= size) return
             dropBuffer = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
             dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
         }
