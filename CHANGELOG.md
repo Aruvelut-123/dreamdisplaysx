@@ -2,6 +2,17 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: gate the displayed frame by get_time + remove PreviewSection debug log + honest A/V labels (feat/libvlc)**
+> — on-demand scrub frames still came out as the opening frame: a stale PRE-seek picture already
+> queued in the vout satisfied the seek latch before the seeked frame arrived. The extractor now
+> sets `acceptAfterMs` (target − 400ms) before `set_time` and drops any display whose reported
+> position is still before it.
+>
+> Also removed the temporary `PreviewSection debug:` info log, and the A/V diagnostic now reports
+> the audio line's buffer latency honestly ("audioBuffered=…ms") instead of a misleading
+> "video ahead / audio ahead" label — the metric measures the audio buffer, not a video-vs-audio
+> offset, so a vout frame-drop (frozen picture while audio plays) is not visible in it.
+
 > **F3 decoder fallback: report the configured hw backend when decoder_info is unavailable (feat/libvlc)**
 > — even after reading `psz_description`, the F3 overlay still showed "software", so
 > `libvlc_media_player_get_video_decoder_info` appears unavailable on this libvlc build. The name

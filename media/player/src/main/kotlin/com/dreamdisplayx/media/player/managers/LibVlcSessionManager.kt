@@ -693,19 +693,13 @@ internal class LibVlcSessionManager(
             // The whole diagnostic + auto-resync can be disabled for bisection (-Ddreamdisplayx.noAutoResync).
             if (!LibVlcDiagnostics.noAutoResync) {
                 val lead = audioOutput.leadNanos()
-                if (lead != null) {
+                if (lead != null && lead > AUTO_RESYNC_THRESHOLD_NANOS) {
                     val leadMs = lead / 1_000_000L
-                    logger.info(
-                        "{} A/V sync: video={}ms, audioBuffered={}ms{}",
-                        debugLabel, ms, leadMs, if (lead >= 0) "" else " (line underrun)"
+                    logger.warn(
+                        "{} A/V drift: audio buffer {}ms behind video (>{}ms) — flushing audio to re-sync.",
+                        debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
                     )
-                    if (lead > AUTO_RESYNC_THRESHOLD_NANOS) {
-                        logger.warn(
-                            "{} A/V drift: audio buffer {}ms behind video (>{}ms) — flushing audio to re-sync.",
-                            debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
-                        )
-                        audioOutput.forceResync()
-                    }
+                    audioOutput.forceResync()
                 }
             }
         }

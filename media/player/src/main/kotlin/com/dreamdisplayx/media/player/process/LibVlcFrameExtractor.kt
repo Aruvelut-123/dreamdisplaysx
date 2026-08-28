@@ -70,18 +70,13 @@ object LibVlcFrameExtractor {
                 // seekability first — bounded, because some URLs never report it.
                 pollSeekable(lib, mp)
                 val targetMs = offsetNanos / 1_000_000L
-                // Pause FIRST, then seek: while paused, set_time flushes the pipeline and renders
-                // the exact target frame, which arrives as the next display callback. Seeking while
-                // playing is racy — get_time jumps to the target instantly (so awaitPosition
-                // succeeds) but the vout keeps emitting stale PRE-seek pictures for a moment, so a
-                // display latch would be satisfied by those old opening frames (every thumbnail
-                // came out as the opening frame). Paused seek is the standard deterministic way to
-                // grab a frame at a position.
-                runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
-                // set_pause is asynchronous: wait until the player actually reports Paused (bounded)
-                // so the subsequent set_time is applied to a settled, paused vout.
-                awaitPaused(lib, mp)
-                // Install the latch BEFORE set_time so the seeked frame's display is never missed.
+                // Seek while PLAYING, then gate the display callback by get_time. The classic paused
+                // seek (pause → set_time → vout renders the target frame) has a libvlc 3.0 vmem
+                // race: get_time jumps to the target instantly but the vout can still render a stale
+                // PRE-seek picture whose CONTENT is the opening frame — the time gate passes because
+                // get_time already reports the target, yet the pixels are the first frame. Playing
+                // (even briefly) forces the decoder to actually decode up to the target position and
+                // display the correct frame.
                 grab.clearCaptured()
                 val seekLatch = CountDownLatch(1)
                 grab.timeProvider = { runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L) }
@@ -96,6 +91,8 @@ object LibVlcFrameExtractor {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null
                 }
+                // Pause the player so it stops consuming resources while we encode the frame.
+                runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
                 grab.acceptAfterMs = -1L
                 grab.timeProvider = null
             }
