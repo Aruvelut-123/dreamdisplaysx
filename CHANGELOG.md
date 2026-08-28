@@ -2,6 +2,14 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: long-lived video-only player per video (feat/libvlc)**
+> — scrub extraction was correct but slow: every hover created a fresh libvlc player and waited for
+> the first-frame decode (2-5s on network streams). A new `ScrubSession` keeps ONE video-only,
+> software-decoded libvlc player alive per video, created lazily on first hover and reused for every
+> subsequent extraction (fast paused-seek → brief play → grab, ~100-200ms). The player is destroyed
+> when the video is switched (`ScrubPreview.release(key)` on `DisplayMediaController.load`), and
+> the `0xC0000005` size-mismatch guard from the one-shot path is retained.
+
 > **Loop/replay: re-arm eosFired on beginSeek(0) from ENDED (feat/libvlc)**
 > — after the first replay ended and restarted from the beginning, a second replay froze on the
 > last frame. Root cause: `beginSeek` (the loop/replay restart path) calls stop()+play() from the
