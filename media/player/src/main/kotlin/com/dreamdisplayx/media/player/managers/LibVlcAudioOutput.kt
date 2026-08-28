@@ -41,25 +41,32 @@ internal class LibVlcAudioOutput(
         private const val FRAME_NANOS = 1_000_000_000L / SAMPLE_RATE
 
         /**
-         * Line buffer bytes (~0.15 s of stereo S16). This is the whole A/V story on libvlc 3.0's custom
-         * audio output: libvlc drives the video from its own clock, which advances the instant a sample
-         * is handed to us, while the sound only leaves the speakers after this ring drains. The video is
-         * therefore ahead of the audible audio by (roughly) the buffer size — and that lead is baked into
-         * the architecture, because libvlc gives no public way to inject the real playback position (its
-         * clock callback is notification-only). Auto-sync still holds: `SourceDataLine.write` blocks when
-         * the ring is full, so libvlc's audio thread — and with it the video — can never run more than
-         * this far ahead; the lead stays bounded at the buffer instead of drifting. A tiny buffer (0.2 s)
-         * underran on game hitches (stutter + stalls); 0.15 s keeps lips even closer while the bounded
-         * backpressure still absorbs scheduling jitter. The diagnostic logs the lead directly
-         * ("video=Xms, audioBuffered=Yms"); a steady Y ≈ buffer size is healthy, a growing one is drift.
+         * Line buffer bytes (~0.045 s of stereo S16). Aggressively small to minimize the constant
+         * video-ahead (libvlc paces video from its delivery clock while the sound leaves the speakers
+         * only after this ring drains; the lead equals the buffer size, baked into the architecture with
+         * no public way to inject the real playback position). Backpressure (`SourceDataLine.write`
+         * blocks when the ring is full) still caps drift at the buffer, and the A/V auto-resync
+         * threshold in the session manager flushes queued audio on real drift. This 45 ms value is a
+         * player trial in the chase for lip-sync; a smaller ring underruns more easily on game hitches
+         * (audible stutter + video stalls), so it may need to come back up if that shows.
          */
-        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 15 / 100
+        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 45 / 1000
     }
 
     // ── State ────────────────────────────────────────────────────────────────
 
     @Volatile
     private var line: SourceDataLine? = null
+
+    /**
+     * Serialises every access to the underlying [SourceDataLine] so the libvlc audio thread (play
+     * write / pause stop / resume start) and the render thread ([bufferedNanos] / [forceResync] / flush)
+     * never touch it concurrently. Java Sound methods are individually thread-safe, but the JNA boundary
+     * and stop-vs-write-vs-flush interleavings on a tiny ring underran the native path when the two
+     * threads raced on pause/resume (EXCEPTION_ACCESS_VIOLATION in jvm.dll). Taking the lock around each
+     * operation keeps the calls serialised and the crash out.
+     */
+    private val lineLock = Any()
 
     /** Effective volume (user volume × distance attenuation), 0..~2. */
     @Volatile
@@ -175,8 +182,10 @@ internal class LibVlcAudioOutput(
     fun leadNanos(): Long? {
         val ln = line ?: return null
         if (!clockLive) return null
-        val emitted = ln.getLongFramePosition()
-        return (totalWrittenFrames - emitted) * FRAME_NANOS
+        synchronized(lineLock) {
+            val emitted = ln.getLongFramePosition()
+            return (totalWrittenFrames - emitted) * FRAME_NANOS
+        }
     }
 
     /**
@@ -199,11 +208,15 @@ internal class LibVlcAudioOutput(
             } else {
                 MediaBufferEffects.applyVolumeS16LE(buf, bytes, g)
             }
-            var written = 0
-            while (written < bytes) {
-                val n = ln.write(buf, written, bytes - written)
-                if (n <= 0) return
-                written += n
+            // Serialise the write against the render thread's flush / position reads and the pause /
+            // resume stop / start (see [lineLock]) so the tiny ring never underruns into a native crash.
+            synchronized(lineLock) {
+                var written = 0
+                while (written < bytes) {
+                    val n = ln.write(buf, written, bytes - written)
+                    if (n <= 0) return
+                    written += n
+                }
             }
         } catch (t: Throwable) {
             // Never throw into the JNA callback trampoline; just drop the block.
@@ -214,26 +227,28 @@ internal class LibVlcAudioOutput(
     /** Pauses the line (keeps buffered PCM; resumes with [onResume]). */
     @Suppress("UNUSED_PARAMETER")
     fun onPause(data: Pointer?, pts: Long) {
-        runCatching { line?.stop() }
+        synchronized(lineLock) { runCatching { line?.stop() } }
     }
 
     @Suppress("UNUSED_PARAMETER")
     fun onResume(data: Pointer?, pts: Long) {
-        runCatching { line?.start() }
+        synchronized(lineLock) { runCatching { line?.start() } }
     }
 
     /** Discards buffered PCM (seek / stop): pretend only the already-emitted frames exist. */
     @Suppress("UNUSED_PARAMETER")
     fun onFlush(data: Pointer?, pts: Long) {
-        runCatching { line?.flush() }
-        totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
+        synchronized(lineLock) {
+            runCatching { line?.flush() }
+            totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
+        }
         clockLive = false
     }
 
     /** Drains buffered PCM (end of stream). */
     @Suppress("UNUSED_PARAMETER")
     fun onDrain(data: Pointer?) {
-        runCatching { line?.drain() }
+        synchronized(lineLock) { runCatching { line?.drain() } }
     }
 
     /**
@@ -242,12 +257,15 @@ internal class LibVlcAudioOutput(
      * of A/V sync: on a real drift (audio stalls while video keeps going) the offset balloons well past
      * the buffer size; flushing snaps the audible audio forward to the delivered clock instead of
      * waiting for backpressure to drain it over many seconds. Called from the control/UI thread when the
-     * sync diagnostic sees the lead exceed a hard threshold. Safe to call repeatedly — after a flush the
-     * lead is ~0 and [bufferedNanos] climbs back to the buffer size on the next blocks.
+     * sync diagnostic sees the lead exceed a hard threshold. Takes [lineLock] so the flush never races
+     * the libvlc audio thread's write / stop / resume on the same line. Safe to call repeatedly — after
+     * a flush the lead is ~0 and [bufferedNanos] climbs back to the buffer size on the next blocks.
      */
     fun forceResync() {
-        runCatching { line?.flush() }
-        totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
+        synchronized(lineLock) {
+            runCatching { line?.flush() }
+            totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
+        }
         clockLive = false
     }
 

@@ -2,6 +2,23 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Harder lip-sync + fix pause/resume JVM crash (feat/libvlc)**
+> — the auto-resync at 45 ms flushed the audio almost every diagnostic and crashed the game on pause/resume.
+>
+> **Audio buffer tightened to ~45 ms** — the video is paced by libvlc's delivery clock while the sound
+> leaves the speakers only after the Java Sound ring drains, so the video leads the audible audio by the
+> buffer. Dropping the ring to 45 ms pulls the lips almost flush. The old 0.3 s buffer had the video a
+> visible step ahead; at 45 ms the constant lead is near-imperceptible. If a ring this tight underruns on
+> game hitches (stutter + stalls), the value is a single constant to raise back up.
+>
+> **Auto-RESYNC threshold pulled to 0.3 s and hardened with a line lock** — a 45 ms trial threshold
+> fired the auto-resync on almost every A/V diagnostic, because the healthy lead already sits at the
+> buffer. The constant cross-thread `line.flush()` from the render thread, racing the libvlc audio
+> thread's write / stop / resume on the same `SourceDataLine`, crashed the JVM with an access violation
+> (`jvm.dll`) on pause/resume. The threshold is back at 0.3 s (a real, sustained drift still recovers in
+> a few seconds), and every line access — write, stop, start, flush, drain, position read — now takes a
+> shared [lock] so the two threads are serialised and the native race is gone.
+
 > **Auto-recovering bidirectional A/V sync + smaller audio buffer (feat/libvlc)**
 > — the video ran a fixed step ahead of the lips and a real drift, once it happened, never pulled itself back.
 >

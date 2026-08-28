@@ -8,7 +8,7 @@
 1. **z-fighting 真修复（`5a8377b6` 后新提交）**：
    - `DisplayGeometry.kt`：surfaceOffset 0.02→0.05（光影 0.08）
    - `ScreenRenderer.kt`：改为 `renderVideo` + 每个 quad 独立 `drawLayer`——**lift 在 `applyScreenTransform` 之前**。首版把 lift 放在 transform 内侧（被 `scale(w,h,0)` 的 z×0 吃掉=失效），backdrop 与 video 仍共面。现在用与 loading placeholder 相同的逐层分离，两 LETTERBOX quad 真正分深度
-2. **A/V 缓冲 + 双向 auto-sync**：`LINE_BUFFER_BYTES` 0.3s→**0.15s**——video-ahead=line 缓冲量（libvlc 3.0 无注入真实音频位置的公开 API，靠减小缓冲+backpressure 限速）；`LibVlcAudioOutput` 新增 `leadNanos()`（带符号，正=视频领先/负=音频领先）与 `forceResync()`；`LibVlcSessionManager` 诊断报带符号 `audioLead=±Xms`，视频领先>1s 自动 flush 音频追平（真 auto-recover）
+2. **A/V 缓冲 + 双向 auto-sync + 崩溃修复**：`LINE_BUFFER_BYTES` 降到 **45ms**（主人要的小 gap）；`LibVlcAudioOutput` 新增 `leadNanos()`（带符号）与 `forceResync()`；**lineLock 同步所有 line 操作**（写/stop/start/flush/读）——修 pause/resume 时 Render thread flush line 与 libvlc 音频线程竞态导致的 `EXCEPTION_ACCESS_VIOLATION`（jvm.dll）崩溃；`AUTO_RESYNC_THRESHOLD` 设 **300ms**（45ms 阈值会频繁 flush line 导致崩溃，恢复合理值只在真漂移时触发）
 3. **ScrubPreview 动态采样**：固定 20 帧→按时长自适应（≤45 帧，约 8s 间隔）——长电影 hover 不再卡在一帧/首帧
 4. **A/V 诊断**：libvlc 3.0.21 的 audio-callback `pts` 是单调时钟非媒体时间→改报带符号领先量（正=视频领先/负=音频领先）
 

@@ -93,14 +93,17 @@ internal class LibVlcSessionManager(
     private val lastSyncDiagNanos = java.util.concurrent.atomic.AtomicLong(0L)
 
     /**
-     * A/V drift threshold (0.5 s): when the audio queued in the line exceeds this, audio has genuinely
-     * stalled behind the video (the line buffer is only ~0.15 s, so healthy leads hover around that; a
-     * lead well past twice the buffer means real drift). Crossing it triggers an automatic audio flush
-     * so the audible sound snaps back to the video clock. 0.5 s is low enough to catch the moderate
-     * drifts that stutter-caused stalls leave behind, yet high enough that the normal ~0.15 s buffer
-     * lead and its jitter never trip it.
+     * A/V drift threshold (~0.3 s). This is NOT the lip-sync gap (that is the audio buffer, ~0.045 s,
+     * and is set in [LibVlcAudioOutput]); it is the point at which a real, sustained drift is declared
+     * and the queued audio is flushed to snap the sound back to the video. The threshold must stay well
+     * above the normal buffer lead so the auto-resync does not fire on every block of jitter — a 45 ms
+     * trial threshold fired almost every diagnostic (the healthy lead already sits at the buffer), and
+     * that constant cross-thread `line.flush()` from the render thread, racing the libvlc audio thread's
+     * write/stop/resume on the same SourceDataLine, is what crashed the JVM with an access violation on
+     * pause/resume. 0.3 s is a safe middle: high enough that healthy jitter never trips it, low enough
+     * that a real stall still recovers within a few seconds.
      */
-    private val AUTO_RESYNC_THRESHOLD_NANOS = 500_000_000L
+    private val AUTO_RESYNC_THRESHOLD_NANOS = 300_000_000L
 
     init {
         // Mirror the config's hw-accel preference onto the shared libvlc instance before it is
