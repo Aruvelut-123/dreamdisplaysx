@@ -682,26 +682,27 @@ internal class LibVlcSessionManager(
         val now = System.nanoTime()
         val last = lastSyncDiagNanos.get()
         if (now - last > 10_000_000_000L && lastSyncDiagNanos.compareAndSet(last, now)) {
-            // Signed lead: positive = video ahead of the audible audio (sample queued but not heard),
-            // negative = audible audio already played past the newest delivered sample (video rendering
-            // fell behind, typically while the vout drops frames through a Minecraft hitch). Small and
-            // steady is healthy in either direction; auto-recovery flushes queued audio when either
-            // side drifts far from the other — flushing discards the stale buffered PCM and re-anchors
-            // the clock, which pulls the audio back onto the video whether it was behind or ahead.
+            // Audio lead is measured as the line's buffer latency: written-frames minus emitted-frames.
+            // Positive = video's newest delivered sample is still queued in the line (video renders
+            // ahead of the audible audio — normal, small and steady). A large value means the audio
+            // THREAD itself stalled (the line can't drain), which is the only condition we can safely
+            // correct by flushing. A genuinely audible "audio ahead of a frozen picture" is a vout
+            // frame-drop (Minecraft render hitch) and is NOT visible in this metric — libvlc drives
+            // video delivery from its audio clock, so the fix for that is on the render side, not by
+            // flushing the audio line (which would only cause an audible jump).
             // The whole diagnostic + auto-resync can be disabled for bisection (-Ddreamdisplayx.noAutoResync).
             if (!LibVlcDiagnostics.noAutoResync) {
                 val lead = audioOutput.leadNanos()
                 if (lead != null) {
                     val leadMs = lead / 1_000_000L
                     logger.info(
-                        "{} A/V sync: video={}ms, audioLead={}ms ({})",
-                        debugLabel, ms, leadMs, if (lead < 0) "audio ahead" else "video ahead"
+                        "{} A/V sync: video={}ms, audioBuffered={}ms{}",
+                        debugLabel, ms, leadMs, if (lead >= 0) "" else " (line underrun)"
                     )
-                    if (kotlin.math.abs(lead) > AUTO_RESYNC_THRESHOLD_NANOS) {
-                        val aheadSide = if (lead < 0) "audio is ahead" else "audio is behind"
+                    if (lead > AUTO_RESYNC_THRESHOLD_NANOS) {
                         logger.warn(
-                            "{} A/V drift: {} video by {}ms (>{}ms) — flushing audio to re-sync.",
-                            debugLabel, aheadSide, kotlin.math.abs(leadMs), AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
+                            "{} A/V drift: audio buffer {}ms behind video (>{}ms) — flushing audio to re-sync.",
+                            debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
                         )
                         audioOutput.forceResync()
                     }

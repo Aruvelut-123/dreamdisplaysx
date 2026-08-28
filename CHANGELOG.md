@@ -2,6 +2,14 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **F3 decoder fallback: report the configured hw backend when decoder_info is unavailable (feat/libvlc)**
+> — even after reading `psz_description`, the F3 overlay still showed "software", so
+> `libvlc_media_player_get_video_decoder_info` appears unavailable on this libvlc build. The name
+> now falls back to [LibVlc.configuredHwBackend] ("dxva2" on Windows / "vaapi" / "videotoolbox"),
+> so the overlay reports the intended backend instead of the default "software" while libvlc is
+> actually decoding on the GPU. The backend resolution is now a single shared function used by the
+> instance options, the media options, and the F3 overlay.
+
 > **F3 debug overlay now shows the real hardware decoder (feat/libvlc)**
 > — libvlc WAS decoding on the GPU (verbose log: "Using DXVA2 (AMD Radeon RX 6600...)") but the F3
 > overlay kept showing "software". `libvlc_media_player_get_video_decoder_info` was only reading

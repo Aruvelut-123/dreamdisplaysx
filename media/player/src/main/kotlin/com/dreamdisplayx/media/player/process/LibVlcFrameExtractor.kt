@@ -84,6 +84,8 @@ object LibVlcFrameExtractor {
                 // Install the latch BEFORE set_time so the seeked frame's display is never missed.
                 grab.clearCaptured()
                 val seekLatch = CountDownLatch(1)
+                grab.timeProvider = { runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L) }
+                grab.acceptAfterMs = (targetMs - 400L).coerceAtLeast(0L)
                 grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
                 LibVlc.lib.libvlc_media_player_set_time(mp, targetMs)
                 if (!awaitPosition(lib, mp, targetMs)) {
@@ -94,6 +96,8 @@ object LibVlcFrameExtractor {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null
                 }
+                grab.acceptAfterMs = -1L
+                grab.timeProvider = null
             }
 
             val frame = grab.consumeFrame()
@@ -222,6 +226,17 @@ object LibVlcFrameExtractor {
         @Volatile var frameSeen = false
         @Volatile var onFrame: () -> Unit = {}
 
+        /**
+         * When >= 0, only a display whose reported position is at/after this time (ms) is accepted
+         * into [captured] / [onFrame]. Set to the seek target before [libvlc_media_player_set_time]
+         * so the latch cannot be satisfied by a stale PRE-seek (opening) frame still queued in the
+         * vout — the reason every on-demand scrub frame came out as the opening frame.
+         */
+        @Volatile var acceptAfterMs = -1L
+
+        /** Reports the current media position (ms) — used by [display] to gate [acceptAfterMs]. */
+        @Volatile var timeProvider: (() -> Long)? = null
+
         private fun setup(chroma: Pointer?, width: Pointer?, height: Pointer?, pitches: Pointer?, lines: Pointer?): Int {
             if (width == null || height == null || chroma == null || pitches == null || lines == null) return 0
             val w = width.getInt(0)
@@ -287,6 +302,14 @@ object LibVlcFrameExtractor {
             val copy = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
             base.duplicate().rewind().let { src -> for (i in 0 until total) copy.put(src.get()) }
             copy.flip()
+            // Drop frames that are still before the seek target (a stale pre-seek picture queued in
+            // the vout would otherwise satisfy the seek latch with the opening frame). Only accept
+            // once the reported position is at/after the target.
+            val gate = acceptAfterMs
+            if (gate >= 0) {
+                val now = timeProvider?.invoke() ?: gate
+                if (now < gate) return
+            }
             captured = copy
             frameSeen = true
             onFrame()
