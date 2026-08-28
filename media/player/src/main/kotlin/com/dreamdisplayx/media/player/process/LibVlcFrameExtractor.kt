@@ -117,7 +117,7 @@ object LibVlcFrameExtractor {
                 // time (too long). Waiting for position >= target + settle is deterministic: by the
                 // time playback has advanced past the target, the target frame has been displayed.
                 val settleTarget = targetMs + SCRUB_SETTLE_MS
-                if (!awaitPosition(lib, mp, settleTarget)) {
+                if (!awaitPast(lib, mp, settleTarget)) {
                     logger.warn("Frame extraction: playback did not advance past target for $url@$offsetNanos")
                     return null
                 }
