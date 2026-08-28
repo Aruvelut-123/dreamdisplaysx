@@ -191,13 +191,20 @@ object LibVlc {
      */
     fun configuredHwBackend(): String? {
         if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
-        return System.getProperty("dreamdisplayx.hwDecode")?.takeIf { it.isNotBlank() }
-            ?: when {
-                com.dreamdisplayx.util.OsInfo.isWindows -> "dxva2"
-                com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
-                com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
-                else -> "any"
-            }
+        val override = System.getProperty("dreamdisplayx.hwDecode")
+        if (override != null) {
+            // Explicit override present: an EMPTY value disables hw decoding entirely (returns null),
+            // a non-blank value forces that backend. This distinguishes "not set" (use per-OS default)
+            // from "set to empty" (disable), so `-Ddreamdisplayx.hwDecode=` truly disables hw instead
+            // of silently falling back to the platform default backend.
+            return override.takeIf { it.isNotBlank() }
+        }
+        return when {
+            com.dreamdisplayx.util.OsInfo.isWindows -> "dxva2"
+            com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
+            com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
+            else -> "any"
+        }
     }
 
     /**
