@@ -2,6 +2,18 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Fix heap-corruption crash on pause/resume (render thread no longer touches the audio line) (feat/libvlc)**
+> — the game crashed with exit code -1073740940 (0xC0000374, STATUS_HEAP_CORRUPTION) after pause/resume.
+>
+> **Render thread now never touches the Java Sound line.** The A/V diagnostic (render thread, every ~10 s)
+> called `SourceDataLine.getLongFramePosition()` / `flush()` directly, racing the libvlc audio thread's
+> write / stop / resume on the same line — a cross-thread access of Java Sound's Windows native layer
+> that corrupted the heap (0xC0000374, exit -1073740940) on pause/resume. The lead is now cached on the
+> libvlc audio thread inside the play callback (the line's owner) and read as a volatile field by the
+> render thread; an A/V re-sync only sets a marker, and the actual `line.flush()` runs back on the audio
+> thread. Every line operation (write, stop, start, flush, drain, position read) now happens on exactly
+> one thread, so the native race — and the crash — is gone.
+
 > **Fix seek crash (native stack-buffer-overrun) + safe audio buffer (feat/libvlc)**
 > — a seek after the 45 ms buffer trial crashed the game with exit code -1073740791 (0xC0000409).
 >

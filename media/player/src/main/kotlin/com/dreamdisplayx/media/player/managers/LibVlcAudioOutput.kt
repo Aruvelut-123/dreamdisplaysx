@@ -76,6 +76,14 @@ internal class LibVlcAudioOutput(
     @Volatile
     private var gain = 1.0
 
+    /** Cached video-vs-audio lead in nanos, written only on the libvlc audio thread, read from any thread. */
+    @Volatile
+    private var cachedLeadNanos: Long? = null
+
+    /** Set by the render thread via [forceResync], consumed (the actual flush) on the libvlc audio thread. */
+    @Volatile
+    private var resyncPending = false
+
     /** Reusable PCM buffer, read on the libvlc audio thread only (play callbacks are serialised). */
     private var pcmBuffer = ByteArray(0)
 
@@ -173,30 +181,49 @@ internal class LibVlcAudioOutput(
         val bytes = count * BYTES_PER_FRAME
         if (pcmBuffer.size < bytes) pcmBuffer = ByteArray(bytes)
         samples.read(0, pcmBuffer, 0, bytes)
+        // If the render thread asked for a re-sync, drain the residue BEFORE writing this block so the
+        // audible audio snaps back to the video clock. This must run on the audio thread (the line's
+        // owner) — never from the render thread, which would race the line and corrupt the heap.
+        if (resyncPending) {
+            resyncPending = false
+            synchronized(lineLock) {
+                runCatching { ln.flush() }
+                totalWrittenFrames = runCatching { ln.getLongFramePosition() ?: 0L }.getOrDefault(0L)
+            }
+            clockLive = false
+            logger.warn("$debugLabel audio flushed on audio thread to re-sync A/V.")
+        }
         feed(pcmBuffer, bytes, ln)
+        // Refresh the A/V lead cache on the audio thread (the line's owner); the render thread reads
+        // only this cached value so the native line is never touched cross-thread (heap-corruption risk).
+        updateLeadCache()
     }
 
     /**
-     * How far the audio that's still sitting in the line's ring buffer trails the video, in nanos —
-     * i.e. video-leading-audible-audio. Computed as `(written - emitted) * FRAME_NANOS`, the number of
-     * frames queued but not yet heard. Stable & small (~the buffer size) means healthy sync; growing
-     * steadily means real A/V drift. Returns `null` until audio has been delivered at least once.
+     * Signed video-vs-audio lead in nanos, cached on the libvlc audio thread. Positive = video ahead of
+     * the audible audio (samples queued but not yet heard), negative = the audible audio has already
+     * played past the newest delivered sample (video rendering fell behind). Updated inside [onPlay] /
+     * [onFlush] — the single thread that owns the line — so the render thread never touches the
+     * `SourceDataLine` (cross-thread `getLongFramePosition` on Java Sound's Windows native layer was
+     * the heap-corruption crash, 0xC0000374). Returns `null` until audio has been delivered at least once.
      */
-    fun bufferedNanos(): Long? = leadNanos()?.coerceAtLeast(0L)
+    fun leadNanos(): Long? = cachedLeadNanos
 
     /**
-     * Signed video-vs-audio lead in nanos. Positive = video ahead of the audible audio (samples queued
-     * but not yet heard), negative = the audible audio has already played past the newest delivered
-     * sample (video rendering fell behind, e.g. while Minecraft hitches and the vout drops frames while
-     * the sound keeps flowing). The diagnostic uses the sign to pick which direction to correct.
+     * How far the audio still queued in the line trails the video, in nanos (video-leading-audible).
+     * See [leadNanos]; non-negative view of the cached value.
      */
-    fun leadNanos(): Long? {
-        val ln = line ?: return null
-        if (!clockLive) return null
-        synchronized(lineLock) {
-            val emitted = ln.getLongFramePosition()
-            return (totalWrittenFrames - emitted) * FRAME_NANOS
-        }
+    fun bufferedNanos(): Long? = cachedLeadNanos?.coerceAtLeast(0L)
+
+    /**
+     * Cache the current lead from [totalWrittenFrames] against the line's emitted-frame counter. MUST be
+     * called on the libvlc audio thread (from [onPlay] / [onFlush]); the render thread reads only the
+     * cached [cachedLeadNanos] field and never the line itself.
+     */
+    private fun updateLeadCache() {
+        val ln = line ?: run { cachedLeadNanos = null; return }
+        val emitted = ln.getLongFramePosition()
+        cachedLeadNanos = (totalWrittenFrames - emitted) * FRAME_NANOS
     }
 
     /**
@@ -254,6 +281,7 @@ internal class LibVlcAudioOutput(
             totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
         }
         clockLive = false
+        updateLeadCache()
     }
 
     /** Drains buffered PCM (end of stream). */
@@ -263,21 +291,16 @@ internal class LibVlcAudioOutput(
     }
 
     /**
-     * Force audio back into sync with the video by discarding whatever has piled up in the line's ring
-     * buffer and re-anchoring the clock to the current playback cursor. This is the auto-recovery half
-     * of A/V sync: on a real drift (audio stalls while video keeps going) the offset balloons well past
-     * the buffer size; flushing snaps the audible audio forward to the delivered clock instead of
-     * waiting for backpressure to drain it over many seconds. Called from the control/UI thread when the
-     * sync diagnostic sees the lead exceed a hard threshold. Takes [lineLock] so the flush never races
-     * the libvlc audio thread's write / stop / resume on the same line. Safe to call repeatedly — after
-     * a flush the lead is ~0 and [bufferedNanos] climbs back to the buffer size on the next blocks.
+     * Requests an A/V re-sync. This only sets a marker and does NOT touch the line: it is called from the
+     * render thread (the A/V diagnostic), which must never touch the Java Sound `SourceDataLine` — a
+     * cross-thread `flush`/`getLongFramePosition` on Java Sound's Windows native layer was the
+     * heap-corruption crash (0xC0000374). The actual `line.flush()` + clock re-anchor happen on the libvlc
+     * audio thread inside [onPlay] (it owns the line), which drains the residue and snaps the audible
+     * audio forward to the delivered clock — the auto-recovery half of A/V sync after a real drift.
+     * Safe to call repeatedly; the marker is coalesced.
      */
     fun forceResync() {
-        synchronized(lineLock) {
-            runCatching { line?.flush() }
-            totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
-        }
-        clockLive = false
+        resyncPending = true
     }
 
     // ── Line lifecycle ───────────────────────────────────────────────────────
@@ -304,6 +327,8 @@ internal class LibVlcAudioOutput(
             line = newLine
             totalWrittenFrames = 0L
             clockLive = false
+            resyncPending = false
+            cachedLeadNanos = null
             logger.info("$debugLabel audio line opened ({} Hz, {} ch).", SAMPLE_RATE, CHANNELS)
         } catch (e: LineUnavailableException) {
             logger.warn("$debugLabel audio line unavailable: ${e.message}.")
