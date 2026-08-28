@@ -124,8 +124,8 @@ object LibVlcFrameExtractor {
                 }
                 val frameTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
                 logger.info(
-                    "SCRUB-DEBUG target={}ms preSeek={}ms postSeek={}ms frameTime={}ms",
-                    targetMs, preSeekTime, postSeekTime, frameTime
+                    "SCRUB-DEBUG target={}ms preSeek={}ms postSeek={}ms frameTime={}ms displays={}",
+                    targetMs, preSeekTime, postSeekTime, frameTime, grab.displaysSinceClear
                 )
                 // Pause the player so it stops consuming resources while we encode the frame.
                 runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
@@ -259,6 +259,9 @@ object LibVlcFrameExtractor {
         @Volatile var frameSeen = false
         @Volatile var onFrame: () -> Unit = {}
 
+        /** Total display callbacks since the last [clearCaptured] (diagnostic: how many frames the vout rendered after a seek). */
+        @Volatile var displaysSinceClear = 0L
+
         /**
          * When >= 0, only a display whose reported position is at/after this time (ms) is accepted
          * into [captured] / [onFrame]. Set to the seek target before [libvlc_media_player_set_time]
@@ -327,6 +330,7 @@ object LibVlcFrameExtractor {
             val w = frameW
             val h = frameH
             if (w <= 0 || h <= 0) return
+            displaysSinceClear++
             val ySize = w * h
             val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
             val total = ySize + 2 * uvSize
@@ -359,6 +363,7 @@ object LibVlcFrameExtractor {
         fun clearCaptured() {
             captured = null
             frameSeen = false
+            displaysSinceClear = 0L
         }
     }
 
