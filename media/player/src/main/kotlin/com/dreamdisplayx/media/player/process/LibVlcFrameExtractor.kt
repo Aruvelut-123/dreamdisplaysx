@@ -56,7 +56,16 @@ object LibVlcFrameExtractor {
             lib.libvlc_video_set_format_callbacks(mp, grab.formatCb, grab.cleanupCb)
             lib.libvlc_video_set_callbacks(mp, grab.lockCb, grab.unlockCb, grab.displayCb, null)
 
-            val media = LibVlc.createMedia(url, LibVlcMediaOptions.forUrl(url) + arrayOf(":no-audio"))
+            // Force SOFTWARE decoding for the temporary extractor player: it shares the global
+            // libvlc instance whose --avcodec-hw=dxva2 option would otherwise make it decode on the
+            // GPU too. DXVA2 + vmem copy-back on libvlc 3.0 can hand back a stale GPU surface after a
+            // seek (get_time reaches the target but the copied-back pixels are still an old frame),
+            // which would make every scrub thumbnail the opening frame. Software decode has no such
+            // stale-surface path and is plenty fast for a single thumbnail.
+            val media = LibVlc.createMedia(
+                url,
+                LibVlcMediaOptions.forUrl(url) + arrayOf(":no-audio", ":avcodec-hw=none")
+            )
             lib.libvlc_media_player_set_media(mp, media)
             lib.libvlc_media_release(media)
             lib.libvlc_media_player_play(mp)
