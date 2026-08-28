@@ -336,6 +336,13 @@ internal class LibVlcAudioOutput(
     @Suppress("UNUSED_PARAMETER")
     fun onDrain(data: Pointer?) {
         // no-op: the line is intentionally kept running and never explicitly drained from callbacks.
+        // DIAGNOSTIC: report how much audio was actually fed when the stream drained, so we can tell
+        // whether the audio track is genuinely shorter than the video (Bilibili DASH audio slaves can
+        // carry fewer fragments than the video master) vs. libvlc stopping audio output early.
+        if (totalWrittenFrames > 0) {
+            val audioMs = totalWrittenFrames * FRAME_NANOS / 1_000_000L
+            logger.warn("$debugLabel audio drained (EOF): fed {} frames ≈ {} ms of audio.", totalWrittenFrames, audioMs)
+        }
     }
 
     /**

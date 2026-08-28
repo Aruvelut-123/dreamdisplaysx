@@ -136,26 +136,39 @@ object LibVlcFrameExtractor {
             pollSeekable(player)
             val targetMs = offsetNanos / 1_000_000L
 
-            // Seek while PLAYING, then wait for the position to advance PAST the target by
-            // RENDER_FRAMES_MS. This is the reliable signal that the decoder has actually decoded
-            // into the target region and the vout has displayed the target frame. A paused seek +
-            // brief 60ms play is NOT reliable on network streams: get_time jumps to the target
-            // instantly but the new fragments aren't loaded yet, so the vout keeps showing the
-            // PREVIOUS seek's frame (which is why the left half of the video showed the right
-            // half's frame). Waiting for position >= target + settle lets the fragments load and
-            // the vout render the true target frame — at ~300ms per extraction this is still fast
-            // now that the player is reused across hovers.
+            // Resume from the pause applied at the end of the previous extraction. A PAUSED seek
+            // jumps get_time to the target but never advances past it, so awaitPast below would time
+            // out on every subsequent hover ("seek did not reach target" + 8s stall). Seeking while
+            // PLAYING lets the decoder advance into the target region and render it.
+            runCatching { lib.libvlc_media_player_set_pause(player, 0) }
             grab.clearCaptured()
             val seekLatch = CountDownLatch(1)
             grab.acceptAfterMs = (targetMs - 400L).coerceAtLeast(0L)
             grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
             lib.libvlc_media_player_set_time(player, targetMs)
-            if (!awaitPast(player, targetMs + RENDER_FRAMES_MS, 8_000L)) {
-                logger.warn("ScrubSession: seek did not reach target for $url@$offsetNanos")
-                return null
+            // First: confirm the seek landed on (at least) the target.
+            if (!awaitPast(player, targetMs, 3_000L)) {
+                logger.warn("ScrubSession: seek did not land on target for $url@$offsetNanos")
             }
-            if (!seekLatch.await(2_000L, TimeUnit.MILLISECONDS)) {
+            // Then let playback advance PAST the target so the vout renders the true target frame
+            // (the reliable signal that new fragments arrived and decoded). Near the end of the
+            // video the settle target must be clamped, otherwise get_time can never reach it and
+            // every late-position scrub would fail. A timeout here is best-effort, not fatal.
+            val lengthMs = runCatching { lib.libvlc_media_player_get_length(player) }.getOrDefault(-1L)
+            val settleMs = when {
+                lengthMs > targetMs + RENDER_FRAMES_MS + 200L -> targetMs + RENDER_FRAMES_MS
+                lengthMs > targetMs + 50L -> lengthMs - 50L
+                else -> targetMs
+            }
+            if (settleMs > targetMs) {
+                awaitPast(player, settleMs, 2_500L)
+            }
+            if (!seekLatch.await(1_500L, TimeUnit.MILLISECONDS)) {
+                // Never serve a stale (wrong-position) frame: return null so the cache keeps showing
+                // the nearest valid thumbnail and the next hover retries.
                 logger.warn("ScrubSession: frame timeout for $url@$offsetNanos")
+                runCatching { lib.libvlc_media_player_set_pause(player, 1) }
+                grab.acceptAfterMs = -1L
                 return null
             }
             // Pause the player so it stops consuming resources while we encode the frame.
