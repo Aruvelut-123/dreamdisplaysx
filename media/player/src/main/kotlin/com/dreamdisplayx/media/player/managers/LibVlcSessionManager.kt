@@ -548,6 +548,11 @@ internal class LibVlcSessionManager(
                 try {
                     LibVlc.lib.libvlc_media_player_stop(mp)
                     LibVlc.lib.libvlc_media_player_play(mp)
+                    // Re-arm the EOS gate: the loop/replay restart path (beginSeek from ENDED) must
+                    // let the NEXT end-of-stream fire handleStreamEnd again, otherwise the second
+                    // replay ends frozen on the last frame (eosFired stays true after the first
+                    // ENDED → fireStreamEnd, so the second END_REACHED event is swallowed).
+                    eosFired.set(false)
                 } catch (_: Throwable) { }
             } else {
                 // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
