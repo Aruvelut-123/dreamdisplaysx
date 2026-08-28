@@ -2,6 +2,15 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Pause/resume no longer calls SourceDataLine.stop()/start() — fixes native crash (feat/libvlc)**
+> — pause/resume crashed with 0xC0000409 / 0xC0000005 (no JVM log, native layer) on Windows.
+>
+> `SourceDataLine.stop()` on pause and `start()` on resume (called from the libvlc audio thread) raced
+> Java Sound's Windows native layer and corrupted its internal state, crashing the JVM before a log was
+> written. The line is now NEVER stopped or started: on pause we only set a flag (and, on play, drop the
+> incoming samples so the line drains to silence), and resume just clears the flag. The line keeps
+> running permanently, so the native stop/start round-trip — and the crash — are gone.
+
 > **Narrow the audio callback read window to stop the pause/resume stack-buffer-overrun (feat/libvlc)**
 > — pause/resume crashed with exit code -1073740791 (0xC0000409, stack buffer overrun) and no JVM log.
 >

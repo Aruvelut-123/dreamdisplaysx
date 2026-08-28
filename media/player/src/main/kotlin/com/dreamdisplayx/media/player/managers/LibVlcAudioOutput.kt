@@ -86,6 +86,12 @@ internal class LibVlcAudioOutput(
     @Volatile
     private var resyncPending = false
 
+    /** True while paused. The line itself is NEVER stopped/started — those Java Sound native calls raced on
+     * pause/resume and crashed (0xC0000409 / 0xC0000005, no JVM log). Instead we keep the line running
+     * forever and simply drop samples here when paused; the line drains silently and picks up on resume. */
+    @Volatile
+    private var paused = false
+
     /** Reusable PCM buffer, read on the libvlc audio thread only (play callbacks are serialised). */
     private var pcmBuffer = ByteArray(0)
 
@@ -116,6 +122,9 @@ internal class LibVlcAudioOutput(
         runCatching { line?.flush() }
         totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
         clockLive = false
+        paused = false
+        resyncPending = false
+        cachedLeadNanos = null
     }
 
     /** Updates the gain applied to the PCM (user volume × distance attenuation). */
@@ -180,6 +189,9 @@ internal class LibVlcAudioOutput(
         val countL = count.toLong()
         totalWrittenFrames += countL
         clockLive = true
+        // While paused, do not touch the line at all (see [onPause]) — just track frames and let the
+        // caller's samples be dropped. The line keeps running but drains to silence; resume flows again.
+        if (paused) return
         val bytes = count * BYTES_PER_FRAME
         if (pcmBuffer.size < bytes) pcmBuffer = ByteArray(bytes)
         samples.read(0, pcmBuffer, 0, bytes)
@@ -264,15 +276,21 @@ internal class LibVlcAudioOutput(
         }
     }
 
-    /** Pauses the line (keeps buffered PCM; resumes with [onResume]). */
+    /** Marks the output paused. Does NOT touch the line: calling `SourceDataLine.stop()` on pause (and
+     * `start()` on resume) from the libvlc audio thread was a native crash (0xC0000409 / 0xC0000005, no
+     * JVM log) — the stop/start round-trip on Java Sound's Windows layer corrupted its internal state.
+     * The line is instead kept running permanently; [onPlay] drops samples while [paused] is true, so
+     * the line drains to silence and resumes naturally. */
     @Suppress("UNUSED_PARAMETER")
     fun onPause(data: Pointer?, pts: Long) {
-        synchronized(lineLock) { runCatching { line?.stop() } }
+        paused = true
+        resyncPending = false
     }
 
     @Suppress("UNUSED_PARAMETER")
     fun onResume(data: Pointer?, pts: Long) {
-        synchronized(lineLock) { runCatching { line?.start() } }
+        paused = false
+        clockLive = false
     }
 
     /** Discards buffered PCM (seek / stop): pretend only the already-emitted frames exist. */
