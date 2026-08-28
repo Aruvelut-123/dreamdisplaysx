@@ -2,6 +2,12 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Upgrade bundled libvlc 3.0.21 → 3.0.22 (feat/libvlc)**
+> — trying the latest 3.0-series maintenance release to see whether its seek/pause native fix removes
+> the remaining intermittent crash. `native/libvlc/build.sh`, `collect.sh` and the Build Natives workflow
+> cache key all move to 3.0.22; the rebuilt natives are published to the new natives release
+> (`natives-de826bd-1787899222`).
+
 > **Seek→pause→resume no longer desyncs or crashes (feat/libvlc)**
 > — the crash reproduced deterministically as seek → pause → resume.
 >
