@@ -2,6 +2,12 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **F3 debug overlay now shows the real hardware decoder (feat/libvlc)**
+> — libvlc WAS decoding on the GPU (verbose log: "Using DXVA2 (AMD Radeon RX 6600...)") but the F3
+> overlay kept showing "software". `libvlc_media_player_get_video_decoder_info` was only reading
+> `psz_name` (the module name, e.g. "avcodec"); we now prefer `psz_description`, which carries the
+> concrete backend (e.g. "H.264/AVC (DXVA2.0 by AMD)"), so the overlay reports the actual decoder.
+
 > **Explicit per-OS hardware-decode backend (dxva2/vaapi/videotoolbox) instead of `--avcodec-hw=any` (feat/libvlc)**
 > — the F3 debug overlay reported "software" because libvlc 3.0's `--avcodec-hw=any` can pick a
 > surface backend it cannot copy back from into vmem, silently falling back to software decoding
