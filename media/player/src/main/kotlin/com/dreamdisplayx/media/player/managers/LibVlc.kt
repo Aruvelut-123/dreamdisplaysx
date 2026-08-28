@@ -89,14 +89,34 @@ object LibVlc {
             // User-Agent. Bilibili/YouTube CDNs reject libvlc's default UA, and media-level options
             // only apply to the primary video URL — the merged audio slave would still be 401/403'd.
             opts.add("--http-user-agent=${com.dreamdisplayx.media.player.util.LibVlcMediaOptions.BROWSER_USER_AGENT}")
-            // Hardware-accelerated decoding. libvlc 3.0's vmem callbacks DO work together with
+            // Hardware-accelerated decoding. libvlc 3.0's vmem callbacks work together with
             // --avcodec-hw: the avcodec module decodes on the GPU then copies the frame back to
-            // system memory before handing it to the lock callback (copy-back). VideoPlayer enables
-            // it on BOTH the instance (--avcodec-hw=any) and the media (:avcodec-hw=any) so that
-            // 4K H.264/HEVC streams decode on the GPU instead of starving the CPU. Gate it on config
-            // so users on machines where hw surfaces fail to copy back can disable it.
+            // system memory before handing it to the lock callback (copy-back) — the same D3D11VA /
+            // DXVA2 copy-back that raw FFmpeg supports, since libvlc's avcodec module IS FFmpeg.
+            // We pick the backend explicitly per-OS instead of `any`: `any` can pick a surface
+            // backend that libvlc 3.0 fails to copy back from (then it silently falls back to
+            // software and the F3 debug overlay reports "software").
+            //   Windows → dxva2 (broad RX/NVIDIA/Intel support; D3D11VA needs a vout that
+            //             understands D3D11 textures, which vmem is not, so dxva2 copy-back is
+            //             the correct vmem-compatible backend)
+            //   Linux   → vaapi (drm copy-back works with vmem)
+            //   Mac     → videotoolbox
+            // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. d3d11va, any, or "" to disable).
             if (useHwAccel && !LibVlcDiagnostics.noHardwareAccel) {
-                opts.add("--avcodec-hw=any")
+                val backend = System.getProperty("dreamdisplayx.hwDecode")
+                    ?: when {
+                        com.dreamdisplayx.util.OsInfo.isWindows -> "dxva2"
+                        com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
+                        com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
+                        else -> "any"
+                    }
+                if (backend.isNotBlank()) opts.add("--avcodec-hw=$backend")
+            }
+            // Verbose libvlc logging (diagnostic): lets us see which decoder/backend libvlc actually
+            // selects and why it might fall back to software. Off by default (noise).
+            if (System.getProperty("dreamdisplayx.verboseLibvlc", "false").equals("true", ignoreCase = true)) {
+                opts.remove("--quiet")
+                opts.add("--verbose=2")
             }
             instance = libcCreateInstance(opts)
             loadError = null

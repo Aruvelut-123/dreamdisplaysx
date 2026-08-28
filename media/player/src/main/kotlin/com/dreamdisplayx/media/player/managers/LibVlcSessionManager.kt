@@ -408,7 +408,16 @@ internal class LibVlcSessionManager(
         // memory before handing it to the vmem lock callback, so vmem and hw coexist and 4K
         // H.264/HEVC decodes on the GPU instead of starving the CPU.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
-        if (LibVlc.useHwAccel) mediaOptions.add(":avcodec-hw=any")
+        if (LibVlc.useHwAccel && !LibVlcDiagnostics.noHardwareAccel) {
+            val backend = System.getProperty("dreamdisplayx.hwDecode")
+                ?: when {
+                    com.dreamdisplayx.util.OsInfo.isWindows -> "dxva2"
+                    com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
+                    com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
+                    else -> "any"
+                }
+            if (backend.isNotBlank()) mediaOptions.add(":avcodec-hw=$backend")
+        }
         val audioUrl = streamSet.currentAudio.url
         if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
             logger.info("$debugLabel audio slave will be merged via add_slave.")

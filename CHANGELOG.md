@@ -2,6 +2,16 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Explicit per-OS hardware-decode backend (dxva2/vaapi/videotoolbox) instead of `--avcodec-hw=any` (feat/libvlc)**
+> — the F3 debug overlay reported "software" because libvlc 3.0's `--avcodec-hw=any` can pick a
+> surface backend it cannot copy back from into vmem, silently falling back to software decoding
+> even though libvlc's avcodec module is the same FFmpeg that supports D3D11VA/DXVA2 copy-back.
+>
+> Now the backend is explicit per OS (Windows → `dxva2`, Linux → `vaapi`, Mac → `videotoolbox`) on
+> both the instance and the media, with `-Ddreamdisplayx.hwDecode=<backend>` to override
+> (e.g. `d3d11va`, `any`, or empty to disable). Added `-Ddreamdisplayx.verboseLibvlc=true` to make
+> libvlc print its actual decoder/backend selection and any fallback reason.
+
 > **Scrub preview now extracts frames on demand + A/V auto-resync is bidirectional (feat/libvlc)**
 > — the scrub bar no longer pre-generates up to 45 sample frames across the whole video (which
 > spawned libvlc players on the IO pool and caused game frame drops); instead each hover position
