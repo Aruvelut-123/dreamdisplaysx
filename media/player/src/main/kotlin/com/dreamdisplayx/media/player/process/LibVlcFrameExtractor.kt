@@ -30,10 +30,12 @@ object LibVlcFrameExtractor {
     private const val SETUP_TIMEOUT_MS = 15_000L
 
     /**
-     * How long to keep the temporary player playing after a seek before consuming the frame. The
-     * first display(s) after a seek can be stale pre-seek pictures (get_time already reports the
-     * target but the pixels are an old frame); letting the vout settle lets later displays overwrite
-     * the capture with the true target frame. Too large makes hover laggy, too small misses the frame.
+     * How far past the seek target the temporary player must advance before the frame is consumed.
+     * Waiting for position >= target + settle is the reliable signal that the decoder has decoded
+     * into the target region and the vout has displayed the target frame (a fixed sleep is racy on
+     * network seeks: get_time jumps to the target immediately while the vout still shows stale
+     * pre-seek pictures until the new fragments arrive). Too large makes hover laggy, too small
+     * misses the frame.
      */
     private const val SCRUB_SETTLE_MS = 300L
 
@@ -106,21 +108,22 @@ object LibVlcFrameExtractor {
                     return null
                 }
                 val postSeekTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-                // Keep the player PLAYING after the seek so the decoder actually decodes up to the
-                // target. The very first display(s) after a seek can be stale PRE-seek pictures —
-                // get_time already reports the target (so the gate passes) but the pixels are still
-                // an old frame; this is especially true on network seeks, which must re-request
-                // fragments before the real target frame appears. Every subsequent display overwrites
-                // `captured`, so wait for the first gated display, then a short settle window, then
-                // consume the LATEST captured frame (the true target frame).
+                // Keep the player PLAYING after the seek and wait for the position to advance PAST
+                // the target by SCRUB_SETTLE_MS. This is the reliable signal that the decoder has
+                // actually decoded into the target region and the vout has displayed the target
+                // frame. A fixed sleep is racy on network seeks: get_time jumps to the target
+                // immediately while the vout still shows stale pre-seek pictures until the new
+                // fragments arrive, so a fixed 300ms either misses the frame (too short) or wastes
+                // time (too long). Waiting for position >= target + settle is deterministic: by the
+                // time playback has advanced past the target, the target frame has been displayed.
+                val settleTarget = targetMs + SCRUB_SETTLE_MS
+                if (!awaitPosition(lib, mp, settleTarget)) {
+                    logger.warn("Frame extraction: playback did not advance past target for $url@$offsetNanos")
+                    return null
+                }
                 if (!seekLatch.await(2, TimeUnit.SECONDS)) {
                     logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
                     return null
-                }
-                try {
-                    Thread.sleep(SCRUB_SETTLE_MS)
-                } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
                 }
                 val frameTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
                 logger.info(
