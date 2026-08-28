@@ -2,6 +2,17 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: seek while playing + only log A/V drift when it actually happens (feat/libvlc)**
+> — the previous fix (gate display by get_time) still produced the opening frame for every hover.
+> Root cause: with a paused seek on libvlc 3.0 vmem, `get_time` jumps to the target instantly but
+> the vout can still hand out a stale PRE-seek picture whose CONTENT is the opening frame — the time
+> gate passes because the reported position is already at target. Seeking while PLAYING forces the
+> decoder to actually decode up to the target and display the correct frame; we then pause right
+> after the first gated frame arrives.
+>
+> The A/V diagnostic no longer logs a heartbeat every 10 s — it only logs a warning (and flushes)
+> when the audio buffer actually exceeds the threshold.
+
 > **Scrub preview: gate the displayed frame by get_time + remove PreviewSection debug log + honest A/V labels (feat/libvlc)**
 > — on-demand scrub frames still came out as the opening frame: a stale PRE-seek picture already
 > queued in the vout satisfied the seek latch before the seeked frame arrived. The extractor now
