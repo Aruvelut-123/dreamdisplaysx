@@ -2,6 +2,13 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: settle window after seek before grabbing the frame (feat/libvlc)**
+> — the seek itself works (get_time reaches the target) but the very first display(s) after a seek
+> can be stale pre-seek pictures — get_time already reports the target while the pixels are still an
+> old frame (network seeks especially, which must re-request fragments). The extractor now keeps the
+> temporary player playing for a 300ms settle window after the first gated display, letting later
+> displays overwrite the capture, then consumes the latest (true target) frame.
+
 > **`-Ddreamdisplayx.hwDecode=` (empty) now truly disables hardware decode (feat/libvlc)**
 > — previously the empty override fell back to the per-OS default backend (dxva2 on Windows), so a
 > user trying `-Ddreamdisplayx.hwDecode=` to bisect a decode issue still got hardware decode (F3
