@@ -870,14 +870,22 @@ internal class LibVlcSessionManager(
             if (buffers[0] != null && frameWidth == w && frameHeight == h) return
             frameWidth = w
             frameHeight = h
-            bufferSize = w * h * 4 // RV32: 4 bytes per pixel
-            if (buffers[0] == null || buffers[0]!!.capacity() < bufferSize) {
+            // RV32 is a single RGBA8888 plane at 4 B/px. Add a generous tail of padding so a slightly
+            // oversized libvlc write (alignment drift, a transient odd row count right after a seek,
+            // or libvlc feeding pitch beyond our declared w*4) lands inside slack rather than writing
+            // past the end of this direct buffer and corrupting adjacent heap memory — the heap- /
+            // native-corruption crash (0xC0000374/ntdll, often reported on an unrelated JIT thread)
+            // that followed a seek. The reader only ever copies the exact w*h*4 span, so the slack is
+            // purely defensive.
+            bufferSize = w * h * 4
+            val padded = bufferSize + VIDEO_BUFFER_PADDING
+            if (buffers[0] == null || buffers[0]!!.capacity() < padded) {
                 for (i in 0 until BUFFER_COUNT) {
-                    buffers[i] = ByteBuffer.allocateDirect(bufferSize).order(ByteOrder.nativeOrder())
+                    buffers[i] = ByteBuffer.allocateDirect(padded).order(ByteOrder.nativeOrder())
                     pointers[i] = com.sun.jna.Native.getDirectBufferPointer(buffers[i]!!)
                     inUse[i] = false
                 }
-                dropBuffer = ByteBuffer.allocateDirect(bufferSize.coerceAtLeast(4)).order(ByteOrder.nativeOrder())
+                dropBuffer = ByteBuffer.allocateDirect(padded.coerceAtLeast(4)).order(ByteOrder.nativeOrder())
                 dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
             }
             nextWrite = 0
@@ -1048,6 +1056,11 @@ internal class LibVlcSessionManager(
     companion object {
         private const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
         private const val REPLAY_FPS = 30.0
+
+        /** Defensive tail (bytes) added beyond w*h*4 when allocating the RV32 video pool so a marginally
+         * oversized libvlc write (alignment drift / transient seek frame) lands in slack instead of
+         * corrupting adjacent heap memory. The reader only copies the exact w*h*4 span. */
+        private const val VIDEO_BUFFER_PADDING = 4096
         private val RV32 = byteArrayOf('R'.code.toByte(), 'V'.code.toByte(), '3'.code.toByte(), '2'.code.toByte())
         private val DROP_TOKEN = Pointer.createConstant(0x7FFFFFFFL)
         private val DROP_TOKEN_VALUE = 0x7FFFFFFFL
