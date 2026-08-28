@@ -130,7 +130,7 @@ jobs:
         uses: actions/cache@v4.2.3
         with:
           path: native/libvlc/.build-cache
-          key: libvlc-${{ matrix.libvlc.platform }}-3.0.21
+          key: libvlc-${{ matrix.libvlc.platform }}-3.0.22
           restore-keys: |
             libvlc-${{ matrix.libvlc.platform }}-
             libvlc-

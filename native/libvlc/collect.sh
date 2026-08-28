@@ -26,7 +26,7 @@ set -euo pipefail
 
 OS_NAME="${1:-}"
 OS_ARCH="${2:-}"
-VLC_VER="${3:-3.0.21}"
+VLC_VER="${3:-3.0.22}"
 
 if [[ -z "$OS_NAME" || -z "$OS_ARCH" ]]; then
   echo "usage: collect.sh <Linux|Windows|Mac> <x86_64|aarch64> [vlc_version]" >&2
