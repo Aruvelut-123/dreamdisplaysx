@@ -2,6 +2,15 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: resume before seek + fast-fail in ScrubSession (feat/libvlc)**
+> — after the first extraction paused the player, every later hover on the same video ran the seek
+> while PAUSED: get_time jumped to the target but never advanced past it, so the 8s awaitPast
+> timed out and every scrub printed "seek did not reach target" (and each hover stalled ~8s). The
+> session now resumes playback before seeking (seek while playing → advance past target → pause),
+> clamps the settle target near end-of-video (so late positions can't fail because get_time can
+> never exceed the length), and fails fast (1.5s) instead of stalling — a failed frame is never
+> served, the nearest valid thumbnail is kept.
+
 > **Scrub preview: seek while playing in ScrubSession (feat/libvlc)**
 > — the first ScrubSession used a paused seek + 60ms brief play, which was unreliable on network
 > streams: get_time jumped to the target instantly but the new fragments weren't loaded yet, so the
