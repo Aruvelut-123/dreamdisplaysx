@@ -2,6 +2,12 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **`-Ddreamdisplayx.hwDecode=` (empty) now truly disables hardware decode (feat/libvlc)**
+> — previously the empty override fell back to the per-OS default backend (dxva2 on Windows), so a
+> user trying `-Ddreamdisplayx.hwDecode=` to bisect a decode issue still got hardware decode (F3
+> kept reporting "dxva2"). The override now distinguishes "not set" (per-OS default) from "set to
+> empty" (hardware decode disabled).
+
 > **Scrub preview: seek while playing + only log A/V drift when it actually happens (feat/libvlc)**
 > — the previous fix (gate display by get_time) still produced the opening frame for every hover.
 > Root cause: with a paused seek on libvlc 3.0 vmem, `get_time` jumps to the target instantly but
