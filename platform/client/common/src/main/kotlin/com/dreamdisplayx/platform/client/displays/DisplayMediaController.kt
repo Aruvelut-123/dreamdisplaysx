@@ -51,6 +51,9 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         oldPlayer?.stop()
 
         screen.onVideoSwapped(videoUrl, lang)
+        // The video changed: drop the long-lived scrub extractor (and its cached thumbnails) for the
+        // previous URL so the native libvlc player is destroyed; the next hover lazily recreates one.
+        screen.previousVideoUrl?.let { com.dreamdisplayx.platform.client.render.ScrubPreview.release(it) }
         DisplayRegistry.recordScreen(screen)
         val shouldBePaused = preservePausedState && screen.paused
         val audioStage = DreamServices.registry.getOrNull(AudioAcousticsServices.ACOUSTICS)?.registerSource(screen.uuid)

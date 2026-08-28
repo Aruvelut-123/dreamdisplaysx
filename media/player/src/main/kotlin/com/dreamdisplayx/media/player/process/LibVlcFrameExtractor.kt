@@ -13,12 +13,20 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.imageio.ImageIO
 
 /**
  * In-process frame extraction for scrub-preview thumbnails, driven by the low-level libvlc binding
- * (no vlcj). Opens the media URL on a temporary media player, seeks to a timestamp, decodes one
- * frame through the low-level video callbacks, and encodes it as a JPEG byte array.
+ * (no vlcj). Two usage modes:
+ *
+ *  - [ScrubSession]: a long-lived, video-only libvlc player (one per video) that is created once and
+ *    then reused for every scrub frame of that video. Only destroyed/recreated when the video
+ *    changes, so the expensive setup (player creation + first-frame decode) happens once instead of
+ *    per hover. Each [ScrubSession.extractAt] is a fast seek→render→grab (~100-200ms).
+ *
+ *  - [extractJpeg]: a one-shot convenience wrapper that spins up a session, extracts a single frame,
+ *    and tears it down. Kept for callers that extract rarely (e.g. a one-off thumbnail).
  *
  * This replaces the old vlcj-based extractor whose `CallbackVideoSurface` was rebuilt per sample
  * without a strong reference, so JNA garbage-collected the trampolines mid-playback and spammed
@@ -30,130 +38,136 @@ object LibVlcFrameExtractor {
     private const val SETUP_TIMEOUT_MS = 15_000L
 
     /**
-     * How far past the seek target the temporary player must advance before the frame is consumed.
-     * Waiting for position >= target + settle is the reliable signal that the decoder has decoded
-     * into the target region and the vout has displayed the target frame (a fixed sleep is racy on
-     * network seeks: get_time jumps to the target immediately while the vout still shows stale
-     * pre-seek pictures until the new fragments arrive). Too large makes hover laggy, too small
-     * misses the frame.
+     * How long a [ScrubSession] briefly plays after a paused seek before grabbing the frame. Playing
+     * a couple of frames forces the decoder to actually decode into the target region and the vout to
+     * display the target frame — a paused-only seek leaves the vout on a stale pre-seek picture.
      */
-    private const val SCRUB_SETTLE_MS = 300L
+    private const val RENDER_FRAMES_MS = 60L
 
     /**
-     * Extracts a single frame at [offsetNanos] from [url], scales it to [w]x[h] (maintaining aspect),
-     * and returns JPEG bytes, or null on any failure.
+     * One-shot extraction: creates a short-lived player, extracts the frame at [offsetNanos], scales
+     * it to [w]x[h] (maintaining aspect), returns JPEG bytes or null on any failure.
      */
     fun extractJpeg(url: String, offsetNanos: Long, w: Int, h: Int): ByteArray? {
         if (!LibVlc.ensureLoaded()) {
             logger.warn("LibVLC not available for frame extraction.")
             return null
         }
-        val lib = LibVlc.lib
-        val mp = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
-            ?: run { logger.warn("libvlc_media_player_new failed: ${LibVlc.errmsg()}"); return null }
-
-        val grab = FrameGrab()
+        val session = ScrubSession(url)
         try {
-            // Register the low-level format + video callbacks once on this short-lived player.
-            lib.libvlc_video_set_format_callbacks(mp, grab.formatCb, grab.cleanupCb)
-            lib.libvlc_video_set_callbacks(mp, grab.lockCb, grab.unlockCb, grab.displayCb, null)
-
-            // Force SOFTWARE decoding for the temporary extractor player: it shares the global
-            // libvlc instance whose --avcodec-hw=dxva2 option would otherwise make it decode on the
-            // GPU too. DXVA2 + vmem copy-back on libvlc 3.0 can hand back a stale GPU surface after a
-            // seek (get_time reaches the target but the copied-back pixels are still an old frame),
-            // which would make every scrub thumbnail the opening frame. Software decode has no such
-            // stale-surface path and is plenty fast for a single thumbnail.
-            val media = LibVlc.createMedia(
-                url,
-                LibVlcMediaOptions.forUrl(url) + arrayOf(":no-audio", ":avcodec-hw=none")
-            )
-            lib.libvlc_media_player_set_media(mp, media)
-            lib.libvlc_media_release(media)
-            lib.libvlc_media_player_play(mp)
-
-            // Wait for the first decoded frame (this proves the format + lock/display callbacks ran).
-            if (!grab.setupLatch.await(SETUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                logger.warn("Frame extraction: no video setup for $url@$offsetNanos (err=${LibVlc.errmsg()})")
+            if (!session.open()) {
+                logger.warn("Frame extraction: could not open session for $url@$offsetNanos")
                 return null
             }
-            if (!grab.firstFrameLatch.await(SETUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                logger.warn("Frame extraction: no first frame for $url@$offsetNanos (err=${LibVlc.errmsg()})")
-                return null
-            }
+            return session.extractAt(offsetNanos, w, h)
+        } finally {
+            session.close()
+        }
+    }
 
-            // Seek to the requested offset and grab the resulting frame.
-            if (offsetNanos > 0) {
-                // libvlc silently ignores set_time while the media is not yet seekable (the player
-                // keeps playing from 0, so every sample would grab an opening frame). Wait for
-                // seekability first — bounded, because some URLs never report it.
-                pollSeekable(lib, mp)
-                val targetMs = offsetNanos / 1_000_000L
-                // Seek while PLAYING, then gate the display callback by get_time. The classic paused
-                // seek (pause → set_time → vout renders the target frame) has a libvlc 3.0 vmem
-                // race: get_time jumps to the target instantly but the vout can still render a stale
-                // PRE-seek picture whose CONTENT is the opening frame — the time gate passes because
-                // get_time already reports the target, yet the pixels are the first frame. Playing
-                // (even briefly) forces the decoder to actually decode up to the target position and
-                // display the correct frame.
-                grab.clearCaptured()
-                val seekLatch = CountDownLatch(1)
-                grab.timeProvider = { runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L) }
-                grab.acceptAfterMs = (targetMs - 400L).coerceAtLeast(0L)
-                grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
-                val preSeekTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-                LibVlc.lib.libvlc_media_player_set_time(mp, targetMs)
-                if (!awaitPosition(lib, mp, targetMs)) {
-                    logger.warn("Frame extraction: seek did not reach target for $url@$offsetNanos")
-                    return null
-                }
-                val postSeekTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-                // Keep the player PLAYING after the seek and wait for the position to advance PAST
-                // the target by SCRUB_SETTLE_MS. This is the reliable signal that the decoder has
-                // actually decoded into the target region and the vout has displayed the target
-                // frame. A fixed sleep is racy on network seeks: get_time jumps to the target
-                // immediately while the vout still shows stale pre-seek pictures until the new
-                // fragments arrive, so a fixed 300ms either misses the frame (too short) or wastes
-                // time (too long). Waiting for position >= target + settle is deterministic: by the
-                // time playback has advanced past the target, the target frame has been displayed.
-                val settleTarget = targetMs + SCRUB_SETTLE_MS
-                if (!awaitPast(lib, mp, settleTarget)) {
-                    logger.warn("Frame extraction: playback did not advance past target for $url@$offsetNanos")
-                    return null
-                }
-                if (!seekLatch.await(2, TimeUnit.SECONDS)) {
-                    logger.warn("Frame extraction: seek frame timeout for $url@$offsetNanos")
-                    return null
-                }
-                val frameTime = runCatching { lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-                logger.info(
-                    "SCRUB-DEBUG target={}ms preSeek={}ms postSeek={}ms frameTime={}ms displays={}",
-                    targetMs, preSeekTime, postSeekTime, frameTime, grab.displaysSinceClear
+    /**
+     * A long-lived, video-only libvlc player used to extract many scrub frames of one video.
+     * [open] must succeed before any [extractAt]; [close] releases the native player. Not thread-safe:
+     * callers must serialize access (ScrubPreview already runs one extraction coroutine per key).
+     */
+    class ScrubSession(private val url: String) {
+        private val lib: LibVlc.LibVlcNative = LibVlc.lib
+        private var mp: Pointer? = null
+        private val grab = FrameGrab()
+        private val opened = AtomicBoolean(false)
+
+        /**
+         * Creates the player, registers the low-level vmem callbacks, loads the media, and waits for
+         * the first decoded frame. Returns true on success. This is the expensive one-time cost.
+         */
+        fun open(): Boolean {
+            if (opened.get()) return true
+            if (!LibVlc.ensureLoaded()) return false
+            val player = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
+                ?: run { logger.warn("ScrubSession: libvlc_media_player_new failed: ${LibVlc.errmsg()}"); return false }
+            mp = player
+            try {
+                // Register the low-level format + video callbacks once for this player.
+                lib.libvlc_video_set_format_callbacks(player, grab.formatCb, grab.cleanupCb)
+                lib.libvlc_video_set_callbacks(player, grab.lockCb, grab.unlockCb, grab.displayCb, null)
+
+                // Video-only, and force SOFTWARE decoding: the global instance carries
+                // --avcodec-hw=dxva2, and DXVA2 + vmem copy-back on libvlc 3.0 can hand back a stale
+                // GPU surface after a seek (get_time reaches the target but the pixels are an old
+                // frame). Software decode has no stale-surface path and is fast enough for a
+                // thumbnail.
+                val media = LibVlc.createMedia(
+                    url,
+                    LibVlcMediaOptions.forUrl(url) + arrayOf(":no-audio", ":avcodec-hw=none")
                 )
-                // Pause the player so it stops consuming resources while we encode the frame.
-                runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
-                grab.acceptAfterMs = -1L
-                grab.timeProvider = null
+                lib.libvlc_media_player_set_media(player, media)
+                lib.libvlc_media_release(media)
+                lib.libvlc_media_player_play(player)
+
+                if (!grab.setupLatch.await(SETUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    logger.warn("ScrubSession: no video setup for $url (err=${LibVlc.errmsg()})")
+                    return false
+                }
+                if (!grab.firstFrameLatch.await(SETUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    logger.warn("ScrubSession: no first frame for $url (err=${LibVlc.errmsg()})")
+                    return false
+                }
+                opened.set(true)
+                return true
+            } catch (t: Throwable) {
+                logger.warn("ScrubSession: open failed for $url: ${t.message}")
+                close()
+                return false
             }
+        }
+
+        /**
+         * Seeks the (already-open) player to [offsetNanos] and returns a JPEG scaled to [w]x[h], or
+         * null on any failure. Fast: paused seek → brief play (renders the target frame) → pause →
+         * grab.
+         */
+        fun extractAt(offsetNanos: Long, w: Int, h: Int): ByteArray? {
+            val player = mp ?: return null
+            if (!opened.get()) return null
+
+            // Wait for seekability first — libvlc silently ignores set_time while the media is not
+            // yet seekable (bounded, because some URLs never report it).
+            pollSeekable(player)
+            val targetMs = offsetNanos / 1_000_000L
+
+            // Pause first, then seek. While paused, get_time jumps to the target instantly but the
+            // vout can still be showing a stale PRE-seek picture; a brief play (RENDER_FRAMES_MS)
+            // forces the decoder to actually decode into the target region and display it, after
+            // which we pause again and grab the latest captured frame.
+            runCatching { lib.libvlc_media_player_set_pause(player, 1) }
+            awaitPaused(player)
+            grab.clearCaptured()
+            val seekLatch = CountDownLatch(1)
+            grab.acceptAfterMs = (targetMs - 400L).coerceAtLeast(0L)
+            grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
+            lib.libvlc_media_player_set_time(player, targetMs)
+            // Wait for the seek to land on the target.
+            if (!awaitPast(player, targetMs - 300L, 5_000L)) {
+                logger.warn("ScrubSession: seek did not reach target for $url@$offsetNanos")
+                return null
+            }
+            // Brief play to force the vout to display the target-region frame.
+            runCatching { lib.libvlc_media_player_set_pause(player, 0) }
+            if (!seekLatch.await(1_500L, TimeUnit.MILLISECONDS)) {
+                logger.warn("ScrubSession: frame timeout for $url@$offsetNanos")
+                return null
+            }
+            // Brief settle so later (correct) displays overwrite the capture.
+            try {
+                Thread.sleep(RENDER_FRAMES_MS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+            runCatching { lib.libvlc_media_player_set_pause(player, 1) }
+            grab.acceptAfterMs = -1L
 
             val frame = grab.consumeFrame()
-                ?: run { logger.warn("Frame extraction: no frame data for $url@$offsetNanos"); return null }
-
-            // Diagnostic: hash the captured pixels so we can tell whether different hover positions
-            // produce different frame content (extraction working) or the same content every time
-            // (the vout is handing back a stale pre-seek picture despite reporting the target time).
-            if (offsetNanos > 0) {
-                val crc = java.util.zip.CRC32()
-                frame.duplicate().rewind().let { src ->
-                    val arr = ByteArray(1024)
-                    while (src.hasRemaining()) {
-                        val n = minOf(1024, src.remaining())
-                        src.get(arr, 0, n)
-                        crc.update(arr, 0, n)
-                    }
-                }
-                logger.info("SCRUB-CRC target={}ms crc={} bytes={}", offsetNanos / 1_000_000L, crc.value, frame.remaining())
-            }
+                ?: run { logger.warn("ScrubSession: no frame data for $url@$offsetNanos"); return null }
 
             val image = i420ToBufferedImage(frame, grab.frameW, grab.frameH) ?: return null
             val scaled = scale(image, w, h)
@@ -166,107 +180,81 @@ object LibVlcFrameExtractor {
                 }
             }
             return out.toByteArray()
-        } catch (e: Exception) {
-            logger.warn("Frame extraction failed for $url@$offsetNanos: ${e.message}")
-            return null
-        } finally {
-            runCatching { lib.libvlc_media_player_stop(mp) }
-            runCatching { lib.libvlc_media_player_release(mp) }
         }
-    }
 
-    /**
-     * Polls [libvlc_media_player_is_seekable] until true or a bounded timeout, so a subsequent
-     * [libvlc_media_player_set_time] is not silently ignored. Returns when seekable or timed out.
-     */
-    private fun pollSeekable(lib: LibVlc.LibVlcNative, mp: Pointer) {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-        while (System.nanoTime() < deadline) {
-            try {
-                if (lib.libvlc_media_player_is_seekable(mp) != 0) return
-            } catch (_: Throwable) {
+        /** Stops and releases the native player; the session cannot be reused after this. */
+        fun close() {
+            if (!opened.compareAndSet(true, false)) {
+                // Even if never fully opened, release a partially created player.
+                mp?.let { runCatching { lib.libvlc_media_player_stop(it) }; runCatching { lib.libvlc_media_player_release(it) } }
+                mp = null
                 return
             }
-            try {
-                Thread.sleep(50)
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return
+            mp?.let {
+                runCatching { lib.libvlc_media_player_stop(it) }
+                runCatching { lib.libvlc_media_player_release(it) }
             }
+            mp = null
         }
-    }
 
-    /**
-     * Polls [libvlc_media_player_get_state] until it reports Paused, so a subsequent seek is applied
-     * to a settled, paused vout (deterministic frame render). Bounded because set_pause is async and
-     * the state may briefly stay Buffering/Playing; never fails the extraction.
-     */
-    private fun awaitPaused(lib: LibVlc.LibVlcNative, mp: Pointer) {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-        while (System.nanoTime() < deadline) {
-            try {
-                if (lib.libvlc_media_player_get_state(mp) == LibVlc.LIBVLC_STATE_PAUSED) return
-            } catch (_: Throwable) {
-                return
-            }
-            try {
-                Thread.sleep(20)
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return
+        /**
+         * Polls [libvlc_media_player_is_seekable] until true or a bounded timeout, so a subsequent
+         * [libvlc_media_player_set_time] is not silently ignored.
+         */
+        private fun pollSeekable(mp: Pointer) {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (System.nanoTime() < deadline) {
+                try {
+                    if (lib.libvlc_media_player_is_seekable(mp) != 0) return
+                } catch (_: Throwable) {
+                    return
+                }
+                try {
+                    Thread.sleep(50)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return
+                }
             }
         }
-    }
 
-    /**
-     * Polls [libvlc_media_player_get_time] until it is at least [minMs] with NO tolerance.
-     * Unlike [awaitPosition] (whose 600ms tolerance defeats a "wait until we're just past the
-     * target" intent — get_time already reports the target right after a seek), this waits for the
-     * player to actually play INTO the target region, which for a network seek means waiting for the
-     * new fragments to be requested and decoded. Returns false on timeout; the caller must not grab.
-     */
-    private fun awaitPast(lib: LibVlc.LibVlcNative, mp: Pointer, minMs: Long, timeoutMs: Long = 8_000L): Boolean {
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
-        while (System.nanoTime() < deadline) {
-            try {
-                val t = lib.libvlc_media_player_get_time(mp)
-                if (t >= minMs) return true
-            } catch (_: Throwable) {
-                return false
-            }
-            try {
-                Thread.sleep(30)
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return false
+        /** Polls [libvlc_media_player_get_state] until it reports Paused (bounded, never fails). */
+        private fun awaitPaused(mp: Pointer) {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (System.nanoTime() < deadline) {
+                try {
+                    if (lib.libvlc_media_player_get_state(mp) == LibVlc.LIBVLC_STATE_PAUSED) return
+                } catch (_: Throwable) {
+                    return
+                }
+                try {
+                    Thread.sleep(20)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return
+                }
             }
         }
-        return false
-    }
 
-    /**
-     * Polls [libvlc_media_player_get_time] until it reaches within [toleranceMs] of [targetMs].
-     * Returns true when the position actually reached the target region (a successful seek), or
-     * false when it timed out (seek was ignored / failed — the caller must not grab a frame).
-     */
-    private fun awaitPosition(lib: LibVlc.LibVlcNative, mp: Pointer, targetMs: Long): Boolean {
-        val tolerance = 600L
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
-        while (System.nanoTime() < deadline) {
-            try {
-                val t = lib.libvlc_media_player_get_time(mp)
-                if (t >= targetMs - tolerance) return true
-            } catch (_: Throwable) {
-                return false
+        /** Polls [libvlc_media_player_get_time] until it is at least [minMs] with NO tolerance. */
+        private fun awaitPast(mp: Pointer, minMs: Long, timeoutMs: Long): Boolean {
+            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+            while (System.nanoTime() < deadline) {
+                try {
+                    val t = lib.libvlc_media_player_get_time(mp)
+                    if (t >= minMs) return true
+                } catch (_: Throwable) {
+                    return false
+                }
+                try {
+                    Thread.sleep(20)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
             }
-            try {
-                Thread.sleep(50)
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return false
-            }
+            return false
         }
-        return false
     }
 
     /**
@@ -304,14 +292,13 @@ object LibVlcFrameExtractor {
         @Volatile var frameSeen = false
         @Volatile var onFrame: () -> Unit = {}
 
-        /** Total display callbacks since the last [clearCaptured] (diagnostic: how many frames the vout rendered after a seek). */
+        /** Total display callbacks since the last [clearCaptured] (diagnostic). */
         @Volatile var displaysSinceClear = 0L
 
         /**
          * When >= 0, only a display whose reported position is at/after this time (ms) is accepted
          * into [captured] / [onFrame]. Set to the seek target before [libvlc_media_player_set_time]
-         * so the latch cannot be satisfied by a stale PRE-seek (opening) frame still queued in the
-         * vout — the reason every on-demand scrub frame came out as the opening frame.
+         * so the latch cannot be satisfied by a stale PRE-seek (opening) frame.
          */
         @Volatile var acceptAfterMs = -1L
 

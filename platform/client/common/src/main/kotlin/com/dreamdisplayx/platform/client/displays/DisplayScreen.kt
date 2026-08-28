@@ -374,6 +374,9 @@ class DisplayScreen(
     /** The currently loaded video URL, or `null` when idle. */
     var videoUrl: String? = null; private set
 
+    /** The URL that was loaded before [videoUrl] (used to release per-video scrub extractors). */
+    var previousVideoUrl: String? = null; private set
+
     /** True while a client-side URL override is active (suppresses server URL changes). */
     private var clientUrlOverride: Boolean = false
 
@@ -513,6 +516,7 @@ class DisplayScreen(
 
     /** Records the new [videoUrl] and [lang] when the media controller swaps players. */
     internal fun onVideoSwapped(videoUrl: String, lang: String) {
+        previousVideoUrl = this.videoUrl
         this.videoUrl = videoUrl
         this.lang = lang
         savedTimeNanos = 0L

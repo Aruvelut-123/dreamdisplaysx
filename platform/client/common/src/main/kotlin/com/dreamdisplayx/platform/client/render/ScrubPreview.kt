@@ -77,10 +77,31 @@ object ScrubPreview {
     /** Keys with an extraction coroutine currently running (one loop per key). */
     private val extractingKeys = ConcurrentHashMap.newKeySet<String>()
 
+    /**
+     * One long-lived, video-only libvlc player per key. The player is created lazily on the first
+     * extraction of a video and REUSED for every subsequent scrub frame — the expensive setup
+     * (player creation + first-frame decode) happens once per video instead of per hover. Closed
+     * when the video is switched/released via [release].
+     */
+    private val sessions = ConcurrentHashMap<String, LibVlcFrameExtractor.ScrubSession>()
+
     /** Records the raw URL for [key] so later hovers can extract without re-resolving it. */
     fun request(key: String, rawUrl: String, durationNanos: Long, seekByDecoding: Boolean = false) {
         val safe = runCatching { MediaHostGuard.resolveSafeUrl(rawUrl) }.getOrNull() ?: rawUrl
         RAW_URL.put(key, safe)
+    }
+
+    /**
+     * Releases the long-lived extractor (and cached frames/textures) for [key]. Call when the video
+     * is switched away or unloaded so the native libvlc player is destroyed; the next [frameAt] on
+     * this key lazily recreates it.
+     */
+    fun release(key: String) {
+        sessions.remove(key)?.close()
+        pendingPositions.remove(key)
+        val frames = FRAMES.getIfPresent(key)
+        FRAMES.invalidate(key)
+        if (frames != null) releaseAll(frames)
     }
 
     /** Returns the texture of the frame nearest [positionNanos] for [key], extracting it on demand if needed. */
@@ -120,10 +141,22 @@ object ScrubPreview {
         }
     }
 
-    /** Extracts one frame at [offsetNanos] and adds it to the per-key cache ring. */
+    /** Extracts one frame at [offsetNanos] (reusing the per-key player) and adds it to the cache ring. */
     private suspend fun extractAndCache(key: String, url: String, offsetNanos: Long) {
+        val session = sessions.computeIfAbsent(key) {
+            LibVlcFrameExtractor.ScrubSession(url)
+        }
+        // Open lazily on first use; a failed open is torn down so the next attempt rebuilds.
+        val ok = withTimeoutOrNull(EXTRACT_TIMEOUT) {
+            session.open()
+        } ?: false
+        if (!ok) {
+            sessions.remove(key, session)
+            session.close()
+            return
+        }
         val bytes = withTimeoutOrNull(EXTRACT_TIMEOUT) {
-            LibVlcFrameExtractor.extractJpeg(url, offsetNanos, FRAME_WIDTH, FRAME_HEIGHT)
+            session.extractAt(offsetNanos, FRAME_WIDTH, FRAME_HEIGHT)
         } ?: return
         val id = registerFrame(key, offsetNanos, bytes) ?: return
         addFrame(key, Frame(offsetNanos, id))
