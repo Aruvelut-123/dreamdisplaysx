@@ -1,25 +1,23 @@
-# Dream DisplaysX — TODO
+# Dream Displays X — TODO
 
-## ✅ 已完成（feat/libvlc，活跃会话）
+## ✅ 已完成（feat/libvlc 会话）
 
-> **Z-fighting 真修复（lift 放对位置）+ A/V 缓冲调优 + 长视频预览动态采样，已提交推送、CI 通过。**
+- [x] **A/V 崩溃根因（真修）**：`ensureDropBuffer()` 4 字节→整帧+padding——pause/seek 后 libvlc 整帧写入 4 字节 buffer 的堆溢出（0xC0000374，随机线程崩溃）→ **用户确认不再崩**
+- [x] **视频 resume 卡帧**：`clear()` 不再销毁 buffers（只重置状态）——多次 seek→pause→resume 后视频不再卡在旧帧、音频照播 → **用户确认修好**
+- [x] **A/V 缓冲/同步加固**：`LINE_BUFFER_BYTES`=100ms、line 访问移到 libvlc 音频线程、`onPlay` count 上限、`AUTO_RESYNC_THRESHOLD`=300ms、pause/resume 不 stop/start line、seek→pause→resume 时钟一致
+- [x] **libvlc 3.0.21 → 3.0.22**：build.sh/collect.sh/natives.yml 版本升级 + Build Natives 重建（natives-de826bd-1787899222）
+- [x] **JVM 诊断开关**（`LibVlcDiagnostics`）：silentAudio / noAudioCallback / noVideoCallback / noFrameSink / noVideoPublish / noAutoResync / noHardwareAccel——留作以后排查
+- [x] **PreviewSection 视频预览偏下/顶留白**：用户反馈已自行修复（疑似与 videoContentAspect 时序有关，崩溃修复后不再出现）
+- [x] **z-fighting**：lift 放对位置 + renderVideo 逐层分离——用户确认已修复
+- [x] **帧向左偏移 ~1px**——用户确认已修复
 
-### 最近两轮已提交的修复
-1. **z-fighting 真修复（`5a8377b6` 后新提交）**：
-   - `DisplayGeometry.kt`：surfaceOffset 0.02→0.05（光影 0.08）
-   - `ScreenRenderer.kt`：改为 `renderVideo` + 每个 quad 独立 `drawLayer`——**lift 在 `applyScreenTransform` 之前**。首版把 lift 放在 transform 内侧（被 `scale(w,h,0)` 的 z×0 吃掉=失效），backdrop 与 video 仍共面。现在用与 loading placeholder 相同的逐层分离，两 LETTERBOX quad 真正分深度
-2. **A/V buffer + bidirectional auto-sync + crash hardening**：`LINE_BUFFER_BYTES`=**100ms**（45ms 试过导致 six/有 seek 栈溢出风险，回退安全值）；**所有 line 访问移到 libvlc 音频线程**——`leadNanos`/`bufferedNanos` 返回音频线程缓存的 @Volatile 字段，`forceResync` 只设标记、实际 `line.flush()` 在 `onPlay`(音频线程) 执行；`onPlay` 加 `count` 上限防御 seek 后异常大块（防栈溢出）；`AUTO_RESYNC_THRESHOLD`=**300ms**。修 pause/resume 时 Render thread 跨线程访问 Java Sound line 导致的**堆损坏**（0xC0000374/退出-1073740940）
-3. **ScrubPreview 动态采样**：固定 20 帧→按时长自适应（≤45 帧，约 8s 间隔）——长电影 hover 不再卡在一帧/首帧
-4. **A/V 诊断**：libvlc 3.0.21 的 audio-callback `pts` 是单调时钟非媒体时间→改报带符号领先量（正=视频领先/负=音频领先）
+## 待验证 / 活跃问题
 
-### 用户已测 / 待验证的反馈（活跃问题）
-- [x] **z-fighting**：首版 lift 顺序错没修好，已重写 renderVideo（**用户确认已全部修复！**）
-- [x] **帧向左偏移 ~1px**（用户标红框）：**用户确认已修好**
-- [ ] **A/V 双向 auto-sync**：缓冲降到 0.15s + 视频领先>1s 自动 flush 音频；用户反馈"音频有时比视频快"→诊断现在能报负值（audio ahead），待用户复测确认
 - [ ] **hover 预览首帧 / 提取不够快**：采样已改动态（长视频更密），但"鼠标移开再回来才显示正确帧"——待查：frameAt 首次命中时帧还没就绪/缓存冷启动，或提取异步延迟导致首次显示默认首帧
-- [ ] **PreviewSection 视频预览偏下/顶留白（不按 LETTERBOX）**：`videoContentAspect` 为 0 时 fallback 到 16:9 且 contentRect 不裁剪→变形/偏位；待查 `videoContentAspect` 在播放时是否总是正确设置，以及 fitRatio/contentRect 配合
+- [ ] **A/V 双向 auto-sync 最终确认**：诊断能报带符号领先量（audio ahead / video ahead），用户复测确认后关闭诊断
 
-### 历史遗留需求（未处理）
+## 历史遗留需求（未处理）
+
 - fps 诊断（publishFrame 每 N 帧日志，验证 GPU scaling 恢复 60fps）
 
 ---
