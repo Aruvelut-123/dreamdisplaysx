@@ -2,6 +2,14 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: seek while playing in ScrubSession (feat/libvlc)**
+> — the first ScrubSession used a paused seek + 60ms brief play, which was unreliable on network
+> streams: get_time jumped to the target instantly but the new fragments weren't loaded yet, so the
+> vout kept showing the PREVIOUS seek's frame — the left half of the video showed the first
+> right-half frame. The session now seeks while PLAYING and waits for the position to advance past
+> the target by 300ms (awaitPast), which lets the fragments load and the vout render the true target
+> frame; still ~300-500ms per extraction because the player is reused across hovers.
+
 > **Scrub preview: long-lived video-only player per video (feat/libvlc)**
 > — scrub extraction was correct but slow: every hover created a fresh libvlc player and waited for
 > the first-frame decode (2-5s on network streams). A new `ScrubSession` keeps ONE video-only,
