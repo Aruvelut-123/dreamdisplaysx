@@ -93,11 +93,14 @@ internal class LibVlcSessionManager(
     private val lastSyncDiagNanos = java.util.concurrent.atomic.AtomicLong(0L)
 
     /**
-     * A/V drift threshold (1 s): when the audio queued in the line exceeds this, audio has genuinely
-     * stalled behind the video (the line buffer is only ~0.15 s; healthy leads stay ~the buffer size).
-     * Crossing it triggers an automatic audio flush so the audible sound snaps back to the video clock.
+     * A/V drift threshold (0.5 s): when the audio queued in the line exceeds this, audio has genuinely
+     * stalled behind the video (the line buffer is only ~0.15 s, so healthy leads hover around that; a
+     * lead well past twice the buffer means real drift). Crossing it triggers an automatic audio flush
+     * so the audible sound snaps back to the video clock. 0.5 s is low enough to catch the moderate
+     * drifts that stutter-caused stalls leave behind, yet high enough that the normal ~0.15 s buffer
+     * lead and its jitter never trip it.
      */
-    private val AUTO_RESYNC_THRESHOLD_NANOS = 1_000_000_000L
+    private val AUTO_RESYNC_THRESHOLD_NANOS = 500_000_000L
 
     init {
         // Mirror the config's hw-accel preference onto the shared libvlc instance before it is

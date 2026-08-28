@@ -63,7 +63,11 @@ class PreviewSection(
     private var audioPresence = if (ds.audioTrackList.size > 1) 1f else 0f
     private var lastPresenceFrameNanos = 0L
 
+    /** Throttle guard for the temporary PreviewSection geometry diagnostic. */
+    private var lastDiagNanos = 0L
+
     companion object {
+        private val logger = org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/PreviewSection")
         /** Aspect ratio of a YouTube thumbnail image, independent of the screen's own block shape. */
         private const val THUMBNAIL_RATIO = 16f / 9f
 
@@ -136,6 +140,18 @@ class PreviewSection(
         val area = UiRect(x, y, w, h)
         val contentRatio = ds.videoContentAspect.toFloat().takeIf { it > 0f } ?: THUMBNAIL_RATIO
         val video = fitRatio(area, contentRatio)
+
+        // Temporary diagnostic: what the preview is actually forwarding, to debug a missing/LETTERBOXed
+        // crop report. Throttled to once per ~3 s so it doesn't spam while the menu is open.
+        val diagNow = System.nanoTime()
+        if (diagNow - lastDiagNanos > 3_000_000_000L) {
+            lastDiagNanos = diagNow
+            logger.info(
+                "PreviewSection debug: contentAspect={} contentRatio={} area={}x{} video={}x{}@({},{}) tex={}x{} yuv={}",
+                ds.videoContentAspect, contentRatio, area.w, area.h, video.w, video.h, video.x, video.y,
+                ds.textureWidth, ds.textureHeight, ds.isYuvTexture
+            )
+        }
 
         if (ds.isVideoStarted) {
             attachFrameSink()
