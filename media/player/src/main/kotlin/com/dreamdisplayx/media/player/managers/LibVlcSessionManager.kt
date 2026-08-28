@@ -909,14 +909,16 @@ internal class LibVlcSessionManager(
 
         @Synchronized
         private fun clear() {
+            // Keep the direct buffers alive! This is called from libvlc's format-cleanup callback on
+            // pause/seek. If we nulled buffers[]/bufferSize here, a resume (or a next seek with the
+            // SAME dimensions) would NOT re-run setup()/resize() — libvlc skips setup when the size
+            // is unchanged — so every subsequent lock() would take the DROP_TOKEN path and every
+            // display() would early-return, freezing the video on the last frame while audio plays
+            // on. We only reset the internal ring state; the next setup() still reallocates grow-only
+            // if a larger frame needs it.
             for (i in 0 until BUFFER_COUNT) {
-                buffers[i] = null
-                pointers[i] = null
                 inUse[i] = false
             }
-            dropBuffer = null
-            dropPointer = null
-            bufferSize = 0
             nextWrite = 0
             writing = -1
             latest = -1

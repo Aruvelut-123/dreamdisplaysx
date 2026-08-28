@@ -2,6 +2,18 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Fix video freeze on resume after multiple seeks: cleanup no longer nulls the frame buffers (feat/libvlc)**
+> — after the drop-buffer overflow fix, seek → seek → pause → resume no longer crashes, but the video
+> froze on a stale frame while audio kept playing.
+>
+> Root cause: `clear()` (called from libvlc's format-cleanup on pause/seek) nulled `buffers[]` and set
+> `bufferSize=0`. On resume with the SAME dimensions libvlc does NOT re-run `setup()`/`resize()`, so
+> every subsequent `lock()` took the DROP_TOKEN path and every `display()` early-returned — the video
+> never updated while the clock and audio continued.
+>
+> Fix: `clear()` now only resets the ring state (inUse/nextWrite/writing/latest) and keeps the direct
+> buffers alive; `resize()` still reallocates grow-only when a larger frame arrives.
+
 > **Fix the real pause/resume native crash: libvlc drop buffer was 4 bytes instead of a full frame (feat/libvlc)**
 > — after `clear()` (called from video cleanup on pause/seek) set `bufferSize=0`, `ensureDropBuffer()`
 > allocated only 4 bytes. libvlc then wrote a whole w×h×4 frame into a 4-byte direct buffer →
