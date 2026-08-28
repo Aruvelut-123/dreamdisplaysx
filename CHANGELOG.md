@@ -2,6 +2,16 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Fix seek crash (native stack-buffer-overrun) + safe audio buffer (feat/libvlc)**
+> — a seek after the 45 ms buffer trial crashed the game with exit code -1073740791 (0xC0000409).
+>
+> **Seek crashed the JVM with a native stack-buffer-overrun** — 0xC0000409 (`STATUS_STACK_BUFFER_OVERRUN`)
+> fired on seek. Two guards: the audio play callback now clamps `count` to a sane ceiling (~1 s of frames)
+> and drops a pathological post-seek block instead of reading `count*4` bytes past a smaller native
+> sample buffer, and the audio ring buffer is pulled back from a 45 ms trial to a safer ~0.1 s so a
+> seek / stream restart no longer races the tiny ring into the native overrun. Backpressure still caps
+> A/V drift at the buffer, and the ~0.1 s lead is barely perceptible.
+
 > **Harder lip-sync + fix pause/resume JVM crash (feat/libvlc)**
 > — the auto-resync at 45 ms flushed the audio almost every diagnostic and crashed the game on pause/resume.
 >

@@ -40,17 +40,21 @@ internal class LibVlcAudioOutput(
         /** Nanoseconds per decoded frame; the blip of one stereo S16 sample pair. */
         private const val FRAME_NANOS = 1_000_000_000L / SAMPLE_RATE
 
+        /** Upper bound on frames per audio callback (~1 s). Guards against a pathological post-seek count. */
+        private const val MAX_COUNT_PER_BLOCK = SAMPLE_RATE
+
         /**
-         * Line buffer bytes (~0.045 s of stereo S16). Aggressively small to minimize the constant
-         * video-ahead (libvlc paces video from its delivery clock while the sound leaves the speakers
-         * only after this ring drains; the lead equals the buffer size, baked into the architecture with
-         * no public way to inject the real playback position). Backpressure (`SourceDataLine.write`
-         * blocks when the ring is full) still caps drift at the buffer, and the A/V auto-resync
-         * threshold in the session manager flushes queued audio on real drift. This 45 ms value is a
-         * player trial in the chase for lip-sync; a smaller ring underruns more easily on game hitches
-         * (audible stutter + video stalls), so it may need to come back up if that shows.
+         * Line buffer bytes (~0.1 s of stereo S16). Tight enough that the constant video-ahead (libvlc
+         * paces video from its delivery clock while the sound leaves the speakers only after this ring
+         * drains — the lead equals the buffer, baked into the architecture with no public way to inject
+         * the real playback position) is barely perceptible, yet large enough that a seek / stream
+         * restart doesn't race the tiny ring into a native stack-buffer-overrun (0xC0000409). Backpressure
+         * (`SourceDataLine.write` blocks when the ring is full) still caps drift at the buffer, and the
+         * A/V auto-resync threshold in the session manager flushes queued audio on real drift. This is a
+         * safety pull-back from a 45 ms trial that crashed on seek; if 0.1 s proves stable, it can go
+         * lower again, and if game hitches underrun (stutter + stalls) it can come back up.
          */
-        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 45 / 1000
+        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME / 10
     }
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -156,6 +160,13 @@ internal class LibVlcAudioOutput(
         // delta is the A/V lead (see [bufferedNanos]). We deliberately ignore `pts`: on libvlc 3.0.21
         // the custom-audio-callback pts is a system monotonic clock (~uptime) rather than media time,
         // so anchoring a media position on it produced ~100-hour readings.
+        // Clamp count to a sane ceiling (~1 s of frames). libvlc can hand us a pathological count right
+        // after a seek/flush while its internal state settles; reading count*4 bytes past a smaller
+        // native sample buffer was a stack-buffer-overrun crash (0xC0000409) on seek. Bail out instead.
+        if (count > MAX_COUNT_PER_BLOCK) {
+            logger.warn("$debugLabel audio block too large ({} frames) — dropping to avoid a native overrun.", count)
+            return
+        }
         val countL = count.toLong()
         totalWrittenFrames += countL
         clockLive = true
