@@ -2,6 +2,16 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **libvlc audio callbacks no longer touch the line at all — fixes pause/resume heap corruption (feat/libvlc)**
+> — pause/resume still crashed with 0xC0000374 even after stop/start removal.
+>
+> The remaining native race was `onFlush` / `onDrain` / `reset()` touching the `SourceDataLine`
+> (`flush()` / `getLongFramePosition()` / `drain()`) while the audio thread's write was in flight.
+> All three now avoid the line entirely: `reset()` only clears flags/clock, `onFlush` only clears the
+> clock, and `onDrain` is a no-op. The line is written exclusively from the play callback and kept
+> running forever (paused state drops samples). No callback ever calls a Java Sound native method, so
+> the cross-callback native race — and the heap corruption — is gone.
+
 > **Upgrade bundled libvlc 3.0.21 → 3.0.22 (feat/libvlc)**
 > — trying the latest 3.0-series maintenance release to see whether its seek/pause native fix removes
 > the remaining intermittent crash. `native/libvlc/build.sh`, `collect.sh` and the Build Natives workflow

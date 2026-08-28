@@ -116,15 +116,18 @@ internal class LibVlcAudioOutput(
 
     // ── Control ──────────────────────────────────────────────────────────────
 
-    /** Resets per-session state and re-primes the DSP chain (called at the start of every playback). */
+    /** Resets per-session state (called at the start of every playback). MUST NOT touch the line: this runs
+     * on the control thread, and touching the `SourceDataLine` here while the libvlc audio thread is
+     * mid-callback was a cross-thread native race (heap corruption, 0xC0000374) on pause/resume/restart.
+     * libvlc itself flushes the audio pipeline around a restart ([onFlush] runs on the audio thread), so
+     * here we only clear our own flags, clock and cache. */
     fun reset() {
         runCatching { dspStage?.reset() }
-        runCatching { line?.flush() }
-        totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
         clockLive = false
         paused = false
         resyncPending = false
         cachedLeadNanos = null
+        totalWrittenFrames = 0L
     }
 
     /**
@@ -311,21 +314,24 @@ internal class LibVlcAudioOutput(
         clockLive = false
     }
 
-    /** Discards buffered PCM (seek / stop): pretend only the already-emitted frames exist. */
+    /** Discards buffered PCM (seek / stop): pretend only the already-emitted frames exist. Does NOT touch
+     * the line — `SourceDataLine.flush()` / `getLongFramePosition()` on the native layer raced the
+     * audio thread's write and was the heap-corruption crash (0xC0000374) on pause/resume. The line is
+     * kept running and the stale buffered PCM is simply overwritten by the next [onPlay] blocks. */
     @Suppress("UNUSED_PARAMETER")
     fun onFlush(data: Pointer?, pts: Long) {
-        synchronized(lineLock) {
-            runCatching { line?.flush() }
-            totalWrittenFrames = runCatching { line?.getLongFramePosition() ?: 0L }.getOrDefault(0L)
-        }
         clockLive = false
-        updateLeadCache()
+        // totalWrittenFrames is intentionally NOT reset to getLongFramePosition() here — that would
+        // touch the line cross-callback and risk the native race. The next block written by [onPlay]
+        // will re-anchor the clock naturally.
+        resyncPending = false
+        cachedLeadNanos = null
     }
 
-    /** Drains buffered PCM (end of stream). */
+    /** Drains buffered PCM (end of stream). Does NOT touch the line — same native race reason. */
     @Suppress("UNUSED_PARAMETER")
     fun onDrain(data: Pointer?) {
-        synchronized(lineLock) { runCatching { line?.drain() } }
+        // no-op: the line is intentionally kept running and never explicitly drained from callbacks.
     }
 
     /**
