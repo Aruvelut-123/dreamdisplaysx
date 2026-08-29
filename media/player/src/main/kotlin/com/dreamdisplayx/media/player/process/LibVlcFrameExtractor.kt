@@ -142,9 +142,13 @@ object LibVlcFrameExtractor {
             // PLAYING lets the decoder advance into the target region and render it.
             runCatching { lib.libvlc_media_player_set_pause(player, 0) }
             grab.clearCaptured()
-            val seekLatch = CountDownLatch(1)
+            // ARM the time gate: without a working timeProvider the display callback's gate collapses
+            // to `now == gate` (never rejects), so STALE pre-seek frames — in particular frames from
+            // a HIGHER position queued in the vout during a BACKWARD seek — pass through and get
+            // cached under the new (lower) timestamp, which made the front half of the video show
+            // the first frame of the back half, frozen.
+            grab.timeProvider = { runCatching { lib.libvlc_media_player_get_time(player) }.getOrDefault(-1L) }
             grab.acceptAfterMs = (targetMs - 400L).coerceAtLeast(0L)
-            grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
             lib.libvlc_media_player_set_time(player, targetMs)
             // First: confirm the seek landed on (at least) the target.
             if (!awaitPast(player, targetMs, 3_000L)) {
@@ -163,17 +167,29 @@ object LibVlcFrameExtractor {
             if (settleMs > targetMs) {
                 awaitPast(player, settleMs, 2_500L)
             }
-            if (!seekLatch.await(1_500L, TimeUnit.MILLISECONDS)) {
+            // PHASE 2 — the frame we ship must be the NEW position, not a stale frame flushed by the
+            // vout during the seek settle (backward seeks are the worst: get_time jumps to target
+            // instantly, so old higher-position frames that were already queued pass the gate and
+            // would be cached at the wrong timestamp). Discard everything captured so far and only
+            // accept a frame that displays AFTER we confirmed playback advanced past the settle
+            // point — by then the vout queue has been flushed and the next display is a fresh decode
+            // of the new position.
+            grab.clearCaptured()
+            val seekLatch = CountDownLatch(1)
+            grab.onFrame = { if (seekLatch.count > 0) seekLatch.countDown() }
+            if (!seekLatch.await(2_000L, TimeUnit.MILLISECONDS)) {
                 // Never serve a stale (wrong-position) frame: return null so the cache keeps showing
                 // the nearest valid thumbnail and the next hover retries.
                 logger.warn("ScrubSession: frame timeout for $url@$offsetNanos")
                 runCatching { lib.libvlc_media_player_set_pause(player, 1) }
                 grab.acceptAfterMs = -1L
+                grab.timeProvider = null
                 return null
             }
             // Pause the player so it stops consuming resources while we encode the frame.
             runCatching { lib.libvlc_media_player_set_pause(player, 1) }
             grab.acceptAfterMs = -1L
+            grab.timeProvider = null
 
             val frame = grab.consumeFrame()
                 ?: run { logger.warn("ScrubSession: no frame data for $url@$offsetNanos"); return null }
