@@ -55,8 +55,21 @@ internal class LibVlcAudioOutput(
          * A/V auto-resync threshold in the session manager flushes queued audio on real drift. This is a
          * safety pull-back from a 45 ms trial that crashed on seek; if 0.1 s proves stable, it can go
          * lower again, and if game hitches underrun (stutter + stalls) it can come back up.
+         *
+         * Tunable via -Ddreamdisplayx.audioBufferMs=<ms> (default 100). A LARGER buffer is safer (the
+         * 45ms trial crashed) and can smooth out write-blocking that would otherwise pulse the libvlc
+         * audio clock — relevant if the video FPS is pinned at ~60% of the source frame rate while the
+         * CPU is idle (audio-clock throttling theory).
          */
-        private const val LINE_BUFFER_BYTES = SAMPLE_RATE * BYTES_PER_FRAME / 10
+        private val LINE_BUFFER_BYTES: Int =
+            (SAMPLE_RATE * BYTES_PER_FRAME * bufferMs() / 1000L).toInt().coerceAtLeast(4410)
+
+        /** Buffer size in ms for the Java Sound line; override with -Ddreamdisplayx.audioBufferMs. */
+        private fun bufferMs(): Int {
+            val v = System.getProperty("dreamdisplayx.audioBufferMs")?.trim()
+            val parsed = v?.toIntOrNull()?.coerceIn(20, 1000) ?: 100
+            return parsed
+        }
     }
 
     // ── State ────────────────────────────────────────────────────────────────
