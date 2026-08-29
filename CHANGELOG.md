@@ -2,6 +2,15 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: fix backward seeks caching stale higher-position frames (feat/libvlc)**
+> — after scrubbing a long video from start to end, scrubbing back to the front half showed the
+> first frame of the back half, frozen. Two compounding bugs: the vmem time gate had lost its
+> `timeProvider` during the ScrubSession rewrite (so the gate never rejected anything), and stale
+> frames already queued in the vout from a higher position pass the gate on a backward seek (get_time
+> jumps to the target instantly). The session now restores the time gate AND re-clears the capture
+> after the seek settles, accepting only a frame that displays after playback confirmed advancing
+> past the target — so a backward seek can never cache a wrong-position frame.
+
 > **Scrub preview: extract from the lowest available quality (≤360p) stream (feat/libvlc)**
 > — scrub thumbnails are tiny (256x144) and only need a still frame, but they were extracted from
 > the currently-playing stream — a 4K master on long videos, whose fragments take far longer to
