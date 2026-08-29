@@ -124,6 +124,22 @@
   already `runCatching`-guarded and degrade gracefully
 - Initializer no longer blocks Android startup; AWT headless override skipped on Android
 
+### Android SQLite (`SqliteAndroidCompat`)
+- The stock `org.xerial:sqlite-jdbc` jar bundles natives for desktop OSes only — its Android
+  (`Linux-Android`) builds ship in the `-sources` artifact but not the runtime jar, so any
+  `jdbc:sqlite:` connect on Android dies in `SQLiteJDBCLoader` with
+  `NativeLibraryNotFoundException` (`StorageManager` Hikari pool init → server crash on world open)
+- Fix: `util` bundles the official Bionic `libsqlitejdbc.so` (16 KB page aligned, from xerial's
+  `-sources` jar) under `dreamdisplayx/natives/sqlitejdbc/{android-aarch64,android-x64}/`; at
+  runtime `SqliteAndroidCompat.ensure()` (only active when `OsInfo.isAndroid`) copies the
+  arch-appropriate `.so` into `AndroidPaths.nativesCacheRoot()/sqlitejdbc/` (exec-friendly) and
+  sets `org.sqlite.lib.path` + `org.sqlite.lib.name`, which `SQLiteJDBCLoader` honors BEFORE its
+  jar-resource fallback — classloader-independent, so it works through the NeoForge jar-in-jar
+  module layer. Desktop platforms short-circuit (no-op); jar resources are inert elsewhere.
+- `StorageManager` calls `SqliteAndroidCompat.ensure()` from its companion `init` (runs during
+  class init, before the instance `dataSource` Hikari pool — also covers `SqlCredentialSyncBackend`
+  and Paper, both of which construct storage after `StorageManager`)
+
 ## Workflow Rules
 
 ### Post-Change Checklist (MANDATORY)

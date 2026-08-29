@@ -12,7 +12,7 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
 - **Stretch mode + GPU-scaled rendering** — video is drawn at native aspect with the GPU doing the scaling; STRETCH / LETTERBOX / CROP UV modes; z-fighting flicker fixed.
 - **Ported upstream 1.9.5 fixes** — displays no longer turn black behind water / glass (drawn before translucent terrain + shader-pack replay pass), partially-written persistent PBO uploads no longer corrupt textures on Windows, and the NeoForge `sqlite-jdbc` clash is fixed by shipping it as a jar-in-jar.
 - **Render-distance menu slider removed** — displays now unload by the client's own chunk render distance (upstream behavior); the distance-based quality scaler is untouched.
-- **Android support restored** — runs under PojavLauncher / FCL / Zalith launchers on ARM64 and x86_64 devices: the natives cache moves to exec-friendly app-internal storage, audio plays through libvlc's OpenSL ES output (3D positional audio unavailable there), and hardware decoding uses MediaCodec (ByteBuffer copy mode). Desktop platforms are unaffected.
+- **Android support restored** — runs under PojavLauncher / FCL / Zalith launchers on ARM64 and x86_64 devices: the natives cache moves to exec-friendly app-internal storage, audio plays through libvlc's OpenSL ES output (3D positional audio unavailable there), and hardware decoding uses MediaCodec (ByteBuffer copy mode). **SQLite persistence works too** — the stock `sqlite-jdbc` jar ships no Android native, so a Bionic build (extracted from xerial's own `-sources` artifact) is bundled and loaded via `org.sqlite.lib.path` / `org.sqlite.lib.name`, keeping display + credential storage on-device. Desktop platforms are unaffected.
 
 ## Playback
 

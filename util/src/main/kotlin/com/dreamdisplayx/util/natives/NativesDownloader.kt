@@ -23,7 +23,10 @@ import java.nio.file.Files
  *
  * sqlite-jdbc is no longer downloaded: on NeoForge it ships as a jar-in-jar and
  * on Fabric/Paper the stock native binaries inside the fat loader jar are used
- * directly.
+ * directly. On Android the stock jar has no usable native (its Linux-Android
+ * builds are absent from the published artifact), so [SqliteAndroidCompat]
+ * extracts a bundled Bionic build and points sqlite-jdbc at it via the
+ * `org.sqlite.lib.path` / `org.sqlite.lib.name` system properties.
  */
 object NativesDownloader {
 

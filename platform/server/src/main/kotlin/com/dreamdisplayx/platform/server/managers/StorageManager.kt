@@ -7,6 +7,7 @@ import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplayx.platform.server.storage.StorageBackend
+import com.dreamdisplayx.util.natives.SqliteAndroidCompat
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.DIRECTION_TO_ORDINAL
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.ORDINAL_TO_DIRECTION
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.packFacing
@@ -278,5 +279,15 @@ class StorageManager(
         seekPositionNanos = row[table.position]
         scheduledStart = row[table.scheduledStart]?.let(Instant::fromEpochMilliseconds)
         scheduledAction = row[table.scheduledAction]?.let(PlaybackAction::fromWire)
+    }
+
+    companion object {
+        init {
+            // The SQLite pool is created in the constructor below, so the Android native
+            // must be installed before the first instance is built — the companion init
+            // runs during class initialization, ahead of any instance property. Desktop
+            // platforms short-circuit inside the call (no-op).
+            SqliteAndroidCompat.ensure()
+        }
     }
 }

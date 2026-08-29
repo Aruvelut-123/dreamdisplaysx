@@ -156,6 +156,10 @@ differences:
 - **Hardware decode** uses MediaCodec ( ByteBuffer copy mode feeding the same frame
   callbacks); override with `-Ddreamdisplayx.hwDecode=<module>` or disable it with an empty
   value, same as desktop.
+- **SQLite persistence** is bundled for Android: the stock `sqlite-jdbc` artifact ships no
+  Android native, so a Bionic build (16 KB page aligned, from xerial's `-sources` jar) is
+  bundled in the mod and loaded via `org.sqlite.lib.path` / `org.sqlite.lib.name` — display
+  and credential storage keep working on-device.
 
 The natives are extracted to app-internal storage automatically (the game directory on
 emulated storage is mounted noexec, so `.so` files there cannot be loaded).
