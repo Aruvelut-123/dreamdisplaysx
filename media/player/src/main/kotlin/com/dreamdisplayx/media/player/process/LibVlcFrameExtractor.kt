@@ -46,16 +46,6 @@ object LibVlcFrameExtractor {
     private const val RENDER_FRAMES_MS = 300L
 
     /**
-     * Playback multiplier used while seeking to an extraction target. Seeking at a high rate makes
-     * the decoder race forward into the target region instead of advancing in real time — this is
-     * what makes scrub extraction feel like FFmpeg's fast seek even for a slow software-decoded
-     * stream (e.g. AV1 on a CPU-bound machine), which otherwise times out trying to reach the
-     * target within the settle budget. libvlc caps the rate per demuxer (typically 2-8x); 8x is a
-     * safe upper bound — set_rate either applies it or returns non-zero and we keep the old rate.
-     */
-    private const val SEEK_RATE = 8.0f
-
-    /**
      * One-shot extraction: creates a short-lived player, extracts the frame at [offsetNanos], scales
      * it to [w]x[h] (maintaining aspect), returns JPEG bytes or null on any failure.
      */
@@ -159,24 +149,19 @@ object LibVlcFrameExtractor {
             // the first frame of the back half, frozen.
             grab.timeProvider = { runCatching { lib.libvlc_media_player_get_time(player) }.getOrDefault(-1L) }
             grab.acceptAfterMs = (targetMs - 400L).coerceAtLeast(0L)
-            // Seek at a HIGH playback rate so the decoder races forward to the target region instead
-            // of advancing in real time. This is what makes extraction feel like FFmpeg's fast seek:
-            // a slow software-decoded stream (AV1 on a CPU-bound machine) still reaches the target
-            // well within the settle budget. The rate is restored to 1.0x before grabbing so the
-            // vout hands back a normal, stable frame.
-            val prevRate = runCatching { lib.libvlc_media_player_get_rate(player) }.getOrDefault(1.0f)
+            // NOTE: do NOT seek at a high playback rate (set_rate) — accelerated playback makes the
+            // vout skip display frames, so the phase-2 latch below never fires (or fires with a
+            // position-jumped frame) and the long-video backward seek regresses. Seek at 1.0x and
+            // let awaitPast wait for real decode progress.
             lib.libvlc_media_player_set_time(player, targetMs)
-            if (lib.libvlc_media_player_set_rate(player, SEEK_RATE) != 0) {
-                runCatching { lib.libvlc_media_player_set_rate(player, prevRate) }
-            }
             // First: confirm the seek landed on (at least) the target.
             if (!awaitPast(player, targetMs, 3_000L)) {
                 logger.warn("ScrubSession: seek did not land on target for $url@$offsetNanos")
             }
-            // Then let the (accelerated) playback advance PAST the target so the vout renders the
-            // true target frame (the reliable signal that new fragments arrived and decoded). Near
-            // the end of the video the settle target must be clamped, otherwise get_time can never
-            // reach it and every late-position scrub would fail. A timeout here is best-effort.
+            // Then let playback advance PAST the target so the vout renders the true target frame
+            // (the reliable signal that new fragments arrived and decoded). Near the end of the
+            // video the settle target must be clamped, otherwise get_time can never reach it and
+            // every late-position scrub would fail. A timeout here is best-effort, not fatal.
             val lengthMs = runCatching { lib.libvlc_media_player_get_length(player) }.getOrDefault(-1L)
             val settleMs = when {
                 lengthMs > targetMs + RENDER_FRAMES_MS + 200L -> targetMs + RENDER_FRAMES_MS
@@ -186,8 +171,6 @@ object LibVlcFrameExtractor {
             if (settleMs > targetMs) {
                 awaitPast(player, settleMs, 2_500L)
             }
-            // Restore normal speed BEFORE the grab so the frame we ship is a stable 1.0x render.
-            runCatching { lib.libvlc_media_player_set_rate(player, prevRate) }
             // PHASE 2 — the frame we ship must be the NEW position, not a stale frame flushed by the
             // vout during the seek settle (backward seeks are the worst: get_time jumps to target
             // instantly, so old higher-position frames that were already queued pass the gate and

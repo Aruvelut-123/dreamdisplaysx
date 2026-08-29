@@ -44,6 +44,12 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
             val dropped = com.dreamdisplayx.media.player.MediaPlayer.framesDropped.get()
             displayer.addToGroup(groupId, "Displays: $screenCount active")
             displayer.addToGroup(groupId, "Frames: $gpu GPU, $dropped dropped")
+            // Delivered video FPS of the first playing screen (debug aid for slow-framerate reports).
+            val playing = com.dreamdisplayx.platform.client.displays.DisplayRegistry.getScreens()
+                .firstOrNull { it.isVideoStarted }
+            if (playing != null) {
+                displayer.addToGroup(groupId, "Video FPS: %.1f".format(playing.videoFps))
+            }
         }
         val decoder = com.dreamdisplayx.media.player.MediaPlayer.currentDecoder.get()
         displayer.addToGroup(groupId, "Decoder: $decoder")

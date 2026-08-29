@@ -34,5 +34,11 @@ object DebugStats {
         add("§7LibVLC: §f$libvlcVersion")
         val screenCount = runCatching { DisplayRegistry.getScreens().size }.getOrDefault(0)
         add("Displays: $screenCount active")
+        if (screenCount > 0) {
+            val playing = DisplayRegistry.getScreens().firstOrNull { it.isVideoStarted }
+            if (playing != null) {
+                add("Video FPS: %.1f".format(playing.videoFps))
+            }
+        }
     }
 }
