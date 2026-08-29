@@ -652,6 +652,15 @@ internal class LibVlcSessionManager(
                 try {
                     LibVlc.lib.libvlc_media_player_stop(mp)
                     LibVlc.lib.libvlc_media_player_play(mp)
+                    // The audio player must be restarted too: its own stream also reached ENDED
+                    // (Bilibili DASH audio is often shorter than the video), so a bare set_time on
+                    // an ENDED audio player does nothing — video replays but audio stays silent.
+                    val ap = audioPlayer
+                    if (ap != null) {
+                        runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                        runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
+                        runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                    }
                     // Re-arm the EOS gate: the loop/replay restart path (beginSeek from ENDED) must
                     // let the NEXT end-of-stream fire handleStreamEnd again, otherwise the second
                     // replay ends frozen on the last frame (eosFired stays true after the first
@@ -661,11 +670,11 @@ internal class LibVlcSessionManager(
             } else {
                 // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
                 runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
-            }
-            // Seek the audio player to the same position.
-            val ap = audioPlayer
-            if (ap != null) {
-                runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                // Seek the audio player to the same position (non-ENDED path).
+                val ap = audioPlayer
+                if (ap != null) {
+                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                }
             }
             // If a seek left the player in a dead state (stopped/ended — e.g. a backwards seek
             // into an already-released region dropping it out of PLAYING), resume it. Buffering(2)
