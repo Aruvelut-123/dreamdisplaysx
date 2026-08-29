@@ -91,6 +91,19 @@
 - Removed client-side screenshare code
 - Bilibili account label + dlogin/dlogoff commands
 
+### 2026-02-DD — Upstream 1.9.5 merge + build pipeline changes
+- Merged upstream `8ccaf45`; fork version bumped to 1.9.5.1-dev
+- Multi-version properties now live in `versions.json` (upstream 3859aeba); `versions/*/gradle.properties` removed
+- `versions/active.txt` still selects the active version for stonecutter
+- sqlite-jdbc ships as a NeoForge jar-in-jar (upstream aca3c564), un-relocated in Fabric/Paper fat jars
+- The relocated-JNI sqlite native build was removed entirely: no `native/sqlite/`, no sqlite job in
+  `natives.yml`, no sqlite entries in `natives-manifest.json`, no `Component.SQLITE` in `NativesDownloader`
+- `natives.yml` now only collects the official LibVLC runtime (7 platforms)
+- Render-distance menu slider removed (upstream 4b053fb9); unload distance follows the client's
+  own chunk render distance (`DisplayScreen.clientRenderDistanceBlocks()`)
+- Ported upstream water/glass render fix (d72d6e0a) + PBO client-mapped-buffer barrier (9cc61b27)
+- Module READMEs (api/core/media*) removed (upstream 6b4eac4f); root README rebuilt on upstream layout
+
 ## Workflow Rules
 
 ### Post-Change Checklist (MANDATORY)
