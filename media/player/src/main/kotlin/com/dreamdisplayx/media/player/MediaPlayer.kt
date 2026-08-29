@@ -323,6 +323,9 @@ class MediaPlayer(
     /** Stream duration in nanos, or 0 for live streams. */
     fun getDuration(): Long = if (liveStream) 0L else durationHintNanos
 
+    /** Delivered video FPS (frames actually displayed per second), for the debug label; 0 when idle. */
+    fun currentVideoFps(): Double = sessionManager.currentVideoFps
+
     /** Primes the first live start offset before initialization opens the decoder. */
     fun primeStartPosition(nanos: Long) {
         if (nanos >= 0L && !sessionManager.isPlaying) primedStartPositionNanos.set(nanos)

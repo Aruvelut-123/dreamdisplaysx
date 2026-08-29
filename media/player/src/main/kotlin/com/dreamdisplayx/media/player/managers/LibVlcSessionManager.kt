@@ -92,6 +92,17 @@ internal class LibVlcSessionManager(
     /** Rate-limits the A/V sync diagnostic (audio line clock vs libvlc clock) to once per few seconds. */
     private val lastSyncDiagNanos = java.util.concurrent.atomic.AtomicLong(0L)
 
+    // ── Video FPS debug counter (renders the actual delivered frame rate, for the debug label) ──
+    @Volatile
+    private var fpsFrames = 0L
+    @Volatile
+    private var fpsWindowStartNanos = 0L
+    @Volatile
+    private var fpsValue = 0.0
+
+    /** Delivered-video FPS (frames displayed per second), smoothed over a 1s sliding window. */
+    val currentVideoFps: Double get() = fpsValue
+
     /**
      * A/V drift threshold (~0.3 s). This is NOT the lip-sync gap (that is the audio buffer, ~0.045 s,
      * and is set in [LibVlcAudioOutput]); it is the point at which a real, sustained drift is declared
@@ -840,6 +851,17 @@ internal class LibVlcSessionManager(
             val ew = expectedW
             val eh = expectedH
             if (ew <= 0 || eh <= 0) return
+            // DEBUG: count delivered frames for the FPS label (1s sliding window).
+            val now = System.nanoTime()
+            if (fpsWindowStartNanos == 0L) fpsWindowStartNanos = now
+            fpsFrames++
+            val elapsedNs = now - fpsWindowStartNanos
+            if (elapsedNs >= 1_000_000_000L) {
+                val fps = fpsFrames.toDouble() * 1_000_000_000.0 / elapsedNs
+                fpsValue = if (fpsValue <= 0.0) fps else fpsValue * 0.5 + fps * 0.5
+                fpsFrames = 0L
+                fpsWindowStartNanos = now
+            }
             try {
                 val rgba = buf.duplicate().order(ByteOrder.nativeOrder()); rgba.rewind()
                 val total = frameWidth * frameHeight * 4

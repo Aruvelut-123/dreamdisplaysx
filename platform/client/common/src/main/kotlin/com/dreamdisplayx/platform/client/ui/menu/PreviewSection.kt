@@ -65,6 +65,11 @@ class PreviewSection(
 
     companion object {
         private val logger = org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/PreviewSection")
+
+        /** Enables the FPS debug label on the preview video (top-left) via -Ddreamdisplayx.debugFps=true. */
+        private val DEBUG_FPS: Boolean =
+            System.getProperty("dreamdisplayx.debugFps", "false").toBoolean()
+
         /** Aspect ratio of a YouTube thumbnail image, independent of the screen's own block shape. */
         private const val THUMBNAIL_RATIO = 16f / 9f
 
@@ -164,6 +169,15 @@ class PreviewSection(
             }
         } else {
             drawWaiting(g, area)
+        }
+
+        // Debug FPS label (rendered on top of the preview, top-left of the video area). Enable with
+        // -Ddreamdisplayx.debugFps=true so it can be left in the build without showing by default.
+        if (DEBUG_FPS) {
+            val fps = ds.videoFps
+            if (fps > 0.0) {
+                g.drawText(Minecraft.getInstance().font, "%.1f fps".format(fps), video.x + 2, video.y + 2, 0xFFFFFF, true)
+            }
         }
     }
 
