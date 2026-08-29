@@ -67,6 +67,10 @@ internal class LibVlcAudioOutput(
         /** Buffer size in ms for the Java Sound line; override with -Ddreamdisplayx.audioBufferMs. */
         private fun bufferMs(): Int {
             val v = System.getProperty("dreamdisplayx.audioBufferMs")?.trim()
+            // Default 100ms. Tight enough for ~A/V lead, safe against the 45ms seek crash. Make it
+            // larger (e.g. 400) via -Ddreamdisplayx.audioBufferMs if the audio-clock throttling
+            // hypothesis (video FPS at ~60% of source) needs smoothing, or smaller (e.g. 45) if
+            // the lead is audible and seek is stable.
             val parsed = v?.toIntOrNull()?.coerceIn(20, 1000) ?: 100
             return parsed
         }
