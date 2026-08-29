@@ -465,9 +465,6 @@ class DisplayScreen(
     /** Current stream description (codec/resolution/source fps) for the F3 debug screen; null when idle. */
     val streamInfo: String? get() = mediaPlayer?.currentStreamInfo()
 
-    /** Audio feed rate in stream-ms per real second (~1000 healthy); 0 when idle. */
-    val audioFeedRate: Double get() = mediaPlayer?.audioFeedRateMs() ?: 0.0
-
     /** Whether scrub previews for this display must seek by decoding forward; see `MediaStream.seekByDecoding`. */
     val scrubPreviewSeeksByDecoding: Boolean get() = mediaPlayer?.capturedStreamSeeksByDecoding() == true
 

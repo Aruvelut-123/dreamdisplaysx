@@ -326,9 +326,6 @@ class MediaPlayer(
     /** Delivered video FPS (frames actually displayed per second), for the debug label; 0 when idle. */
     fun currentVideoFps(): Double = sessionManager.currentVideoFps
 
-    /** Audio feed rate (ms of stream-time per real second). ~1000 = healthy; <1000 = audio clock starvation. */
-    fun audioFeedRateMs(): Double = sessionManager.audioFeedRateMs()
-
     /**
      * Compact description of the currently-playing video stream (codec / resolution / source frame
      * rate), for the F3 debug screen — e.g. "avc1.640028 · 1080p · 60fps". Null when no stream is

@@ -52,9 +52,6 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
                 // Source stream identity: codec / resolution / source fps — tells whether a low
                 // delivered FPS is a codec problem (AV1/HEVC soft-decode) rather than rendering.
                 playing.streamInfo?.let { displayer.addToGroup(groupId, "Stream: $it") }
-                // Audio feed rate: ~1000 ms/s healthy; <1000 means audio clock starvation dragging
-                // libvlc's master clock (and therefore the video delivery rate) down.
-                displayer.addToGroup(groupId, "Audio: %.0f ms/s".format(playing.audioFeedRate))
             }
         }
         val decoder = com.dreamdisplayx.media.player.MediaPlayer.currentDecoder.get()

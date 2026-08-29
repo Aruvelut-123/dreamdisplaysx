@@ -103,9 +103,6 @@ internal class LibVlcSessionManager(
     /** Delivered-video FPS (frames displayed per second), smoothed over a 1s sliding window. */
     val currentVideoFps: Double get() = fpsValue
 
-    /** Audio feed rate (ms of stream-time per real second); ~1000 healthy, <1000 = audio starvation. */
-    fun audioFeedRateMs(): Double = audioOutput.audioFeedRateMsPerSec()
-
     /**
      * A/V drift threshold (~0.3 s). This is NOT the lip-sync gap (that is the audio buffer, ~0.045 s,
      * and is set in [LibVlcAudioOutput]); it is the point at which a real, sustained drift is declared
