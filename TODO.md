@@ -24,12 +24,11 @@
 - [x] **Scrub network-caching=300ms**（51c60261）：libvlc 默认 1500ms，seek 后要缓冲满才渲染；短视频 CDN 慢 → 2s latch 超时 → 疯狂 frame timeout。加 `:network-caching=300` 让 seek 后快速渲染——**待用户复测**
 - [x] **F3 显示 Video FPS 行**（2f586ef6）：Frames 下面加"Video FPS: n"（第一个播放中的屏，无需 JVM 参数）——**待用户看**
 - [x] **音频提前结束诊断**（84753725）：onDrain + END_REACHED 对比音频/视频时长 → **用户确认 2:13 视频音频 129s（视频短 ~4s）** = DASH 音频流本身比视频短，**媒体源特性，非代码 bug**
-- [x] **FPS 调试标签**（e6f17b32）：`-Ddreamdisplayx.debugFps=true` 时预览视频左上角显示实际交付 FPS（publishFrame 计数，1s 滑动窗口）——**待用户复测帧率慢问题**
+- [x] **F3 显示 Stream 信息行**（da301b78）：Video FPS 下加"Stream: codec 高度p 源fps"——用于判断 1080P vs 4K 帧率差异是否是编码/软解问题——**待用户看**
 
 ## 待验证 / 活跃问题
 
-- [ ] **短视频 scrub 复测**：H.264 优先后确认不再疯狂 frame timeout（若短视频只有 AV1 流则仍需别的方案）
-- [ ] **帧率慢（<30fps）**：用 FPS 调试标签（`-Ddreamdisplayx.debugFps=true`）看实际交付帧率，判断是解码器/网络/渲染哪个瓶颈——**待用户测**
+- [ ] **帧率反常识（1080P 17fps vs 4K 27-32fps）**：1080P 应该比 4K 负担小却更慢——怀疑 1080P 流是 AV1/HEVC 软解、4K 流是 H.264 硬解。**用 F3 的 Stream + Video FPS 行对比 1080P 和 4K 的 codec 差异**——待用户看
 - [ ] **音频提前 ~4s**：已确认是媒体源特性（Bilibili 音频流短），无法播放不存在的数据；用户接受则关闭诊断
 - [ ] **搜索返回 0**（非本喵改动）：最近提交只碰播放/scrub 相关，**没碰搜索代码**。主人 20 秒内连搜 4 次全 0 = **Bilibili 搜索风控**。待主人冷却后复测
 - [ ] **Scrub 诊断日志清理**：SCRUB-DEBUG / SCRUB-CRC / onDrain 日志在确认修好后移除
@@ -37,6 +36,7 @@
 
 ## 历史遗留需求（未处理）
 
+- **Scrub 短视频 frame timeout（暂缓——主人指示难修复先放着）**：H.264 优先（84753725）+ network-caching=300（51c60261）已提交，但**短视频仍可能超时**；8x 倍率已回退（2f586ef6）。难在 Bilibili 短视频 CDN（edge.mountaintoys.cn）seek 分片慢/不稳定 + libvlc vout 渲染时序。**后续再看**
 - fps 诊断（publishFrame 每 N 帧日志，验证 GPU scaling 恢复 60fps）
 
 ---
