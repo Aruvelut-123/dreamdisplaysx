@@ -11,7 +11,7 @@ import java.util.jar.JarFile
  * Loads the LibVLC native runtime and sets the system properties vlcj needs to
  * discover it.
  *
- * The primary path is [NativesDownloader], which fetches LibVLC + SQLite into
+ * The primary path is [NativesDownloader], which fetches LibVLC into
  * `./dreamdisplayx/natives/<os>/<arch>/` at startup (the jar no longer bundles
  * any native binaries). A classpath extraction fallback (`libvlc/native/...`)
  * is retained for local dev builds that may still place natives on the

@@ -1,19 +1,18 @@
 # Build Natives — standalone workflow
 #
-# Compiles/collects the relocated native libraries the fat loader jars need and
-# publishes the binaries as a GitHub Release. Only the main project build
-# workflow downloads them from that release, so the C toolchains (MinGW on
-# Windows) are not needed on every CI run.
+# Collects the official LibVLC runtime (libvlc.dll / .so / .dylib + plugins)
+# and publishes the binaries as a GitHub Release. Only the main project build
+# workflow downloads them from that release, so the MSYS2 toolchains on Windows
+# are not needed on every CI run.
 #
-# Two product groups, one release:
-#   - sqlite: compiles the relocated sqlite-jdbc native library (mod isolation)
-#   - libvlc: collects the official LibVLC runtime (libvlc.dll / .so / .dylib
-#             + plugins) so built jars carry the full decoder itself
+# sqlite-jdbc ships as a plain dependency now: on NeoForge it rides along as a
+# jar-in-jar, on Fabric/Paper the stock native binaries inside the fat loader
+# jar are used directly — no custom-built (relocated-JNI) sqlite natives needed.
 #
 # Trigger: manual (workflow_dispatch). The release tag is auto-generated from
-# the commit SHA and timestamp, and the tag marker files
-# (.github/natives-sqlite-tag.txt, .github/natives-libvlc-tag.txt) are updated
-# so the main build workflow always picks up the latest pre-built natives.
+# the commit SHA and timestamp, and the tag marker file
+# (.github/natives-tag.txt) is updated so the main build workflow always picks
+# up the latest pre-built natives.
 
 name: Build Natives
 
@@ -28,82 +27,6 @@ permissions:
   contents: write
 
 jobs:
-  sqlite:
-    name: sqlite ${{ matrix.sqlite.platform }}
-    runs-on: ${{ matrix.sqlite.runner }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        sqlite:
-          - { platform: linux-x64,      os: Linux,   arch: x86_64,  runner: ubuntu-latest }
-          - { platform: linux-aarch64,  os: Linux,   arch: aarch64, runner: ubuntu-24.04-arm }
-          - { platform: macos-x64,      os: Mac,     arch: x86_64,  runner: macos-15-intel }
-          - { platform: macos-aarch64,  os: Mac,     arch: aarch64, runner: macos-14 }
-          - { platform: windows-x64,    os: Windows, arch: x86_64,  runner: windows-latest }
-          - { platform: windows-aarch64,os: Windows, arch: aarch64, runner: windows-11-arm }
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup JDK 25
-        uses: actions/setup-java@v5.2.0
-        with:
-          java-version: 25
-          distribution: zulu
-
-      - name: Cache sqlite native build
-        uses: actions/cache@v4.2.3
-        with:
-          path: |
-            native/sqlite/amalgamation
-            native/sqlite/sqlite-jdbc-src
-          key: sqlite-${{ matrix.sqlite.platform }}
-          restore-keys: |
-            sqlite-${{ matrix.sqlite.platform }}-
-            sqlite-
-
-      - name: Install MinGW gcc on Windows
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          choco install mingw --no-progress -y
-          echo "$PATH" >> /dev/null
-          gcc --version
-
-      - name: Build sqlite native library
-        shell: bash
-        run: |
-          set -euo pipefail
-          export OUT_DIR="$PWD/native-artifact/sqlite/${{ matrix.sqlite.platform }}"
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            export CC="gcc"
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            export CC="clang"
-          else
-            export CC="gcc"
-          fi
-          bash native/sqlite/compile.sh ${{ matrix.sqlite.os }} ${{ matrix.sqlite.arch }}
-
-      - name: Package sqlite native library
-        shell: bash
-        run: |
-          # Pack only the platform content (<os>/<arch>/libsqlitejdbc.so etc.).
-          tar czf "sqlite-${{ matrix.sqlite.platform }}.tar.gz" \
-            -C native-artifact/sqlite/${{ matrix.sqlite.platform }} .
-
-      - name: Upload packaged sqlite native library
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: sqlite-${{ matrix.sqlite.platform }}
-          path: sqlite-${{ matrix.sqlite.platform }}.tar.gz
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
-
   libvlc:
     name: libvlc ${{ matrix.libvlc.platform }}
     runs-on: ${{ matrix.libvlc.runner }}
@@ -176,7 +99,7 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [ sqlite, libvlc ]
+    needs: [ libvlc ]
     timeout-minutes: 5
     outputs:
       tag: ${{ steps.gen_tag.outputs.tag }}
@@ -197,7 +120,7 @@ jobs:
       - name: Download all native archives
         uses: actions/download-artifact@v8.0.1
         with:
-          pattern: '*-*'
+          pattern: 'libvlc-*'
           path: native-archives
           merge-multiple: true
 
@@ -210,9 +133,8 @@ jobs:
           tag_name: ${{ steps.gen_tag.outputs.tag }}
           name: Natives ${{ steps.gen_tag.outputs.tag }}
           body: >
-            Pre-built native libraries for all 6 target platforms:
-            sqlite-jdbc with relocated JNI symbols
-            (com.dreamdisplayx.libs.org.sqlite) and the official LibVLC runtime.
+            Pre-built native libraries for all 7 target platforms:
+            the official LibVLC runtime.
           files: native-archives/*.tar.gz
           fail_on_unmatched_files: true
           draft: false
@@ -222,8 +144,7 @@ jobs:
         env:
           # A Personal Access Token (classic or fine-grained with repo: contents write)
           # is required because the default GITHUB_TOKEN cannot trigger downstream
-          # workflows. The SQLITE_NATIVES_TOKEN secret was already set up for the
-          # legacy sqlite-natives.yml workflow.
+          # workflows. Keeps the legacy SQLITE_NATIVES_TOKEN secret name.
           TOKEN: ${{ secrets.SQLITE_NATIVES_TOKEN }}
           NATIVES_TAG: ${{ steps.gen_tag.outputs.tag }}
         if: env.TOKEN != ''
@@ -231,7 +152,7 @@ jobs:
           git clone "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" repo
           cd repo
           # Checkout the branch that triggered this workflow_dispatch so that
-          # the tag marker file (which lives on feat/libvlc, not main) is present.
+          # the tag marker file is present on it.
           git checkout "${{ github.ref_name }}"
           # Update the tag marker file. The natives manifest release_base is
           # injected by _build.yml at build time (release_base is never

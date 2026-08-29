@@ -333,12 +333,8 @@ class DisplayScreen(
     /** Temporary mute applied while the game window is unfocused; does not change [muted]. */
     private var focusMuted: Boolean = false
 
-    /** Distance in blocks past which the display is unloaded; writes record the new value. */
-    var renderDistance: Int = 96
-        set(value) {
-            field = value
-            DisplayRegistry.recordScreen(this)
-        }
+    /** Distance in blocks past which the display is unloaded; mirrors the client's own render distance option. */
+    val renderDistance: Int get() = clientRenderDistanceBlocks()
 
     /** Last known playback position in nanoseconds, restored on reconnect. */
     var savedTimeNanos: Long = 0
@@ -1131,7 +1127,7 @@ class DisplayScreen(
 
     companion object {
         /** Logger for replay-capture and diagnostic messages. */
-        private val logger = LoggerFactory.getLogger("DreamDisplaysX/DisplayScreen")
+        private val logger = LoggerFactory.getLogger(javaClass)
 
         /** Ticks between voxel-acoustics re-probes; the DSP chain smooths across this gap. */
         private const val ENV_PROBE_INTERVAL_TICKS = 2
@@ -1179,5 +1175,9 @@ class DisplayScreen(
 
         /** Maximum server-prescribed default volume accepted by the client (200% in the UI). */
         private const val MAX_SERVER_DEFAULT_VOLUME = 1.0f
+
+        /** The client's own chunk render distance option, converted to blocks. */
+        internal fun clientRenderDistanceBlocks(): Int =
+            Minecraft.getInstance().options.renderDistance().get() * 16
     }
 }

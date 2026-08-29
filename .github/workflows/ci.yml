@@ -13,7 +13,6 @@ on:
       - 'SESSION_TASKS.md'
       - '.gitignore'
       - '.github/**'
-      - 'native/sqlite/**'
       - 'native/libvlc/**'
   pull_request:
     branches: [ main ]
@@ -23,7 +22,6 @@ on:
       - 'SESSION_TASKS.md'
       - '.gitignore'
       - '.github/**'
-      - 'native/sqlite/**'
       - 'native/libvlc/**'
   workflow_dispatch:
 

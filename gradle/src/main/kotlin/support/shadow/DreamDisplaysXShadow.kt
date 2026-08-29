@@ -1,8 +1,8 @@
 package support.shadow
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.gradle.api.file.CopySpec
 
-/** Shared modules bundled into every fat loader jar (`Fabric`, `NeoForge`, `Paper`). */
 val dreamDisplaysSharedModules = listOf(
     ":platform:client:common",
     ":core",
@@ -14,7 +14,6 @@ val dreamDisplaysSharedModules = listOf(
     ":media:audio",
 )
 
-/** Third-party dependencies bundled into fat client loader jars (superset safe). */
 val dreamDisplaysShadedDependencies = listOf(
     "org.jetbrains.kotlinx:kotlinx-serialization-core",
     "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm",
@@ -68,14 +67,22 @@ val dreamDisplaysShadedPackages = listOf(
     "org.mozilla.javascript",
     "org.mozilla.classfile",
     "com.google.zxing",
-    "org.sqlite",
 )
 
-/** Exclude all sqlite-jdbc native binaries (they are downloaded at runtime
- *  by [NativesDownloader]; the stock JNI symbols do not match the relocated
- *  NativeDB class). */
+/** Excludes sqlite-jdbc's native binaries for platforms this project never runs on. */
 val dreamDisplaysSqliteNativeExcludes = listOf(
-    "org/sqlite/native/**",
+    "org/sqlite/native/Linux-Android/**",
+    "org/sqlite/native/Linux-Musl/x86/**",
+    "org/sqlite/native/FreeBSD/**",
+    "org/sqlite/native/Linux/ppc64/**",
+    "org/sqlite/native/Linux/riscv64/**",
+    "org/sqlite/native/Linux/arm/**",
+    "org/sqlite/native/Linux/armv6/**",
+    "org/sqlite/native/Linux/armv7/**",
+    "org/sqlite/native/Linux/x86/**",
+    "org/sqlite/native/Windows/x86/**",
+    "org/sqlite/native/Windows/armv7/**",
+    "org/sqlite/native/Windows/aarch64/**",
 )
 
 /** Includes the shared `:core`/`:api`/`:util`/`:media:*` modules and third-party dependencies in a fat loader jar. */
@@ -86,23 +93,17 @@ fun ShadowJar.includeDreamDisplaysXSharedContents() {
     }
 }
 
-/** Relocates the shared third-party packages under `com.dreamdisplayx.libs` in a fat loader jar. */
+/**
+ * Relocates the shared third-party packages under `com.dreamdisplayx.libs` in a fat loader jar.
+ * sqlite-jdbc is NOT relocated: on NeoForge it ships as a jar-in-jar instead (upstream #201), and
+ * on Fabric/Paper the fat jar bundles it un-relocated so SQLiteJDBCLoader's hard-coded resource
+ * lookups keep working.
+ */
 fun ShadowJar.relocateDreamDisplaysXSharedPackages(prefix: String = "com.dreamdisplayx.libs") {
-    dreamDisplaysShadedPackages.forEach { pack ->
-        // The sqlite-jdbc native binaries (org/sqlite/native/**) keep their original path so
-        // SQLiteJDBCLoader's hard-coded "org/sqlite/native/..." resource lookup still resolves them.
-        // They are rebuilt in CI with relocated JNI symbols to match the relocated NativeDB class.
-        if (pack == "org.sqlite") {
-            relocate(pack, "$prefix.$pack") {
-                exclude("org/sqlite/native/**")
-            }
-        } else {
-            relocate(pack, "$prefix.$pack")
-        }
-    }
+    dreamDisplaysShadedPackages.forEach { relocate(it, "$prefix.$it") }
 }
 
-/** Excludes sqlite-jdbc's native binaries for platforms this project never runs on. */
-fun ShadowJar.excludeDreamDisplaysXSqliteNativeExtras() {
+/** Excludes sqlite-jdbc's native binaries for platforms this project never runs on (CopySpec variant, for jarJar trimming). */
+fun CopySpec.excludeDreamDisplaysXSqliteNativeExtras() {
     dreamDisplaysSqliteNativeExcludes.forEach { exclude(it) }
 }

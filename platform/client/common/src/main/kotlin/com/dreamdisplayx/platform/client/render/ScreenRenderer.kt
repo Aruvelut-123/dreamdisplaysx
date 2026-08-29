@@ -33,9 +33,12 @@ object ScreenRenderer : ClientRenderService {
     private typealias QuadAppender = (PoseStack.Pose, VertexConsumer) -> Unit
     private typealias QuadRenderer = (RenderType, QuadAppender) -> Unit
 
-    /** Iterates all registered screens and renders each one relative to [camera]. */
-    fun render(stack: PoseStack, camera: Camera) {
-        render(stack, camera) { type, appendVertices ->
+    /**
+     * Iterates all registered screens and renders each one relative to [camera]. Pass `replay = true`
+     * for [UnshadedDisplayPass]'s second draw of a frame already on screen.
+     */
+    fun render(stack: PoseStack, camera: Camera, replay: Boolean = false) {
+        render(stack, camera, replay) { type, appendVertices ->
             drawImmediate(stack, type, appendVertices)
         }
     }
@@ -67,7 +70,7 @@ object ScreenRenderer : ClientRenderService {
     override val registeredCount: Int; get() = DisplayRegistry.getScreens().count { it.hasTexture }
 
     /** Iterates all registered screens and lets the caller submit quads through the active renderer. */
-    fun render(stack: PoseStack, camera: Camera, drawQuad: QuadRenderer) {
+    fun render(stack: PoseStack, camera: Camera, replay: Boolean = false, drawQuad: QuadRenderer) {
         val cameraPos =
             //? if >=1.21.11 {
             camera.position()
@@ -83,7 +86,7 @@ object ScreenRenderer : ClientRenderService {
             val relativePos = screenCenter.subtract(cameraPos)
             stack.translate(relativePos.x, relativePos.y, relativePos.z)
 
-            renderScreenTexture(displayScreen, stack, drawQuad)
+            renderScreenTexture(displayScreen, stack, replay, drawQuad)
 
             stack.popPose()
         }
@@ -91,25 +94,32 @@ object ScreenRenderer : ClientRenderService {
         // The registered RenderHook extends the world pass after the mod's own screens.
         // ClientRenderModule installs the default hook for API-registered surfaces.
         // The world render hooks do not surface a partial tick, hence the 0f tickDelta.
-        DreamServices.registry.getOrNull<RenderHook>()
+        // Only on the level-pass draw: the replay would run every surface a second time.
+        if (!replay) DreamServices.registry.getOrNull<RenderHook>()
             ?.onRender(MinecraftRenderContext(stack, camera, 0f))
     }
 
+    /** Distance the [UnshadedDisplayPass] replay is lifted off the level-pass quad it repeats, in blocks. */
+    private const val REPLAY_LIFT = 0.01f
+
     /** Translates and rotates the pose for [displayScreen]'s facing direction, then renders the video or fallback color. */
-    private fun renderScreenTexture(displayScreen: DisplayScreen, stack: PoseStack, drawQuad: QuadRenderer) {
-        // Upload the latest decoded frame to the GPU texture (if a new one is ready).
-        // Done here on the render thread instead of via mc.execute() per frame.
-        displayScreen.fitTexture()
+    private fun renderScreenTexture(
+        displayScreen: DisplayScreen, stack: PoseStack, replay: Boolean, drawQuad: QuadRenderer,
+    ) {
+        if (!replay) displayScreen.fitTexture()
 
         val facing = displayScreen.facing
         val w = displayScreen.width
         val h = displayScreen.height
+        val lift = if (replay) REPLAY_LIFT else 0f
 
         if (displayScreen.isVideoStarted && displayScreen.hasTexture && displayScreen.renderType != null) {
             // Each quad is drawn through its own drawLayer so the backdrop and video can sit at distinct
-            // z-depths: liftTowardViewer MUST be applied BEFORE the transform's z-flattening scale, and
+            // z-depths: liftTowardViewer is applied BEFORE the transform's z-flattening scale, and
             // drawLayer does exactly that (the same per-layer separation the loading placeholder uses).
-            renderVideo(stack, displayScreen, drawQuad)
+            // The replay lift is added on top so the UnshadedDisplayPass repaint sits just in front of
+            // the level-pass draw it repeats (water/glass fix).
+            renderVideo(stack, displayScreen, drawQuad, lift)
         } else {
             renderPlaceholder(
                 stack,
@@ -118,7 +128,8 @@ object ScreenRenderer : ClientRenderService {
                 facing,
                 w,
                 h,
-                displayScreen.errored
+                displayScreen.errored,
+                lift,
             )
         }
     }
@@ -142,7 +153,7 @@ object ScreenRenderer : ClientRenderService {
      *  is exactly why the backdrop and video previously sat coplanar and z-fought. Here the video is lifted
      *  one extra layer above the backdrop so the two LETTERBOX quads hold distinct depths — the same
      *  per-layer separation the loading placeholder already uses. */
-    private fun renderVideo(stack: PoseStack, displayScreen: DisplayScreen, drawQuad: QuadRenderer) {
+    private fun renderVideo(stack: PoseStack, displayScreen: DisplayScreen, drawQuad: QuadRenderer, lift: Float) {
         val appear = displayScreen.appearProgress()
         val base = if (displayScreen.isYuvTexture) displayScreen.brightness.coerceIn(0f, 1f) * 255f else 255f
         val c = (base * appear).toInt().coerceIn(0, 255)
@@ -159,7 +170,7 @@ object ScreenRenderer : ClientRenderService {
 
         if (letterbox) {
             // Black backdrop covers the whole block face at the base depth.
-            drawLayer(stack, facing, w, h, 0f) {
+            drawLayer(stack, facing, w, h, lift) {
                 drawQuad(DisplayYuvRenderTypes.solidColorType()) { pose, builder ->
                     appendQuad(pose, builder, 0, 0, 0, displayScreen.rotation)
                 }
@@ -168,7 +179,7 @@ object ScreenRenderer : ClientRenderService {
 
         // Video quad: in LETTERBOX it is lifted one extra layer above the backdrop; otherwise it sits at
         // the base depth (single quad, no coplanar neighbour).
-        drawLayer(stack, facing, w, h, if (letterbox) OVERLAY_LIFT else 0f) {
+        drawLayer(stack, facing, w, h, lift + if (letterbox) OVERLAY_LIFT else 0f) {
             drawQuad(displayScreen.renderType!!) { pose, builder ->
                 appendQuad(pose, builder, c, c, c, displayScreen.rotation, qx0, qy0, qx1, qy1, u0, v0, u1, v1)
             }
@@ -222,10 +233,10 @@ object ScreenRenderer : ClientRenderService {
      */
     private fun renderPlaceholder(
         stack: PoseStack, drawQuad: QuadRenderer, type: RenderType,
-        facing: DisplayFacing, w: Int, h: Int, error: Boolean,
+        facing: DisplayFacing, w: Int, h: Int, error: Boolean, lift: Float,
     ) {
         // Backdrop on the screen plane
-        drawLayer(stack, facing, w, h, 0f) {
+        drawLayer(stack, facing, w, h, lift) {
             val (r, g, b) = if (error) {
                 Triple(28, 6, 6)
             } else {
@@ -242,7 +253,7 @@ object ScreenRenderer : ClientRenderService {
         val x1 = 0.94f
 
         // Bar track, lifted off the backdrop.
-        drawLayer(stack, facing, w, h, OVERLAY_LIFT) {
+        drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT) {
             val (r, g, b) = if (error) Triple(120, 30, 30) else Triple(22, 24, 34)
             drawQuad(type) { pose, vb -> appendRect(pose, vb, x0, y0, x1, y1, r, g, b) }
         }
@@ -257,7 +268,7 @@ object ScreenRenderer : ClientRenderService {
         val segStart = x0 - segW + travel * phase
         val sx0 = segStart.coerceIn(x0, x1)
         val sx1 = (segStart + segW).coerceIn(x0, x1)
-        if (sx1 > sx0) drawLayer(stack, facing, w, h, OVERLAY_LIFT * 2f) {
+        if (sx1 > sx0) drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT * 2f) {
             drawQuad(type) { pose, vb -> appendRect(pose, vb, sx0, y0, sx1, y1, 40, 110, 255) }
         }
     }

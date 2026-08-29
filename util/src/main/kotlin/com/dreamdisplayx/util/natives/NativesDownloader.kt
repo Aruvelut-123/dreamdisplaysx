@@ -13,16 +13,17 @@ import java.io.IOException
 import java.nio.file.Files
 
 /**
- * Downloads the native LibVLC and SQLite runtimes from a pinned GitHub Release
- * into the working directory's `dreamdisplayx/natives/<os>/<arch>/` folder.
+ * Downloads the native LibVLC runtime from a pinned GitHub Release into the
+ * working directory's `dreamdisplayx/natives/<os>/<arch>/` folder.
  *
  * The manifest (`dreamdisplayx/natives-manifest.json` bundled in the jar) maps
  * each platform to a release asset name. Downloads are proxied through
  * gh-proxy.com (with a direct GitHub fallback) so that users behind restrictive
  * networks can still fetch the binaries.
  *
- * Lives in `util` (not `media:player`) because the dedicated server also needs
- * the SQLite runtime and only depends on the `core` + `util` modules.
+ * sqlite-jdbc is no longer downloaded: on NeoForge it ships as a jar-in-jar and
+ * on Fabric/Paper the stock native binaries inside the fat loader jar are used
+ * directly.
  */
 object NativesDownloader {
 
@@ -30,51 +31,40 @@ object NativesDownloader {
 
     private const val BASE_DIR = "./dreamdisplayx/natives"
 
-    /** Which runtimes to fetch. The dedicated server only needs [SQLITE]. */
-    enum class Component {
-        LIBVLC,
-        SQLITE,
-    }
-
     // ── Manifest ──────────────────────────────────────────────────────────
 
     private data class Manifest(
         val version: Int,
         val release_base: String,
         val libvlc: Map<String, String>,
-        val sqlite: Map<String, String>,
     )
 
     // ── Public API ─────────────────────────────────────────────────────────
 
     /**
      * Called once during mod initialisation. Downloads and extracts any missing
-     * native runtimes, then sets the system properties that LibVLC and SQLite
-     * need to discover them.
+     * native runtime, then sets the system properties that LibVLC needs to
+     * discover it.
      *
-     * Safe to call multiple times; subsequent calls are a no-op for components
-     * that have already been fetched successfully. This allows the dedicated
-     * server to call `ensure(SQLITE)` first and the client to later call
-     * `ensure()` (i.e. LIBVLC+SQLITE) without skipping the unfulfilled ones.
+     * Safe to call multiple times; subsequent calls are a no-op once the
+     * runtime has been fetched successfully.
      */
     @JvmStatic
-    fun ensure(components: Set<Component> = setOf(Component.LIBVLC, Component.SQLITE)) {
-        val missing = components - downloadedComponents
-        if (missing.isEmpty()) return
+    fun ensure() {
+        if (downloaded) return
         synchronized(this) {
-            val stillMissing = missing - downloadedComponents
-            if (stillMissing.isEmpty()) return
+            if (downloaded) return
             try {
-                downloadAndExtract(stillMissing)
-                downloadedComponents.addAll(stillMissing)
+                downloadAndExtract()
+                downloaded = true
             } catch (e: Exception) {
                 logger.error("Failed to download natives", e)
             }
         }
     }
 
-    /** Components that have been successfully downloaded at least once. */
-    private val downloadedComponents = mutableSetOf<Component>()
+    /** Whether the runtime has been successfully downloaded at least once. */
+    private var downloaded = false
 
     // ── Platform detection ─────────────────────────────────────────────────
 
@@ -111,54 +101,34 @@ object NativesDownloader {
 
     // ── Download & extract ─────────────────────────────────────────────────
 
-    private fun downloadAndExtract(components: Set<Component>) {
+    private fun downloadAndExtract() {
         val manifest = loadManifest() ?: run {
             logger.warn("natives-manifest.json not found on classpath; skipping download.")
             return
         }
 
         val libvlcAsset = manifest.libvlc[platformKey]
-        val sqliteAsset = manifest.sqlite[platformKey]
 
         val nativesDir = File("$BASE_DIR/$osDir/$archDir")
         nativesDir.mkdirs()
 
         // LibVLC
-        if (Component.LIBVLC in components) {
-            if (libvlcAsset != null) {
-                val libvlcDir = File(nativesDir, "libvlc")
-                if (!hasLibVlc(libvlcDir)) {
-                    logger.info("LibVLC natives not cached at {}; downloading {}", libvlcDir, libvlcAsset)
-                    downloadAndExtractTarGz(manifest.release_base, libvlcAsset, libvlcDir)
-                } else {
-                    logger.info("LibVLC natives already cached at {}", libvlcDir)
-                }
-                // Set system properties for vlcj
-                System.setProperty("jna.library.path", libvlcDir.absolutePath)
-                val pluginsDir = File(libvlcDir, "plugins")
-                if (pluginsDir.isDirectory) {
-                    System.setProperty("VLC_PLUGIN_PATH", pluginsDir.absolutePath)
-                }
+        if (libvlcAsset != null) {
+            val libvlcDir = File(nativesDir, "libvlc")
+            if (!hasLibVlc(libvlcDir)) {
+                logger.info("LibVLC natives not cached at {}; downloading {}", libvlcDir, libvlcAsset)
+                downloadAndExtractTarGz(manifest.release_base, libvlcAsset, libvlcDir)
             } else {
-                logger.warn("No LibVLC asset for platform {}", platformKey)
+                logger.info("LibVLC natives already cached at {}", libvlcDir)
             }
-        }
-
-        // SQLite
-        if (Component.SQLITE in components) {
-            if (sqliteAsset != null) {
-                val sqliteDir = File(nativesDir, "sqlite")
-                if (!hasSqlite(sqliteDir)) {
-                    logger.info("SQLite natives not cached at {}; downloading {}", sqliteDir, sqliteAsset)
-                    downloadAndExtractTarGz(manifest.release_base, sqliteAsset, sqliteDir)
-                } else {
-                    logger.info("SQLite natives already cached at {}", sqliteDir)
-                }
-                // Tell SQLiteJDBCLoader to look here instead of classpath
-                System.setProperty("org.sqlite.lib.path", sqliteDir.absolutePath)
-            } else {
-                logger.warn("No SQLite asset for platform {}", platformKey)
+            // Set system properties for vlcj
+            System.setProperty("jna.library.path", libvlcDir.absolutePath)
+            val pluginsDir = File(libvlcDir, "plugins")
+            if (pluginsDir.isDirectory) {
+                System.setProperty("VLC_PLUGIN_PATH", pluginsDir.absolutePath)
             }
+        } else {
+            logger.warn("No LibVLC asset for platform {}", platformKey)
         }
     }
 
@@ -190,8 +160,7 @@ object NativesDownloader {
         val version = parseJsonInt(json, "version")
         val releaseBase = parseJsonString(json, "release_base")
         val libvlc = parseJsonMap(json, "libvlc")
-        val sqlite = parseJsonMap(json, "sqlite")
-        return Manifest(version, releaseBase, libvlc, sqlite)
+        return Manifest(version, releaseBase, libvlc)
     }
 
     // ── Tar.gz extraction ──────────────────────────────────────────────────
@@ -287,16 +256,6 @@ object NativesDownloader {
             else -> "libvlc.so"
         }
         return File(dir, probeName).isFile
-    }
-
-    private fun hasSqlite(dir: File): Boolean {
-        if (!dir.isDirectory) return false
-        val probeName = when {
-            OsInfo.isWindows -> "sqlitejdbc.dll"
-            OsInfo.isMac -> "libsqlitejdbc.jnilib"
-            else -> "libsqlitejdbc.so"
-        }
-        return File(dir, probeName).isFile || dir.listFiles()?.any { it.name.contains("sqlite") } == true
     }
 
     // ── Minimal JSON helpers ───────────────────────────────────────────────

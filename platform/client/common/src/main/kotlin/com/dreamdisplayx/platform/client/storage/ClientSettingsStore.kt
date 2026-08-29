@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object ClientSettingsStore : ClientSettingsStorage {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ClientSettingsStore")
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     /** File name for the JSON settings file. */
     private const val FILE_NAME = "client-display-settings.json"
@@ -89,13 +89,6 @@ object ClientSettingsStore : ClientSettingsStorage {
     override fun setSavedTimeNanos(displayUuid: UUID, nanos: Long) {
         val s = getSettings(displayUuid)
         s.savedTimeNanos = nanos
-        save()
-    }
-
-    /** Sets the viewer-chosen render distance (in blocks) for [displayUuid] and saves. */
-    override fun setRenderDistance(displayUuid: UUID, blocks: Int) {
-        val s = getSettings(displayUuid)
-        s.renderDistance = blocks
         save()
     }
 

@@ -31,11 +31,11 @@ object Initializer {
     const val MOD_ID: String = "dreamdisplayx"
 
     /** Logger for startup and lifecycle messages. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/Initializer")
+    private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Called once during mod startup; initializes config, `FFmpeg`, disk cache, and the focuser thread. */
+    /** Called once during mod startup; initializes config, disk cache, and the focuser thread. */
     fun onModInit(dreamDisplaysMod: Mod) {
-        // Android is not supported — the mod relies on native libraries (dlopen/JNI) and
+        // Android is not supported 鈥?the mod relies on native libraries (dlopen/JNI) and
         // subprocess execution that SELinux and noexec policies prevent on stock Android.
         if (OsInfo.isAndroid) {
             logger.warn("Dream DisplaysX is not supported on Android. Disabling mod.")
@@ -49,8 +49,8 @@ object Initializer {
         }
         ClientPacketManager.bind(dreamDisplaysMod)
 
-        // Fetch the native runtimes (LibVLC + SQLite) into ./dreamdisplayx/natives/
-        // before anything tries to use them. No-ops when already cached.
+        // Fetch the native LibVLC runtime into ./dreamdisplayx/natives/ before
+        // anything tries to use it. No-ops when already cached.
         NativesDownloader.ensure()
 
         logger.info("Dream DisplaysX v${GeneralUtil.getPrettyModVersion()} (${GeneralUtil.getCommitId()}) starting...")

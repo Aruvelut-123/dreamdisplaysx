@@ -66,10 +66,11 @@ object DisplayYuvRenderTypes {
      * Single decision point for the GPU-YUV mode: the native library must produce planar frames and the runtime must
      * support the YUV pipeline, with no active shader pack.
      *
-     * NOTE (feat/libvlc): this is forced OFF. The 26.2 YUV fragment-shader path (via Yuv262Reflect) renders black
+     * NOTE (libvlc): this is forced OFF. The 26.2 YUV fragment-shader path (via Yuv262Reflect) renders black
      * on the user's Sodium environment, so the display always uses the reliable RGB single-texture path
      * (buildRgba + uploadInterleaved), matching the VideoPlayer mod's RV32 (RGBA8888) model. The YUV code is kept
-     * for a future fix but is never selected.
+     * for a future fix but is never selected. Upstream additionally rules YUV out while a shader pack is
+     * active (no pack can read the three planes), which stays safe here too.
      */
     val active: Boolean
         get() = false

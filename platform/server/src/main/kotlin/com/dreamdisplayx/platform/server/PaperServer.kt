@@ -1,4 +1,4 @@
-package com.dreamdisplayx.platform.server
+﻿package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
@@ -16,7 +16,6 @@ import com.dreamdisplayx.platform.server.registrar.CommandRegistrar
 import com.dreamdisplayx.platform.server.registrar.ListenerRegistrar
 import com.dreamdisplayx.platform.server.storage.StorageBackend
 import com.dreamdisplayx.platform.server.utils.net.PaperV2Networking
-import com.dreamdisplayx.util.natives.NativesDownloader
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import org.bstats.bukkit.Metrics
@@ -60,10 +59,6 @@ class PaperServer : JavaPlugin() {
 
     /** Initializes scheduler, storage, listeners, channels, and metrics. Safe to call from a reload. */
     fun doEnable() {
-        // Fetch the SQLite native runtime before any storage open. The dedicated
-        // server only needs SQLite (no LibVLC) and only depends on core+util.
-        NativesDownloader.ensure(setOf(NativesDownloader.Component.SQLITE))
-
         Scheduler.init(this)
 
         val s = Companion.config.storage

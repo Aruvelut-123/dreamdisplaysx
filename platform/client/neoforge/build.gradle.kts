@@ -109,6 +109,7 @@ dependencies {
     implementation(libs.exposedMigrationJdbc)
     implementation(libs.hikari)
     runtimeOnly(libs.sqliteJdbc)
+    jarJar(libs.sqliteJdbc)
     vendoredLibraries(libs.tomlj)
     vendoredLibraries(libs.semver4j)
     vendoredLibraries(libs.caffeine)
@@ -135,7 +136,6 @@ dependencies {
     shadow(libs.caffeine)
     shadow(libs.okhttp)
     shadow(libs.okio)
-    shadow(libs.sqliteJdbc)
     shadow(libs.exposedCore)
     shadow(libs.exposedJdbc)
     shadow(libs.exposedMigrationJdbc)
@@ -208,13 +208,29 @@ java {
     withSourcesJar()
 }
 
+val sqliteJdbcJarJarFile = configurations.named("jarJar").map { configuration ->
+    configuration.first { it.name.startsWith("sqlite-jdbc-") }
+}
+
+val trimmedSqliteJdbcJarJar = tasks.register<Zip>("trimmedSqliteJdbcJarJar") {
+    from(sqliteJdbcJarJarFile.map { zipTree(it) })
+    excludeDreamDisplaysXSqliteNativeExtras()
+    archiveFileName.set(sqliteJdbcJarJarFile.map { it.name })
+    destinationDirectory.set(layout.buildDirectory.dir("generated/trimmedJarJar"))
+}
+
 tasks.shadowJar {
     configurations = listOf(project.configurations.getByName("shadow"))
     archiveBaseName.set("dreamdisplayx-neoforge")
     archiveVersion.set("$activeStonecutterVersion-${rootProject.version}")
     includeDreamDisplaysXSharedContents()
     relocateDreamDisplaysXSharedPackages()
-    excludeDreamDisplaysXSqliteNativeExtras()
+    from(tasks.named("jarJar")) {
+        exclude("META-INF/jarjar/sqlite-jdbc-*.jar")
+    }
+    from(trimmedSqliteJdbcJarJar) {
+        into("META-INF/jarjar")
+    }
 }
 
 tasks.withType<AbstractArchiveTask>().configureEach {

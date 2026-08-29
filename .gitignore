@@ -39,3 +39,6 @@ native/target/
 
 # Local build logs
 build-*.log
+
+# Stonecutter
+versions/

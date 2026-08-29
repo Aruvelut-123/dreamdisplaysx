@@ -118,8 +118,8 @@ class StorageManager(
     password: String = "",
     useSSL: Boolean = false,
     jdbcUrl: String = "",
-    private val logger: Logger = LoggerFactory.getLogger("DreamDisplaysX/Storage"),
 ) {
+    private val logger: Logger = LoggerFactory.getLogger(javaClass)
     private val table = DisplaysTable(tablePrefix)
 
     private val dataSource = HikariDataSource(HikariConfig().apply {

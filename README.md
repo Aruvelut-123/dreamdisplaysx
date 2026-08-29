@@ -2,78 +2,24 @@
 [![License](https://img.shields.io/github/license/Aruvelut-123/dreamdisplaysx)](https://github.com/Aruvelut-123/dreamdisplaysx/blob/main/LICENSE)
 
 <div align="center">
-  <img src="https://i.imgur.com/HM4JUdj.png" alt="Dream DisplaysX"> 
-  <div>
-    <a href="https://github.com/Aruvelut-123/dreamdisplaysx/releases">Download from GitHub</a>
-  </div>
+  <img src="https://i.imgur.com/HM4JUdj.png" alt="Dream DisplaysX">
 </div>
 
-## What is Dream DisplaysX?
+# Bring real video playback to Minecraft
 
-**Dream DisplaysX** is a fork of [Dream Displays](https://github.com/arnodoelinger/dreamdisplays) that puts video
-displays inside Minecraft — watch YouTube, Twitch, Bilibili, or any video, right on a wall in your world, together with
-friends or solo.
+Watch videos, livestreams, and more directly on in-game displays — together with your friends.
 
-Put a display on the wall and watch YouTube, Twitch, Bilibili, or pretty much any video, right inside Minecraft.
-It works great solo, and just as well with friends: watch together in sync, or let everyone control their own screen
-independently. Players just install the client-side mod, and they're ready to go.
+Create a display, paste a link and that's it!
 
-## What's new in this fork?
+![Player watching on displays](https://i.imgur.com/JoARVeu.png)
 
-Compared to the original Dream Displays, this fork adds:
+Dream DisplaysX is a fork of [Dream Displays](https://github.com/arnodoelinger/dreamdisplays). If you encounter any
+error on this version, **do not** submit issues to the original repository — open an issue
+[here](https://github.com/Aruvelut-123/dreamdisplaysx/issues) instead. Thanks!
 
-- **Bilibili account login** — QR-code login screen (`/dlogin`); `SESSDATA` is stored **encrypted** on the server
-  (AES-256-GCM) and pushed back to unlock higher-quality / VIP Bilibili streams.
-- **Global Bilibili login** — single account per server/network, broadcast to all players,
-  OP-only with LuckPerms support and cross-server credential sync (SQLite/MySQL).
-- **Bilibili VIP badge** — official VIP badge image, differentiating normal and annual VIP.
-- **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions.
-- **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
-- **Built-in Simplified Chinese** (`zh_cn`) language file.
-- **Fully self-contained** — no external FFmpeg binary, no Rust toolchain, no Python, no vlcj. Video/audio decode runs through a low-level libvlc (JNA) binding; the native runtimes are downloaded automatically on first boot.
-- Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.
+# Watch anything
 
-> If you encounter any error on this version, **do not** submit issues to the original repository — open an issue
-> [here](https://github.com/Aruvelut-123/dreamdisplaysx/issues) instead. Thanks!
-
-## Works with all popular server software
-
-Setting it up on the server takes seconds:
-
-- Running a plugin-based server (Paper, Spigot, Velocity, BungeeCord)? Drop the plugin `.jar` into your `/plugins` folder
-- Running a mod-based server (Fabric, NeoForge)? Drop the mod `.jar` into your `/mods` folder
-
-![Display menu](https://wsrv.nl/?url=https%3A%2F%2Fprivate-user-images.githubusercontent.com%2F74359983%2F633438991-f1ada886-0cd5-447a-8da7-99491d77c0ae.png%3Fjwt%3DeyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODYzNzc1MjEsIm5iZiI6MTc4NjM3NzIyMSwicGF0aCI6Ii83NDM1OTk4My82MzM0Mzg5OTEtZjFhZGE4ODYtMGNkNS00NDdhLThkYTctOTk0OTFkNzdjMGFlLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjA4MTAlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwODEwVDE1NTM0MVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWM1ZmY1YTM3MDFlNjE0ODdmMWNjZjAzZDllN2M1ZDQzZjc0OGMwMzM0MDYyYzY3MDVkMTU4YjE3NmQ0ZjYyZTcmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JnJlc3BvbnNlLWNvbnRlbnQtdHlwZT1pbWFnZSUyRnBuZyJ9.SgSQJl554bceqqJwZb4mtglbQ-grB4huwFMRXXypnLQ&n=-1)
-
-## Supported versions
-
-| Minecraft | Fabric | NeoForge | Paper | Notes |
-|-----------|--------|----------|-------|-------|
-| 1.21.1    | ✅      | ✅        | ✅     | Legacy LTS line |
-| 1.21.11   | ✅      | ✅        | ✅     | Current default |
-| 26.1.2    | ✅      | ✅        | ✅     | |
-| 26.2      | ✅      | ✅        | ✅     | |
-
-Velocity and BungeeCord proxies are also supported.
-
-## Download
-
-Grab the `.jar` for your loader and Minecraft version from the
-[latest release](https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest):
-
-- `dreamdisplayx-fabric-<mc>-<version>.jar` — Fabric / Quilt client or server mod
-- `dreamdisplayx-neoforge-<mc>-<version>.jar` — NeoForge client or server mod
-- `dreamdisplayx-paper-<version>.jar` — Paper plugin (cross-version, 1.21.1 – 26.2)
-- `dreamdisplayx-velocity-<version>.jar` / `dreamdisplayx-bungeecord-<version>.jar` — proxy plugins
-
-On the **client**, install the mod into your mods folder. On the **server**, install the matching jar (plugin or mod).
-That's it — no extra dependencies required.
-
-## Features
-
-### What you can watch
-
-Create a display, paste a link with `/display video <link>` — Dream DisplaysX figures out the rest.
+![Display menu](https://i.imgur.com/wGnDzrT.png)
 
 |                                                                                                                                                                                                                                                                           | Source                        | What works                                                                     |
 |---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|--------------------------------------------------------------------------------|
@@ -85,42 +31,83 @@ Create a display, paste a link with `/display video <link>` — Dream DisplaysX 
 | <img src="https://cdn.simpleicons.org/googledrive" width="32" height="32" alt="Google Drive"><br><img src="https://cdn.simpleicons.org/dropbox" width="32" height="32" alt="Dropbox"><br><img src="https://cdn.simpleicons.org/imgur" width="32" height="32" alt="Imgur"> | **Share links**               | Google Drive, Dropbox, and Imgur links are rewritten to the file they point at |
 | <img src="https://cdn.simpleicons.org/googlechrome" width="32" height="32" alt="Web">                                                                                                                                                                                     | **Pretty much anywhere else** | Not on the list? Try it anyway — chances are it'll play                        |
 
-### Playback
+# Built for multiplayer
 
-- **Seamless multiplayer synchronization: local, synced, and broadcast**
-- Direct search and suggestions
-- Picture-in-Picture mode
-- Adjustable resolutions from 144p up to 4K
-- Volume control from 0% to 200%
-- Brightness control from 0% to 100%
-- Multiple video languages support
-- Integrated controls for play, pause, and seek
-- **Hardware-accelerated video decode** — FFmpeg hwaccel with per-platform backends (QSV, NVDEC, AMF, D3D11VA, VA-API, Vulkan, VideoToolbox), auto-detected from the GPU vendor and OS
-- And much more!
+Create a display, paste a link with `/display video <link>` — Dream DisplaysX figures out the rest.
 
-### Displays
+Watch together with your friends with seamless multiplayer synchronization. Choose between local, synchronized, and
+broadcast playback depending on how you want your displays to behave.
 
-- **Vertical display orientation support**
-- Customizable display sizes in blocks
-- Screens and settings remain after the server restarts or when unloaded
+Dream DisplaysX keeps playback synchronized across the server while keeping network usage extremely low.
 
-### Server
+![Cinema](https://i.imgur.com/PKxe0oG.png)
 
-- **Simple and precise server-side configuration**
-- **Ultra-low network impact and zero lags**
-- **Fabric server support (1:1 as Paper)**
-- Display commands — manage your in-game screens: create, delete, etc.
-- Fine-grained permissions for admin-only control
-- Full [LuckPerms](https://luckperms.net/) support
+# Made for you
 
-## How to use this mod?
+Dream DisplaysX is built to make watching videos in Minecraft feel as natural as possible.
+
+<table>
+<tr>
+<td valign="top" width="50%" align="center">
+
+## Your experience
+
+<div align="left">
+
+- **Seamless multiplayer playback** — local, synced, and broadcast modes
+- **Powerful media player** — search, Picture-in-Picture & more
+- **Immersive audio** — 3D sound, volume up to 200% & more
+- **Adjustable resolutions** — from 144p up to 4K
+- **Hardware-accelerated playback** — libvlc hardware decode (d3d11va / vaapi / videotoolbox)
+- **Customizable displays** — size, brightness, stretch mode & orientation
+
+</div>
+
+</td>
+<td valign="top" width="50%" align="center">
+
+## Your server
+
+<div align="left">
+
+- **Broad server support** — Paper, Fabric, NeoForge, Velocity, BungeeCord
+- **Fullscreen mode** — great for events and presentations
+- **Simple config** — precise control over displays and playback
+- **Permissions** — fine-grained control with LuckPerms support
+- **Ultra-low network impact** — minimal impact for your traffic
+- **Persistent displays** — settings survive server restarts and unloading
+
+</div>
+
+</td>
+</tr>
+</table>
+
+# What's new in this fork?
+
+Compared to the original Dream Displays, this fork adds:
+
+- **Bilibili account login** — QR-code login screen (`/dlogin`); `SESSDATA` is stored **encrypted** on the server
+  (AES-256-GCM) and pushed back to unlock higher-quality / VIP Bilibili streams.
+- **Global Bilibili login** — single account per server/network, broadcast to all players,
+  OP-only with LuckPerms support and cross-server credential sync (SQLite/MySQL).
+- **Bilibili VIP badge** — official VIP badge image, differentiating normal and annual VIP.
+- **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions, unreleased-content filter.
+- **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
+- **Built-in Simplified Chinese** (`zh_cn`) language file.
+- **libvlc playback engine** — low-level JNA libvlc binding (no vlcj, no FFmpeg binary, no Rust, no Python).
+  Video and audio run on decoupled clocks for full-framerate playback; native runtimes are downloaded automatically
+  on first boot.
+- Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.
+
+# Get started
+
+Build your first display, invite your friends, and make displays a part of your world.
 
 Set up a display using black concrete, select it with a diamond axe, and type `/display create`. After the display is
-created, type `/display video <link> [language]`
+created, type `/display video <link> [language]`. Done! To customize the display, look at it and press `Shift + RMB`.
 
-Done! To customize the display, look at it and press `Shift + RMB`
-
-### Command reference
+## Command reference
 
 | Command                                          | Where      | What it does                                              |
 |--------------------------------------------------|------------|-----------------------------------------------------------|
@@ -137,7 +124,29 @@ Done! To customize the display, look at it and press `Shift + RMB`
 > On success the mod sends your `SESSDATA` to the server, which stores it encrypted, syncs it across
 > the server network, and broadcasts it to all online players — everyone gets the unlocked streams.
 
-### JVM arguments (advanced tuning & diagnostics)
+## Download
+
+Grab the `.jar` for your loader and Minecraft version from the
+[latest release](https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest):
+
+- `dreamdisplayx-fabric-<mc>-<version>.jar` — Fabric / Quilt client or server mod
+- `dreamdisplayx-neoforge-<mc>-<version>.jar` — NeoForge client or server mod
+- `dreamdisplayx-paper-<version>.jar` — Paper plugin (cross-version, 1.21.1 – 26.2)
+- `dreamdisplayx-velocity-<version>.jar` / `dreamdisplayx-bungeecord-<version>.jar` — proxy plugins
+
+On the **client**, install the mod into your mods folder. On the **server**, install the matching jar (plugin or mod).
+That's it — no extra dependencies required.
+
+## Supported versions
+
+| Minecraft | Fabric | NeoForge | Paper | Notes             |
+|-----------|--------|----------|-------|-------------------|
+| 1.21.1    | ✅      | ✅        | ✅     | Legacy LTS line   |
+| 1.21.11   | ✅      | ✅        | ✅     | Upstream default  |
+| 26.1.2    | ✅      | ✅        | ✅     |                   |
+| 26.2      | ✅      | ✅        | ✅     |                   |
+
+## JVM arguments (advanced tuning & diagnostics)
 
 Add these to your launcher's JVM arguments (e.g. Prism: `Settings → Java → JVM arguments`). All are
 optional — defaults work fine.
@@ -170,11 +179,11 @@ cd dreamdisplaysx
 ./gradlew :platform:client:fabric:build :platform:client:neoforge:build
 ```
 
-The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; the active version is
-selected in `versions/active.txt`. On the `feat/libvlc` branch, the media pipeline is being ported from JavaCPP/FFmpeg to
-**libvlc** (vlcj). The LibVLC + SQLite runtimes are collected from official pre-built VideoLAN distributions by the CI
-"Build Natives" workflow (`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for
-macOS and Windows x86/x64, and the MSYS2 package for Windows aarch64 — and **downloaded at runtime** on first boot into
+The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; version properties
+live in `versions.json` and the active version is selected in `versions/active.txt`. The libvlc + SQLite native
+runtimes are collected from official pre-built VideoLAN distributions by the CI "Build Natives" workflow
+(`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for macOS and Windows
+x86/x64, and the MSYS2 package for Windows aarch64 — and **downloaded at runtime** on first boot into
 `./dreamdisplayx/natives/<os>/<arch>/` (never bundled in the jar, keeping it small).
 
 ## Disclaimer

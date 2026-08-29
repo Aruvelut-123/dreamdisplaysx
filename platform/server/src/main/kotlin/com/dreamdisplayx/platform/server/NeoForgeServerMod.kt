@@ -12,7 +12,6 @@ import com.dreamdisplayx.platform.server.utils.net.NeoForgeProxyNetworking
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeV2Networking
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import com.dreamdisplayx.platform.server.utils.net.VanillaServerPacketHandler
-import com.dreamdisplayx.util.natives.NativesDownloader
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
 import net.minecraft.core.registries.Registries
 import net.minecraft.server.MinecraftServer
@@ -38,10 +37,6 @@ class NeoForgeServer(modEventBus: IEventBus) {
     init {
         logger.info("Initializing server-side mod...")
 
-        // Fetch the SQLite native runtime before any storage open. The dedicated
-        // server only needs SQLite (no LibVLC) and only depends on core+util.
-        NativesDownloader.ensure(setOf(NativesDownloader.Component.SQLITE))
-
         configInstance = VanillaConfig(FMLPaths.CONFIGDIR.get().resolve("dreamdisplayx").toFile())
         VanillaServerState.config = configInstance
         VanillaServerState.serverVersion = serverVersion
@@ -61,7 +56,7 @@ class NeoForgeServer(modEventBus: IEventBus) {
 
     /**
      * Registers [NeoForgeBareTokenArgumentType] once `NeoForge` unfreezes `COMMAND_ARGUMENT_TYPE`
-     * for this event; doing it eagerly from the constructor is too early — that registry is still
+     * for this event; doing it eagerly from the constructor is too early - that registry is still
      * frozen at mod-construction time and only opens up for this `RegisterEvent` pass.
      */
     private fun registerArgumentTypes(event: RegisterEvent) {

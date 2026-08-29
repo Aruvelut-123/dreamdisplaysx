@@ -1,4 +1,4 @@
-package com.dreamdisplayx.platform.server
+﻿package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.client.net.Packets
 import com.dreamdisplayx.platform.client.net.ProxyPayload
@@ -15,7 +15,6 @@ import com.dreamdisplayx.platform.server.utils.net.FabricProxyNetworking
 import com.dreamdisplayx.platform.server.utils.net.FabricV2Networking
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import com.dreamdisplayx.platform.server.utils.net.VanillaServerPacketHandler
-import com.dreamdisplayx.util.natives.NativesDownloader
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -40,10 +39,6 @@ class Server : ModInitializer {
      */
     override fun onInitialize() {
         logger.info("Initializing server-side mod...")
-
-        // Fetch the SQLite native runtime before any storage open. The dedicated
-        // server only needs SQLite (no LibVLC) and only depends on core+util.
-        NativesDownloader.ensure(setOf(NativesDownloader.Component.SQLITE))
 
         configInstance = VanillaConfig(FabricLoader.getInstance().configDir.resolve("dreamdisplayx").toFile())
         VanillaServerState.config = configInstance

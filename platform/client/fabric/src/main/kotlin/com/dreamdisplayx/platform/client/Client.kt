@@ -36,6 +36,7 @@ import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.platform.client.net.V2Payload
 import com.dreamdisplayx.platform.client.platform.FabricPlatformIntegrationProvider
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
+import com.dreamdisplayx.platform.client.render.UnshadedDisplayPass
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
 import net.fabricmc.api.ClientModInitializer
@@ -96,10 +97,16 @@ class Client : ClientModInitializer, Mod {
             }
         }
 
-        LevelRenderEvents.END_MAIN.register { context ->
+        LevelRenderEvents.BEFORE_TRANSLUCENT_TERRAIN.register { context ->
             val mc = Minecraft.getInstance()
             if (mc.level != null && mc.player != null) {
                 renderBufferedScreens(context, mc)
+            }
+        }
+
+        LevelRenderEvents.END_MAIN.register { _ ->
+            val mc = Minecraft.getInstance()
+            if (mc.level != null && mc.player != null) {
                 // Render popout windows after all Minecraft / mod rendering is submitted,
                 // so any GL-context switch (macOS GLFW backend) does not disturb in-flight commands.
                 DisplayRegistry.getScreens().forEach { it.renderPopout() }
@@ -110,7 +117,10 @@ class Client : ClientModInitializer, Mod {
         /*WorldRenderEvents.AFTER_ENTITIES.register { context ->
             val mc = Minecraft.getInstance()
             if (mc.level != null && mc.player != null) {
-                ScreenRenderer.render(worldPoseStack(context), mainCamera(mc))
+                val stack = worldPoseStack(context)
+                val camera = mainCamera(mc)
+                UnshadedDisplayPass.capture(stack, camera)
+                ScreenRenderer.render(stack, camera)
                 DisplayRegistry.getScreens().forEach { it.renderPopout() }
             }
         }*/
@@ -134,7 +144,7 @@ class Client : ClientModInitializer, Mod {
 
         ClientTickEvents.END_CLIENT_TICK.register { Initializer.onEndTick(it) }
 
-        // Opens the Bilibili login screen (QR code / phone + password) — only usable when not
+        // Opens the Bilibili login screen (QR code / phone + password) 鈥?only usable when not
         // already logged in and when the player is OP on the server.
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
@@ -144,10 +154,10 @@ class Client : ClientModInitializer, Mod {
                         if (BilibiliApi.cookie.isNotBlank()) {
                             //? if >=26 {
                             Minecraft.getInstance().player?.sendSystemMessage(
-                                net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."))
+                                net.minecraft.network.chat.Component.literal("搂eAlready logged in. Use /dlogoff first."))
                             //?} else
                             /*Minecraft.getInstance().player?.displayClientMessage(
-                                net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false)*/
+                                net.minecraft.network.chat.Component.literal("搂eAlready logged in. Use /dlogoff first."), false)*/
                             return@executes 1
                         }
                         //? if >=26.2 {
@@ -168,10 +178,10 @@ class Client : ClientModInitializer, Mod {
                         if (BilibiliApi.cookie.isBlank()) {
                             //? if >=26 {
                             Minecraft.getInstance().player?.sendSystemMessage(
-                                net.minecraft.network.chat.Component.literal("§eNot logged in."))
+                                net.minecraft.network.chat.Component.literal("搂eNot logged in."))
                             //?} else
                             /*Minecraft.getInstance().player?.displayClientMessage(
-                                net.minecraft.network.chat.Component.literal("§eNot logged in."), false)*/
+                                net.minecraft.network.chat.Component.literal("搂eNot logged in."), false)*/
                             return@executes 1
                         }
                         BilibiliLoginManager.logout()
@@ -179,10 +189,10 @@ class Client : ClientModInitializer, Mod {
                         BilibiliAccountLabel.invalidate()
                         //? if >=26 {
                         Minecraft.getInstance().player?.sendSystemMessage(
-                            net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."))
+                            net.minecraft.network.chat.Component.literal("搂aLogged out of Bilibili."))
                         //?} else
                         /*Minecraft.getInstance().player?.displayClientMessage(
-                            net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."), false)*/
+                            net.minecraft.network.chat.Component.literal("搂aLogged out of Bilibili."), false)*/
                         1
                     }
             )
@@ -235,6 +245,8 @@ class Client : ClientModInitializer, Mod {
             return
         }
 
+        UnshadedDisplayPass.capture(context.poseStack(), camera)
+
         val submitNodeCollector = runCatching {
             val method = submitNodeCollectorMethod
                 ?.takeIf { it.declaringClass.isAssignableFrom(context.javaClass) }
@@ -263,7 +275,9 @@ class Client : ClientModInitializer, Mod {
         if (!hasBufferSource(context)) {
             return
         }
-        renderWithBufferSource(context, mainCamera(mc))
+        val camera = mainCamera(mc)
+        UnshadedDisplayPass.capture(context.poseStack(), camera)
+        renderWithBufferSource(context, camera)
     }
 
     /** If the `LevelRenderContext` has a `BufferSource` API, returns true. */
@@ -330,6 +344,6 @@ class Client : ClientModInitializer, Mod {
 
     private companion object {
         /** Logger. */
-        private val logger = LoggerFactory.getLogger("DreamDisplaysX/FabricClient")
+        private val logger = LoggerFactory.getLogger(javaClass)
     }
 }
