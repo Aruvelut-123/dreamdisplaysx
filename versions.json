@@ -17,7 +17,9 @@
       "paper.api.version": "1.21.1-R0.1-SNAPSHOT",
       "paper.minecraft.api": "1.21.1",
       "neoforge.loader.range": "[21.1,)",
-      "neoforge.minecraft.range": "[1.21.1]"
+      "neoforge.minecraft.range": "[1.21.1]",
+      "modmenu.version": "11.0.4",
+      "cloth.config.version": "15.0.140"
     },
     "1.21.11": {
       "minecraft.version": "1.21.11",
@@ -33,7 +35,9 @@
       "paper.api.version": "1.21.11-R0.1-SNAPSHOT",
       "paper.minecraft.api": "1.21.11",
       "neoforge.loader.range": "[1,)",
-      "neoforge.minecraft.range": "[1.21.11]"
+      "neoforge.minecraft.range": "[1.21.11]",
+      "modmenu.version": "17.0.0",
+      "cloth.config.version": "21.11.153"
     },
     "26.1.2": {
       "minecraft.version": "26.1.2",
@@ -49,7 +53,9 @@
       "paper.api.version": "26.1.2.build.72-stable",
       "paper.minecraft.api": "26.1.2",
       "neoforge.loader.range": "[26.1.2.0,)",
-      "neoforge.minecraft.range": "[26.1.2]"
+      "neoforge.minecraft.range": "[26.1.2]",
+      "modmenu.version": "18.0.0",
+      "cloth.config.version": "26.1.154"
     },
     "26.2": {
       "minecraft.version": "26.2",
@@ -65,7 +71,9 @@
       "paper.api.version": "26.2.build.112-stable",
       "paper.minecraft.api": "26.2",
       "neoforge.loader.range": "[26.2.0.0-beta,)",
-      "neoforge.minecraft.range": "[26.2]"
+      "neoforge.minecraft.range": "[26.2]",
+      "modmenu.version": "20.0.1",
+      "cloth.config.version": "26.2.155"
     }
   }
 }
