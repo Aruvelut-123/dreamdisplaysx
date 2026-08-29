@@ -21,6 +21,21 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > that has no H.264 rendition (AV1-only) reaches the seek target within the settle budget, where
 > before it timed out every extraction attempt on a CPU-bound machine. Rate is restored to 1.0x
 > before the frame grab so the shipped frame is a stable render.
+> — **Reverted (2f586ef6):** accelerated playback makes the vout skip display frames, so the
+> phase-2 latch never fires (or fires with a position-jumped frame) and the long-video backward
+> scrub regressed. Seek stays at 1.0x.
+
+> **Scrub preview: network-caching=300ms on the extractor (feat/libvlc)**
+> — scrub frame timeouts on slow Bilibili edge CDNs: the libvlc default `network-caching` is
+> ~1500ms, and after a seek the vout only renders once new fragments have buffered past that mark.
+> On a slow mirror, 1.5s + seek latency blows the 2s phase-2 latch, so every scrub timed out
+> ("frame timeout" every ~4-5s). The scrub media now sets `:network-caching=300` (plenty for a
+> 360p thumb), so the target frame renders almost immediately after the seek.
+
+> **Debug: video FPS line on the F3 screen (feat/libvlc)**
+> — the F3 debug overlay now shows `Video FPS: <n>` under the existing `Frames` line (Delivered
+> FPS of the first playing screen, no JVM flag needed). Enabling the preview label still works via
+> `-Ddreamdisplayx.debugFps=true`.
 
 > **Diagnostics: audio EOF + A/V length gap (feat/libvlc)**
 > — `onDrain` reports how much audio was fed (≈ audio track length) and END_REACHED compares it
