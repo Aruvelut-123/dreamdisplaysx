@@ -539,14 +539,39 @@ class MediaPlayer(
 
     /**
      * Raw stream URL for scrub-preview extraction (null for live or unresolved).
+     *
+     * Scrub thumbnails are tiny (256x144) and only need a still frame, so the LOWEST available
+     * quality (at most 360p) is used instead of the currently-playing stream: a 360p stream has
+     * far smaller fragments, so every seek loads and decodes much faster than seeking a 4K master
+     * stream. Falls back to the lowest available quality when no 360p (or lower) rendition exists.
      */
-    fun capturedStreamRawUrl(): String? = capturePreparedMedia()?.streamSet?.currentVideo?.url
+    fun capturedStreamRawUrl(): String? {
+        val pm = capturePreparedMedia() ?: return null
+        val ss = pm.streamSet
+        val videos = ss.availableVideo
+        val scrubStream = videos
+            .filter { val h = it.height; h != null && h <= 360 }
+            .minByOrNull { it.height ?: Int.MAX_VALUE }
+            ?: videos.minByOrNull { it.height ?: Int.MAX_VALUE }
+            ?: ss.currentVideo
+        return scrubStream.url
+    }
 
     /**
-     * Whether captured stream uses decode-forward seek path.
+     * Whether the scrub-preview stream uses decode-forward seek path (mirrors
+     * [capturedStreamRawUrl]'s chosen low-quality stream).
      */
-    fun capturedStreamSeeksByDecoding(): Boolean =
-        capturePreparedMedia()?.streamSet?.currentVideo?.seekByDecoding == true
+    fun capturedStreamSeeksByDecoding(): Boolean {
+        val pm = capturePreparedMedia() ?: return false
+        val ss = pm.streamSet
+        val videos = ss.availableVideo
+        val scrubStream = videos
+            .filter { val h = it.height; h != null && h <= 360 }
+            .minByOrNull { it.height ?: Int.MAX_VALUE }
+            ?: videos.minByOrNull { it.height ?: Int.MAX_VALUE }
+            ?: ss.currentVideo
+        return scrubStream.seekByDecoding
+    }
 
     /**
      * Updates distance-based volume attenuation (call every tick from game thread).
