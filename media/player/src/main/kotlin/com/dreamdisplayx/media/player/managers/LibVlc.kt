@@ -82,8 +82,9 @@ object LibVlc {
             com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
             Native.load("libvlc", LibVlcNative::class.java)
             val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--quiet",
-                "--no-keyboard-events", "--no-mouse-events", "--network-caching=300",
-                "--file-caching=300", "--live-caching=600", "--audio-filter=scaletempo")
+                "--no-keyboard-events", "--no-mouse-events",
+                "--network-caching=${networkCachingMs()}",
+                "--file-caching=${networkCachingMs()}", "--live-caching=600", "--audio-filter=scaletempo")
             // Instance-level browser UA so EVERY http request (including the :input-slave audio
             // stream, which is a separate HTTP transaction from the video) carries a browser-shaped
             // User-Agent. Bilibili/YouTube CDNs reject libvlc's default UA, and media-level options
@@ -205,6 +206,18 @@ object LibVlc {
             com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
             else -> "any"
         }
+    }
+
+    /**
+     * Network and file caching in milliseconds, configurable via `-Ddreamdisplayx.networkCachingMs`.
+     * Default is 300ms (libvlc's default). Larger values (e.g. 2000-5000) pre-buffer more data,
+     * which can smooth out slow CDN delivery — relevant if 1080P video FPS is pinned at ~16-20 fps
+     * while 4K reaches 25-38 (same decoder, same clock, different CDN / DASH fragment pacing).
+     * Applied to both `--network-caching` and `--file-caching` at instance level.
+     */
+    fun networkCachingMs(): Int {
+        val v = System.getProperty("dreamdisplayx.networkCachingMs")?.trim()
+        return v?.toIntOrNull()?.coerceIn(100, 30000) ?: 300
     }
 
     /**
