@@ -352,6 +352,30 @@ internal class LibVlcAudioOutput(
      */
     fun audioFeedMs(): Long = totalWrittenFrames * FRAME_NANOS / 1_000_000L
 
+    // Last sample for [audioFeedRateMsPerSec].
+    private var feedRateLastNanos = 0L
+    private var feedRateLastFrames = 0L
+
+    /**
+     * How much audio (in stream-time milliseconds) is being handed to the line per real second,
+     * sampled over the interval since the previous call. A healthy value is ~1000 ms/s; a value well
+     * below that means the audio clock is starving (network/cache stutter), which drags the libvlc
+     * master clock down and caps the video delivery rate (a low Video FPS while the CPU is idle).
+     */
+    fun audioFeedRateMsPerSec(): Double {
+        val now = System.nanoTime()
+        val prevNanos = feedRateLastNanos
+        val prevFrames = feedRateLastFrames
+        feedRateLastNanos = now
+        feedRateLastFrames = totalWrittenFrames
+        if (prevNanos == 0L || now <= prevNanos) return 0.0
+        val deltaFrames = (totalWrittenFrames - prevFrames).coerceAtLeast(0L)
+        val deltaSec = (now - prevNanos) / 1_000_000_000.0
+        if (deltaSec <= 0.0) return 0.0
+        return deltaFrames * FRAME_NANOS / 1_000_000.0 / deltaSec
+    }
+
+
     /**
      * Requests an A/V re-sync. This only sets a marker and does NOT touch the line: it is called from the
      * render thread (the A/V diagnostic), which must never touch the Java Sound `SourceDataLine` — a

@@ -39,6 +39,7 @@ object DebugStats {
             if (playing != null) {
                 add("Video FPS: %.1f".format(playing.videoFps))
                 playing.streamInfo?.let { add("Stream: $it") }
+                add("Audio: %.0f ms/s".format(playing.audioFeedRate))
             }
         }
     }
