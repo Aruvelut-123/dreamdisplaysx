@@ -34,6 +34,9 @@
 - [x] **网络缓存可配置**（750c94bf）：`-Ddreamdisplayx.networkCachingMs=<ms>`（默认 300ms）——网络非瓶颈，保持默认
 - [x] **丢帧开关**（96407431）：`-Ddreamdisplayx.noDropLateFrames=true`（`--no-drop-late-frames`）——非瓶颈，保持默认（会导致旧帧+新帧抖动）
 
+- [x] **初始 A/V 同步**（44588612）：播放/重播开始后 1.5s 校正音频 player 到视频位置（之前要等 10s）——**✅ 已验证：mostly fixed**
+- [x] **Windows 默认解码后端 d3d11va**（611ef4e9）：现代 D3D11 API，AMD/NVIDIA/Intel 通用；Linux→vaapi、Mac→videotoolbox 不变——**待主人确认 F3 Decoder 显示 d3d11va**
+
 ## 待验证 / 活跃问题
 
 - [ ] **后台卡顿（次要）**：游戏切到后台时 libvlc 偶尔卡顿，但大部分时候正常——可能是 Windows 后台线程降优先级 / Minecraft 渲染暂停影响 vout 线程。低优先级，暂不处理
