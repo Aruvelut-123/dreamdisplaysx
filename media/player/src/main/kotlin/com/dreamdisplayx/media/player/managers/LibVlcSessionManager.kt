@@ -168,6 +168,15 @@ internal class LibVlcSessionManager(
     @Volatile
     private var mediaPlayer: Pointer? = null
 
+    /**
+     * Second libvlc media player dedicated to audio-only playback. Decoupled from the video player
+     * so its audio-clock (Java Sound `write()` blocking) never throttles the video vout. Created
+     * alongside [mediaPlayer] on first use and never rebuilt. Audio callbacks are registered on
+     * this player only; the video player has `:no-audio` and runs on the system clock.
+     */
+    @Volatile
+    private var audioPlayer: Pointer? = null
+
     private val released = AtomicBoolean(false)
     private val stopped = AtomicBoolean(false)
 
@@ -455,20 +464,22 @@ internal class LibVlcSessionManager(
         // Reset the audio output for this new session (re-prime the 3D DSP chain, flush the line).
         runCatching { audioOutput.reset() }
 
-        // Build the media options (UA + referer + optional hw decode). Audio is merged via
-        // libvlc_media_player_add_slave with the full URI — the string `:input-slave=URL` option
-        // truncates URLs containing '&' (Bilibili DASH query params), silently killing the audio
-        // stream and the master clock. Hardware decode is enabled BOTH here (media-level) and at
-        // instance-level (--avcodec-hw=any); VLC copies the GPU-decoded frame back to system
-        // memory before handing it to the vmem lock callback, so vmem and hw coexist and 4K
-        // H.264/HEVC decodes on the GPU instead of starving the CPU.
+        // Build the media options (UA + referer + optional hw decode). Audio is played by a SEPARATE
+        // libvlc player (see below) so its Java Sound `write()` blocking never throttles the video
+        // vout. The video media gets `:no-audio`: with no audio track the video player's master clock
+        // is the system clock, so the vout delivers at the full source frame rate instead of being
+        // dragged to ~60% by an audio clock that is pulsed by line writes. Hardware decode is enabled
+        // BOTH here (media-level) and at instance-level (--avcodec-hw=any); VLC copies the GPU-decoded
+        // frame back to system memory before handing it to the vmem lock callback, so vmem and hw
+        // coexist and 4K H.264/HEVC decodes on the GPU instead of starving the CPU.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
         LibVlc.configuredHwBackend()?.let { mediaOptions.add(":avcodec-hw=$it") }
+        mediaOptions.add(":no-audio")
         val audioUrl = streamSet.currentAudio.url
         if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
-            logger.info("$debugLabel audio slave will be merged via add_slave.")
+            logger.info("$debugLabel audio will be played by the separate audio player.")
         } else {
-            logger.warn("$debugLabel audio slave NOT merged: audioUrl='{}' equalsVideo={}.",
+            logger.warn("$debugLabel audio NOT started: audioUrl='{}' equalsVideo={}.",
                 audioUrl.ifBlank { "<blank>" }, audioUrl.equals(safeUrl, ignoreCase = true))
         }
 
@@ -489,13 +500,20 @@ internal class LibVlcSessionManager(
                 val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
                 LibVlc.lib.libvlc_media_player_set_media(mp, media)
                 LibVlc.lib.libvlc_media_release(media) // the player holds its own reference
-                // Merge the DASH audio stream as a real slave input with its full URI (see above).
-                if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
-                    val rc = runCatching {
-                        LibVlc.lib.libvlc_media_player_add_slave(mp, LibVlc.LIBVLC_MEDIA_SLAVE_TYPE_AUDIO, audioUrl, true)
-                    }.getOrElse { -1 }
-                    if (rc != 0) logger.error("$debugLabel add_slave audio failed (rc={}) {}.", rc, LibVlc.errmsg())
-                    else logger.info("$debugLabel add_slave audio attached.")
+                // Start the SEPARATE audio player with the DASH audio URL (:no-video so no vout is
+                // built; audio callbacks on it feed the Java Sound line). Skipped when there is no
+                // separate audio URL (e.g. the merged audio was already in the video container).
+                val ap = audioPlayer()
+                if (ap != null && audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
+                    runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                    val audioOptions = mutableListOf(*LibVlcMediaOptions.forUrl(audioUrl))
+                    audioOptions.add(":no-video")
+                    val audioMedia = LibVlc.createMedia(audioUrl, audioOptions.toTypedArray())
+                    LibVlc.lib.libvlc_media_player_set_media(ap, audioMedia)
+                    LibVlc.lib.libvlc_media_release(audioMedia)
+                    LibVlc.lib.libvlc_media_player_play(ap)
+                } else {
+                    logger.info("$debugLabel audio player skipped (no separate audio URL).")
                 }
                 LibVlc.lib.libvlc_media_player_play(mp)
                 isPlaying = true
@@ -512,6 +530,10 @@ internal class LibVlcSessionManager(
             submit {
                 val mp = mediaPlayer ?: return@submit
                 runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
+                val ap = audioPlayer
+                if (ap != null) {
+                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                }
             }
         }
 
@@ -528,6 +550,9 @@ internal class LibVlcSessionManager(
 
     /**
      * Returns the single libvlc media player, creating it on first use and never rebuilding it.
+     * This is the VIDEO player: it only registers video callbacks (audio callbacks live on the
+     * separate [audioPlayer]), and its media gets `:no-audio` so it runs on the system clock —
+     * the audio player's Java Sound `write()` blocking can no longer throttle the vout.
      */
     private fun player(): Pointer? {
         val existing = mediaPlayer
@@ -545,17 +570,7 @@ internal class LibVlcSessionManager(
                 lib.libvlc_video_set_format_callbacks(mp, videoFormatCallback, videoCleanupCallback)
                 lib.libvlc_video_set_callbacks(mp, videoLockCallback, videoUnlockCallback, videoDisplayCallback, null)
             }
-            // Audio callbacks (once; held strongly). libvlc then delivers decoded PCM to us instead
-            // of playing through its default output — we run it through the 3D DSP and Java Sound
-            // line (LibVlcAudioOutput) so spatialisation / occlusion / pacing are under our control.
-            // Skippable via diagnostic switch for bisection (libvlc then uses its own audio handling).
-            openAudioLine()
-            if (!LibVlcDiagnostics.noAudioCallback) {
-                lib.libvlc_audio_set_format_callbacks(mp, audioFormatSetupCallback, audioFormatCleanupCallback)
-                lib.libvlc_audio_set_callbacks(mp, audioPlayCallback, audioPauseCallback,
-                    audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
-            }
-            // Events (once).
+            // Events (once). The video player drives the session state (playing/end/error).
             val em = lib.libvlc_media_player_event_manager(mp)
             if (em != null) {
                 for (e in MEDIA_PLAYER_EVENTS) {
@@ -563,10 +578,44 @@ internal class LibVlcSessionManager(
                 }
             }
             mediaPlayer = mp
-            if (MediaPlayer.DEBUG) logger.debug("$debugLabel created single libvlc media player.")
+            if (MediaPlayer.DEBUG) logger.debug("$debugLabel created single libvlc video player.")
             mp
         } catch (t: Throwable) {
             logger.error("$debugLabel failed to create libvlc media player: ${t.message}")
+            null
+        }
+    }
+
+    /**
+     * Returns the dedicated AUDIO-only libvlc media player, creating it on first use and never
+     * rebuilding it. It only registers the audio callbacks that feed the 3D DSP + Java Sound line
+     * ([LibVlcAudioOutput]); its media gets `:no-video`. No events are attached: its END_REACHED
+     * (Bilibili DASH audio slaves run shorter than the video) must NOT trigger the session EOS.
+     * Skipped entirely when [LibVlcDiagnostics.noAudioCallback] is set (bisection).
+     */
+    private fun audioPlayer(): Pointer? {
+        if (LibVlcDiagnostics.noAudioCallback) return null
+        val existing = audioPlayer
+        if (existing != null) return existing
+        return try {
+            LibVlc.ensureLoaded()
+            val lib = LibVlc.lib
+            val ap = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
+            if (ap == null) {
+                logger.error("$debugLabel libvlc audio player new returned null: ${LibVlc.errmsg()}")
+                return null
+            }
+            // Audio callbacks (once; held strongly) feed the 3D DSP + Java Sound line. The line is
+            // pre-opened here so the first PCM block has a destination (also primes the default format).
+            openAudioLine()
+            lib.libvlc_audio_set_format_callbacks(ap, audioFormatSetupCallback, audioFormatCleanupCallback)
+            lib.libvlc_audio_set_callbacks(ap, audioPlayCallback, audioPauseCallback,
+                audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
+            audioPlayer = ap
+            if (MediaPlayer.DEBUG) logger.debug("$debugLabel created dedicated libvlc audio player.")
+            ap
+        } catch (t: Throwable) {
+            logger.error("$debugLabel failed to create libvlc audio player: ${t.message}")
             null
         }
     }
@@ -590,7 +639,7 @@ internal class LibVlcSessionManager(
         @Suppress("UNUSED_PARAMETER") lastQuality: Int,
     ): Boolean = false
 
-    /** Seeks the single player to [offsetNanos]. */
+    /** Seeks both the video and audio players to [offsetNanos]. */
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         // Reset audio flags before the seek so a pause-then-resume immediately after seek starts clean.
         audioOutput.onSeekReset()
@@ -612,6 +661,11 @@ internal class LibVlcSessionManager(
             } else {
                 // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
                 runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
+            }
+            // Seek the audio player to the same position.
+            val ap = audioPlayer
+            if (ap != null) {
+                runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
             }
             // If a seek left the player in a dead state (stopped/ended — e.g. a backwards seek
             // into an already-released region dropping it out of PLAYING), resume it. Buffering(2)
@@ -642,6 +696,10 @@ internal class LibVlcSessionManager(
             if (mp != null) {
                 runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
             }
+            val ap = audioPlayer
+            if (ap != null) {
+                runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+            }
         }
         surface.clear()
     }
@@ -657,6 +715,13 @@ internal class LibVlcSessionManager(
         if (mp != null) {
             try {
                 LibVlc.lib.libvlc_media_player_release(mp)
+            } catch (_: Exception) { }
+        }
+        val ap = audioPlayer
+        audioPlayer = null
+        if (ap != null) {
+            try {
+                LibVlc.lib.libvlc_media_player_release(ap)
             } catch (_: Exception) { }
         }
         runCatching { controlExecutor.shutdownNow() }
@@ -699,14 +764,26 @@ internal class LibVlcSessionManager(
         // Persist the authoritative libvlc position (get_time, ms) rather than the wall-clock
         // estimate, so the progress bar resumes exactly where the stream was paused.
         parkPositionNanos = currentPacingNanos().takeIf { it >= 0 } ?: clock.currentTime()
-        submit { runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) } }
+        submit {
+            runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
+            val ap = audioPlayer
+            if (ap != null) {
+                runCatching { LibVlc.lib.libvlc_media_player_set_pause(ap, 1) }
+            }
+        }
         return true
     }
 
     fun resume() {
         val mp = mediaPlayer ?: return
         parkFlag.set(false)
-        submit { runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 0) } }
+        submit {
+            runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 0) }
+            val ap = audioPlayer
+            if (ap != null) {
+                runCatching { LibVlc.lib.libvlc_media_player_set_pause(ap, 0) }
+            }
+        }
     }
 
     fun isParked(): Boolean = parkFlag.get()
@@ -760,6 +837,26 @@ internal class LibVlcSessionManager(
                         debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
                     )
                     audioOutput.forceResync()
+                }
+                // Two-player A/V sync: the audio player runs on its own clock (separate from the video
+                // player's system clock). Compare their get_time values; if the audio player drifts
+                // more than the threshold, snap it back to the video position. This keeps lip-sync
+                // without the audio clock ever throttling the vout. set_time on the audio player is
+                // cheap (audio-only, no vout to rebuild) and only fires on genuine sustained drift.
+                val ap = audioPlayer
+                if (ap != null) {
+                    val videoMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                    val audioMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(ap) }.getOrDefault(-1L)
+                    if (videoMs >= 0 && audioMs >= 0) {
+                        val drift = videoMs - audioMs
+                        if (kotlin.math.abs(drift) > AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L) {
+                            logger.warn(
+                                "{} A/V drift: audio player {}ms from video ({} vs {}ms) — snapping audio to video.",
+                                debugLabel, drift, audioMs, videoMs
+                            )
+                            runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, videoMs) }
+                        }
+                    }
                 }
             }
         }
