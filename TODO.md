@@ -18,15 +18,17 @@
 - [x] **onDrain 音频诊断**（随 7bdd1fdb 提交）：记录 fed frames≈音频总时长，用于判断音频是否比视频短——**待用户复测**
 - [x] **长视频 crash（0xC0000005）**（eaadc9f4）：i420ToBufferedImage capacity 保护 → **用户确认长视频不再崩**
 - [x] **循环重播**（eac3fd40）：eosFired 重置 → **用户确认循环重播没问题**
-- [x] **Scrub 向后 seek 修复**（defc60da）：恢复 timeProvider 门控 + settle 后再 clear 一次，只接受前进过 target 后的新帧——解决"往回看时前半显示后半第一帧定死"——**待用户复测**
+- [x] **Scrub 向后 seek 修复**（defc60da）：恢复 timeProvider 门控 + settle 后再 clear 一次，只接受前进过 target 后的新帧——解决"往回看时前半显示后半第一帧定死" → **用户确认长视频 scrub 现在正常**
+- [x] **Scrub 短视频超时修复**（84753725）：Bilibili 解析 codecs 字段 + scrub 优先选 H.264 ≤360p 流（避开软件解码慢的 AV1/HEVC）——**待用户复测**
+- [x] **音频提前结束诊断**（84753725）：onDrain + END_REACHED 对比音频/视频时长 → **用户确认 2:13 视频音频 129s（视频短 ~4s）** = DASH 音频流本身比视频短，**媒体源特性，非代码 bug**
+- [x] **FPS 调试标签**（e6f17b32）：`-Ddreamdisplayx.debugFps=true` 时预览视频左上角显示实际交付 FPS（publishFrame 计数，1s 滑动窗口）——**待用户复测帧率慢问题**
 
 ## 待验证 / 活跃问题
 
-- [ ] **Scrub 短视频仍有问题**（用户提到但未详述）：等主人说明具体现象（提取慢？首帧？错帧？）
-- [ ] **Scrub 长视频向后 seek 复测**：defc60da 修复后，确认从后往前 scrub 前半不再显示后半首帧
-- [ ] **音频提前停止**（未定位）：音频和视频同步但音频先停。**onDrain 诊断日志**已就位，待用户复测：看音频总时长 vs 视频总时长，判断是否 DASH 音频流比视频短
+- [ ] **短视频 scrub 复测**：H.264 优先后确认不再疯狂 frame timeout（若短视频只有 AV1 流则仍需别的方案）
+- [ ] **帧率慢（<30fps）**：用 FPS 调试标签（`-Ddreamdisplayx.debugFps=true`）看实际交付帧率，判断是解码器/网络/渲染哪个瓶颈——**待用户测**
+- [ ] **音频提前 ~4s**：已确认是媒体源特性（Bilibili 音频流短），无法播放不存在的数据；用户接受则关闭诊断
 - [ ] **搜索返回 0**（非本喵改动）：最近提交只碰播放/scrub 相关，**没碰搜索代码**。主人 20 秒内连搜 4 次全 0 = **Bilibili 搜索风控**。待主人冷却后复测
-- [ ] **Scrub 整体复测**：awaitPast + ScrubSession 复用 + 360P 流 + 向后 seek 四合一，确认 hover 快速且所有位置正确
 - [ ] **Scrub 诊断日志清理**：SCRUB-DEBUG / SCRUB-CRC / onDrain 日志在确认修好后移除
 - [ ] **A/V 双向 auto-sync 最终确认**：诊断能报带符号领先量（audio ahead / video ahead），用户复测确认后关闭诊断
 
