@@ -48,6 +48,19 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > informative: with audio gone, 1080p jumped from 10-17 to 18-20 fps — confirming the audio pipe
 > throttles the video delivery clock. `Stream:` / `Video FPS:` lines stay.
 
+> **Debug: F3 shows frame interval (feat/libvlc)**
+> — `Frame int: min/avg/max ms` under `Stream:` reveals the vout's actual pacing pattern. All
+> hardware backends (dxva2 / d3d11va / amf / vulkan) deliver 1080p at 14-19 fps and 4K at 25-38
+> fps (≈60% of source either way) — the bottleneck is NOT the decoder. The frame-interval line
+> distinguishes libvlc dropping half the frames (min≈source interval, avg≈2x) from a genuinely
+> slow decoder (min≈avg≈slow), guiding whether to fix clock throttling vs. the decode path.
+
+> **Audio: tunable line buffer (feat/libvlc)**
+> — `LINE_BUFFER_BYTES` is now `-Ddreamdisplayx.audioBufferMs=<ms>` (default 100). A larger value
+> (e.g. 400-500ms) is crash-safe (the 45ms trial crashed; bigger is safer) and can smooth the
+> Java Sound `write()` blocking that may pulse/throttle the libvlc audio clock — the suspected
+> cause of video FPS pinned at ~60% of source.
+
 > **Diagnostics: audio EOF + A/V length gap (feat/libvlc)**
 > — `onDrain` reports how much audio was fed (≈ audio track length) and END_REACHED compares it
 > against the video length, to distinguish a genuinely shorter DASH audio slave (Bilibili) from
