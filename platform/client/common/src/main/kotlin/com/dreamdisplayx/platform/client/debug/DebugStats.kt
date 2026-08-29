@@ -38,6 +38,7 @@ object DebugStats {
             val playing = DisplayRegistry.getScreens().firstOrNull { it.isVideoStarted }
             if (playing != null) {
                 add("Video FPS: %.1f".format(playing.videoFps))
+                playing.streamInfo?.let { add("Stream: $it") }
             }
         }
     }

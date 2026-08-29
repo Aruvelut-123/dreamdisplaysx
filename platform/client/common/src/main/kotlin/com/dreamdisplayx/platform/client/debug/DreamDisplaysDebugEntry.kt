@@ -49,6 +49,9 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
                 .firstOrNull { it.isVideoStarted }
             if (playing != null) {
                 displayer.addToGroup(groupId, "Video FPS: %.1f".format(playing.videoFps))
+                // Source stream identity: codec / resolution / source fps — tells whether a low
+                // delivered FPS is a codec problem (AV1/HEVC soft-decode) rather than rendering.
+                playing.streamInfo?.let { displayer.addToGroup(groupId, "Stream: $it") }
             }
         }
         val decoder = com.dreamdisplayx.media.player.MediaPlayer.currentDecoder.get()

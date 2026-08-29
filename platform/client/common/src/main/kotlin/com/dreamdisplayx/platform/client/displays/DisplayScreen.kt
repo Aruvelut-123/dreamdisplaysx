@@ -462,6 +462,9 @@ class DisplayScreen(
     /** Delivered video FPS for the debug label (0 when idle); only meaningful with -Ddreamdisplayx.debugFps. */
     val videoFps: Double get() = mediaPlayer?.currentVideoFps() ?: 0.0
 
+    /** Current stream description (codec/resolution/source fps) for the F3 debug screen; null when idle. */
+    val streamInfo: String? get() = mediaPlayer?.currentStreamInfo()
+
     /** Whether scrub previews for this display must seek by decoding forward; see `MediaStream.seekByDecoding`. */
     val scrubPreviewSeeksByDecoding: Boolean get() = mediaPlayer?.capturedStreamSeeksByDecoding() == true
 

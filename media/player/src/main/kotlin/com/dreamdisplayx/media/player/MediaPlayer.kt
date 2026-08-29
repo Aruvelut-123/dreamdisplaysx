@@ -326,6 +326,22 @@ class MediaPlayer(
     /** Delivered video FPS (frames actually displayed per second), for the debug label; 0 when idle. */
     fun currentVideoFps(): Double = sessionManager.currentVideoFps
 
+    /**
+     * Compact description of the currently-playing video stream (codec / resolution / source frame
+     * rate), for the F3 debug screen — e.g. "avc1.640028 · 1080p · 60fps". Null when no stream is
+     * active. Useful to tell whether a slow delivered FPS is a codec problem (AV1/HEVC soft-decoding
+     * vs H.264) rather than a rendering issue.
+     */
+    fun currentStreamInfo(): String? {
+        val v = streams?.currentVideo ?: return null
+        val parts = buildList {
+            if (!v.codec.isNullOrBlank()) add(v.codec)
+            v.height?.let { add("${it}p") }
+            v.fps?.let { add(if (it >= 50) "${it.toInt()}fps" else "${it.toInt()}fps") }
+        }
+        return if (parts.isEmpty()) null else parts.joinToString(" ")
+    }
+
     /** Primes the first live start offset before initialization opens the decoder. */
     fun primeStartPosition(nanos: Long) {
         if (nanos >= 0L && !sessionManager.isPlaying) primedStartPositionNanos.set(nanos)
