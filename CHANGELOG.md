@@ -15,6 +15,13 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > budget. `codecs` is now parsed from the playurl DASH response, and the scrub stream is chosen as
 > H.264 at ≤360p first, then any ≤360p, then the lowest rendition.
 
+> **Scrub preview: seek at 8x playback rate (feat/libvlc)**
+> — extraction now seeks with `libvlc_media_player_set_rate(8.0f)`, so the decoder races forward
+> into the target region instead of advancing in real time — FFmpeg-style fast seek. Even a stream
+> that has no H.264 rendition (AV1-only) reaches the seek target within the settle budget, where
+> before it timed out every extraction attempt on a CPU-bound machine. Rate is restored to 1.0x
+> before the frame grab so the shipped frame is a stable render.
+
 > **Diagnostics: audio EOF + A/V length gap (feat/libvlc)**
 > — `onDrain` reports how much audio was fed (≈ audio track length) and END_REACHED compares it
 > against the video length, to distinguish a genuinely shorter DASH audio slave (Bilibili) from

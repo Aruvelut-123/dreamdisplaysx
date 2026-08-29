@@ -20,6 +20,7 @@
 - [x] **循环重播**（eac3fd40）：eosFired 重置 → **用户确认循环重播没问题**
 - [x] **Scrub 向后 seek 修复**（defc60da）：恢复 timeProvider 门控 + settle 后再 clear 一次，只接受前进过 target 后的新帧——解决"往回看时前半显示后半第一帧定死" → **用户确认长视频 scrub 现在正常**
 - [x] **Scrub 短视频超时修复**（84753725）：Bilibili 解析 codecs 字段 + scrub 优先选 H.264 ≤360p 流（避开软件解码慢的 AV1/HEVC）——**待用户复测**
+- [x] **Scrub 8x 倍率 seek**（07ebc011）：seek 时设 rate=8x 让解码器快速前进到 target（FFmpeg 式快定位），AV1 独占流也能超时前到达，抓帧前恢复 1x——**待用户复测**
 - [x] **音频提前结束诊断**（84753725）：onDrain + END_REACHED 对比音频/视频时长 → **用户确认 2:13 视频音频 129s（视频短 ~4s）** = DASH 音频流本身比视频短，**媒体源特性，非代码 bug**
 - [x] **FPS 调试标签**（e6f17b32）：`-Ddreamdisplayx.debugFps=true` 时预览视频左上角显示实际交付 FPS（publishFrame 计数，1s 滑动窗口）——**待用户复测帧率慢问题**
 
