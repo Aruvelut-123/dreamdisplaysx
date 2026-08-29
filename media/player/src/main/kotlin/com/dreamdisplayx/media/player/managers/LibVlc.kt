@@ -105,6 +105,16 @@ object LibVlc {
             // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. d3d11va, any, or "" to disable).
             val backend = configuredHwBackend()
             if (backend != null) opts.add("--avcodec-hw=$backend")
+            // libvlc drops frames that arrive late against the master clock. The default is ON, and
+            // when the clock is system-clock (`:no-audio`), the vout may still drop ~35% of frames
+            // (observed: 1080P 30fps source → Frame int 39/58/230ms — min=39ms ≈ 25fps cadence,
+            // avg=58ms ≈ 17fps). Disabling dropping (`--no-drop-late-frames`) and skipping
+            // (`--no-skip-frames`) lets the vout display every frame. The risk is A/V desync if the
+            // decoder genuinely falls behind. Enable with `-Ddreamdisplayx.noDropLateFrames=true`.
+            if (System.getProperty("dreamdisplayx.noDropLateFrames", "false").equals("true", ignoreCase = true)) {
+                opts.add("--no-drop-late-frames")
+                opts.add("--no-skip-frames")
+            }
             // Verbose libvlc logging (diagnostic): lets us see which decoder/backend libvlc actually
             // selects and why it might fall back to software. Off by default (noise).
             if (System.getProperty("dreamdisplayx.verboseLibvlc", "false").equals("true", ignoreCase = true)) {
