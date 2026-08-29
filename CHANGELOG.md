@@ -37,6 +37,13 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > FPS of the first playing screen, no JVM flag needed). Enabling the preview label still works via
 > `-Ddreamdisplayx.debugFps=true`.
 
+> **Debug: F3 shows stream identity + audio feed rate (feat/libvlc)**
+> — `Stream:` (codec / resolution / source fps) and `Audio: <n> ms/s` lines were added under
+> `Video FPS`. They diagnose a counter-intuitive framerate report (1080p delivering fewer FPS than
+> 4K, e.g. 10-17 vs 25-38): both are H.264, so decode load is not the bottleneck; a low `Audio`
+> feed rate (<1000 ms/s) would reveal that the libvlc master clock (driven by the Java Sound
+> audio pipe) is starving and dragging the video delivery rate down with it.
+
 > **Diagnostics: audio EOF + A/V length gap (feat/libvlc)**
 > — `onDrain` reports how much audio was fed (≈ audio track length) and END_REACHED compares it
 > against the video length, to distinguish a genuinely shorter DASH audio slave (Bilibili) from
