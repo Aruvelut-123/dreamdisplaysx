@@ -30,11 +30,13 @@
 
 - [x] **F3 帧间隔诊断**（b3b9ccf5）：Frame int: min/avg/max ms——揭示 vout 是"丢一半帧"（min≈33ms avg≈55ms）还是"解码器慢"（全部≈55ms）——**已验证：min=32/avg=52/max=200ms = vout 丢帧（时钟节流）**
 - [x] **音频缓冲可配置**（647ee9a8）：`-Ddreamdisplayx.audioBufferMs=<ms>`（默认 100ms）；400ms 提升帧率到 20-22fps 但 1-2 分钟卡住（lead 400ms>300ms 阈值→每 10s flush）——**默认保持 100ms**
-- [x] **双 player 分拆**（bf75a052）：视频 player `:no-audio`（系统时钟→满帧率）+ 音频 player `:no-video`（独立喂 Java Sound）；每 ~10s 把音频 player 校正到视频 get_time——**待主人实测**
+- [x] **双 player 分拆**（bf75a052 + 300e92b7）：视频 player `:no-audio`（系统时钟→满帧率）+ 音频 player `:no-video`（独立喂 Java Sound）；每 ~10s 把音频 player 校正到视频 get_time；ENDED 重播也重启音频 player——**✅ 已验证：30fps 视频→30fps、60fps→60fps，全部正常（帧率/音频/A-V/seek/replay）**
+- [x] **网络缓存可配置**（750c94bf）：`-Ddreamdisplayx.networkCachingMs=<ms>`（默认 300ms）——网络非瓶颈，保持默认
+- [x] **丢帧开关**（96407431）：`-Ddreamdisplayx.noDropLateFrames=true`（`--no-drop-late-frames`）——非瓶颈，保持默认（会导致旧帧+新帧抖动）
 
 ## 待验证 / 活跃问题
 
-- [ ] **双 player 分拆验证**（bf75a052）：1080P 视频帧率是否到 30fps（Frame int 应显示 min≈avg≈33ms）？音频是否正常？A/V 是否同步？seek/pause/resume 是否正常？
+- [ ] **后台卡顿（次要）**：游戏切到后台时 libvlc 偶尔卡顿，但大部分时候正常——可能是 Windows 后台线程降优先级 / Minecraft 渲染暂停影响 vout 线程。低优先级，暂不处理
 - [ ] **音频提前 ~4s**：已确认是媒体源特性（Bilibili 音频流短），无法播放不存在的数据；用户接受则关闭诊断
 - [ ] **搜索返回 0**（非本喵改动）：最近提交只碰播放/scrub 相关，**没碰搜索代码**。主人 20 秒内连搜 4 次全 0 = **Bilibili 搜索风控**。待主人冷却后复测
 - [ ] **Scrub 诊断日志清理**：SCRUB-DEBUG / SCRUB-CRC / onDrain 日志在确认修好后移除

@@ -97,12 +97,11 @@ object LibVlc {
             // We pick the backend explicitly per-OS instead of `any`: `any` can pick a surface
             // backend that libvlc 3.0 fails to copy back from (then it silently falls back to
             // software and the F3 debug overlay reports "software").
-            //   Windows → dxva2 (broad RX/NVIDIA/Intel support; D3D11VA needs a vout that
-            //             understands D3D11 textures, which vmem is not, so dxva2 copy-back is
-            //             the correct vmem-compatible backend)
+            //   Windows → d3d11va (modern D3D11 API, works well on all Windows GPUs — AMD/NVIDIA/
+            //             Intel — and vmem copy-back is confirmed working; dxva2 is the legacy API)
             //   Linux   → vaapi (drm copy-back works with vmem)
             //   Mac     → videotoolbox
-            // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. d3d11va, any, or "" to disable).
+            // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. dxva2, any, or "" to disable).
             val backend = configuredHwBackend()
             if (backend != null) opts.add("--avcodec-hw=$backend")
             // libvlc drops frames that arrive late against the master clock. The default is ON, and
@@ -211,7 +210,7 @@ object LibVlc {
             return override.takeIf { it.isNotBlank() }
         }
         return when {
-            com.dreamdisplayx.util.OsInfo.isWindows -> "dxva2"
+            com.dreamdisplayx.util.OsInfo.isWindows -> "d3d11va"
             com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
             com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
             else -> "any"
