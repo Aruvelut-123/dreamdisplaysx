@@ -43,6 +43,10 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > 4K, e.g. 10-17 vs 25-38): both are H.264, so decode load is not the bottleneck; a low `Audio`
 > feed rate (<1000 ms/s) would reveal that the libvlc master clock (driven by the Java Sound
 > audio pipe) is starving and dragging the video delivery rate down with it.
+> — **Reverted (c6c95075):** adding the Audio feed-rate line made the audio go silent
+> (`Audio: 0ms/s`), so the whole diagnostic was removed to restore sound. The regression itself was
+> informative: with audio gone, 1080p jumped from 10-17 to 18-20 fps — confirming the audio pipe
+> throttles the video delivery clock. `Stream:` / `Video FPS:` lines stay.
 
 > **Diagnostics: audio EOF + A/V length gap (feat/libvlc)**
 > — `onDrain` reports how much audio was fed (≈ audio track length) and END_REACHED compares it
