@@ -87,15 +87,16 @@ internal object DisplayGeometry {
 
     /**
      * Distance the quad floats in front of the supporting blocks, in local block space. This is a secondary safety margin
-     * on top of the depth-bias trick.
+     * on top of the depth-bias trick. Generous enough to clear the block face even on AMD/OpenGL where the
+     * pipeline's GPU polygon-offset bias can silently fail (only the world-space lift remains effective).
      */
-    private const val SURFACE_OFFSET = 0.008f
+    private const val SURFACE_OFFSET = 0.05f
 
     /**
      * Larger surface offset used while a shader pack is active. Shader packs (notably `OptiFine` / `SEUS Renewed`) draw with
      * a different depth pass that needs more clearance to avoid z-fighting.
      */
-    private const val SHADER_SURFACE_OFFSET = 0.016f
+    private const val SHADER_SURFACE_OFFSET = 0.08f
 
     /** Surface offset in effect right now: widened while a shader pack owns the depth buffer. */
     private fun surfaceOffset(): Float =

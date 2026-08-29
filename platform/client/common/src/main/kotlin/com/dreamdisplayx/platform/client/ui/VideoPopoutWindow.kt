@@ -333,12 +333,22 @@ class VideoPopoutWindow(
                 ?: BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
             val pixels = (img.raster.dataBuffer as DataBufferInt).data
             val src = buf.duplicate()
-            for (i in pixels.indices) {
-                val r = src.get().toInt() and 0xFF
-                val g = src.get().toInt() and 0xFF
-                val b = src.get().toInt() and 0xFF
-                if (format == UploadPixelFormat.RGBA32) src.get()
-                pixels[i] = (r shl 16) or (g shl 8) or b
+            if (format == UploadPixelFormat.BGRA32) {
+                for (i in pixels.indices) {
+                    val b = src.get().toInt() and 0xFF
+                    val g = src.get().toInt() and 0xFF
+                    val r = src.get().toInt() and 0xFF
+                    src.get() // alpha
+                    pixels[i] = (r shl 16) or (g shl 8) or b
+                }
+            } else {
+                for (i in pixels.indices) {
+                    val r = src.get().toInt() and 0xFF
+                    val g = src.get().toInt() and 0xFF
+                    val b = src.get().toInt() and 0xFF
+                    if (format == UploadPixelFormat.RGBA32) src.get()
+                    pixels[i] = (r shl 16) or (g shl 8) or b
+                }
             }
             contentAspect = aspect
             currentImage = img

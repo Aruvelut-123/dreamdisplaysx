@@ -1,10 +1,9 @@
 package com.dreamdisplayx.platform.client.debug
 
-import com.dreamdisplayx.media.player.MediaPlayer
+import com.dreamdisplayx.media.player.util.LibVlcNativesLoader
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.util.GeneralUtil
 import net.minecraft.client.resources.language.I18n
-import org.bytedeco.ffmpeg.global.avutil
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -12,11 +11,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Thread-safe; called from the render thread (or any thread via [getLines]).
  */
 object DebugStats {
-    /** Cached FFmpeg version string, read once. */
-    val ffmpegVersion: String by lazy {
-        runCatching { avutil.av_version_info()?.getString()?.trim() ?: "unknown" }
-            .getOrDefault("unknown")
-    }
+    /** Cached LibVLC version string, read once (populated by [LibVlcNativesLoader]). */
+    val libvlcVersion: String
+        get() = LibVlcNativesLoader.libvlcVersion ?: "unavailable"
 
     /** Cached mod version. */
     val modVersion: String by lazy { GeneralUtil.getPrettyModVersion() }
@@ -34,13 +31,16 @@ object DebugStats {
     fun getLines(): List<String> = buildList {
         add("§bDream DisplaysX §a$modVersion")
         add("§7Commit: §f$commitId")
-        add("§7FFmpeg: §f$ffmpegVersion")
+        add("§7LibVLC: §f$libvlcVersion")
         val screenCount = runCatching { DisplayRegistry.getScreens().size }.getOrDefault(0)
-        val gpu = MediaPlayer.framesToGpu.get()
-        val dropped = MediaPlayer.framesDropped.get()
-        val decoder = MediaPlayer.currentDecoder.get()
         add("Displays: $screenCount active")
-        add("Frames: $gpu GPU, $dropped dropped")
-        add("Decoder: $decoder")
+        if (screenCount > 0) {
+            val playing = DisplayRegistry.getScreens().firstOrNull { it.isVideoStarted }
+            if (playing != null) {
+                add("Video FPS: %.1f".format(playing.videoFps))
+                playing.streamInfo?.let { add("Stream: $it") }
+                playing.frameIntervalInfo?.let { add("Frame int: $it") }
+            }
+        }
     }
 }

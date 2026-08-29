@@ -3,6 +3,7 @@ package com.dreamdisplayx.platform.client.render
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.mojang.blaze3d.platform.NativeImage
 import org.lwjgl.opengl.GL11
+import org.lwjgl.opengl.GL12
 import org.lwjgl.opengl.GL30
 
 /** Pixel layout of decoded video frames handed to the texture uploader. */
@@ -25,6 +26,12 @@ enum class UploadPixelFormat(
     /** Packed 32-bit RGBA. */
     RGBA32(4, GL11.GL_RGBA, NativeImage.Format.RGBA, 4),
 
+    /**
+     * Packed 32-bit BGRA — the byte layout libvlc's `RV32` chroma actually produces. Uploading with
+     * `GL_BGRA` avoids any per-pixel R/B swap on the colour-conversion path.
+     */
+    BGRA32(4, GL12.GL_BGRA, NativeImage.Format.RGBA, 4),
+
     /** Single-channel plane of an I420 frame (Y, U, or V), uploaded into a RED8 texture. */
     R8(1, GL30.GL_RED, NativeImage.Format.LUMINANCE, 1),
 }
@@ -33,5 +40,6 @@ enum class UploadPixelFormat(
 fun FramePixelFormat.toUploadFormat(): UploadPixelFormat = when (this) {
     FramePixelFormat.RGB24 -> UploadPixelFormat.RGB24
     FramePixelFormat.RGBA32 -> UploadPixelFormat.RGBA32
+    FramePixelFormat.BGRA32 -> UploadPixelFormat.BGRA32
     FramePixelFormat.R8 -> UploadPixelFormat.R8
 }

@@ -30,7 +30,7 @@ Compared to the original Dream Displays, this fork adds:
 - **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions.
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
-- **Fully self-contained** — no external FFmpeg binary, no Rust toolchain, no Python. Native FFmpeg decode is bundled via JavaCPP Maven artifacts.
+- **Fully self-contained** — no external FFmpeg binary, no Rust toolchain, no Python, no vlcj. Video/audio decode runs through a low-level libvlc (JNA) binding; the native runtimes are downloaded automatically on first boot.
 - Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.
 
 > If you encounter any error on this version, **do not** submit issues to the original repository — open an issue
@@ -137,6 +137,27 @@ Done! To customize the display, look at it and press `Shift + RMB`
 > On success the mod sends your `SESSDATA` to the server, which stores it encrypted, syncs it across
 > the server network, and broadcasts it to all online players — everyone gets the unlocked streams.
 
+### JVM arguments (advanced tuning & diagnostics)
+
+Add these to your launcher's JVM arguments (e.g. Prism: `Settings → Java → JVM arguments`). All are
+optional — defaults work fine.
+
+| Argument | Default | What it does |
+|----------|---------|--------------|
+| `-Ddreamdisplayx.hwDecode=<backend>` | `d3d11va` (Win) / `vaapi` (Linux) / `videotoolbox` (Mac) | Hardware decode backend for libvlc. Other values: `dxva2`, `any`, empty string = disable hardware decode. |
+| `-Ddreamdisplayx.audioBufferMs=<ms>` | `100` | Java Sound line buffer for audio. Larger is safer (45ms crashed historically); lower tightens lip-sync. |
+| `-Ddreamdisplayx.networkCachingMs=<ms>` | `300` | libvlc `--network-caching` / `--file-caching`. Raise if streams stutter on slow networks. |
+| `-Ddreamdisplayx.debugFps=true` | off | Draw the live delivered video FPS on the display-menu preview. |
+| `-Ddreamdisplayx.verboseLibvlc=true` | off | Enable libvlc debug logging (shows decoder/backend selection, fallback reasons). |
+| `-Ddreamdisplayx.noDropLateFrames=true` | off | Add `--no-drop-late-frames --no-skip-frames` (diagnostic; causes old/new-frame flicker). |
+| `-Ddreamdisplayx.noAutoResync=true` | off | Disable the A/V drift correction entirely (bisection). |
+| `-Ddreamdisplayx.silentAudio=true` | off | Never open the audio line (bisection). |
+| `-Ddreamdisplayx.noAudioCallback=true` | off | Don't register libvlc audio callbacks (bisection). |
+| `-Ddreamdisplayx.noVideoCallback=true` | off | Don't register libvlc video callbacks (bisection). |
+| `-Ddreamdisplayx.noFrameSink=true` | off | Skip preview/popout frame sinks (bisection). |
+| `-Ddreamdisplayx.noVideoPublish=true` | off | Skip the GPU surface publish — video frozen, audio only (bisection). |
+| `-Ddreamdisplayx.noHardwareAccel=true` | off | Don't pass `--avcodec-hw` to libvlc at all (bisection). |
+
 [Read more in our wiki](https://github.com/Aruvelut-123/dreamdisplaysx/wiki).
 
 ![Display](https://i.imgur.com/yyIKdp8.png)
@@ -150,7 +171,11 @@ cd dreamdisplaysx
 ```
 
 The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; the active version is
-selected in `versions/active.txt`. Native FFmpeg libraries are bundled via Maven (`org.bytedeco:ffmpeg-platform`) — no runtime download needed.
+selected in `versions/active.txt`. On the `feat/libvlc` branch, the media pipeline is being ported from JavaCPP/FFmpeg to
+**libvlc** (vlcj). The LibVLC + SQLite runtimes are collected from official pre-built VideoLAN distributions by the CI
+"Build Natives" workflow (`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for
+macOS and Windows x86/x64, and the MSYS2 package for Windows aarch64 — and **downloaded at runtime** on first boot into
+`./dreamdisplayx/natives/<os>/<arch>/` (never bundled in the jar, keeping it small).
 
 ## Disclaimer
 
@@ -159,3 +184,4 @@ Dream DisplaysX is not affiliated with original Dream Display nor Mojang Studio.
 ## Credits
 
 - **[Dream Displays](https://github.com/arnodoelinger/dreamdisplays)** — the original upstream project that this fork is based on.
+- **[VideoPlayer-Library](https://github.com/squi2rel/VideoPlayer-Library)** — reference for libvlc native build and packaging (used during CI workflow development).

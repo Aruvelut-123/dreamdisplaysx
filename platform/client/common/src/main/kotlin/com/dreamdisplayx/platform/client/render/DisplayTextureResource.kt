@@ -130,18 +130,23 @@ class DisplayTextureResource(private val uuid: UUID) {
      * pixels tall, without touching the GPU. Used to pre-seed sizes before the actual allocation happens on the
      * render thread.
      */
-    fun prepareDimensions(blockWidth: Int, blockHeight: Int, qualityHeight: Int) {
-        val (w, h) = textureDimensions(blockWidth, blockHeight, qualityHeight)
+    fun prepareDimensions(blockWidth: Int, blockHeight: Int, qualityHeight: Int, contentAspect: Double = 0.0) {
+        val (w, h) = textureDimensions(blockWidth, blockHeight, qualityHeight, contentAspect)
         width = w
         height = h
     }
 
     /**
      * Texture size for a [blockWidth] x [blockHeight] screen at [qualityHeight] pixels tall, with
-     * both axes forced even.
+     * both axes forced even. When [contentAspect] (width/height of the decoded video) is positive the
+     * texture is allocated at the video's own aspect (so the vout thread uploads native-size frames
+     * with a direct copy and the GPU does the scaling); otherwise it falls back to the block aspect.
      */
-    private fun textureDimensions(blockWidth: Int, blockHeight: Int, qualityHeight: Int): Pair<Int, Int> {
-        val width = ((blockWidth / blockHeight.toDouble()) * qualityHeight).toInt()
+    private fun textureDimensions(
+        blockWidth: Int, blockHeight: Int, qualityHeight: Int, contentAspect: Double,
+    ): Pair<Int, Int> {
+        val aspect = if (contentAspect > 0.0) contentAspect else blockWidth / blockHeight.toDouble()
+        val width = (aspect * qualityHeight).toInt()
         return width.toEvenDimension() to qualityHeight.toEvenDimension()
     }
 
@@ -153,17 +158,17 @@ class DisplayTextureResource(private val uuid: UUID) {
      * [RenderType] sized for [blockWidth] x [blockHeight] blocks at [qualityHeight] pixels. Must be
      * called on the render thread.
      */
-    fun allocate(blockWidth: Int, blockHeight: Int, qualityHeight: Int) {
+    fun allocate(blockWidth: Int, blockHeight: Int, qualityHeight: Int, contentAspect: Double = 0.0) {
         discardPending()
-        prepareDimensions(blockWidth, blockHeight, qualityHeight)
+        prepareDimensions(blockWidth, blockHeight, qualityHeight, contentAspect)
         current?.release()
         current = build(width, height)
     }
 
     /** Stages a fresh allocation at the dimensions for [blockWidth] x [blockHeight] @ [qualityHeight] without touching the currently active allocation. */
-    fun allocatePending(blockWidth: Int, blockHeight: Int, qualityHeight: Int) {
+    fun allocatePending(blockWidth: Int, blockHeight: Int, qualityHeight: Int, contentAspect: Double = 0.0) {
         discardPending()
-        val (w, h) = textureDimensions(blockWidth, blockHeight, qualityHeight)
+        val (w, h) = textureDimensions(blockWidth, blockHeight, qualityHeight, contentAspect)
         pending = build(w, h)
     }
 

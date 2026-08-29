@@ -47,6 +47,12 @@ object OsInfo {
     /** True specifically on 64-bit ARM. */
     val isArm64: Boolean = "aarch64" in arch || "arm64" in arch
 
+    /** True on 64-bit x86-64 (`x86_64` / `amd64`). */
+    val isX64: Boolean = "x86_64" in arch || "amd64" in arch
+
+    /** True on 32-bit x86 (`x86` / `i386` / `i486` / `i686`). */
+    val isX86: Boolean = "x86" in arch || "i386" in arch || "i486" in arch || "i686" in arch
+
     /**
      * The Linux desktop session type, or null when not running under a Linux desktop.
      *

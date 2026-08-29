@@ -2,7 +2,6 @@ package com.dreamdisplayx.platform.client
 
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
 import com.dreamdisplayx.media.player.cdn.BilibiliCdnMirror
-import com.dreamdisplayx.media.player.process.HwAccelEnumerator
 import com.dreamdisplayx.platform.client.config.ConfigScreenText
 import com.dreamdisplayx.platform.client.managers.ClientStartupManager
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
@@ -70,25 +69,6 @@ object ClothConfigScreenProvider {
                 .setDefaultValue(true)
                 .setTooltip(Component.translatable(ConfigScreenText.Keys.USE_HW_ACCEL_TOOLTIP))
                 .setSaveConsumer { v: Boolean -> config.useHwAccel = v }
-                .build(),
-        )
-
-        // Video decoder selection (button-style selector with all available FFmpeg backends)
-        val decoderSelections = buildList {
-            add("auto")
-            add("software")
-            addAll(HwAccelEnumerator.availableBackends())
-        }.toTypedArray()
-        general.addEntry(
-            entryBuilder.startSelector(
-                Component.translatable(ConfigScreenText.Keys.DECODER),
-                decoderSelections,
-                config.hwaccelDecoder.ifEmpty { "auto" },
-            )
-                .setDefaultValue("auto")
-                .setNameProvider { v -> ConfigScreenText.decoderLabel(v) }
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.DECODER_TOOLTIP))
-                .setSaveConsumer { v: String -> config.hwaccelDecoder = v }
                 .build(),
         )
 

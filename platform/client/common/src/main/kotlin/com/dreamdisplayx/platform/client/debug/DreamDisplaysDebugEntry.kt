@@ -8,9 +8,8 @@ import net.minecraft.client.gui.components.debug.DebugScreenDisplayer
 import net.minecraft.client.gui.components.debug.DebugScreenEntries
 import net.minecraft.client.gui.components.debug.DebugScreenEntry
 import net.minecraft.resources.Identifier
-import net.minecraft.world.level.Level
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk
-import org.bytedeco.ffmpeg.global.avutil
 
 /**
  * 26.x native [DebugScreenEntry] that displays Dream DisplaysX runtime info
@@ -18,9 +17,8 @@ import org.bytedeco.ffmpeg.global.avutil
  * Uses [addToGroup] to place lines on the right side alongside system specs.
  */
 object DreamDisplaysDebugEntry : DebugScreenEntry {
-    private val ffmpegVersion: String by lazy {
-        runCatching { avutil.av_version_info()?.getString()?.trim() ?: "unknown" }.getOrDefault("unknown")
-    }
+    private val libvlcVersion: String
+        get() = com.dreamdisplayx.media.player.util.LibVlcNativesLoader.libvlcVersion ?: "unavailable"
 
     private val modVersion: String by lazy { GeneralUtil.getPrettyModVersion() }
 
@@ -37,7 +35,7 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
     ) {
         displayer.addToGroup(groupId, "§bDream DisplaysX §a$modVersion")
         displayer.addToGroup(groupId, "§7Commit: §f$commitId")
-        displayer.addToGroup(groupId, "§7FFmpeg: §f$ffmpegVersion")
+        displayer.addToGroup(groupId, "§7LibVLC: §f$libvlcVersion")
         val screenCount = runCatching {
             com.dreamdisplayx.platform.client.displays.DisplayRegistry.getScreens().size
         }.getOrDefault(0)
@@ -46,6 +44,18 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
             val dropped = com.dreamdisplayx.media.player.MediaPlayer.framesDropped.get()
             displayer.addToGroup(groupId, "Displays: $screenCount active")
             displayer.addToGroup(groupId, "Frames: $gpu GPU, $dropped dropped")
+            // Delivered video FPS of the first playing screen (debug aid for slow-framerate reports).
+            val playing = com.dreamdisplayx.platform.client.displays.DisplayRegistry.getScreens()
+                .firstOrNull { it.isVideoStarted }
+            if (playing != null) {
+                displayer.addToGroup(groupId, "Video FPS: %.1f".format(playing.videoFps))
+                // Source stream identity: codec / resolution / source fps — tells whether a low
+                // delivered FPS is a codec problem (AV1/HEVC soft-decode) rather than rendering.
+                playing.streamInfo?.let { displayer.addToGroup(groupId, "Stream: $it") }
+                // Frame interval min/avg/max (ms): min≈source-frame interval with avg≈2x ⇒ libvlc
+                // is dropping half the frames (clock throttling); min≈avg≈slow ⇒ decoder-limited.
+                playing.frameIntervalInfo?.let { displayer.addToGroup(groupId, "Frame int: $it") }
+            }
         }
         val decoder = com.dreamdisplayx.media.player.MediaPlayer.currentDecoder.get()
         displayer.addToGroup(groupId, "Decoder: $decoder")

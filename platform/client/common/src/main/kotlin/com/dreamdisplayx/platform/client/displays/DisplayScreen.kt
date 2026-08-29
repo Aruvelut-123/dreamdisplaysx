@@ -374,6 +374,9 @@ class DisplayScreen(
     /** The currently loaded video URL, or `null` when idle. */
     var videoUrl: String? = null; private set
 
+    /** The URL that was loaded before [videoUrl] (used to release per-video scrub extractors). */
+    var previousVideoUrl: String? = null; private set
+
     /** True while a client-side URL override is active (suppresses server URL changes). */
     private var clientUrlOverride: Boolean = false
 
@@ -456,6 +459,15 @@ class DisplayScreen(
     /** Raw stream URL for seek-bar scrub-preview frame extraction; null for live/unresolved. */
     val scrubPreviewRawUrl: String? get() = mediaPlayer?.capturedStreamRawUrl()
 
+    /** Delivered video FPS for the debug label (0 when idle); only meaningful with -Ddreamdisplayx.debugFps. */
+    val videoFps: Double get() = mediaPlayer?.currentVideoFps() ?: 0.0
+
+    /** Current stream description (codec/resolution/source fps) for the F3 debug screen; null when idle. */
+    val streamInfo: String? get() = mediaPlayer?.currentStreamInfo()
+
+    /** Frame-interval "min/avg/max ms" of vout displays for the F3 debug screen; null when idle. */
+    val frameIntervalInfo: String? get() = mediaPlayer?.frameIntervalInfo()
+
     /** Whether scrub previews for this display must seek by decoding forward; see `MediaStream.seekByDecoding`. */
     val scrubPreviewSeeksByDecoding: Boolean get() = mediaPlayer?.capturedStreamSeeksByDecoding() == true
 
@@ -513,6 +525,7 @@ class DisplayScreen(
 
     /** Records the new [videoUrl] and [lang] when the media controller swaps players. */
     internal fun onVideoSwapped(videoUrl: String, lang: String) {
+        previousVideoUrl = this.videoUrl
         this.videoUrl = videoUrl
         this.lang = lang
         savedTimeNanos = 0L
@@ -546,7 +559,7 @@ class DisplayScreen(
 
     /** Sizes the GPU texture buffers for the current dimensions and quality before the first frame. */
     internal fun prepareTextureDimensions() {
-        textureResource.prepareDimensions(width, height, effectiveTextureHeight())
+        textureResource.prepareDimensions(width, height, effectiveTextureHeight(), videoContentAspect)
     }
 
     /** Re-attaches the popout sink chain to a freshly created [player]. */
@@ -934,12 +947,12 @@ class DisplayScreen(
     fun createTexture() {
         hasEverRendered = false
         firstFrameNanos = 0L
-        textureResource.allocate(width, height, effectiveTextureHeight())
+        textureResource.allocate(width, height, effectiveTextureHeight(), videoContentAspect)
     }
 
     /** Stages new-resolution texture; live frame renders until first new frame (render thread only). */
     fun beginQualityHandoff() {
-        textureResource.allocatePending(width, height, effectiveTextureHeight())
+        textureResource.allocatePending(width, height, effectiveTextureHeight(), videoContentAspect)
     }
 
     /** Drops any staged quality-handoff texture (e.g. when a full session restart supersedes it). */

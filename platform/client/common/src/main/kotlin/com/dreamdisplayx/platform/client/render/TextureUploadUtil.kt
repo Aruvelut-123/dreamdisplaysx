@@ -92,6 +92,17 @@ object TextureUploadUtil {
             return
         }
 
+        // R8 and true RGBA32 are uploaded as-is; BGRA32 must be reordered to RGBA for the
+        // command-encoder path (which only knows NativeImage formats); RGB24 gets expanded.
+        if (format == UploadPixelFormat.BGRA32) {
+            val rgbaSize = w * h * 4
+            val rgba = rgbaScratch?.takeIf { it.capacity() >= rgbaSize }
+                ?: ByteBuffer.allocateDirect(rgbaSize).order(ByteOrder.nativeOrder()).also(setRgbaScratch)
+            bgraToRgba(src, rgba, w, h)
+            writeToTexture(texture, rgba, w, h, NativeImage.Format.RGBA)
+            return
+        }
+
         // RGBA32 and R8 are uploaded as-is; only RGB24 needs the expansion pass below
         if (format != UploadPixelFormat.RGB24) {
             writeToTexture(texture, src, w, h, format.nativeImageFormat)
@@ -205,6 +216,27 @@ object TextureUploadUtil {
             dst.put(src.get())
             dst.put(src.get())
             dst.put(0xFF.toByte())
+        }
+        dst.flip()
+        src.limit(savedLimit)
+        src.position(savedPos)
+    }
+
+    /** BGRA32 -> RGBA32 conversion (libvlc RV32 data is BGRA; used on the non-direct-GL upload path). */
+    private fun bgraToRgba(src: ByteBuffer, dst: ByteBuffer, w: Int, h: Int) {
+        val size = w * h * 4
+        if (size <= 0 || src.remaining() < size) return
+
+        val savedLimit = src.limit()
+        val savedPos = src.position()
+        src.limit(savedPos + size)
+        dst.clear()
+        while (src.hasRemaining()) {
+            val b = src.get().toInt() and 0xFF
+            val g = src.get().toInt() and 0xFF
+            val r = src.get().toInt() and 0xFF
+            val a = src.get().toInt() and 0xFF
+            dst.put(r.toByte()); dst.put(g.toByte()); dst.put(b.toByte()); dst.put(a.toByte())
         }
         dst.flip()
         src.limit(savedLimit)

@@ -14,6 +14,7 @@ on:
       - '.gitignore'
       - '.github/**'
       - 'native/sqlite/**'
+      - 'native/libvlc/**'
   pull_request:
     branches: [ main ]
     paths-ignore:
@@ -23,6 +24,7 @@ on:
       - '.gitignore'
       - '.github/**'
       - 'native/sqlite/**'
+      - 'native/libvlc/**'
   workflow_dispatch:
 
 concurrency:

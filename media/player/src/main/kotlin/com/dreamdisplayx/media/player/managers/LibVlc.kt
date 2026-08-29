@@ -1,0 +1,396 @@
+package com.dreamdisplayx.media.player.managers
+
+import com.sun.jna.Callback
+import com.sun.jna.Library
+import com.sun.jna.Memory
+import com.sun.jna.Native
+import com.sun.jna.Pointer
+import com.sun.jna.Structure
+import com.sun.jna.ptr.PointerByReference
+import java.nio.charset.StandardCharsets
+
+/**
+ * Low-level JNA binding to the libvlc shared library, mirroring VideoPlayer's [VlcLibrary].
+ *
+ * The natives are loaded by [LibVlcNativesLoader] (which sets `jna.library.path` and
+ * `VLC_PLUGIN_PATH`); this object just calls `Native.load("libvlc", LibVlc::class.java)`.
+ */
+object LibVlc {
+
+    private val logger = org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
+
+    // ── Event constants ──────────────────────────────────────────────────────
+
+    const val LIBVLC_MEDIA_PLAYER_PLAYING = 0x104
+    const val LIBVLC_MEDIA_PLAYER_PAUSED = 0x105
+    const val LIBVLC_MEDIA_PLAYER_STOPPED = 0x106
+    const val LIBVLC_MEDIA_PLAYER_END_REACHED = 0x109
+    const val LIBVLC_MEDIA_PLAYER_ENCOUNTERED_ERROR = 0x10A
+    const val LIBVLC_MEDIA_PLAYER_TIME_CHANGED = 0x10B
+    const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
+    /**
+     * libvlc_state_t values returned by libvlc_media_player_get_state — these are tiny integers
+     * (Playing=3, Paused=4, Stopped=5, Ended=6), NOT the libvlc_event_e constants above (0x1xx).
+     * Never compare a state against the event constants.
+     */
+    const val LIBVLC_STATE_PLAYING = 3
+    const val LIBVLC_STATE_PAUSED = 4
+    const val LIBVLC_STATE_STOPPED = 5
+    const val LIBVLC_STATE_ENDED = 6
+    const val LIBVLC_ENDED = 6 // legacy alias for LIBVLC_STATE_ENDED
+
+    // libvlc_media_slave_type_t (libvlc_media.h)
+    const val LIBVLC_MEDIA_SLAVE_TYPE_AUDIO = 1
+
+    private val RV32 = byteArrayOf('R'.code.toByte(), 'V'.code.toByte(), '3'.code.toByte(), '2'.code.toByte())
+
+    // ── Singleton libvlc instance ────────────────────────────────────────────
+
+    @Volatile
+    private var instance: Pointer? = null
+
+    @Volatile
+    private var loadError: Throwable? = null
+
+    @Volatile
+    private var loadAttempted = false
+
+    /** Set once before first [ensureLoaded]; enables `--avcodec-hw=any` when true. */
+    @Volatile
+    var useHwAccel: Boolean = true
+
+    val lib: LibVlcNative by lazy {
+        // NOTE: do NOT call ensureLoaded() here — ensureLoaded() itself resolves `lib` while
+        // creating the instance, which would deadlock on the lazy initializer. The caller is
+        // expected to call ensureLoaded() (via the session manager) before touching `lib`.
+        Native.load("libvlc", LibVlcNative::class.java)
+    }
+
+    /** Returns the singleton libvlc instance pointer. */
+    val libvlcInstance: Pointer get() = instance ?: throw IllegalStateException("LibVLC not loaded")
+
+    @Synchronized
+    fun ensureLoaded(): Boolean {
+        if (instance != null) return true
+        if (loadAttempted && loadError != null) return false
+        loadAttempted = true
+        try {
+            // NativesDownloader.ensure() is called by LibVlcNativesLoader.load() which sets up
+            // jna.library.path and the VLC_PLUGIN_PATH system property. The low-level binding must
+            // pass the plugin path explicitly to libvlc_new (vlcj does this internally; libvlc does
+            // NOT read the Java system property).
+            com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
+            Native.load("libvlc", LibVlcNative::class.java)
+            val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--quiet",
+                "--no-keyboard-events", "--no-mouse-events",
+                "--network-caching=${networkCachingMs()}",
+                "--file-caching=${networkCachingMs()}", "--live-caching=600", "--audio-filter=scaletempo")
+            // Instance-level browser UA so EVERY http request (including the :input-slave audio
+            // stream, which is a separate HTTP transaction from the video) carries a browser-shaped
+            // User-Agent. Bilibili/YouTube CDNs reject libvlc's default UA, and media-level options
+            // only apply to the primary video URL — the merged audio slave would still be 401/403'd.
+            opts.add("--http-user-agent=${com.dreamdisplayx.media.player.util.LibVlcMediaOptions.BROWSER_USER_AGENT}")
+            // Hardware-accelerated decoding. libvlc 3.0's vmem callbacks work together with
+            // --avcodec-hw: the avcodec module decodes on the GPU then copies the frame back to
+            // system memory before handing it to the lock callback (copy-back) — the same D3D11VA /
+            // DXVA2 copy-back that raw FFmpeg supports, since libvlc's avcodec module IS FFmpeg.
+            // We pick the backend explicitly per-OS instead of `any`: `any` can pick a surface
+            // backend that libvlc 3.0 fails to copy back from (then it silently falls back to
+            // software and the F3 debug overlay reports "software").
+            //   Windows → d3d11va (modern D3D11 API, works well on all Windows GPUs — AMD/NVIDIA/
+            //             Intel — and vmem copy-back is confirmed working; dxva2 is the legacy API)
+            //   Linux   → vaapi (drm copy-back works with vmem)
+            //   Mac     → videotoolbox
+            // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. dxva2, any, or "" to disable).
+            val backend = configuredHwBackend()
+            if (backend != null) opts.add("--avcodec-hw=$backend")
+            // libvlc drops frames that arrive late against the master clock. The default is ON, and
+            // when the clock is system-clock (`:no-audio`), the vout may still drop ~35% of frames
+            // (observed: 1080P 30fps source → Frame int 39/58/230ms — min=39ms ≈ 25fps cadence,
+            // avg=58ms ≈ 17fps). Disabling dropping (`--no-drop-late-frames`) and skipping
+            // (`--no-skip-frames`) lets the vout display every frame. The risk is A/V desync if the
+            // decoder genuinely falls behind. Enable with `-Ddreamdisplayx.noDropLateFrames=true`.
+            if (System.getProperty("dreamdisplayx.noDropLateFrames", "false").equals("true", ignoreCase = true)) {
+                opts.add("--no-drop-late-frames")
+                opts.add("--no-skip-frames")
+            }
+            // Verbose libvlc logging (diagnostic): lets us see which decoder/backend libvlc actually
+            // selects and why it might fall back to software. Off by default (noise).
+            if (System.getProperty("dreamdisplayx.verboseLibvlc", "false").equals("true", ignoreCase = true)) {
+                opts.remove("--quiet")
+                opts.add("--verbose=2")
+            }
+            instance = libcCreateInstance(opts)
+            loadError = null
+            return true
+        } catch (t: Throwable) {
+            loadError = t
+            logger.warn("LibVLC low-level load failed: ${t.message}")
+            return false
+        }
+    }
+
+    // ── Error helpers ────────────────────────────────────────────────────────
+
+    fun errmsg(): String = try {
+        val msg = lib.libvlc_errmsg()
+        if (msg == null) "" else msg.getString(0)
+    } catch (_: RuntimeException) { "" }
+
+    /** Sentinel picture token returned by a lock callback when the frame must be dropped. */
+    fun dropToken(): Pointer = Pointer.createConstant(0x7FFFFFFFL)
+
+    // ── Media / instance helpers ─────────────────────────────────────────────
+
+    /** Creates a libvlc instance with the given options. */
+    private fun libcCreateInstance(options: List<String>): Pointer {
+        NativeStringArray(options).use { arr ->
+            val ptr = lib.libvlc_new(options.size, arr.pointer())
+            if (ptr == null) throw IllegalStateException("libvlc_new returned null: ${errmsg()}")
+            return ptr
+        }
+    }
+
+    /** Creates a libvlc media object from a URL with media-level options. */
+    fun createMedia(url: String, options: Array<String>): Pointer {
+        val media = lib.libvlc_media_new_location(libvlcInstance, url)
+        if (media == null) throw IllegalStateException("libvlc_media_new_location returned null: ${errmsg()}")
+        for (opt in options) {
+            lib.libvlc_media_add_option(media, opt)
+        }
+        return media
+    }
+
+    /** Helper: create a direct ByteBuffer of a given size and return its Pointer. */
+    fun allocateBuffer(size: Int): java.nio.ByteBuffer =
+        java.nio.ByteBuffer.allocateDirect(size).order(java.nio.ByteOrder.nativeOrder())
+
+    // ── NativeStringArray ────────────────────────────────────────────────────
+
+    class NativeStringArray(private val values: List<String>) : AutoCloseable {
+        private val strings = ArrayList<Memory>(values.size)
+        private val pointer = Memory((values.size + 1L) * Native.POINTER_SIZE)
+
+        init {
+            for (i in values.indices) {
+                val mem = utf8(values[i])
+                strings.add(mem)
+                pointer.setPointer(i.toLong() * Native.POINTER_SIZE, mem)
+            }
+            pointer.setPointer(values.size.toLong() * Native.POINTER_SIZE, null)
+        }
+
+        fun pointer(): Pointer = pointer
+        override fun close() { strings.clear() }
+    }
+
+    private fun utf8(s: String): Memory {
+        val bytes = s.toByteArray(StandardCharsets.UTF_8)
+        val mem = Memory((bytes.size + 1).toLong())
+        mem.write(0, bytes, 0, bytes.size)
+        mem.setByte(bytes.size.toLong(), 0)
+        return mem
+    }
+
+    // ── Media decoder info (F3 diagnostics) ─────────────────────────────────
+
+    /**
+     * The hardware-decode backend passed to libvlc (instance + media), resolved per-OS unless
+     * overridden with `-Ddreamdisplayx.hwDecode`. Returns null when hw decode is disabled
+     * (config off, or `-Ddreamdisplayx.noHardwareAccel=true`).
+     */
+    fun configuredHwBackend(): String? {
+        if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
+        val override = System.getProperty("dreamdisplayx.hwDecode")
+        if (override != null) {
+            // Explicit override present: an EMPTY value disables hw decoding entirely (returns null),
+            // a non-blank value forces that backend. This distinguishes "not set" (use per-OS default)
+            // from "set to empty" (disable), so `-Ddreamdisplayx.hwDecode=` truly disables hw instead
+            // of silently falling back to the platform default backend.
+            return override.takeIf { it.isNotBlank() }
+        }
+        return when {
+            com.dreamdisplayx.util.OsInfo.isWindows -> "d3d11va"
+            com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
+            com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
+            else -> "any"
+        }
+    }
+
+    /**
+     * Network and file caching in milliseconds, configurable via `-Ddreamdisplayx.networkCachingMs`.
+     * Default is 300ms (libvlc's default). Larger values (e.g. 2000-5000) pre-buffer more data,
+     * which can smooth out slow CDN delivery — relevant if 1080P video FPS is pinned at ~16-20 fps
+     * while 4K reaches 25-38 (same decoder, same clock, different CDN / DASH fragment pacing).
+     * Applied to both `--network-caching` and `--file-caching` at instance level.
+     */
+    fun networkCachingMs(): Int {
+        val v = System.getProperty("dreamdisplayx.networkCachingMs")?.trim()
+        return v?.toIntOrNull()?.coerceIn(100, 30000) ?: 300
+    }
+
+    /**
+     * Reads the active video decoder's human-readable name via
+     * `libvlc_media_player_get_video_decoder_info`. libvlc allocates a
+     * `libvlc_media_decoder_info_t {char *psz_name; char *psz_description; int i_type;}` and we must
+     * release it with `libvlc_media_decoder_info_release`. The API takes a pointer-to-pointer, so the
+     * JNA binding uses [PointerByReference] (a struct-by-value binding would read garbage and never
+     * report a name).
+     *
+     * When the API is unavailable on this libvlc build (returns non-zero / null) we fall back to
+     * [configuredHwBackend] so the F3 overlay reports the intended backend ("dxva2") instead of
+     * staying at the default "software" even though decoding IS on the GPU.
+     */
+    fun videoDecoderName(player: Pointer): String? = try {
+        val dec = PointerByReference()
+        val enc = PointerByReference()
+        if (lib.libvlc_media_player_get_video_decoder_info(player, dec, enc) != 0) {
+            org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
+                .debug("get_video_decoder_info returned non-zero for player; falling back to configured backend.")
+            return configuredHwBackend()
+        }
+        val d = dec.value ?: return configuredHwBackend()
+        // libvlc_media_decoder_info_t { char *psz_name; char *psz_description; int i_type; }
+        // psz_name is usually just the module ("avcodec"); psz_description carries the concrete
+        // backend (e.g. "H.264/AVC (DXVA2.0 by AMD)" or "FFmpeg..."). Prefer the description and
+        // fall back to the name so the F3 overlay shows the real decoder (DXVA2/d3d11va/vaapi)
+        // instead of always reading back "software".
+        val name = runCatching { d.getPointer(0)?.getString(0, "UTF-8")?.takeIf { it.isNotBlank() } }
+            .getOrNull()
+        val description = runCatching { d.getPointer(Native.POINTER_SIZE.toLong())?.getString(0, "UTF-8") }
+            .getOrNull()?.takeIf { it.isNotBlank() }
+        runCatching { lib.libvlc_media_decoder_info_release(d) }
+        runCatching { enc.value?.let { lib.libvlc_media_decoder_info_release(it) } }
+        description ?: name ?: configuredHwBackend()
+    } catch (_: Throwable) { configuredHwBackend() }
+
+    // ── Callback interfaces ──────────────────────────────────────────────────
+    // The Pointer parameters are nullable because libvlc passes a null `opaque` (and null
+    // `userData` for events) when we registered the callbacks with a null context. Kotlin would
+    // otherwise insert a non-null check on a null native argument and throw an NPE inside the
+    // JNA callback trampoline.
+
+    fun interface EventCallback : Callback {
+        fun invoke(event: Pointer?, userData: Pointer?)
+    }
+
+    fun interface VideoLockCallback : Callback {
+        fun invoke(opaque: Pointer?, planes: Pointer?): Pointer?
+    }
+
+    fun interface VideoUnlockCallback : Callback {
+        fun invoke(opaque: Pointer?, picture: Pointer?, planes: Pointer?)
+    }
+
+    fun interface VideoDisplayCallback : Callback {
+        fun invoke(opaque: Pointer?, picture: Pointer?)
+    }
+
+    fun interface VideoFormatCallback : Callback {
+        fun invoke(opaque: PointerByReference?, chroma: Pointer?, width: Pointer?, height: Pointer?, pitches: Pointer?, lines: Pointer?): Int
+    }
+
+    fun interface VideoCleanupCallback : Callback {
+        fun invoke(opaque: Pointer?)
+    }
+
+    fun interface AudioPlayCallback : Callback {
+        fun invoke(data: Pointer?, samples: Pointer?, count: Int, pts: Long)
+    }
+
+    fun interface AudioPauseCallback : Callback {
+        fun invoke(data: Pointer?, pts: Long)
+    }
+
+    fun interface AudioResumeCallback : Callback {
+        fun invoke(data: Pointer?, pts: Long)
+    }
+
+    fun interface AudioFlushCallback : Callback {
+        fun invoke(data: Pointer?, pts: Long)
+    }
+
+    fun interface AudioDrainCallback : Callback {
+        fun invoke(data: Pointer?)
+    }
+
+    fun interface AudioSetVolumeCallback : Callback {
+        fun invoke(data: Pointer?, volume: Float, mute: Int)
+    }
+
+    fun interface AudioSetupCallback : Callback {
+        fun invoke(data: PointerByReference?, format: Pointer?, rate: Pointer?, channels: Pointer?): Int
+    }
+
+    fun interface AudioCleanupCallback : Callback {
+        fun invoke(data: Pointer?)
+    }
+
+    // ── Low-level libvlc native API ──────────────────────────────────────────
+
+    interface LibVlcNative : Library {
+        // Instance
+        fun libvlc_new(argc: Int, argv: Pointer): Pointer
+        fun libvlc_release(instance: Pointer)
+
+        // Error
+        fun libvlc_errmsg(): Pointer
+        fun libvlc_clearerr()
+
+        // Version
+        fun libvlc_get_version(): Pointer
+
+        // Media
+        fun libvlc_media_new_location(instance: Pointer, url: String): Pointer
+        fun libvlc_media_add_option(media: Pointer, option: String)
+        fun libvlc_media_release(media: Pointer)
+
+        // Media player
+        fun libvlc_media_player_new(instance: Pointer): Pointer
+        fun libvlc_media_player_release(player: Pointer)
+        fun libvlc_media_player_set_media(player: Pointer, media: Pointer)
+        fun libvlc_media_player_play(player: Pointer): Int
+        fun libvlc_media_player_stop(player: Pointer)
+        fun libvlc_media_player_set_pause(player: Pointer, pause: Int)
+        fun libvlc_media_player_is_playing(player: Pointer): Int
+        fun libvlc_media_player_is_seekable(player: Pointer): Int
+        fun libvlc_media_player_can_pause(player: Pointer): Int
+        fun libvlc_media_player_get_time(player: Pointer): Long
+        fun libvlc_media_player_set_time(player: Pointer, time: Long)
+        fun libvlc_media_player_get_length(player: Pointer): Long
+        fun libvlc_media_player_get_state(player: Pointer): Int
+        fun libvlc_media_player_get_fps(player: Pointer): Float
+        fun libvlc_media_player_set_rate(player: Pointer, rate: Float): Int
+        fun libvlc_media_player_get_rate(player: Pointer): Float
+        // Slave (merged audio/video) inputs by full URI — added in libvlc 3.0.6; the string-option
+        // :input-slave=... mangles URLs containing '&' (query params get truncated), which silently
+        // breaks Bilibili DASH audio streams and the master clock with them.
+        fun libvlc_media_player_add_slave(player: Pointer, type: Int, uri: String, select: Boolean): Int
+        // Decoder info for F3 diagnostics (added in libvlc 3.0.7; libvlc allocates the structs,
+        // released via libvlc_media_decoder_info_release).
+        fun libvlc_media_player_get_video_decoder_info(player: Pointer, decoder: PointerByReference, encoder: PointerByReference): Int
+        fun libvlc_media_decoder_info_release(decoder: Pointer)
+
+        // Audio
+        fun libvlc_audio_set_volume(player: Pointer, volume: Int): Int
+        fun libvlc_audio_get_volume(player: Pointer): Int
+        fun libvlc_audio_get_track_count(player: Pointer): Int
+        fun libvlc_audio_get_track(player: Pointer): Int
+        fun libvlc_audio_set_track(player: Pointer, track: Int): Int
+        fun libvlc_audio_set_callbacks(player: Pointer, play: AudioPlayCallback, pause: AudioPauseCallback,
+                                       resume: AudioResumeCallback, flush: AudioFlushCallback,
+                                       drain: AudioDrainCallback, opaque: Pointer?)
+        fun libvlc_audio_set_volume_callback(player: Pointer, setVolume: AudioSetVolumeCallback)
+        fun libvlc_audio_set_format_callbacks(player: Pointer, setup: AudioSetupCallback, cleanup: AudioCleanupCallback)
+
+        // Video
+        fun libvlc_video_set_callbacks(player: Pointer, lock: VideoLockCallback, unlock: VideoUnlockCallback,
+                                        display: VideoDisplayCallback, opaque: Pointer?)
+        fun libvlc_video_set_format_callbacks(player: Pointer, setup: VideoFormatCallback, cleanup: VideoCleanupCallback)
+
+        // Events
+        fun libvlc_media_player_event_manager(player: Pointer): Pointer?
+        fun libvlc_event_attach(eventManager: Pointer, eventType: Int, callback: EventCallback, userData: Pointer?): Int
+        fun libvlc_event_detach(eventManager: Pointer, eventType: Int, callback: EventCallback, userData: Pointer?)
+    }
+}

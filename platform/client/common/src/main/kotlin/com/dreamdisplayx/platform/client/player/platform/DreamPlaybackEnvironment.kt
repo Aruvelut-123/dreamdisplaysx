@@ -37,12 +37,8 @@ object DreamPlaybackEnvironment : PlaybackEnvironment {
         /** Active GPU YUV render type. */
         override val gpuYuvActive: Boolean get() = DisplayYuvRenderTypes.active
 
-        /**
-         * Hardware-accelerated decode candidates computed from the config's `hwaccelDecoder`
-         * setting and the GPU vendor / render-backend detection.
-         */
-        override val hwAccelCandidates: List<String> get() =
-            HwAccelCandidateResolver.resolve(ClientStateManager.config.hwaccelDecoder, useHwAccel)
+        /** Hardware-accelerated decode candidates — libvlc auto-detects internally. */
+        override val hwAccelCandidates: List<String> get() = emptyList()
 
         /** Preferred Bilibili CDN mirror host, or auto-select by probe when unset / `"auto"`. */
         override val bilibiliCdnMirror: String? get() =

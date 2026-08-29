@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.LockSupport
 
 /**
- * Render-facing contract satisfied by [JavaCppVideoPipe]. Starting and stopping a session stays on the
+ * Render-facing contract satisfied by the libvlc video pipe. Starting and stopping a session stays on the
  * concrete types because their inputs differ (an owned [Process] vs. a native handle).
  */
 internal interface FramePipe {

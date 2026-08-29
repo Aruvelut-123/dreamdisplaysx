@@ -79,14 +79,14 @@ object TwitchMetadataCache {
         return runCatching {
             TwitchApi.resolve(source)?.also { CACHE.put(key, it) }
         }.onFailure { e ->
-            logger.warn("Twitch metadata fetch failed for {}: {}.", key, e.message)
+            logger.debug("Twitch metadata fetch failed for {}: {}.", key, e.message)
         }.getOrNull()
     }
 
     private fun fetchAndStore(key: String, source: MediaSource.Twitch) {
         runCatching { TwitchApi.resolve(source) }
             .onSuccess { metadata -> metadata?.let { CACHE.put(key, it) } }
-            .onFailure { e -> logger.warn("Twitch metadata fetch failed for {}: {}.", key, e.message) }
+            .onFailure { e -> logger.debug("Twitch metadata fetch failed for {}: {}.", key, e.message) }
             .also { IN_FLIGHT.invalidate(key) }
     }
 }

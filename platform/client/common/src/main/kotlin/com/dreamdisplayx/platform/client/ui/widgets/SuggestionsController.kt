@@ -171,7 +171,7 @@ class SuggestionsController {
                     val bangumi = BilibiliApi.searchBangumi(q)
                     val media = BilibiliApi.searchMedia(q)
                     val all = videos + bangumi + media
-                    logger.info(
+                    logger.debug(
                         "Bilibili search '{}': {} video(s), {} bangumi, {} movie (filter={})",
                         q, videos.size, bangumi.size, media.size, bilibiliFilter.apiName,
                     )
@@ -198,7 +198,7 @@ class SuggestionsController {
     /** Switches the Bilibili media-type filter and re-runs the current search when one is active. */
     fun setBilibiliFilter(type: BilibiliSearchType) {
         if (type == bilibiliFilter) return
-        logger.info("Bilibili filter changed: {} -> {}", bilibiliFilter.apiName, type.apiName)
+        logger.debug("Bilibili filter changed: {} -> {}", bilibiliFilter.apiName, type.apiName)
         bilibiliFilter = type
         onResults()
         lastQuery?.let { runSearch(it) }
@@ -444,7 +444,7 @@ class SuggestionsController {
                     pendingOffset, minOf(pendingOffset + BILIBILI_PAGE_SIZE, pendingResults.size),
                 )
                 pendingOffset += next.size
-                logger.info(
+                logger.debug(
                     "Load-more: exposing {} more result(s) (offset now {}/{}), cards before {}",
                     next.size, pendingOffset, pendingResults.size, cards.size,
                 )
@@ -493,7 +493,7 @@ class SuggestionsController {
                         pendingOffset, minOf(pendingOffset + BILIBILI_PAGE_SIZE, pendingResults.size),
                     )
                     pendingOffset += next.size
-                    logger.info(
+                    logger.debug(
                         "Load-more: Bilibili page {} fetched {} new result(s), exposing {} more (offset {}/{}).",
                         nextPage, items.size, next.size, pendingOffset, pendingResults.size,
                     )

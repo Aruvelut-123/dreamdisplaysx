@@ -1,24 +1,30 @@
 #!/usr/bin/env bash
 #
-# Builds LibVLC runtime (libvlc, libvlccore, plugins) from the official
-# VideoLAN source for all 6 target platforms.
+# Fetches the official LibVLC runtime (libvlc, libvlccore, plugins) from
+# VideoLAN's pre-built distribution archives for all 6 target platforms.
+#
+# This replaces the earlier "build from source" approach — cross-compiling
+# VLC against modern FFmpeg (7.x/8.x) was causing API incompatibilities.
+# Instead, we use the same strategy as VideoPlayer-Library: download the
+# official VideoLAN binaries and verify their completeness.
 #
 # Usage:
 #   build.sh <Linux|Windows|Mac> <x86_64|aarch64> [vlc_version]
 #
+# Source of truth per platform:
+#   Linux x86_64 / aarch64  → Flathub flatpak org.videolan.VLC //stable
+#   Windows x86_64          → get.videolan.org win64 .zip
+#   Windows aarch64         → MSYS2 mingw-w64-clang-aarch64-vlc
+#   Mac x86_64              → get.videolan.org intel64 .dmg
+#   Mac aarch64             → get.videolan.org arm64 .dmg
+#
 # Environment:
 #   OUT_DIR      output directory (default $PWD/out)
-#   MAKE_JOBS    parallel make jobs (default: nproc)
-#   VLC_SRC_DIR  cache directory holding the VLC source (optional)
-#
-# Each platform installs system-level build dependencies, then runs the
-# standard VLC bootstrap/configure/make chain.  Only libvlc, libvlccore
-# and the built-in plugins are built (no GUI, no Qt, no skins2).
 set -euo pipefail
 
 OS_NAME="${1:-}"
 OS_ARCH="${2:-}"
-VLC_VER="${3:-3.0.21}"
+VLC_VER="${3:-3.0.22}"
 
 if [[ -z "$OS_NAME" || -z "$OS_ARCH" ]]; then
   echo "usage: build.sh <Linux|Windows|Mac> <x86_64|aarch64> [vlc_version]" >&2
@@ -27,174 +33,160 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT_DIR="${OUT_DIR:-$PWD/out}"
-MAKE_JOBS="${MAKE_JOBS:-$(nproc 2>/dev/null || echo 4)}"
 OUT_LIBDIR="$OUT_DIR/$OS_NAME/$OS_ARCH"
 mkdir -p "$OUT_LIBDIR"
 
-echo ">>> Building LibVLC $VLC_VER for $OS_NAME/$OS_ARCH (jobs=$MAKE_JOBS)"
+echo ">>> Fetching LibVLC $VLC_VER for $OS_NAME/$OS_ARCH"
 
-# ── 1. Download VLC source tarball ──────────────────────────────────────────
-VLC_SRC_DIR="${VLC_SRC_DIR:-$ROOT/.build-cache/vlc-$VLC_VER}"
-if [[ ! -d "$VLC_SRC_DIR" ]]; then
-  TARBALL="vlc-$VLC_VER.tar.xz"
-  TARBALL_URL="https://get.videolan.org/vlc/$VLC_VER/vlc-$VLC_VER.tar.xz"
-  echo ">>> Downloading $TARBALL_URL"
-  mkdir -p "$(dirname "$VLC_SRC_DIR")"
-  cd "$(dirname "$VLC_SRC_DIR")"
-  curl -fL --retry 3 --retry-all-errors -o "$TARBALL" "$TARBALL_URL" \
-    || curl -fL --retry 3 --retry-all-errors -o "$TARBALL" \
-      "https://download.videolan.org/pub/videolan/vlc/$VLC_VER/$TARBALL"
-  tar xJf "$TARBALL"
-  cd "$ROOT"
-fi
-cd "$VLC_SRC_DIR"
+# Helper: require a file exists in the output dir
+require_file() {
+  local label="$1"
+  local pattern="$2"
+  local dir="${3:-$OUT_LIBDIR}"
+  if ! find "$dir" -maxdepth 1 -type f -iname "$pattern" -print -quit | grep -q .; then
+    echo "ERROR: missing $label (pattern $pattern) in $dir" >&2
+    exit 1
+  fi
+  echo "  ✓ $label: $(find "$dir" -maxdepth 1 -type f -iname "$pattern" -exec basename {} \;)"
+}
 
-# ── 2. Install build dependencies & configure ───────────────────────────────
+# Helper: require a plugin exists
+require_plugin() {
+  local label="$1"
+  local pattern="$2"
+  if ! find "$OUT_LIBDIR/plugins" -type f -iname "$pattern" -print -quit | grep -q .; then
+    echo "ERROR: missing plugin $label (pattern $pattern)" >&2
+    exit 1
+  fi
+  echo "  ✓ plugin $label"
+}
+
+# ── Fetch and extract per platform ────────────────────────────────────────
 case "$OS_NAME" in
   Linux)
-    echo ">>> Installing Linux build dependencies"
-    apt-get update -qq
-    apt-get install -y -qq \
-      autoconf automake autopoint libtool pkg-config gettext \
-      yasm ragel \
-      libxcb-shm0-dev libxcb-xv0-dev libxcb-keysyms1-dev \
-      libx11-xcb-dev libxcb-randr0-dev libxcb-composite0-dev \
-      libxcb-shape0-dev libxcb-xfixes0-dev libxcb-render0-dev \
-      libasound2-dev libpulse-dev libdbus-1-dev \
-      libfreetype6-dev libfontconfig1-dev libxml2-dev \
-      libavcodec-dev libavformat-dev libswscale-dev \
-      libchromaprint-dev libbluray-dev libgstreamer1.0-dev \
-      libgstreamer-plugins-base1.0-dev \
-      libgnutls28-dev libgcrypt20-dev \
-      liblua5.2-dev libmad0-dev libogg-dev libvorbis-dev \
-      libtheora-dev libdvdnav-dev libdvdread-dev \
-      libsamplerate0-dev liba52-0.7.4-dev libmpeg2-4-dev \
-      libdca-dev libfaad-dev libtwolame-dev libmpcdec-dev \
-      libvpx-dev libx264-dev libx265-dev
+    echo ">>> Installing flatpak (if needed)"
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq flatpak 2>/dev/null || true
 
-    CONFIGURE_HOST=""
-    VLC_BUILD_OPTS=(
-      --enable-libvlc --enable-libvlccore
-      --disable-gui --disable-qt --disable-skins2
-      --disable-lua --disable-ncurses
-      --enable-avcodec --enable-avformat --enable-swscale
-      --enable-postproc --enable-avutil
-      --disable-chromaprint --disable-bluray
-      --enable-dbus --enable-pulse --enable-alsa
-      --enable-xcb --enable-xvideo
-      --enable-freetype --enable-fontconfig
-      --enable-dvdnav --enable-dvdread
-      --enable-vorbis --enable-ogg --enable-mad --enable-mpeg2
-      --enable-dca --enable-faad --enable-twolame --enable-mpc
-      --enable-vpx --enable-x264 --enable-x265
-      --enable-realrtsp --enable-live555
-      --enable-opengl --enable-glx
-      --prefix="$OUT_LIBDIR"
-    )
-    ;;
+    echo ">>> Adding Flathub remote"
+    flatpak --user remote-add --if-not-exists flathub \
+      https://flathub.org/repo/flathub.flatpakrepo
 
-  Mac)
-    echo ">>> Installing macOS build dependencies"
-    brew install autoconf automake libtool pkg-config gettext ragel yasm \
-      freetype fontconfig libxml2 dbus gnutls \
-      lua mad libogg libvorbis libtheora \
-      x264 x265 libvpx ffmpeg
+    echo ">>> Installing VLC from Flathub (stable)"
+    flatpak --user install -y --noninteractive flathub org.videolan.VLC//stable
 
-    # Homebrew installs gettext + libtool keg-only; force-link them
-    brew link --overwrite gettext libtool 2>/dev/null || true
+    location="$(flatpak --user info --show-location org.videolan.VLC)"
+    echo "  Flatpak location: $location"
 
-    CONFIGURE_HOST=""
-    VLC_BUILD_OPTS=(
-      --enable-libvlc --enable-libvlccore
-      --disable-gui --disable-qt --disable-skins2
-      --disable-lua --disable-ncurses
-      --enable-avcodec --enable-avformat --enable-swscale
-      --enable-postproc --enable-avutil
-      --disable-chromaprint --disable-bluray
-      --enable-dbus --enable-freetype --enable-fontconfig
-      --enable-vorbis --enable-ogg --enable-mad
-      --enable-vpx --enable-x264 --enable-x265
-      --enable-realrtsp --enable-live555
-      --prefix="$OUT_LIBDIR"
-    )
+    # Copy libvlc.so* and libvlccore.so* from the bundle
+    shopt -s nullglob
+    cp -a "$location/files/lib"/libvlc*.so* "$OUT_LIBDIR/"
+    shopt -u nullglob
+
+    # Copy plugins
+    if [[ -d "$location/files/lib/vlc/plugins" ]]; then
+      cp -a "$location/files/lib/vlc/plugins" "$OUT_LIBDIR/plugins"
+    elif [[ -d "$location/files/plugins" ]]; then
+      cp -a "$location/files/plugins" "$OUT_LIBDIR/plugins"
+    else
+      echo "ERROR: no VLC plugins directory found in flatpak" >&2
+      exit 1
+    fi
     ;;
 
   Windows)
-    echo ">>> Installing Windows (MSYS2/MinGW) build dependencies"
-    # GitHub Actions windows-latest has MSYS2 pre-installed at C:\msys64
-    MSYS2="C:/msys64/usr/bin/bash.exe"
-    if [[ ! -f "$MSYS2" ]]; then
-      # Fallback: try to find msys2
-      MSYS2="$(command -v msys2 2>/dev/null || echo "")"
-      if [[ -z "$MSYS2" ]]; then
-        echo "ERROR: MSYS2 not found; install it first (choco install msys2)"
+    if [[ "$OS_ARCH" == "aarch64" ]]; then
+      # Windows ARM64: no official VLC build exists, so use the MSYS2
+      # clangarm64 package (the only pre-built source for this platform).
+      echo ">>> Installing MSYS2 VLC package (aarch64)"
+      # Official mirror auto-redirects to a fast mirror; default list includes
+      # slow/blocked mirrors (e.g. ftp2.osuosl.org) that time out on runners.
+      echo 'Server = https://mirror.msys2.org/msys/$arch' > /etc/pacman.d/mirrorlist.msys
+      echo 'Server = https://mirror.msys2.org/mingw/$repo' > /etc/pacman.d/mirrorlist.mingw
+      pacman -Sy --noconfirm --needed
+      pacman -S --noconfirm --needed mingw-w64-clang-aarch64-vlc
+
+      VLC_LIBDIR="/clangarm64"
+      cp -a "$VLC_LIBDIR/bin"/libvlc*.dll "$OUT_LIBDIR/" 2>/dev/null || true
+      if [[ -d "$VLC_LIBDIR/lib/vlc/plugins" ]]; then
+        cp -a "$VLC_LIBDIR/lib/vlc/plugins" "$OUT_LIBDIR/plugins"
+      elif [[ -d "$VLC_LIBDIR/plugins" ]]; then
+        cp -a "$VLC_LIBDIR/plugins" "$OUT_LIBDIR/plugins"
+      else
+        echo "ERROR: no VLC plugins directory found at $VLC_LIBDIR" >&2
+        ls -la "$VLC_LIBDIR/lib/vlc/" 2>/dev/null || true
         exit 1
       fi
-    fi
+    else
+      # Windows x86_64 or x86: download official VideoLAN archive
+      if [[ "$OS_ARCH" == "x86" ]]; then
+        WIN_ARCH="win32"
+      else
+        WIN_ARCH="win64"
+      fi
+      echo ">>> Downloading official VLC $VLC_VER $WIN_ARCH zip"
+      ZIP_URL="https://get.videolan.org/vlc/$VLC_VER/$WIN_ARCH/vlc-$VLC_VER-$WIN_ARCH.zip"
+      ZIP_FILE="vlc-$VLC_VER-$WIN_ARCH.zip"
+      curl -fL --retry 3 --retry-all-errors -o "$ZIP_FILE" "$ZIP_URL"
 
-    # Determine MinGW arch prefix
-    MINGW_ARCH="x86_64"
-    MINGW_PREFIX="mingw-w64-x86_64"
+      echo ">>> Extracting"
+      # MSYS2 shell may not ship unzip; install it or use busybox/tar fallback
+      if ! command -v unzip &>/dev/null; then
+        echo 'Server = https://mirror.msys2.org/msys/$arch' > /etc/pacman.d/mirrorlist.msys
+        echo 'Server = https://mirror.msys2.org/mingw/$repo' > /etc/pacman.d/mirrorlist.mingw
+        pacman -Sy --noconfirm --needed unzip
+      fi
+      unzip -q "$ZIP_FILE" -d vlc-extract
+
+      # The zip contains a top-level directory vlc-<ver>/
+      SRC="vlc-extract/vlc-$VLC_VER"
+      if [[ ! -d "$SRC" ]]; then
+        SRC="$(find vlc-extract -mindepth 1 -maxdepth 1 -type d | head -1)"
+      fi
+      cp -a "$SRC/libvlc.dll" "$OUT_LIBDIR/" 2>/dev/null || true
+      cp -a "$SRC/libvlccore.dll" "$OUT_LIBDIR/" 2>/dev/null || true
+      if [[ -d "$SRC/plugins" ]]; then
+        cp -a "$SRC/plugins" "$OUT_LIBDIR/plugins"
+      else
+        echo "ERROR: no plugins directory in $WIN_ARCH zip at $SRC" >&2
+        ls -la "$SRC/" 2>/dev/null || true
+        exit 1
+      fi
+      rm -rf vlc-extract "$ZIP_FILE"
+    fi
+    ;;
+
+  Mac)
+    # macOS: download the appropriate architecture-specific DMG
     if [[ "$OS_ARCH" == "aarch64" ]]; then
-      MINGW_ARCH="aarch64"
-      MINGW_PREFIX="mingw-w64-clang-aarch64"
+      DMG_URL="https://get.videolan.org/vlc/$VLC_VER/macosx/vlc-$VLC_VER-arm64.dmg"
+    else
+      DMG_URL="https://get.videolan.org/vlc/$VLC_VER/macosx/vlc-$VLC_VER-intel64.dmg"
+    fi
+    DMG_FILE="vlc-$VLC_VER.dmg"
+    echo ">>> Downloading $DMG_URL"
+    curl -fL --retry 3 --retry-all-errors -o "$DMG_FILE" "$DMG_URL"
+
+    echo ">>> Mounting DMG"
+    MOUNT_POINT="/Volumes/vlc-install"
+    hdiutil attach "$DMG_FILE" -nobrowse -mountpoint "$MOUNT_POINT"
+
+    # VLC.app is at the root of the DMG
+    VLC_APP="$MOUNT_POINT/VLC.app/Contents/MacOS"
+    if [[ ! -d "$VLC_APP/lib" ]]; then
+      # Alternative path: VLC.app/Contents/Frameworks
+      VLC_APP="$MOUNT_POINT/VLC.app/Contents/Frameworks"
     fi
 
-    # Install mingw-w64 toolchain + VLC dependencies via MSYS2 pacman
-    "$MSYS2" -lc "
-      pacman -Syu --noconfirm --needed
-      pacman -S --noconfirm --needed \
-        ${MINGW_PREFIX}-toolchain \
-        ${MINGW_PREFIX}-autotools \
-        ${MINGW_PREFIX}-gettext \
-        ${MINGW_PREFIX}-pkg-config \
-        ${MINGW_PREFIX}-libmad \
-        ${MINGW_PREFIX}-libogg \
-        ${MINGW_PREFIX}-libvorbis \
-        ${MINGW_PREFIX}-libtheora \
-        ${MINGW_PREFIX}-freetype \
-        ${MINGW_PREFIX}-fontconfig \
-        ${MINGW_PREFIX}-libxml2 \
-        ${MINGW_PREFIX}-gnutls \
-        ${MINGW_PREFIX}-lua \
-        ${MINGW_PREFIX}-dbus \
-        ${MINGW_PREFIX}-libsamplerate \
-        ${MINGW_PREFIX}-libbluray \
-        ${MINGW_PREFIX}-libdvdnav \
-        ${MINGW_PREFIX}-libdvdread \
-        ${MINGW_PREFIX}-x264 \
-        ${MINGW_PREFIX}-x265 \
-        ${MINGW_PREFIX}-libvpx \
-        ${MINGW_PREFIX}-ffmpeg \
-        make gettext
-    "
-
-    CONFIGURE_HOST="--host=${MINGW_ARCH}-w64-mingw32"
-    export CC="${MINGW_ARCH}-w64-mingw32-gcc"
-    export CXX="${MINGW_ARCH}-w64-mingw32-g++"
-    # For Clang-based aarch64, mingw-w64-clang-aarch64 uses clang
-    if [[ "$MINGW_ARCH" == "aarch64" ]]; then
-      export CC="${MINGW_ARCH}-w64-mingw32-clang"
-      export CXX="${MINGW_ARCH}-w64-mingw32-clang++"
+    cp -a "$VLC_APP/lib"/libvlc*.dylib "$OUT_LIBDIR/" 2>/dev/null || true
+    if [[ -d "$VLC_APP/plugins" ]]; then
+      cp -a "$VLC_APP/plugins" "$OUT_LIBDIR/plugins"
+    else
+      # Trying the MacOS/lib path as fallback
+      cp -a "$MOUNT_POINT/VLC.app/Contents/MacOS/plugins" "$OUT_LIBDIR/plugins" 2>/dev/null || true
     fi
-    export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig"
-    if [[ "$OS_ARCH" == "aarch64" ]]; then
-      export PKG_CONFIG_PATH="/clangarm64/lib/pkgconfig:/clangarm64/share/pkgconfig"
-    fi
-
-    VLC_BUILD_OPTS=(
-      --enable-libvlc --enable-libvlccore
-      --disable-gui --disable-qt --disable-skins2
-      --disable-lua --disable-ncurses
-      --enable-avcodec --enable-avformat --enable-swscale
-      --enable-postproc --enable-avutil
-      --disable-chromaprint --disable-bluray
-      --enable-freetype --enable-fontconfig
-      --enable-vorbis --enable-ogg --enable-mad
-      --enable-vpx --enable-x264 --enable-x265
-      --enable-realrtsp --enable-live555
-      --prefix="$OUT_LIBDIR"
-    )
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    rm -f "$DMG_FILE"
     ;;
 
   *)
@@ -203,57 +195,42 @@ case "$OS_NAME" in
     ;;
 esac
 
-# ── 3. Bootstrap + Configure + Make ────────────────────────────────────────
-echo ">>> Running bootstrap"
-./bootstrap 2>&1 | tail -5
+# ── Verify completeness (inspired by VideoPlayer-Library) ──────────────────
+echo ">>> Verifying LibVLC runtime completeness"
 
-echo ">>> Running configure"
-mkdir -p "$VLC_SRC_DIR/build"
-cd "$VLC_SRC_DIR/build"
-../configure \
-  $CONFIGURE_HOST \
-  "${VLC_BUILD_OPTS[@]}" \
-  2>&1 | tail -20
+# Core libraries
+case "$OS_NAME" in
+  Linux)
+    require_file "libvlc.so"     "libvlc.so*"
+    require_file "libvlccore.so" "libvlccore.so*"
+    ;;
+  Windows)
+    require_file "libvlc.dll"     "libvlc*.dll"
+    require_file "libvlccore.dll" "libvlccore*.dll"
+    ;;
+  Mac)
+    require_file "libvlc.dylib"     "libvlc*.dylib"
+    require_file "libvlccore.dylib" "libvlccore*.dylib"
+    ;;
+esac
 
-echo ">>> Building (make -j${MAKE_JOBS})"
-make -j"${MAKE_JOBS}" 2>&1 | tail -20
-
-echo ">>> Installing to $OUT_LIBDIR"
-make install 2>&1 | tail -10
-
-# ── 4. Normalize install layout ────────────────────────────────────────────
-# `make install` scatters files under prefix/lib (SOs) and prefix/lib/vlc/plugins.
-# Flatten to the loader's expected layout:
-#   $OUT_LIBDIR/libvlc.so | libvlc.dll | libvlc.dylib
-#   $OUT_LIBDIR/libvlccore.*
-#   $OUT_LIBDIR/plugins/...
-cd "$ROOT"
-echo ">>> Normalizing install layout in $OUT_LIBDIR"
-for sub in bin lib lib64 Lib Lib64; do
-  if [[ -d "$OUT_LIBDIR/$sub" ]]; then
-    # Lift library files up (DLLs install to bin/ on Windows, SOs to lib/ on Unix)
-    find "$OUT_LIBDIR/$sub" -maxdepth 1 -type f \
-      \( -name 'libvlc*' -o -name 'libvlccore*' \) -exec mv -f {} "$OUT_LIBDIR/" \;
-    # Move plugins dir if present under this subdir
-    if [[ -d "$OUT_LIBDIR/$sub/vlc/plugins" ]]; then
-      rm -rf "$OUT_LIBDIR/plugins"
-      mv "$OUT_LIBDIR/$sub/vlc/plugins" "$OUT_LIBDIR/plugins"
-    elif [[ -d "$OUT_LIBDIR/$sub/plugins" ]]; then
-      rm -rf "$OUT_LIBDIR/plugins"
-      mv "$OUT_LIBDIR/$sub/plugins" "$OUT_LIBDIR/plugins"
-    fi
-    rm -rf "$OUT_LIBDIR/$sub"
-  fi
-done
-# Any leftover nested vlc dir directly under output
-if [[ -d "$OUT_LIBDIR/vlc/plugins" ]]; then
-  rm -rf "$OUT_LIBDIR/plugins"
-  mv "$OUT_LIBDIR/vlc/plugins" "$OUT_LIBDIR/plugins"
-  rm -rf "$OUT_LIBDIR/vlc"
+# Plugin directory
+PLUGIN_COUNT="$(find "$OUT_LIBDIR/plugins" -type f 2>/dev/null | wc -l)"
+echo "  Plugin count: $PLUGIN_COUNT"
+if [[ "$PLUGIN_COUNT" -lt 250 ]]; then
+  echo "WARNING: low plugin count ($PLUGIN_COUNT); expected ≥250" >&2
 fi
-# Drop unwanted share/include/etc dirs
-rm -rf "$OUT_LIBDIR/share" "$OUT_LIBDIR/include" "$OUT_LIBDIR/etc"
+
+# Key playback plugins (video player mod requirements)
+require_plugin "avcodec"         "*avcodec*plugin*"
+require_plugin "mkv"             "*mkv*plugin*"
+require_plugin "mp4"             "*mp4*plugin*"
+require_plugin "packetizer_h264" "*packetizer_h264*plugin*"
+require_plugin "packetizer_hevc" "*packetizer_hevc*plugin*"
+require_plugin "http"            "*http*plugin*"
+require_plugin "freetype"        "*freetype*plugin*"
+
 echo ">>> Collected files:"
 find "$OUT_LIBDIR" -maxdepth 1 -type f | sort
 echo "  Plugins: $(find "$OUT_LIBDIR/plugins" -type f 2>/dev/null | wc -l) files"
-echo ">>> Done building LibVLC $VLC_VER for $OS_NAME/$OS_ARCH"
+echo ">>> Done fetching LibVLC $VLC_VER for $OS_NAME/$OS_ARCH"

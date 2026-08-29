@@ -1,4 +1,4 @@
-# Dream DisplaysX — TODO
+# Dream Displays X — TODO
 
 ## 待办（功能/优化）
 

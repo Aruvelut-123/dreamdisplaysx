@@ -1,6 +1,5 @@
 import support.shadow.excludeDreamDisplaysXSqliteNativeExtras
 import support.shadow.includeDreamDisplaysXSharedContents
-import support.shadow.includeRebuiltSqliteNatives
 import support.shadow.relocateDreamDisplaysXSharedPackages
 import support.stonecutter.StonecutterVersions
 
@@ -216,7 +215,6 @@ tasks.shadowJar {
     includeDreamDisplaysXSharedContents()
     relocateDreamDisplaysXSharedPackages()
     excludeDreamDisplaysXSqliteNativeExtras()
-    includeRebuiltSqliteNatives(rootProject.file("native/build/ci-bundle/dreamdisplayx-natives"))
 }
 
 tasks.withType<AbstractArchiveTask>().configureEach {
