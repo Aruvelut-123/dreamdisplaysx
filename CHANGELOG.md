@@ -2,6 +2,25 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Debug: video FPS label on the preview (feat/libvlc)**
+> — with `-Ddreamdisplayx.debugFps=true`, the display-menu preview draws the actual delivered video
+> FPS (counted in `publishFrame`) at the top-left of the video. Frames per second are smoothed over
+> a 1s window, so it reflects real decode/delivery throughput — useful to tell whether a slow
+> framerate is the decoder, the network, or the renderer.
+
+> **Scrub preview: prefer H.264 ≤360p streams + parse Bilibili codecs (feat/libvlc)**
+> — short-video scrub extraction kept timing out (frame timeouts every ~4s). The Bilibili resolver
+> never populated `MediaStream.codec` (all null), so stream selection couldn't avoid AV1/HEVC, which
+> software-decodes far too slowly on a CPU-bound machine to reach a seek target in the extraction
+> budget. `codecs` is now parsed from the playurl DASH response, and the scrub stream is chosen as
+> H.264 at ≤360p first, then any ≤360p, then the lowest rendition.
+
+> **Diagnostics: audio EOF + A/V length gap (feat/libvlc)**
+> — `onDrain` reports how much audio was fed (≈ audio track length) and END_REACHED compares it
+> against the video length, to distinguish a genuinely shorter DASH audio slave (Bilibili) from
+> libvlc stopping audio early. A 2:13 video reported 129s of audio — the audio track itself is
+> ~4s shorter than the video; that gap is a property of the source, not a bug in the player.
+
 > **Scrub preview: fix backward seeks caching stale higher-position frames (feat/libvlc)**
 > — after scrubbing a long video from start to end, scrubbing back to the front half showed the
 > first frame of the back half, frozen. Two compounding bugs: the vmem time gate had lost its
