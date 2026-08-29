@@ -517,6 +517,10 @@ internal class LibVlcSessionManager(
                 }
                 LibVlc.lib.libvlc_media_player_play(mp)
                 isPlaying = true
+                // Initial A/V sync: both players start independently, so the audio player's clock can
+                // drift from the video's right from the start. Schedule an early correction (~1.5s)
+                // rather than waiting for the 10s auto-resync.
+                scheduleInitialAvSync()
             } catch (t: Throwable) {
                 logger.error("$debugLabel failed to start libvlc media: ${t.message}")
                 errorMessage = t.message ?: "libvlc start failed"
@@ -666,6 +670,10 @@ internal class LibVlcSessionManager(
                     // replay ends frozen on the last frame (eosFired stays true after the first
                     // ENDED → fireStreamEnd, so the second END_REACHED event is swallowed).
                     eosFired.set(false)
+                    // The two players restart independently, so their clocks drift apart right away;
+                    // the 10s auto-resync would leave the audio audibly off-sync for the first loop.
+                    // Schedule an early correction (~1.5s) once both have settled into playback.
+                    scheduleInitialAvSync()
                 } catch (_: Throwable) { }
             } else {
                 // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
@@ -689,6 +697,35 @@ internal class LibVlcSessionManager(
         }
         logger.debug("$debugLabel libvlc seek to ${offsetNanos / 1_000_000} ms.")
         return true
+    }
+
+    /**
+     * Schedules a one-shot A/V correction ~1.5s after playback starts. The video and audio players
+     * start independently, so their clocks drift apart immediately; the 10s auto-resync in
+     * [currentPacingNanos] would leave the audio audibly off-sync for the first ~10s. This snaps the
+     * audio player to the video `get_time` early, once both have settled into playback. Best-effort:
+     * if either player isn't ready yet, the next 10s auto-resync still corrects the drift.
+     */
+    private fun scheduleInitialAvSync() {
+        if (LibVlcDiagnostics.noAutoResync) return
+        Thread {
+            try {
+                Thread.sleep(1500)
+            } catch (_: InterruptedException) {
+                return@Thread
+            }
+            submit {
+                val mp = mediaPlayer
+                val ap = audioPlayer
+                if (mp != null && ap != null && !stopped.get() && !parkFlag.get()) {
+                    val videoMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                    if (videoMs >= 0) {
+                        runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, videoMs) }
+                        logger.debug("$debugLabel initial A/V sync: audio player snapped to {} ms.", videoMs)
+                    }
+                }
+            }
+        }.also { it.isDaemon = true }.start()
     }
 
     /**
