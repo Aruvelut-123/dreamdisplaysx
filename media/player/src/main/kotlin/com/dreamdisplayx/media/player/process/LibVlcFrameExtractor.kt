@@ -97,9 +97,19 @@ object LibVlcFrameExtractor {
                 // GPU surface after a seek (get_time reaches the target but the pixels are an old
                 // frame). Software decode has no stale-surface path and is fast enough for a
                 // thumbnail.
+                //
+                // network-caching=300ms: the libvlc default is ~1500ms, and after a seek the vout
+                // only renders once the new fragments have buffered past that mark. On a slow CDN
+                // (e.g. some Bilibili edge mirrors) that 1.5s + seek latency blows the 2s phase-2
+                // latch, so every scrub times out ("frame timeout" every ~4-5s). A 300ms buffer is
+                // plenty for a 360p thumb stream and renders almost immediately after the seek.
                 val media = LibVlc.createMedia(
                     url,
-                    LibVlcMediaOptions.forUrl(url) + arrayOf(":no-audio", ":avcodec-hw=none")
+                    LibVlcMediaOptions.forUrl(url) + arrayOf(
+                        ":no-audio",
+                        ":avcodec-hw=none",
+                        ":network-caching=300"
+                    )
                 )
                 lib.libvlc_media_player_set_media(player, media)
                 lib.libvlc_media_release(media)
