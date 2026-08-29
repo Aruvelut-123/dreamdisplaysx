@@ -103,6 +103,36 @@ internal class LibVlcSessionManager(
     /** Delivered-video FPS (frames displayed per second), smoothed over a 1s sliding window. */
     val currentVideoFps: Double get() = fpsValue
 
+    // ── Frame-interval diagnostics (min/avg/max gap between vout displays, in ms) ──
+    // Reveals the vout's actual pacing pattern: if min ≈ source-frame interval (e.g. 33ms for 30fps)
+    // but avg is ~2x that, libvlc is DROPPING half the frames (clock throttling); if min ≈ avg ≈ the
+    // slow value, the decoder itself is only producing frames at that rate.
+    @Volatile private var lastDisplayNanos = 0L
+    @Volatile private var gapMinMs = 0L
+    @Volatile private var gapMaxMs = 0L
+    @Volatile private var gapSumMs = 0L
+    @Volatile private var gapCount = 0L
+
+    /** "min/avg/max ms" frame-interval summary of the last ~N vout displays; null when no frames yet. */
+    fun frameIntervalInfo(): String? {
+        if (gapCount <= 0) return null
+        val avg = gapSumMs.toDouble() / gapCount
+        return "${gapMinMs}/${"%.0f".format(avg)}/${gapMaxMs}ms"
+    }
+
+    private fun recordFrameGap() {
+        val now = System.nanoTime()
+        val prev = lastDisplayNanos
+        lastDisplayNanos = now
+        if (prev == 0L) return
+        val gap = (now - prev) / 1_000_000L
+        if (gap <= 0L) return
+        if (gapMinMs == 0L || gap < gapMinMs) gapMinMs = gap
+        if (gap > gapMaxMs) gapMaxMs = gap
+        gapSumMs += gap
+        gapCount++
+    }
+
     /**
      * A/V drift threshold (~0.3 s). This is NOT the lip-sync gap (that is the audio buffer, ~0.045 s,
      * and is set in [LibVlcAudioOutput]); it is the point at which a real, sustained drift is declared
@@ -855,6 +885,7 @@ internal class LibVlcSessionManager(
             val now = System.nanoTime()
             if (fpsWindowStartNanos == 0L) fpsWindowStartNanos = now
             fpsFrames++
+            recordFrameGap()
             val elapsedNs = now - fpsWindowStartNanos
             if (elapsedNs >= 1_000_000_000L) {
                 val fps = fpsFrames.toDouble() * 1_000_000_000.0 / elapsedNs

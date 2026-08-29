@@ -326,6 +326,9 @@ class MediaPlayer(
     /** Delivered video FPS (frames actually displayed per second), for the debug label; 0 when idle. */
     fun currentVideoFps(): Double = sessionManager.currentVideoFps
 
+    /** Frame-interval summary "min/avg/max ms" of vout displays; null when no frames yet. */
+    fun frameIntervalInfo(): String? = sessionManager.frameIntervalInfo()
+
     /**
      * Compact description of the currently-playing video stream (codec / resolution / source frame
      * rate), for the F3 debug screen — e.g. "avc1.640028 · 1080p · 60fps". Null when no stream is

@@ -465,6 +465,9 @@ class DisplayScreen(
     /** Current stream description (codec/resolution/source fps) for the F3 debug screen; null when idle. */
     val streamInfo: String? get() = mediaPlayer?.currentStreamInfo()
 
+    /** Frame-interval "min/avg/max ms" of vout displays for the F3 debug screen; null when idle. */
+    val frameIntervalInfo: String? get() = mediaPlayer?.frameIntervalInfo()
+
     /** Whether scrub previews for this display must seek by decoding forward; see `MediaStream.seekByDecoding`. */
     val scrubPreviewSeeksByDecoding: Boolean get() = mediaPlayer?.capturedStreamSeeksByDecoding() == true
 

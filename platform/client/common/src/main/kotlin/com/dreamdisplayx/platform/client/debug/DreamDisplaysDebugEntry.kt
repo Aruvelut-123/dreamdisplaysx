@@ -52,6 +52,9 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
                 // Source stream identity: codec / resolution / source fps — tells whether a low
                 // delivered FPS is a codec problem (AV1/HEVC soft-decode) rather than rendering.
                 playing.streamInfo?.let { displayer.addToGroup(groupId, "Stream: $it") }
+                // Frame interval min/avg/max (ms): min≈source-frame interval with avg≈2x ⇒ libvlc
+                // is dropping half the frames (clock throttling); min≈avg≈slow ⇒ decoder-limited.
+                playing.frameIntervalInfo?.let { displayer.addToGroup(groupId, "Frame int: $it") }
             }
         }
         val decoder = com.dreamdisplayx.media.player.MediaPlayer.currentDecoder.get()
