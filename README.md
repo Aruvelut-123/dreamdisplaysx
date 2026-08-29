@@ -146,6 +146,20 @@ That's it — no extra dependencies required.
 | 26.1.2    | ✅      | ✅        | ✅     |                   |
 | 26.2      | ✅      | ✅        | ✅     |                   |
 
+## Android (PojavLauncher / FCL / Zalith)
+
+The mod runs on Android launchers on **ARM64** and **x86_64** devices, with two platform
+differences:
+
+- **Audio** plays through libvlc's own OpenSL ES output. The desktop 3D positional audio
+  (panning / occlusion / reverb) needs `javax.sound`, which Android JVMs don't ship.
+- **Hardware decode** uses MediaCodec ( ByteBuffer copy mode feeding the same frame
+  callbacks); override with `-Ddreamdisplayx.hwDecode=<module>` or disable it with an empty
+  value, same as desktop.
+
+The natives are extracted to app-internal storage automatically (the game directory on
+emulated storage is mounted noexec, so `.so` files there cannot be loaded).
+
 ## JVM arguments (advanced tuning & diagnostics)
 
 Add these to your launcher's JVM arguments (e.g. Prism: `Settings → Java → JVM arguments`). All are
@@ -153,7 +167,7 @@ optional — defaults work fine.
 
 | Argument | Default | What it does |
 |----------|---------|--------------|
-| `-Ddreamdisplayx.hwDecode=<backend>` | `d3d11va` (Win) / `vaapi` (Linux) / `videotoolbox` (Mac) | Hardware decode backend for libvlc. Other values: `dxva2`, `any`, empty string = disable hardware decode. |
+| `-Ddreamdisplayx.hwDecode=<backend>` | `d3d11va` (Win) / `vaapi` (Linux) / `videotoolbox` (Mac) / `mediacodec_ndk,mediacodec_jni,any` (Android) | Hardware decode backend for libvlc. Other values: `dxva2`, `any`, empty string = disable hardware decode. |
 | `-Ddreamdisplayx.audioBufferMs=<ms>` | `100` | Java Sound line buffer for audio. Larger is safer (45ms crashed historically); lower tightens lip-sync. |
 | `-Ddreamdisplayx.networkCachingMs=<ms>` | `300` | libvlc `--network-caching` / `--file-caching`. Raise if streams stutter on slow networks. |
 | `-Ddreamdisplayx.debugFps=true` | off | Draw the live delivered video FPS on the display-menu preview. |
@@ -183,8 +197,9 @@ The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi
 live in `versions.json` and the active version is selected in `versions/active.txt`. The libvlc + SQLite native
 runtimes are collected from official pre-built VideoLAN distributions by the CI "Build Natives" workflow
 (`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for macOS and Windows
-x86/x64, and the MSYS2 package for Windows aarch64 — and **downloaded at runtime** on first boot into
-`./dreamdisplayx/natives/<os>/<arch>/` (never bundled in the jar, keeping it small).
+x86/x64, the MSYS2 package for Windows aarch64, and the official VLC-Android APK for Android ARM64/x86_64 — and
+**downloaded at runtime** on first boot into `./dreamdisplayx/natives/<os>/<arch>/` (never bundled in the jar,
+keeping it small).
 
 ## Disclaimer
 

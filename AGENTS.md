@@ -104,6 +104,26 @@
 - Ported upstream water/glass render fix (d72d6e0a) + PBO client-mapped-buffer barrier (9cc61b27)
 - Module READMEs (api/core/media*) removed (upstream 6b4eac4f); root README rebuilt on upstream layout
 
+### 2026-02-DD — Android support restored
+- Platforms: `android-aarch64` / `android-x64` (PojavLauncher / FCL / Zalith; ARM64 + x86_64)
+- Detection: `OsInfo.isAndroid` (heuristic, was already present) — every Android branch keys off it
+- Natives: `natives.yml` collects the official VLC-Android APK per ABI and ships its four `.so`
+  (monolithic `libvlc.so`, plugins statically linked — no plugins dir); manifest gains the two
+  android keys; `NativesDownloader`/`LibVlcNativesLoader` resolve `Android`/`aarch64|x86_64` dirs
+- noexec: `AndroidPaths.nativesCacheRoot()` redirects the cache from the (noexec) game dir into
+  app-internal storage (`java.io.tmpdir` → `user.home` → `/data/user/0/<pkg>/cache`)
+- Audio: `javax.sound` does not exist on Android, so `LibVlcSessionManager.audioOutput` is
+  nullable and NOT instantiated there (`systemAudio` flag); `audioPlayer()` returns null; the
+  video player keeps its own audio and libvlc plays it via `--aout=opensl`; volume goes through
+  `libvlc_audio_set_volume`. Desktop path unchanged.
+- Video/instance: Android passes `--plugin-path=<natives dir>` + `--aout=opensl` +
+  `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode); no
+  `--avcodec-hw` (desktop-only concept)
+- AWT guards: `VideoPopoutWindow.isAvailable` returns false on Android and `ModTitleLabel`
+  catches `LinkageError` (no `java.desktop` module); Thumbnails/ScrubPreview decode paths were
+  already `runCatching`-guarded and degrade gracefully
+- Initializer no longer blocks Android startup; AWT headless override skipped on Android
+
 ## Workflow Rules
 
 ### Post-Change Checklist (MANDATORY)

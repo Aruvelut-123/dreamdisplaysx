@@ -31,6 +31,15 @@ object NativesDownloader {
 
     private const val BASE_DIR = "./dreamdisplayx/natives"
 
+    /**
+     * Cache root for the native runtime. On Android the game working directory is usually on
+     * noexec emulated storage, so the cache is redirected into app-internal storage where
+     * dlopen works (see [AndroidPaths]).
+     */
+    private val baseDir: String by lazy {
+        if (OsInfo.isAndroid) AndroidPaths.nativesCacheRoot() else BASE_DIR
+    }
+
     // ── Manifest ──────────────────────────────────────────────────────────
 
     private data class Manifest(
@@ -70,6 +79,7 @@ object NativesDownloader {
 
     private val platformKey: String by lazy {
         val os = when {
+            OsInfo.isAndroid -> "android"
             OsInfo.isWindows -> "windows"
             OsInfo.isMac -> "macos"
             else -> "linux"
@@ -85,6 +95,7 @@ object NativesDownloader {
 
     private val osDir: String by lazy {
         when {
+            OsInfo.isAndroid -> "Android"
             OsInfo.isWindows -> "Windows"
             OsInfo.isMac -> "Mac"
             else -> "Linux"
@@ -109,7 +120,7 @@ object NativesDownloader {
 
         val libvlcAsset = manifest.libvlc[platformKey]
 
-        val nativesDir = File("$BASE_DIR/$osDir/$archDir")
+        val nativesDir = File("$baseDir/$osDir/$archDir")
         nativesDir.mkdirs()
 
         // LibVLC
@@ -250,6 +261,8 @@ object NativesDownloader {
 
     private fun hasLibVlc(dir: File): Boolean {
         if (!dir.isDirectory) return false
+        // Android archives ship a single monolithic libvlc.so (plugins statically linked in),
+        // so the plain libvlc.so probe works there too.
         val probeName = when {
             OsInfo.isWindows -> "libvlc.dll"
             OsInfo.isMac -> "libvlc.dylib"

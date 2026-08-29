@@ -35,16 +35,14 @@ object Initializer {
 
     /** Called once during mod startup; initializes config, disk cache, and the focuser thread. */
     fun onModInit(dreamDisplaysMod: Mod) {
-        // Android is not supported 鈥?the mod relies on native libraries (dlopen/JNI) and
-        // subprocess execution that SELinux and noexec policies prevent on stock Android.
-        if (OsInfo.isAndroid) {
-            logger.warn("Dream DisplaysX is not supported on Android. Disabling mod.")
-            return
-        }
+        // Android (PojavLauncher / FCL / Zalith): supported. The pipeline is pure libvlc via
+        // JNA (dlopen, no subprocess), the natives cache moves to exec-friendly app-internal
+        // storage (see AndroidPaths), audio runs through libvlc's OpenSL ES output, and the
+        // AWT headless override below is skipped since the JVM there ships no java.desktop.
         // On macOS, VideoPopoutWindow uses GLFW (not AWT), so no AWT setup is needed.
         // On Windows / Linux, AWT is used: override java.awt.headless so a JFrame can open.
         // Must run before any AWT class initializes the Toolkit.
-        if (!OsInfo.isMac) {
+        if (!OsInfo.isMac && !OsInfo.isAndroid) {
             System.setProperty("java.awt.headless", "false")
         }
         ClientPacketManager.bind(dreamDisplaysMod)

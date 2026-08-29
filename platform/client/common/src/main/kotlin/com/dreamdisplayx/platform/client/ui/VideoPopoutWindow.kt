@@ -455,7 +455,10 @@ class VideoPopoutWindow(
 
         /** True when a popout window can be opened. Always true on macOS; AWT checks for headless mode. */
         val isAvailable: Boolean by lazy {
-            IS_MACOS || try {
+            // Android ships no java.desktop: the AWT backend cannot exist there, and the
+            // NoClassDefFoundError would escape the Exception guard below.
+            if (OsInfo.isAndroid) false
+            else IS_MACOS || try {
                 !GraphicsEnvironment.isHeadless()
             } catch (_: Exception) {
                 false

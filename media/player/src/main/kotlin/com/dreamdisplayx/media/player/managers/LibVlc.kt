@@ -102,8 +102,23 @@ object LibVlc {
             //   Linux   → vaapi (drm copy-back works with vmem)
             //   Mac     → videotoolbox
             // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. dxva2, any, or "" to disable).
-            val backend = configuredHwBackend()
-            if (backend != null) opts.add("--avcodec-hw=$backend")
+            // Android: the single monolithic libvlc.so needs its own directory passed via
+            // --plugin-path so libvlccore can find the statically registered module bank, and
+            // the OpenSL ES audio output must be forced (--aout=opensl): the PulseAudio/ALSA
+            // probes would otherwise abort the aout module bank on Android where neither
+            // exists. Hardware decode runs through the MediaCodec decoder module (NOT
+            // --avcodec-hw, which has no Android entry): fed a vmem output the module cannot
+            // use its direct Surface path, so it decodes in ByteBuffer (copy) mode and hands
+            // plain frames to our lock callback — the same copy-back contract as the desktop
+            // backends. mediacodec_ndk covers API 21+, mediacodec_jni is the legacy fallback.
+            if (com.dreamdisplayx.util.OsInfo.isAndroid) {
+                opts.add("--plugin-path=" + System.getProperty("jna.library.path", ""))
+                opts.add("--aout=opensl")
+                androidDecoderModule()?.let { opts.add("--codec=$it") }
+            } else {
+                val backend = configuredHwBackend()
+                if (backend != null) opts.add("--avcodec-hw=$backend")
+            }
             // libvlc drops frames that arrive late against the master clock. The default is ON, and
             // when the clock is system-clock (`:no-audio`), the vout may still drop ~35% of frames
             // (observed: 1080P 30fps source → Frame int 39/58/230ms — min=39ms ≈ 25fps cadence,
@@ -199,6 +214,22 @@ object LibVlc {
      * overridden with `-Ddreamdisplayx.hwDecode`. Returns null when hw decode is disabled
      * (config off, or `-Ddreamdisplayx.noHardwareAccel=true`).
      */
+    /**
+     * The Android decoder-module chain for `--codec`: MediaCodec NDK (API 21+) first, legacy
+     * JNI entry point as fallback, then software avcodec. Empty override disables hw decode
+     * entirely, a non-blank override forces that chain — same semantics as the desktop
+     * `--avcodec-hw` override.
+     */
+    private fun androidDecoderModule(): String? {
+        if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
+        val override = System.getProperty("dreamdisplayx.hwDecode")
+        if (override != null) {
+            // Empty value disables hw decode; non-blank forces that module chain.
+            return override.takeIf { it.isNotBlank() }
+        }
+        return "mediacodec_ndk,mediacodec_jni,any"
+    }
+
     fun configuredHwBackend(): String? {
         if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
         val override = System.getProperty("dreamdisplayx.hwDecode")

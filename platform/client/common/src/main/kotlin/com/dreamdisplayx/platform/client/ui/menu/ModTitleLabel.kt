@@ -54,6 +54,9 @@ class ModTitleLabel {
         try {
             Desktop.getDesktop().browse(URI.create(MODRINTH_URL))
         } catch (_: Exception) {
+        } catch (_: LinkageError) {
+            // Android ships no java.desktop: no browser API exists there (Throwable would
+            // also swallow genuine bugs, so the linkage case is handled explicitly).
         }
         return true
     }

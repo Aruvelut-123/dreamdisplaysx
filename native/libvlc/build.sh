@@ -9,7 +9,7 @@
 # official VideoLAN binaries and verify their completeness.
 #
 # Usage:
-#   build.sh <Linux|Windows|Mac> <x86_64|aarch64> [vlc_version]
+#   build.sh <Linux|Windows|Mac|Android> <x86_64|aarch64> [vlc_version]
 #
 # Source of truth per platform:
 #   Linux x86_64 / aarch64  → Flathub flatpak org.videolan.VLC //stable
@@ -17,17 +17,23 @@
 #   Windows aarch64         → MSYS2 mingw-w64-clang-aarch64-vlc
 #   Mac x86_64              → get.videolan.org intel64 .dmg
 #   Mac aarch64             → get.videolan.org arm64 .dmg
+#   Android aarch64 / x86_64→ get.videolan.org vlc-android APK (monolithic
+#                             libvlc.so with statically linked plugins; the
+#                             vlc-android 3.x line is built from VLC 3.0 like
+#                             the desktop runtimes)
 #
 # Environment:
 #   OUT_DIR      output directory (default $PWD/out)
+#   VLC_ANDROID_VER  VLC-Android app version to fetch (default 3.7.1)
 set -euo pipefail
 
 OS_NAME="${1:-}"
 OS_ARCH="${2:-}"
 VLC_VER="${3:-3.0.22}"
+VLC_ANDROID_VER="${VLC_ANDROID_VER:-3.7.1}"
 
 if [[ -z "$OS_NAME" || -z "$OS_ARCH" ]]; then
-  echo "usage: build.sh <Linux|Windows|Mac> <x86_64|aarch64> [vlc_version]" >&2
+  echo "usage: build.sh <Linux|Windows|Mac|Android> <x86_64|aarch64> [vlc_version]" >&2
   exit 2
 fi
 
@@ -189,6 +195,47 @@ case "$OS_NAME" in
     rm -f "$DMG_FILE"
     ;;
 
+  Android)
+    # Official VLC-Android APK: monolithic libvlc.so (all plugins statically
+    # linked), libvlccore merged into it, plus libc++_shared / libmla /
+    # libvlcjni companions. The APK is a plain (non-zip64) zip that java's
+    # ZipFile and unzip can both read. We ship only the four .so files —
+    # libvlcjni is kept because libvlc.so's JNI surface references it on
+    # some builds, and dlopen("libvlc.so") will pull its deps from the same
+    # directory.
+    case "$OS_ARCH" in
+      aarch64) ANDROID_ABI="arm64-v8a" ;;
+      x86_64)  ANDROID_ABI="x86_64" ;;
+      *)
+        echo "ERROR: unsupported Android arch $OS_ARCH" >&2
+        exit 2
+        ;;
+    esac
+    APK_URL="https://get.videolan.org/vlc-android/${VLC_ANDROID_VER}/VLC-Android-${VLC_ANDROID_VER}-${ANDROID_ABI}.apk"
+    APK_FILE="VLC-Android-${VLC_ANDROID_VER}-${ANDROID_ABI}.apk"
+    echo ">>> Downloading $APK_URL"
+    curl -fL --retry 3 --retry-all-errors -o "$APK_FILE" "$APK_URL"
+
+    echo ">>> Extracting $ANDROID_ABI libs from the APK"
+    EXTRACT_DIR="vlc-android-extract"
+    rm -rf "$EXTRACT_DIR"
+    mkdir -p "$EXTRACT_DIR"
+    if command -v unzip &>/dev/null; then
+      unzip -q "$APK_FILE" "lib/${ANDROID_ABI}/*" -d "$EXTRACT_DIR"
+    else
+      # MSYS2-less environments: use the JDK's jar tool (a plain zip reader).
+      JDK_BIN="$(dirname "$(readlink -f "$(command -v java)")")"
+      "$JDK_BIN/jar" xf "$APK_FILE" "lib/${ANDROID_ABI}/libc++_shared.so" \
+        "lib/${ANDROID_ABI}/libmla.so" \
+        "lib/${ANDROID_ABI}/libvlc.so" \
+        "lib/${ANDROID_ABI}/libvlcjni.so"
+      mkdir -p "$EXTRACT_DIR/lib/${ANDROID_ABI}"
+      mv "lib/${ANDROID_ABI}/"*.so "$EXTRACT_DIR/lib/${ANDROID_ABI}/"
+    fi
+    cp -a "$EXTRACT_DIR/lib/${ANDROID_ABI}/"*.so "$OUT_LIBDIR/"
+    rm -rf "$EXTRACT_DIR" "$APK_FILE"
+    ;;
+
   *)
     echo "ERROR: unsupported os $OS_NAME" >&2
     exit 2
@@ -212,23 +259,37 @@ case "$OS_NAME" in
     require_file "libvlc.dylib"     "libvlc*.dylib"
     require_file "libvlccore.dylib" "libvlccore*.dylib"
     ;;
+  Android)
+    # Monolithic build: libvlc.so embeds libvlccore + all plugins, so only the
+    # four companion .so files are required.
+    require_file "libvlc.so"         "libvlc.so"
+    require_file "libvlcjni.so"      "libvlcjni.so"
+    require_file "libc++_shared.so"  "libc++_shared.so"
+    require_file "libmla.so"         "libmla.so"
+    ;;
 esac
 
-# Plugin directory
-PLUGIN_COUNT="$(find "$OUT_LIBDIR/plugins" -type f 2>/dev/null | wc -l)"
-echo "  Plugin count: $PLUGIN_COUNT"
-if [[ "$PLUGIN_COUNT" -lt 250 ]]; then
-  echo "WARNING: low plugin count ($PLUGIN_COUNT); expected ≥250" >&2
+# Plugin directory (desktop layouts only — the Android monolithic libvlc.so
+# carries its plugins inside the library itself)
+if [[ "$OS_NAME" != "Android" ]]; then
+  PLUGIN_COUNT="$(find "$OUT_LIBDIR/plugins" -type f 2>/dev/null | wc -l)"
+  echo "  Plugin count: $PLUGIN_COUNT"
+  if [[ "$PLUGIN_COUNT" -lt 250 ]]; then
+    echo "WARNING: low plugin count ($PLUGIN_COUNT); expected ≥250" >&2
+  fi
 fi
 
-# Key playback plugins (video player mod requirements)
-require_plugin "avcodec"         "*avcodec*plugin*"
-require_plugin "mkv"             "*mkv*plugin*"
-require_plugin "mp4"             "*mp4*plugin*"
-require_plugin "packetizer_h264" "*packetizer_h264*plugin*"
-require_plugin "packetizer_hevc" "*packetizer_hevc*plugin*"
-require_plugin "http"            "*http*plugin*"
-require_plugin "freetype"        "*freetype*plugin*"
+# Key playback plugins (video player mod requirements) — desktop only; the
+# Android monolithic libvlc.so carries every module inside the library.
+if [[ "$OS_NAME" != "Android" ]]; then
+  require_plugin "avcodec"         "*avcodec*plugin*"
+  require_plugin "mkv"             "*mkv*plugin*"
+  require_plugin "mp4"             "*mp4*plugin*"
+  require_plugin "packetizer_h264" "*packetizer_h264*plugin*"
+  require_plugin "packetizer_hevc" "*packetizer_hevc*plugin*"
+  require_plugin "http"            "*http*plugin*"
+  require_plugin "freetype"        "*freetype*plugin*"
+fi
 
 echo ">>> Collected files:"
 find "$OUT_LIBDIR" -maxdepth 1 -type f | sort

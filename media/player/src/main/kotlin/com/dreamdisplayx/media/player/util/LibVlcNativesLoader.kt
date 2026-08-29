@@ -97,11 +97,15 @@ object LibVlcNativesLoader {
         }
 
         try {
-            // Extract to a stable cache directory
-            val cacheDir = File(
-                System.getProperty("user.home"),
-                ".dreamdisplayx/libvlc/cache",
-            )
+            // Extract to a stable cache directory. On Android the classpath fallback must NOT
+            // land in the (often noexec) game directory — use the same exec-friendly root as
+            // NativesDownloader (java.io.tmpdir inside the app cache).
+            val cacheRoot = if (com.dreamdisplayx.util.OsInfo.isAndroid) {
+                com.dreamdisplayx.util.natives.AndroidPaths.nativesCacheRoot()
+            } else {
+                File(System.getProperty("user.home"), ".dreamdisplayx/libvlc/cache").absolutePath
+            }
+            val cacheDir = File(cacheRoot)
             cacheDir.mkdirs()
 
             // Use a versioned subdirectory based on resource content hash
@@ -146,6 +150,11 @@ object LibVlcNativesLoader {
     private data class NativePlatform(val os: String, val arch: String)
 
     private fun detectPlatform(): NativePlatform {
+        // Android detection must come first: os.name reports "Linux" there, and the natives
+        // cache lives in a different (exec-friendly) location.
+        if (com.dreamdisplayx.util.OsInfo.isAndroid) {
+            return NativePlatform("Android", if (com.dreamdisplayx.util.OsInfo.isArm64) "aarch64" else "x86_64")
+        }
         val osName = System.getProperty("os.name").lowercase()
         val osArch = System.getProperty("os.arch").lowercase()
 
@@ -170,9 +179,12 @@ object LibVlcNativesLoader {
      */
     private fun resolveDownloadDir(): File? {
         val platform = detectPlatform()
-        val dir = File(
-            "./dreamdisplayx/natives/${platform.os}/${platform.arch}/libvlc",
-        )
+        val root = if (com.dreamdisplayx.util.OsInfo.isAndroid) {
+            com.dreamdisplayx.util.natives.AndroidPaths.nativesCacheRoot()
+        } else {
+            "./dreamdisplayx/natives"
+        }
+        val dir = File("$root/${platform.os}/${platform.arch}/libvlc")
         val probeName = when (platform.os) {
             "Windows" -> "libvlc.dll"
             "Mac"     -> "libvlc.dylib"

@@ -83,11 +83,25 @@ internal class LibVlcSessionManager(
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcSession")
 
     /**
+     * Android mode: javax.sound does not exist on Android (no java.desktop), so the
+     * Java Sound callback pipeline cannot run there — [LibVlcAudioOutput] is not even
+     * instantiated, because its method signatures reference `SourceDataLine` and would
+     * fail to link. The video player instead keeps its own audio track and libvlc feeds
+     * the OpenSL ES output directly (`--aout=opensl` set in [LibVlc]; 3D positional
+     * audio is unavailable on this platform). Every dedicated audio-player interaction
+     * is gated on this flag, and all those call sites already null-check the player,
+     * so skipping creation is safe.
+     */
+    private val systemAudio: Boolean = com.dreamdisplayx.util.OsInfo.isAndroid
+
+    /**
      * Owns the Java Sound audio line + 3D DSP feeding for this display. libvlc is configured with
      * audio callbacks so decoded PCM reaches us instead of libvlc's default output; this restores
-     * directional 3D audio (panning), occlusion and our own audio pacing.
+     * directional 3D audio (panning), occlusion and our own audio pacing. Null on Android
+     * ([systemAudio]): libvlc's own OpenSL ES output plays the sound there.
      */
-    private val audioOutput = LibVlcAudioOutput(debugLabel, audioStage)
+    private val audioOutput: LibVlcAudioOutput? =
+        if (systemAudio) null else LibVlcAudioOutput(debugLabel, audioStage)
 
     /** Rate-limits the A/V sync diagnostic (audio line clock vs libvlc clock) to once per few seconds. */
     private val lastSyncDiagNanos = java.util.concurrent.atomic.AtomicLong(0L)
@@ -238,31 +252,31 @@ internal class LibVlcSessionManager(
     // ── Audio callbacks (held strongly; feed the 3D DSP + Java Sound line) ───
 
     private val audioFormatSetupCallback = LibVlc.AudioSetupCallback { data, format, rate, channels ->
-        audioOutput.onFormatSetup(data, format, rate, channels)
+        audioOutput?.onFormatSetup(data, format, rate, channels) ?: 0
     }
 
     private val audioFormatCleanupCallback = LibVlc.AudioCleanupCallback { data ->
-        audioOutput.onFormatCleanup(data)
+        audioOutput?.onFormatCleanup(data)
     }
 
     private val audioPlayCallback = LibVlc.AudioPlayCallback { data, samples, count, pts ->
-        audioOutput.onPlay(data, samples, count, pts)
+        audioOutput?.onPlay(data, samples, count, pts)
     }
 
     private val audioPauseCallback = LibVlc.AudioPauseCallback { data, pts ->
-        audioOutput.onPause(data, pts)
+        audioOutput?.onPause(data, pts)
     }
 
     private val audioResumeCallback = LibVlc.AudioResumeCallback { data, pts ->
-        audioOutput.onResume(data, pts)
+        audioOutput?.onResume(data, pts)
     }
 
     private val audioFlushCallback = LibVlc.AudioFlushCallback { data, pts ->
-        audioOutput.onFlush(data, pts)
+        audioOutput?.onFlush(data, pts)
     }
 
     private val audioDrainCallback = LibVlc.AudioDrainCallback { data ->
-        audioOutput.onDrain(data)
+        audioOutput?.onDrain(data)
     }
 
     private val videoFormatCallback = LibVlc.VideoFormatCallback { opaque, chroma, width, height, pitches, lines ->
@@ -308,7 +322,7 @@ internal class LibVlcSessionManager(
                 // DIAGNOSTIC: audio-vs-video length comparison. When a DASH audio slave is shorter
                 // than the video master (common on Bilibili), libvlc stops calling onPlay once the
                 // audio fragments run out and the audible audio ends early while video continues.
-                val audioMs = runCatching { audioOutput.audioFeedMs() }.getOrDefault(-1L)
+                val audioMs = runCatching { audioOutput?.audioFeedMs() }.getOrDefault(-1L) ?: -1L
                 val videoMs = runCatching {
                     val p = mediaPlayer
                     if (p != null) LibVlc.lib.libvlc_media_player_get_length(p) else -1L
@@ -361,12 +375,17 @@ internal class LibVlcSessionManager(
      * delivered to us raw, so volume is applied here (and by the 3D DSP chain).
      */
     fun setVolume(volume: Double) {
-        audioOutput.setVolume(volume)
+        audioOutput?.setVolume(volume)
+        // Android (system audio): route the volume into libvlc's own output.
+        if (systemAudio) {
+            val ap = mediaPlayer ?: return
+            runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, (volume.coerceIn(0.0, 1.0) * 100).toInt()) }
+        }
     }
 
     /** Opens (or reuses) the shared Java Sound audio line for this display. */
     private fun openAudioLine() {
-        runCatching { audioOutput.openLine() }
+        runCatching { audioOutput?.openLine() }
     }
 
     /**
@@ -462,7 +481,7 @@ internal class LibVlcSessionManager(
         // right second instead of inheriting a stale origin from the previous session.
         clock.reset(offsetNanos)
         // Reset the audio output for this new session (re-prime the 3D DSP chain, flush the line).
-        runCatching { audioOutput.reset() }
+        runCatching { audioOutput?.reset() }
 
         // Build the media options (UA + referer + optional hw decode). Audio is played by a SEPARATE
         // libvlc player (see below) so its Java Sound `write()` blocking never throttles the video
@@ -473,8 +492,18 @@ internal class LibVlcSessionManager(
         // frame back to system memory before handing it to the vmem lock callback, so vmem and hw
         // coexist and 4K H.264/HEVC decodes on the GPU instead of starving the CPU.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
-        LibVlc.configuredHwBackend()?.let { mediaOptions.add(":avcodec-hw=$it") }
-        mediaOptions.add(":no-audio")
+        // Media-level hw decode is an avcodec-module concept (desktop backends only); on
+        // Android the decoder module is chosen at instance level (--codec=mediacodec_*) and
+        // avcodec stays the software fallback.
+        if (!systemAudio) LibVlc.configuredHwBackend()?.let { mediaOptions.add(":avcodec-hw=$it") }
+        if (systemAudio) {
+            // Android: audio stays inside the video player (OpenSL ES); no callback pipeline,
+            // no dedicated audio player. Note the media option keeps audio OFF the callbacks —
+            // it is ":no-audio" on desktop because a separate player owns sound there.
+            mediaOptions.remove(":no-audio")
+        } else {
+            mediaOptions.add(":no-audio")
+        }
         val audioUrl = streamSet.currentAudio.url
         if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
             logger.info("$debugLabel audio will be played by the separate audio player.")
@@ -599,6 +628,8 @@ internal class LibVlcSessionManager(
      */
     private fun audioPlayer(): Pointer? {
         if (LibVlcDiagnostics.noAudioCallback) return null
+        // Android: no callback audio pipeline — libvlc's OpenSL ES output owns sound.
+        if (systemAudio) return null
         val existing = audioPlayer
         if (existing != null) return existing
         return try {
@@ -646,7 +677,7 @@ internal class LibVlcSessionManager(
     /** Seeks both the video and audio players to [offsetNanos]. */
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         // Reset audio flags before the seek so a pause-then-resume immediately after seek starts clean.
-        audioOutput.onSeekReset()
+        audioOutput?.onSeekReset()
         submit {
             val mp = mediaPlayer ?: return@submit
             // ENDED state ignores set_time and a bare play() is not guaranteed to restart in libvlc
@@ -771,7 +802,7 @@ internal class LibVlcSessionManager(
             } catch (_: Exception) { }
         }
         runCatching { controlExecutor.shutdownNow() }
-        audioOutput.close()
+        audioOutput?.close()
         renderExecutor.execute { surface.cleanup() }
     }
 
@@ -875,7 +906,7 @@ internal class LibVlcSessionManager(
             // flushing the audio line (which would only cause an audible jump).
             // The whole diagnostic + auto-resync can be disabled for bisection (-Ddreamdisplayx.noAutoResync).
             if (!LibVlcDiagnostics.noAutoResync) {
-                val lead = audioOutput.leadNanos()
+                val lead = audioOutput?.leadNanos()
                 if (lead != null && lead > AUTO_RESYNC_THRESHOLD_NANOS) {
                     val leadMs = lead / 1_000_000L
                     if (MediaPlayer.DEBUG) {
@@ -884,7 +915,7 @@ internal class LibVlcSessionManager(
                             debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
                         )
                     }
-                    audioOutput.forceResync()
+                    audioOutput?.forceResync()
                 }
                 // Two-player A/V sync: the audio player runs on its own clock (separate from the video
                 // player's system clock). Compare their get_time values; if the audio player drifts
