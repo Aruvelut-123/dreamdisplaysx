@@ -2,6 +2,12 @@
 
 Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdisplays/commit/45ab6f8).
 
+> **Scrub preview: extract from the lowest available quality (≤360p) stream (feat/libvlc)**
+> — scrub thumbnails are tiny (256x144) and only need a still frame, but they were extracted from
+> the currently-playing stream — a 4K master on long videos, whose fragments take far longer to
+> load and decode on every seek. `capturedStreamRawUrl()` now picks the lowest-quality rendition
+> (at most 360p) from the already-resolved stream list, so every scrub seek is dramatically faster.
+
 > **Scrub preview: resume before seek + fast-fail in ScrubSession (feat/libvlc)**
 > — after the first extraction paused the player, every later hover on the same video ran the seek
 > while PAUSED: get_time jumped to the target but never advanced past it, so the 8s awaitPast
