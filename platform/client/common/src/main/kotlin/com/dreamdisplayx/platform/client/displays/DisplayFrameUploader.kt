@@ -81,7 +81,9 @@ internal class DisplayFrameUploader(private val uuid: UUID) {
                 }
             }
         }.onFailure { e ->
-            logger.warn("$uuid fitTexture failed: ${e.message ?: e::class.java.name}")
+            // Per-frame upload path (called from fitTexture every frame while a video is live): a
+            // transient GL/upload failure must not spam WARN — DEBUG keeps the detail without noise.
+            logger.debug("$uuid fitTexture failed: ${e.message ?: e::class.java.name}")
         }
     }
 

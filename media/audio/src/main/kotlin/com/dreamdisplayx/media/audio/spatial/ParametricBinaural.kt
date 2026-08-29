@@ -48,7 +48,7 @@ class ParametricBinaural(private val sampleRate: Float) {
     /** Renders one mono [sample] into a binaural pair, storing result in [lastL] and [lastR]. */
     fun renderSample(sample: Float) {
         delayLine.push(sample)
-        val near = delayLine.read(0f)
+        val near = sample // read(0f) on the just-pushed sample equals it exactly; skip the interpolation read
         val far = shadowFilter.process(delayLine.read(itdSamples)) * farGain
         if (farIsRight) {
             lastL = near; lastR = far

@@ -68,14 +68,14 @@ class PlatformMetadataCache(
     fun resolveBlocking(key: String): PlatformVideoMetadata? {
         get(key)?.let { return it }
         return runCatching { fetch(key)?.also { cache.put(key, it) } }
-            .onFailure { logger.warn("{} metadata fetch failed for {}: {}.", name, key, it.message) }
+            .onFailure { logger.debug("{} metadata fetch failed for {}: {}.", name, key, it.message) }
             .getOrNull()
     }
 
     private fun fetchAndStore(key: String) {
         runCatching { fetch(key) }
             .onSuccess { metadata -> metadata?.let { cache.put(key, it) } }
-            .onFailure { logger.warn("{} metadata fetch failed for {}: {}.", name, key, it.message) }
+            .onFailure { logger.debug("{} metadata fetch failed for {}: {}.", name, key, it.message) }
             .also { inFlight.invalidate(key) }
     }
 }

@@ -76,7 +76,7 @@ object MediaHostGuard {
     fun isAllowed(url: String): Boolean {
         if (allowPrivate) return true
         val host = hostOf(url) ?: run {
-            logger.warn("Blocked media URL with no parseable host: ${url.take(120)}")
+            logger.debug("Blocked media URL with no parseable host: ${url.take(120)}")
             return false
         }
         return hostVerdicts.get(host, ::resolvesToPublicAddresses)
@@ -87,7 +87,7 @@ object MediaHostGuard {
         val addresses = runCatching {
             InetAddress.getAllByName(host)
         }.onFailure { e ->
-            logger.warn("Blocked media URL; host '$host' did not resolve: ${e.message}.")
+            logger.debug("Blocked media URL; host '$host' did not resolve: ${e.message}.")
         }.getOrNull() ?: return false
         addresses.firstOrNull { isNonPublic(it) }?.let {
             logger.warn("Blocked media URL resolving to non-public address ${it.hostAddress} (host=$host).")

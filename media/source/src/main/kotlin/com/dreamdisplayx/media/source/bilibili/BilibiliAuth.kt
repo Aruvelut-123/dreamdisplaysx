@@ -85,9 +85,14 @@ object BilibiliAuth {
         // treat "not yet scanned" (86101) and "scanned, awaiting confirmation" (86090) as success.
         // `data` is present on every state, so read the real status from it.
         val statusCode = data?.optInt("code") ?: root?.optInt("code") ?: -1
-        logger.info("QR poll statusCode={} topCode={} hasData={} dataKeys={}", statusCode, root?.optInt("code"), data != null, data?.keys?.toList())
+        logger.debug(
+            "QR poll statusCode={} topCode={} hasData={} dataKeys={}",
+            statusCode, root?.optInt("code"), data != null, data?.keys?.toList()
+        )
         if (statusCode == 0) {
-            logger.info("QR poll success data={}", data?.toString()?.take(800))
+            // DEBUG + sanitized: the success payload contains the SESSDATA / refresh_token — never
+            // log them at INFO (the QR poll loop repeats every couple of seconds while logging in).
+            logger.debug("QR poll success (payload keys={})", data?.keys?.toList())
         }
         return when (statusCode) {
             0 -> {
@@ -95,16 +100,16 @@ object BilibiliAuth {
                     ?: data?.optString("url")?.let { url -> fetchCrossDomainCookies(url) }
                 val refreshTokenVal = data?.optString("refresh_token").orEmpty()
                 if (cookie != null) {
-                    logger.info("QR login succeeded, cookie extracted (len={})", cookie.length)
+                    logger.debug("QR login succeeded, cookie extracted (len={})", cookie.length)
                     if (refreshTokenVal.isNotEmpty()) {
                         refreshToken = refreshTokenVal
-                        logger.info("Bilibili refresh token stored (len={})", refreshTokenVal.length)
+                        logger.debug("Bilibili refresh token stored (len={})", refreshTokenVal.length)
                     }
                     PollResult.Success(cookie, refreshTokenVal)
                 } else {
                     // Rarely, Bilibili reports code=0 before the cookies are available. Keep polling
                     // so the next attempt picks up the real SESSDATA instead of faking a success.
-                    logger.info("QR poll code=0 but no usable cookie yet; will keep polling")
+                    logger.debug("QR poll code=0 but no usable cookie yet; will keep polling")
                     PollResult.Pending
                 }
             }
@@ -289,7 +294,7 @@ object BilibiliAuth {
         }
         val newRefresh = result?.obj("data")?.optString("refresh_token")
         if (newRefresh != null) refreshToken = newRefresh
-        logger.info("Bilibili session refreshed; new refresh token stored={}", newRefresh != null)
+        logger.debug("Bilibili session refreshed; new refresh token stored={}", newRefresh != null)
         return true
     }
 

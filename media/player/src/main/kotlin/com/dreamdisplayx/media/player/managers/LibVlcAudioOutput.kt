@@ -247,7 +247,7 @@ internal class LibVlcAudioOutput(
                 totalWrittenFrames = runCatching { ln.getLongFramePosition() ?: 0L }.getOrDefault(0L)
             }
             clockLive = false
-            logger.warn("$debugLabel audio flushed on audio thread to re-sync A/V.")
+            logger.debug("$debugLabel audio flushed on audio thread to re-sync A/V.")
         }
         feed(pcmBuffer, bytes, ln)
         // Refresh the A/V lead cache on the audio thread (the line's owner); the render thread reads
@@ -358,7 +358,7 @@ internal class LibVlcAudioOutput(
         // carry fewer fragments than the video master) vs. libvlc stopping audio output early.
         if (totalWrittenFrames > 0) {
             val audioMs = totalWrittenFrames * FRAME_NANOS / 1_000_000L
-            logger.warn("$debugLabel audio drained (EOF): fed {} frames ≈ {} ms of audio.", totalWrittenFrames, audioMs)
+            logger.debug("$debugLabel audio drained (EOF): fed {} frames ≈ {} ms of audio.", totalWrittenFrames, audioMs)
         }
     }
 

@@ -295,7 +295,7 @@ internal class LibVlcSessionManager(
                 if (player != null) {
                     val tracks = LibVlc.lib.libvlc_audio_get_track_count(player)
                     val vol = LibVlc.lib.libvlc_audio_get_volume(player)
-                    logger.info("$debugLabel libvlc playing: audioTracks={} volume={}.", tracks, vol)
+                    logger.debug("$debugLabel libvlc playing: audioTracks={} volume={}.", tracks, vol)
                     // Update F3 decoder info — query immediately, and retry if the decoder isn't
                     // initialised yet (the info may not be available at the very first PLAYING event).
                     updateDecoderName(player, immediate = true)
@@ -314,7 +314,7 @@ internal class LibVlcSessionManager(
                     if (p != null) LibVlc.lib.libvlc_media_player_get_length(p) else -1L
                 }.getOrDefault(-1L)
                 if (audioMs >= 0 && videoMs > 0) {
-                    logger.warn(
+                    logger.debug(
                         "$debugLabel A/V END: audio fed {} ms vs video length {} ms ({} ms gap).",
                         audioMs, videoMs, videoMs - audioMs
                     )
@@ -380,7 +380,7 @@ internal class LibVlcSessionManager(
                 val name = LibVlc.videoDecoderName(player)
                 if (!name.isNullOrBlank()) {
                     val old = MediaPlayer.currentDecoder.getAndSet(name)
-                    if (old != name) logger.info("$debugLabel video decoder: {}.", name)
+                    if (old != name && MediaPlayer.DEBUG) logger.debug("$debugLabel video decoder: {}.", name)
                 } else {
                     logger.debug("$debugLabel video decoder info not ready yet.")
                 }
@@ -878,10 +878,12 @@ internal class LibVlcSessionManager(
                 val lead = audioOutput.leadNanos()
                 if (lead != null && lead > AUTO_RESYNC_THRESHOLD_NANOS) {
                     val leadMs = lead / 1_000_000L
-                    logger.warn(
-                        "{} A/V drift: audio buffer {}ms behind video (>{}ms) — flushing audio to re-sync.",
-                        debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
-                    )
+                    if (MediaPlayer.DEBUG) {
+                        logger.debug(
+                            "{} A/V drift: audio buffer {}ms behind video (>{}ms) — flushing audio to re-sync.",
+                            debugLabel, leadMs, AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L
+                        )
+                    }
                     audioOutput.forceResync()
                 }
                 // Two-player A/V sync: the audio player runs on its own clock (separate from the video
@@ -896,10 +898,12 @@ internal class LibVlcSessionManager(
                     if (videoMs >= 0 && audioMs >= 0) {
                         val drift = videoMs - audioMs
                         if (kotlin.math.abs(drift) > AUTO_RESYNC_THRESHOLD_NANOS / 1_000_000L) {
-                            logger.warn(
-                                "{} A/V drift: audio player {}ms from video ({} vs {}ms) — snapping audio to video.",
-                                debugLabel, drift, audioMs, videoMs
-                            )
+                            if (MediaPlayer.DEBUG) {
+                                logger.debug(
+                                    "{} A/V drift: audio player {}ms from video ({} vs {}ms) — snapping audio to video.",
+                                    debugLabel, drift, audioMs, videoMs
+                                )
+                            }
                             runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, videoMs) }
                         }
                     }

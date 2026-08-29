@@ -17,6 +17,9 @@ class LoudnessMeter(private val sampleRate: Float) {
     private var meanSquare = 1e-9f
     private val integrationSeconds = 3f
 
+    /** Precomputed `1 - exp(-dtPerSample / integrationSeconds)`; `dtPerSample = 1 / sampleRate` is constant. */
+    private val alpha = 1f - exp(-1f / (sampleRate * integrationSeconds))
+
     /** Smoothed makeup gain applied on top of the source's own mix gain, in dB. */
     private val gainDbSmoother = ParamSmoother(0.5f)
 
@@ -24,7 +27,6 @@ class LoudnessMeter(private val sampleRate: Float) {
     fun observe(sampleL: Float, sampleR: Float, dtPerSample: Float) {
         val mono = (sampleL + sampleR) * 0.5f
         val weighted = highPass.process(shelf.process(mono))
-        val alpha = 1f - exp(-dtPerSample / integrationSeconds)
         meanSquare += (weighted * weighted - meanSquare) * alpha
     }
 

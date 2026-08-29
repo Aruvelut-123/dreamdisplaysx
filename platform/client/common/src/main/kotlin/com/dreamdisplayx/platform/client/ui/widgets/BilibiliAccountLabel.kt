@@ -18,6 +18,7 @@ import net.minecraft.network.chat.Component
 import org.slf4j.LoggerFactory
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
@@ -52,6 +53,9 @@ object BilibiliAccountLabel {
 
     private val TTL = 5.minutes
 
+    /** Backoff after a failed fetch: retry no sooner than 30s (was: every draw call). */
+    private val FAIL_TTL = 30.seconds
+
     /** Invalidates the cache so the next draw re-fetches. */
     fun invalidate() { cachedInfo = null; lastFetch = null }
 
@@ -63,6 +67,9 @@ object BilibiliAccountLabel {
         if (BilibiliApi.cookie.isBlank()) {
             cachedInfo = null; lastFetch = null; return null
         }
+        // A failed fetch must still record the attempt time: without a backoff, draw() would retry
+        // the network call every frame while the API is unreachable. Retry no sooner than FAIL_TTL.
+        if (lastFetch != null && now - lastFetch!! < FAIL_TTL) return cached
         return try {
             val root = fetchNav()
             val data = root?.obj("data") ?: return null
@@ -78,7 +85,10 @@ object BilibiliAccountLabel {
             lastFetch = now
             info
         } catch (e: Exception) {
-            logger.warn("Failed to fetch Bilibili account info: ${e.message}.")
+            // Retry later rather than next frame; the account info is cosmetic, not worth a
+            // per-frame network hit (and a WARN log) while the nav API is unreachable.
+            lastFetch = now
+            logger.debug("Failed to fetch Bilibili account info: ${e.message}.")
             null
         }
     }

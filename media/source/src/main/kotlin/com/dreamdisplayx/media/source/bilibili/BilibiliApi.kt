@@ -9,11 +9,8 @@ import com.dreamdisplayx.util.*
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.protobuf.ProtoBuf
-import kotlinx.serialization.protobuf.ProtoNumber
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.JsonArray
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.security.MessageDigest
@@ -55,6 +52,11 @@ data class BilibiliSearchItem(
 object BilibiliApi {
     /** Logger. */
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliApi")
+
+    /** Lowercase hex digits, indexed by nibble — avoids `"%02x".format` per byte in [md5]. */
+    private val HEX_CHARS = charArrayOf(
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+    )
 
     /**
      * Bilibili login cookie string set by the client after a platform login (see `BilibiliAuth`),
@@ -188,7 +190,9 @@ object BilibiliApi {
     }
 
     /** Strips the `<em class="keyword">...</em>` highlight markup BIlibili's search API wraps matches in. */
-    private fun stripHighlightTags(title: String): String = title.replace(Regex("</?em[^>]*>"), "")
+    private val EM_TAG_RE = Regex("</?em[^>]*>")
+
+    private fun stripHighlightTags(title: String): String = title.replace(EM_TAG_RE, "")
 
     /** Any Han (Chinese-script) character, used to pick the localised title below. */
     private val HAN_CHAR_RE = Regex("[一-鿿]")
@@ -563,8 +567,16 @@ object BilibiliApi {
     private fun urlEncode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
     /** Returns the lowercase hex MD5 digest of [s]. */
-    private fun md5(s: String): String =
-        MessageDigest.getInstance("MD5").digest(s.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+    private fun md5(s: String): String {
+        val digest = MessageDigest.getInstance("MD5").digest(s.toByteArray(Charsets.UTF_8))
+        return buildString(digest.size * 2) {
+            for (b in digest) {
+                val v = b.toInt() and 0xFF
+                append(HEX_CHARS[v ushr 4])
+                append(HEX_CHARS[v and 0x0F])
+            }
+        }
+    }
 
     /** GETs [url] and parses it as a JSON object, or null on any failure (offline, blocked, 404). */
     private fun getJson(url: String): JsonObject? = runCatching {

@@ -18,6 +18,12 @@ internal object DirectMediaProbe {
     private const val SNIFF_BYTES = 512
     private const val TS_PACKET_BYTES = 188
 
+    /** RFC 5987 extended filename: `filename*=UTF-8''percent%20encoded.mp4` (cached — built once, not per call). */
+    private val FILENAME_EXT_RE = Regex("filename\\*=(?:UTF-8'')?\"?([^\";]+)\"?", RegexOption.IGNORE_CASE)
+
+    /** Plain filename: `filename="file.mp4"` (cached — built once, not per call). */
+    private val FILENAME_PLAIN_RE = Regex("filename=\"?([^\";]+)\"?", RegexOption.IGNORE_CASE)
+
     /** What the server said about the URL.  makes a progressive file seekable. */
     data class Result(
         val finalUrl: String,
@@ -186,11 +192,11 @@ internal object DirectMediaProbe {
     private fun fileNameFrom(disposition: String?): String? {
         if (disposition == null) return null
         // RFC 5987 extended form: filename*=UTF-8''percent%20encoded.mp4
-        Regex("filename\\*=(?:UTF-8'')?\"?([^\";]+)\"?", RegexOption.IGNORE_CASE).find(disposition)?.let {
+        FILENAME_EXT_RE.find(disposition)?.let {
             return runCatching { URLDecoder.decode(it.groupValues[1], StandardCharsets.UTF_8) }
                 .getOrNull()?.takeIf { name -> name.isNotBlank() }
         }
-        Regex("filename=\"?([^\";]+)\"?", RegexOption.IGNORE_CASE).find(disposition)?.let {
+        FILENAME_PLAIN_RE.find(disposition)?.let {
             return it.groupValues[1].trim().takeIf { name -> name.isNotBlank() }
         }
         return null
