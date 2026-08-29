@@ -346,6 +346,13 @@ internal class LibVlcAudioOutput(
     }
 
     /**
+     * How much audio has been handed to the line so far, in milliseconds. Diagnostic: compare against
+     * the video length to tell whether the audio track simply ran out earlier (shorter DASH audio
+     * slave) vs. libvlc stopping audio output while the video continues.
+     */
+    fun audioFeedMs(): Long = totalWrittenFrames * FRAME_NANOS / 1_000_000L
+
+    /**
      * Requests an A/V re-sync. This only sets a marker and does NOT touch the line: it is called from the
      * render thread (the A/V diagnostic), which must never touch the Java Sound `SourceDataLine` — a
      * cross-thread `flush`/`getLongFramePosition` on Java Sound's Windows native layer was the

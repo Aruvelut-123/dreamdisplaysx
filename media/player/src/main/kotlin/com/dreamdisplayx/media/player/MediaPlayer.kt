@@ -543,18 +543,16 @@ class MediaPlayer(
      * Scrub thumbnails are tiny (256x144) and only need a still frame, so the LOWEST available
      * quality (at most 360p) is used instead of the currently-playing stream: a 360p stream has
      * far smaller fragments, so every seek loads and decodes much faster than seeking a 4K master
-     * stream. Falls back to the lowest available quality when no 360p (or lower) rendition exists.
+     * stream. H.264 (avc) renditions are preferred over AV1/HEVC within that band — the extractor
+     * decodes with SOFTWARE (no stale-GPU-surface risk), and software AV1/HEVC on a CPU-bound
+     * machine is far too slow to reach the seek target within the extraction budget (every scrub
+     * then times out). Falls back to the lowest available quality when no H.264 360p (or lower)
+     * rendition exists.
      */
     fun capturedStreamRawUrl(): String? {
         val pm = capturePreparedMedia() ?: return null
-        val ss = pm.streamSet
-        val videos = ss.availableVideo
-        val scrubStream = videos
-            .filter { val h = it.height; h != null && h <= 360 }
-            .minByOrNull { it.height ?: Int.MAX_VALUE }
-            ?: videos.minByOrNull { it.height ?: Int.MAX_VALUE }
-            ?: ss.currentVideo
-        return scrubStream.url
+        val videos = pm.streamSet.availableVideo
+        return scrubStreamOf(videos).url
     }
 
     /**
@@ -563,14 +561,24 @@ class MediaPlayer(
      */
     fun capturedStreamSeeksByDecoding(): Boolean {
         val pm = capturePreparedMedia() ?: return false
-        val ss = pm.streamSet
-        val videos = ss.availableVideo
-        val scrubStream = videos
-            .filter { val h = it.height; h != null && h <= 360 }
+        val videos = pm.streamSet.availableVideo
+        return scrubStreamOf(videos).seekByDecoding
+    }
+
+    /** Picks the scrub stream: H.264 at ≤360p first, then any ≤360p, then the lowest rendition. */
+    private fun scrubStreamOf(videos: List<com.dreamdisplayx.api.media.stream.model.MediaStream>): com.dreamdisplayx.api.media.stream.model.MediaStream {
+        fun isH264(s: com.dreamdisplayx.api.media.stream.model.MediaStream): Boolean =
+            s.codec?.lowercase()?.let { c ->
+                c.contains("h264") || c.contains("avc") || c.contains("264")
+            } == true
+        return videos
+            .filter { val h = it.height; h != null && h <= 360 && isH264(it) }
             .minByOrNull { it.height ?: Int.MAX_VALUE }
+            ?: videos
+                .filter { val h = it.height; h != null && h <= 360 }
+                .minByOrNull { it.height ?: Int.MAX_VALUE }
             ?: videos.minByOrNull { it.height ?: Int.MAX_VALUE }
-            ?: ss.currentVideo
-        return scrubStream.seekByDecoding
+            ?: videos.first()
     }
 
     /**

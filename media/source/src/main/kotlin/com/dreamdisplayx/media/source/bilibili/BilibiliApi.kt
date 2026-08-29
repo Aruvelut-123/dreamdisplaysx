@@ -401,7 +401,11 @@ object BilibiliApi {
                 streams += MediaStream(
                     url = urls.first(), backupUrls = urls.drop(1),
                     type = MediaStreamType.VIDEO,
-                    codec = null,
+                    // `codecs` is e.g. "avc1.64001f" (H.264) / "av01.0.05M.08" (AV1) /
+                    // "hev1.1.6.L120" (HEVC). Populated so stream consumers can prefer H.264
+                    // renditions (e.g. scrub extraction, which software-decodes and stalls on
+                    // AV1/HEVC long-GOP streams).
+                    codec = v.optString("codecs")?.takeIf { it.isNotEmpty() },
                     width = v.optInt("width"),
                     // Bilibili movie / bangumi DASH streams report the actual encoded height
                     // (e.g. 808 instead of 1080), which makes the quality selector show "808p"

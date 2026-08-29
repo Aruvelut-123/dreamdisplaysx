@@ -255,6 +255,20 @@ internal class LibVlcSessionManager(
                 if (MediaPlayer.DEBUG) logger.debug("$debugLabel libvlc paused.")
             }
             LibVlc.LIBVLC_MEDIA_PLAYER_END_REACHED -> {
+                // DIAGNOSTIC: audio-vs-video length comparison. When a DASH audio slave is shorter
+                // than the video master (common on Bilibili), libvlc stops calling onPlay once the
+                // audio fragments run out and the audible audio ends early while video continues.
+                val audioMs = runCatching { audioOutput.audioFeedMs() }.getOrDefault(-1L)
+                val videoMs = runCatching {
+                    val p = mediaPlayer
+                    if (p != null) LibVlc.lib.libvlc_media_player_get_length(p) else -1L
+                }.getOrDefault(-1L)
+                if (audioMs >= 0 && videoMs > 0) {
+                    logger.warn(
+                        "$debugLabel A/V END: audio fed {} ms vs video length {} ms ({} ms gap).",
+                        audioMs, videoMs, videoMs - audioMs
+                    )
+                }
                 logger.debug("$debugLabel libvlc end reached.")
                 eosReached = true
                 fireStreamEnd()
