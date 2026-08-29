@@ -28,12 +28,13 @@
 
 - [x] **F3 Audio feed rate → 音频消失，已回退**（97a821e5 → c6c95075）：诊断导致音频无声（Audio: 0ms/s），回退后音频恢复。**重要发现**：无声时 1080P 从 10-17fps 跳到 18-20fps → **确认音频管道在节流 vout**！
 
-- [x] **F3 帧间隔诊断**（b3b9ccf5）：Frame int: min/avg/max ms——揭示 vout 是"丢一半帧"（min≈33ms avg≈55ms）还是"解码器慢"（全部≈55ms）——**待主人看**
-- [x] **音频缓冲可配置**（647ee9a8）：`-Ddreamdisplayx.audioBufferMs=<ms>`（默认 100ms），加大（如 400ms）可减少 write 阻塞对音频时钟的脉动干扰——**待主人试**
+- [x] **F3 帧间隔诊断**（b3b9ccf5）：Frame int: min/avg/max ms——揭示 vout 是"丢一半帧"（min≈33ms avg≈55ms）还是"解码器慢"（全部≈55ms）——**已验证：min=32/avg=52/max=200ms = vout 丢帧（时钟节流）**
+- [x] **音频缓冲可配置**（647ee9a8）：`-Ddreamdisplayx.audioBufferMs=<ms>`（默认 100ms）；400ms 提升帧率到 20-22fps 但 1-2 分钟卡住（lead 400ms>300ms 阈值→每 10s flush）——**默认保持 100ms**
+- [x] **双 player 分拆**（bf75a052）：视频 player `:no-audio`（系统时钟→满帧率）+ 音频 player `:no-video`（独立喂 Java Sound）；每 ~10s 把音频 player 校正到视频 get_time——**待主人实测**
 
 ## 待验证 / 活跃问题
 
-- [ ] **帧率反常识（所有 1080P 视频 14-19fps vs 4K 25-38fps）**：四个硬件后端全部一样 → **不是解码器问题**。所有数据指向**libvlc 主时钟（音频时钟）在按 ~60% 速度走**。**用 F3 的 Frame int 行判断**：min≈33ms(30fps 节奏) + avg≈55ms = vout 丢帧（时钟节流）；min≈avg≈55ms = 解码器慢。**再看 `-Ddreamdisplayx.audioBufferMs=400` 是否改善帧率**
+- [ ] **双 player 分拆验证**（bf75a052）：1080P 视频帧率是否到 30fps（Frame int 应显示 min≈avg≈33ms）？音频是否正常？A/V 是否同步？seek/pause/resume 是否正常？
 - [ ] **音频提前 ~4s**：已确认是媒体源特性（Bilibili 音频流短），无法播放不存在的数据；用户接受则关闭诊断
 - [ ] **搜索返回 0**（非本喵改动）：最近提交只碰播放/scrub 相关，**没碰搜索代码**。主人 20 秒内连搜 4 次全 0 = **Bilibili 搜索风控**。待主人冷却后复测
 - [ ] **Scrub 诊断日志清理**：SCRUB-DEBUG / SCRUB-CRC / onDrain 日志在确认修好后移除

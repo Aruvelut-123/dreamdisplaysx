@@ -59,7 +59,20 @@ Based on Dream Displays [`45ab6f8`](https://github.com/arnodoelinger/dreamdispla
 > — `LINE_BUFFER_BYTES` is now `-Ddreamdisplayx.audioBufferMs=<ms>` (default 100). A larger value
 > (e.g. 400-500ms) is crash-safe (the 45ms trial crashed; bigger is safer) and can smooth the
 > Java Sound `write()` blocking that may pulse/throttle the libvlc audio clock — the suspected
-> cause of video FPS pinned at ~60% of source.
+> cause of video FPS pinned at ~60% of source. Note: 400ms ALSO triggered a stall after ~1-2min
+> (A/V lead 400ms > 300ms auto-resync threshold → audio flushed every ~10s → clock interrupted),
+> so the default stays 100ms.
+
+> **Playback: two-player split — video and audio no longer share a clock (feat/libvlc)**
+> — Previously one libvlc player merged the DASH audio via `add_slave`, making the audio clock
+> the master: Java Sound `write()` blocking pulsed it, dragging the vout to ~60% of the source
+> frame rate (Frame int: 32/52/200ms — frames arrive at 30fps cadence but ~half are dropped).
+> — Now playback uses TWO libvlc players: the video player runs its media with `:no-audio` so it
+> is driven by the system clock and the vout delivers the full source FPS; a dedicated audio-only
+> player (`:no-video`) plays the DASH audio URL and feeds the 3D DSP + Java Sound line. A/V sync
+> is kept by snapping the audio player to the video `get_time` every ~10s when drift exceeds the
+> 300ms threshold. This should fix both the low FPS and the 400ms-buffer stall (audio clock can
+> no longer throttle or interrupt the video pipeline).
 
 > **Diagnostics: audio EOF + A/V length gap (feat/libvlc)**
 > — `onDrain` reports how much audio was fed (≈ audio track length) and END_REACHED compares it
