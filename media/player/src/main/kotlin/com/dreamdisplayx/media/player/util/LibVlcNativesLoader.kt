@@ -54,9 +54,60 @@ object LibVlcNativesLoader {
         val candidates = listOfNotNull(resolveDownloadDir(), extractedDir)
         for (dir in candidates) {
             val so = File(dir, "libvlc.so")
-            if (so.isFile) return so.absolutePath
+            if (so.isFile) {
+                preloadAndroidCompanions(dir)
+                return so.absolutePath
+            }
         }
         return null
+    }
+
+    /**
+     * Preloads every companion `.so` next to `libvlc.so` into the process global symbol
+     * namespace on Android.
+     *
+     * The Android linker does NOT search a dlopen'd library's own directory for its
+     * `DT_NEEDED` dependencies, so `libvlc.so` — which links against the NDK libc++ and the
+     * VLC-Android helper libs — fails to open with `cannot locate symbol
+     * "_ZTTNSt6__ndk118basic_stringstream..."`. `System.load(path)` dlopens with
+     * `RTLD_LAZY | RTLD_GLOBAL`, so each companion's symbols become globally visible and are
+     * resolved when `libvlc.so` is opened afterwards. Identity-loading a plain native file
+     * cannot mutate any app state; failures are logged and skipped. No-op on desktop.
+     */
+    private fun preloadAndroidCompanions(dir: File) {
+        if (!com.dreamdisplayx.util.OsInfo.isAndroid) return
+        val companions = (dir.listFiles() ?: return).asSequence()
+            .filter { it.isFile && it.name.endsWith(".so") && it.name != "libvlc.so" }
+            .sortedWith(
+                compareBy<File> { if (it.name == "libc++_shared.so") 0 else 1 }.thenBy { it.name },
+            )
+            .toList()
+        // Multi-pass: companions may depend on each other (e.g. libmla/libvlcjni reference
+        // libvlc), so keep retrying the still-unloaded ones until no progress is made.
+        var remaining = companions
+        while (remaining.isNotEmpty()) {
+            val (ok, failed) = remaining.partition { f ->
+                try {
+                    System.load(f.absolutePath)
+                    true
+                } catch (t: Throwable) {
+                    false
+                }
+            }
+            ok.forEach { logger.info("Preloaded Android companion native: {}", it.name) }
+            if (failed.size == remaining.size) {
+                // No progress this pass — the leftover companions need libvlc itself
+                // (loaded later) or a missing dependency. Report and stop.
+                failed.forEach { f ->
+                    logger.warn(
+                        "Could not preload Android companion native {} before libvlc.so; " +
+                            "it will be resolved when libvlc loads", f.name,
+                    )
+                }
+                break
+            }
+            remaining = failed
+        }
     }
 
     /**

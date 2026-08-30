@@ -122,7 +122,12 @@
 - Native loading: Android JVMs report `os.name=Linux-Android`, so JNA's generic-Linux name
   mapping turns `Native.load("libvlc", ...)` into a doubled `liblibvlc.so` lookup. `LibVlc`
   therefore loads the exact extracted `libvlc.so` path on Android via
-  `LibVlcNativesLoader.jnaLoadTarget()` (desktop keeps the plain `"libvlc"` name).
+  `LibVlcNativesLoader.jnaLoadTarget()` (desktop keeps the plain `"libvlc"` name). The Android
+  linker ALSO does not search a library's own directory for its `DT_NEEDED` deps, so the
+  VLC-Android companions (`libc++_shared.so` / `libmla.so` / `libvlcjni.so`, same directory)
+  are preloaded first with `RTLD_GLOBAL` (`System.load`, multi-pass until no progress) in
+  `LibVlcNativesLoader.preloadAndroidCompanions()` before `libvlc.so` is opened; without it
+  dlopen dies on `cannot locate symbol _ZTTNSt6__ndk118basic_stringstream...`.
 - AWT guards: `VideoPopoutWindow.isAvailable` returns false on Android and `ModTitleLabel`
   catches `LinkageError` (no `java.desktop` module); Thumbnails/ScrubPreview decode paths were
   already `runCatching`-guarded and degrade gracefully
