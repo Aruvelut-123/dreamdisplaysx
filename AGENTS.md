@@ -117,12 +117,18 @@
   video player keeps its own audio and libvlc plays it via `--aout=opensles`; volume goes through
   `libvlc_audio_set_volume`. Desktop path unchanged.
 - Video/instance: Android passes `--aout=opensles` +
-  `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode); no
-  `--avcodec-hw` (desktop-only concept). **Never pass `--plugin-path` on Android**: the
-  monolithic libvlc-all AAR builds VLC with loadplugins disabled, so the option is compiled out
-  entirely and `libvlc_new` returns null on an unknown option (observed: "vlc: unknown option or
-  missing mandatory argument `--plugin-path=...'" → `LibVLC low-level load failed`).
-  Also note the aout module's real name is `opensles` (OpenSL ES), not `opensl`.
+  `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode) + always
+  `--http-proxy=direct://`; no `--avcodec-hw` (desktop-only concept). **Never pass
+  `--plugin-path` on Android**: the monolithic libvlc-all AAR builds VLC with loadplugins
+  disabled, so the option is compiled out entirely and `libvlc_new` returns null on an unknown
+  option (observed: "vlc: unknown option or missing mandatory argument `--plugin-path=...'"
+  → `LibVLC low-level load failed`). Also note the aout module's real name is `opensles`
+  (OpenSL ES), not `opensl`. **Always force `--http-proxy=direct://` on Android**: VLC-Android's
+  http access module only calls `vlc_getProxyUrl()` (its JNI system-proxy probe reading the Java
+  `http.proxyHost` property) when `http-proxy` is unset, and on Pojav-style game JVMs that JNI
+  call crashes the JVM from inside (`SIGSEGV in libjvm.so`, thread `config_GetGenericDir`) —
+  verified when opening a Bilibili http URL after the `--plugin-path` fix. The `direct://` marker
+  is used verbatim, so the JNI probe never runs.
 - Native loading: Android JVMs report `os.name=Linux-Android`, so JNA's generic-Linux name
   mapping turns `Native.load("libvlc", ...)` into a doubled `liblibvlc.so` lookup. `LibVlc`
   therefore loads the exact extracted `libvlc.so` path on Android via
