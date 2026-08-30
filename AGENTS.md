@@ -123,19 +123,33 @@
   mapping turns `Native.load("libvlc", ...)` into a doubled `liblibvlc.so` lookup. `LibVlc`
   therefore loads the exact extracted `libvlc.so` path on Android via
   `LibVlcNativesLoader.jnaLoadTarget()` (desktop keeps the plain `"libvlc"` name). The Android
-  linker ALSO does not search a library's own directory for its `DT_NEEDED` deps, so the
-  Android companions (unique-SONAME `libc++_dreamdisplayx.so` / `libvlcjni.so`, same directory)
-  are preloaded first with `RTLD_GLOBAL` (`System.load`, multi-pass until no progress) in
-  `LibVlcNativesLoader.preloadAndroidCompanions()` before `libvlc.so` is opened; without it
-  dlopen dies on `cannot locate symbol _ZTTNSt6__ndk118basic_stringstream...`.
+  linker ALSO does not search a library's own directory for its `DT_NEEDED` deps, so the ONLY
+  runtime dependency that must be preloaded first with `RTLD_GLOBAL` (`System.load`) in
+  `LibVlcNativesLoader.preloadAndroidCompanions()` is the renamed libc++
+  (`libc++_dreamdisplayx.so`); without it dlopen dies on
+  `cannot locate symbol _ZTTNSt6__ndk118basic_stringstream...`.
 - Android native cache hygiene: `NativesDownloader.flattenPlatformDir()` wipes the destination
   before overlaying the extracted archive, and on every Android startup
   `cleanAndroidStaleNatives()` deletes any `.so` outside the AAR-era whitelist
-  (`libvlc.so` / `libvlcjni.so` / `libc++_dreamdisplayx.so`). Without this an old APK-era
-  `libc++_shared.so` / `libmla.so` could survive beside the renamed libc++, and two libc++
-  copies loaded `RTLD_GLOBAL` corrupt each other's C++ vtables / thread-start pointers —
-  observed crash signature when a video starts: `SIGSEGV in __pthread_start` (thread jumps to
-  an unmapped address).
+  (`libvlc.so` / `libc++_dreamdisplayx.so`). Without this an old APK-era `libc++_shared.so` /
+  `libmla.so` could survive beside the renamed libc++, and two libc++ copies loaded
+  `RTLD_GLOBAL` corrupt each other's C++ vtables / thread-start pointers — observed crash
+  signature when a video starts: `SIGSEGV in __pthread_start` (thread jumps to an unmapped
+  address).
+- **NEVER preload `libvlcjni.so`** (also excluded from the stale-clean whitelist): it is the
+  org.videolan Java-layer JNI glue, NOT a dependency of `libvlc.so` (the AAR's DT_NEEDED lists
+  only libc++/libm/libEGL/libGLESv2/liblog/libc/libdl/libandroid/libmediandk; the ten
+  "libvlcjni" strings inside libvlc.so are build-path macros, not runtime dlopens). If it is
+  ever `System.load`'ed its `JNI_OnLoad` calls `FindClass("android/os/Build$VERSION")` — a
+  class that does not exist on Pojav-style game JVMs (desktop OpenJDK, no `android.*` framework
+  classes) — so it throws `NoClassDefFoundError`, the JVM dlcloses the library, but
+  `JNI_OnLoad` has already spawned native worker threads whose start routines point into
+  libvlcjni's own text; once unmapped those threads jump into a hole and crash with `SIGSEGV in
+  __pthread_start`. This was the TRUE root cause of the repeated Android crashes (both the
+  dirty-cache run and the post-hygiene run showed the same `NoClassDefFoundError:
+  android/os/Build$VERSION` → `Unloaded shared library` → `SIGSEGV` sequence); the double-libc++
+  mixing was only the extra corruption visible in the first log. squi2rel/VideoPlayer never
+  loads libvlcjni.so either.
 - Android JNI bridge: plain JNA `Native.load` only `dlopen`s `libvlc.so` and never triggers
   its `JNI_OnLoad`, so VLC-Android's AndroidBridge never learns the JavaVM and `libvlc_new`
   returns null. `LibVlcNativesLoader.injectAndroidJniOnLoad()` (called from `LibVlc.ensureLoaded`

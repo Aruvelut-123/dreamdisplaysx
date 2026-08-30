@@ -160,25 +160,27 @@ differences:
   Android native, so a Bionic build (16 KB page aligned, from xerial's `-sources` jar) is
   bundled in the mod and loaded via `org.sqlite.lib.path` / `org.sqlite.lib.name` — display
   and credential storage keep working on-device.
-- **LibVLC loads by absolute path, with companions preloaded**: the Android JVM reports
+- **LibVLC loads by absolute path, with only libc++ preloaded**: the Android JVM reports
   `os.name=Linux-Android`, which makes JNA's generic-Linux name mapping turn `libvlc` into a
   doubled `liblibvlc.so`; the mod dlopens the exact extracted `libvlc.so` path instead. The
-  Android runtime also depends on `libc++` and `libvlcjni.so` in the same directory — the
-  Android linker does not search it, so those are loaded first with `RTLD_GLOBAL`
-  (`System.load`) before `libvlc.so` is opened. The bundled `libc++` carries a **unique
-  SONAME** (`libc++_dreamdisplayx.so`, with `libvlc.so`'s `DT_NEEDED` rewritten at packaging
-  time): Pojav-style launchers load their own `libc++_shared.so` first, and the Android
-  linker would otherwise deduplicate by SONAME and bind `libvlc.so` to that stale copy, which
-  lacks the `_ZTTNSt6__ndk118basic_stringstream...` vtable symbol libvlc needs. Two extra
-  Android safeguards: the natives cache is **wiped before extraction** and any stray `.so`
-  outside the AAR-era whitelist is **deleted at every startup**, so an old APK-era
-  `libc++_shared.so` / `libmla.so` can never be loaded beside the renamed libc++ (two libc++
-  copies in one process corrupt C++ vtables/thread-start pointers — `SIGSEGV in
-  __pthread_start`). And because plain `dlopen` never invokes JNI entry points, the loader
-  also calls `libvlc.so`'s exported `JNI_OnLoad` with the live JavaVM (obtained via
-  `JNI_GetCreatedJavaVMs` from `libjvm.so`) so VLC-Android's AndroidBridge initialises and
-  `libvlc_new` succeeds — mirroring the native bridge squi2rel/VideoPlayer ships, done in
-  pure JNA. Desktop loading by name is unchanged.
+  Android runtime depends on `libc++` in the same directory — the Android linker does not
+  search it, so the renamed libc++ is loaded first with `RTLD_GLOBAL` (`System.load`) before
+  `libvlc.so` is opened. The bundled libc++ carries a **unique SONAME**
+  (`libc++_dreamdisplayx.so`, with `libvlc.so`'s `DT_NEEDED` rewritten at packaging time):
+  Pojav-style launchers load their own `libc++_shared.so` first, and the Android linker would
+  otherwise deduplicate by SONAME and bind `libvlc.so` to that stale copy, which lacks the
+  `_ZTTNSt6__ndk118basic_stringstream...` vtable symbol libvlc needs. **`libvlcjni.so` is never
+  loaded** — it is the org.videolan Java-layer JNI glue, not a dependency of `libvlc.so`, and
+  if it were `System.load`'ed its `JNI_OnLoad` would fail on a game JVM (it needs the Android
+  framework class `android.os.Build$VERSION`) and the JVM would unload it under threads it had
+  already spawned — a `SIGSEGV in __pthread_start`. Three Android safeguards: the natives
+  cache is **wiped before extraction**, any stray `.so` outside the AAR-era whitelist
+  (`libvlc.so` / `libc++_dreamdisplayx.so`) is **deleted at every startup** (this also
+  removes `libvlcjni.so`), and the whitelist excludes it permanently. And because plain
+  `dlopen` never invokes JNI entry points, the loader also calls `libvlc.so`'s exported
+  `JNI_OnLoad` with the live JavaVM (obtained via `JNI_GetCreatedJavaVMs` from `libjvm.so`)
+  so VLC-Android's AndroidBridge initialises and `libvlc_new` succeeds — mirroring the native
+  bridge squi2rel/VideoPlayer ships, done in pure JNA. Desktop loading by name is unchanged.
 
 The natives are extracted to app-internal storage automatically (the game directory on
 emulated storage is mounted noexec, so `.so` files there cannot be loaded).

@@ -278,8 +278,22 @@ object NativesDownloader {
 
     // ── Cache validation ───────────────────────────────────────────────────
 
-    /** Android companions that belong in the AAR-era cache. Anything else is stale. */
-    private val androidWhitelist = setOf("libvlc.so", "libvlcjni.so", "libc++_dreamdisplayx.so")
+    /**
+     * Android companions that belong in the AAR-era cache. Anything else is stale.
+     *
+     * Deliberately NOT whitelisted: `libvlcjni.so`. The pure-JNA pipeline never needs it
+     * (libvlc.so's DT_NEEDED references only libc++/libm/libEGL/etc; the ten "libvlcjni"
+     * strings inside libvlc.so are build-path macros, not runtime dlopens), and if it is
+     * ever System.load'ed its JNI_OnLoad immediately fails: it calls FindClass on
+     * "android/os/Build$VERSION", which does not exist on Pojav-style game JVMs
+     * (desktop OpenJDK, no android.* framework classes) → NoClassDefFoundError → the JVM
+     * dlcloses the library, but JNI_OnLoad has already spawned native worker threads whose
+     * start routines point into libvlcjni's own text → the threads crash in
+     * `__pthread_start` once the library is unmapped (observed crash pc in the unmapped gap
+     * right after an "Unloaded shared library" event). Keeping libvlcjni.so out of the
+     * cache means it can never be (re)loaded.
+     */
+    private val androidWhitelist = setOf("libvlc.so", "libc++_dreamdisplayx.so")
 
     /**
      * Removes every `.so` in [dir] that is not part of the current Android runtime format.
@@ -287,8 +301,10 @@ object NativesDownloader {
      * Stale APK-era companions (`libc++_shared.so` / `libmla.so`) must never be preloaded
      * next to the renamed `libc++_dreamdisplayx.so`: two libc++ copies loaded RTLD_GLOBAL
      * into one process corrupt each other's vtable / thread-start pointers (observed as
-     * `SIGSEGV in __pthread_start`). This is called on every Android startup so even a
-     * cache that was previously mixed heals itself without a full re-download.
+     * `SIGSEGV in __pthread_start`). The AAR-era `libvlcjni.so` is excluded for the same
+     * reason — its JNI_OnLoad crashes on desktop-style game JVMs and it is not a dependency
+     * of libvlc.so (see [androidWhitelist]). This is called on every Android startup so
+     * even a cache that was previously mixed heals itself without a full re-download.
      */
     private fun cleanAndroidStaleNatives(dir: File) {
         if (!dir.isDirectory) return

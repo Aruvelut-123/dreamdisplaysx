@@ -90,43 +90,39 @@ object LibVlcNativesLoader {
      */
     private fun preloadAndroidCompanions(dir: File) {
         if (!com.dreamdisplayx.util.OsInfo.isAndroid) return
+        // ONLY the (renamed) libc++ that libvlc.so's rewritten DT_NEEDED references may be
+        // preloaded. In particular libvlcjni.so must NOT be loaded:
+        //
+        //  * libvlc.so does not depend on it (the AAR's DT_NEEDED lists only libc++/libm/
+        //    libEGL/libGLESv2/liblog/libc/libdl/libandroid/libmediandk), so it is pure
+        //    dead weight for the pure-JNA pipeline;
+        //  * System.load-ing it runs its JNI_OnLoad, which calls FindClass on
+        //    "android/os/Build$VERSION" — a class that does not exist on Pojav-style game
+        //    JVMs — and throws NoClassDefFoundError;
+        //  * the JVM then dlcloses the library, but VLC-Android's JNI_OnLoad has already
+        //    created native worker threads whose start routines point into libvlcjni's own
+        //    text; once the library is unmapped those threads jump into a hole and crash
+        //    with SIGSEGV in __pthread_start (observed: cache-clean run still crashed at
+        //    pc in the unmapped gap right after an "Unloaded shared library" event).
         val companions = (dir.listFiles() ?: return).asSequence()
-            .filter { it.isFile && it.name.endsWith(".so") && it.name != "libvlc.so" }
-            .sortedWith(
-                // libc++ first: nothing else can link before the C++ runtime is in place.
-                compareBy<File> {
-                    when (it.name) {
-                        "libc++_dreamdisplayx.so", "libc++_shared.so" -> 0
-                        else -> 1
-                    }
-                }.thenBy { it.name },
-            )
+            .filter { it.isFile && it.name.endsWith(".so") }
+            .filter { it.name == "libc++_dreamdisplayx.so" || it.name == "libc++_shared.so" }
+            .sortedBy { it.name }
             .toList()
-        // Multi-pass: companions may depend on each other (e.g. libvlcjni references
-        // libvlc), so keep retrying the still-unloaded ones until no progress is made.
-        var remaining = companions
-        while (remaining.isNotEmpty()) {
-            val (ok, failed) = remaining.partition { f ->
-                try {
-                    System.load(f.absolutePath)
-                    true
-                } catch (t: Throwable) {
-                    false
-                }
+        // Single pass is enough: only the C++ runtime is preloaded, and libvlc.so is opened
+        // afterwards by JNA (the Android linker does not search a dlopen'd library's own
+        // directory for its DT_NEEDED deps, so libc++ must already be in the global
+        // namespace).
+        for (f in companions) {
+            try {
+                System.load(f.absolutePath)
+                logger.info("Preloaded Android companion native: {}", f.name)
+            } catch (t: Throwable) {
+                logger.warn(
+                    "Could not preload Android companion native {} before libvlc.so; " +
+                        "it will be resolved when libvlc loads", f.name,
+                )
             }
-            ok.forEach { logger.info("Preloaded Android companion native: {}", it.name) }
-            if (failed.size == remaining.size) {
-                // No progress this pass — the leftover companions need libvlc itself
-                // (loaded later) or a missing dependency. Report and stop.
-                failed.forEach { f ->
-                    logger.warn(
-                        "Could not preload Android companion native {} before libvlc.so; " +
-                            "it will be resolved when libvlc loads", f.name,
-                    )
-                }
-                break
-            }
-            remaining = failed
         }
     }
 
