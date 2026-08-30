@@ -42,8 +42,9 @@ jobs:
           - { platform: windows-x86,    os: Windows, arch: x86,     runner: windows-latest,          msystem: MINGW32 }
           - { platform: windows-x64,    os: Windows, arch: x86_64,  runner: windows-latest,          msystem: MINGW64 }
           - { platform: windows-aarch64,os: Windows, arch: aarch64, runner: windows-11-arm,          msystem: CLANGARM64 }
-          # Android: pulls the official VLC-Android APK (monolithic libvlc.so);
-          # pure download+extract, any runner works.
+          # Android: pulls the official org.videolan.android:libvlc-all Maven
+          # AAR (monolithic libvlc.so) and renames libc++ to a unique SONAME;
+          # pure download+extract+patchelf, any runner works.
           - { platform: android-aarch64, os: Android, arch: aarch64, runner: ubuntu-latest,          msystem: '' }
           - { platform: android-x64,     os: Android, arch: x86_64,  runner: ubuntu-latest,          msystem: '' }
 

@@ -71,18 +71,34 @@ object LibVlcNativesLoader {
      * VLC-Android helper libs — fails to open with `cannot locate symbol
      * "_ZTTNSt6__ndk118basic_stringstream..."`. `System.load(path)` dlopens with
      * `RTLD_LAZY | RTLD_GLOBAL`, so each companion's symbols become globally visible and are
-     * resolved when `libvlc.so` is opened afterwards. Identity-loading a plain native file
-     * cannot mutate any app state; failures are logged and skipped. No-op on desktop.
+     * resolved when `libvlc.so` is opened afterwards.
+     *
+     * SONAME hardening: the shipped libc++ is renamed to `libc++_dreamdisplayx.so` at
+     * packaging time (unique SONAME; `native/libvlc/build.sh` also rewrites libvlc.so's
+     * `DT_NEEDED` to match). Pojav-style launchers (Zalith/FCL) load their own
+     * `libc++_shared.so` before our code runs, and the Android linker deduplicates by
+     * SONAME — so a same-named preload would silently bind to their library (often missing
+     * the `_ZTTNSt6__ndk118basic_stringstream...` vtable symbol). The unique SONAME makes
+     * the linker bind only to the copy we ship here.
+     *
+     * Identity-loading a plain native file cannot mutate any app state; failures are logged
+     * and skipped. No-op on desktop.
      */
     private fun preloadAndroidCompanions(dir: File) {
         if (!com.dreamdisplayx.util.OsInfo.isAndroid) return
         val companions = (dir.listFiles() ?: return).asSequence()
             .filter { it.isFile && it.name.endsWith(".so") && it.name != "libvlc.so" }
             .sortedWith(
-                compareBy<File> { if (it.name == "libc++_shared.so") 0 else 1 }.thenBy { it.name },
+                // libc++ first: nothing else can link before the C++ runtime is in place.
+                compareBy<File> {
+                    when (it.name) {
+                        "libc++_dreamdisplayx.so", "libc++_shared.so" -> 0
+                        else -> 1
+                    }
+                }.thenBy { it.name },
             )
             .toList()
-        // Multi-pass: companions may depend on each other (e.g. libmla/libvlcjni reference
+        // Multi-pass: companions may depend on each other (e.g. libvlcjni references
         // libvlc), so keep retrying the still-unloaded ones until no progress is made.
         var remaining = companions
         while (remaining.isNotEmpty()) {

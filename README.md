@@ -163,9 +163,14 @@ differences:
 - **LibVLC loads by absolute path, with companions preloaded**: the Android JVM reports
   `os.name=Linux-Android`, which makes JNA's generic-Linux name mapping turn `libvlc` into a
   doubled `liblibvlc.so`; the mod dlopens the exact extracted `libvlc.so` path instead. The
-  VLC-Android runtime also depends on `libc++_shared.so` / `libmla.so` / `libvlcjni.so` in the
-  same directory — the Android linker does not search it, so those are loaded first with
-  `RTLD_GLOBAL` (`System.load`) before `libvlc.so` is opened. Desktop loading by name is unchanged.
+  Android runtime also depends on `libc++` and `libvlcjni.so` in the same directory — the
+  Android linker does not search it, so those are loaded first with `RTLD_GLOBAL`
+  (`System.load`) before `libvlc.so` is opened. The bundled `libc++` carries a **unique
+  SONAME** (`libc++_dreamdisplayx.so`, with `libvlc.so`'s `DT_NEEDED` rewritten at packaging
+  time): Pojav-style launchers load their own `libc++_shared.so` first, and the Android
+  linker would otherwise deduplicate by SONAME and bind `libvlc.so` to that stale copy, which
+  lacks the `_ZTTNSt6__ndk118basic_stringstream...` vtable symbol libvlc needs. Desktop
+  loading by name is unchanged.
 
 The natives are extracted to app-internal storage automatically (the game directory on
 emulated storage is mounted noexec, so `.so` files there cannot be loaded).
@@ -207,7 +212,7 @@ The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi
 live in `versions.json` and the active version is selected in `versions/active.txt`. The libvlc + SQLite native
 runtimes are collected from official pre-built VideoLAN distributions by the CI "Build Natives" workflow
 (`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for macOS and Windows
-x86/x64, the MSYS2 package for Windows aarch64, and the official VLC-Android APK for Android ARM64/x86_64 — and
+x86/x64, the MSYS2 package for Windows aarch64, and the official `libvlc-all` Maven AAR for Android ARM64/x86_64 — and
 **downloaded at runtime** on first boot into `./dreamdisplayx/natives/<os>/<arch>/` (never bundled in the jar,
 keeping it small).
 

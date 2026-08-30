@@ -17,6 +17,7 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
 ## Playback
 
 - **Pause/resume crash fixes** — render thread no longer touches the audio line (0xC0000374 heap corruption); drop buffer padded to a full frame (0xC0000374 on seek); audio callback window clamped ~0.25s (0xC0000409); no more `SourceDataLine.stop()/start()` (0xC0000409/0xC0000005).
+- **Android: libvlc natives switch to the official libvlc-all AAR with a unique libc++ SONAME** — the Android runtime now comes from the `org.videolan.android:libvlc-all` Maven artifact (3.7.5, the same library-form distribution squi2rel/VideoPlayer uses) instead of the VLC-Android APK. Preloading companions alone was not enough: Pojav-style launchers (Zalith/FCL) load their own `libc++_shared.so` first, and the Android linker deduplicates by SONAME, so libvlc.so silently bound to that stale copy and dlopen still died on `cannot locate symbol _ZTTNSt6__ndk118basic_stringstream...`. `native/libvlc/build.sh` now renames libc++ to a unique SONAME (`libc++_dreamdisplayx.so`) and rewrites libvlc.so's `DT_NEEDED` via `patchelf`, so the linker can only bind to the copy we ship; `NativesDownloader` requires the renamed file on Android so old APK-format caches are re-downloaded automatically. Desktop platforms are unaffected.
 - **A/V auto-resync (bidirectional)** — flushes and re-anchors when the audio buffer drifts >300ms in either direction, plus a 1.5s initial sync after playback/replay start.
 - **Loop/replay fixes** — ENDED path does `stop()`+`play()`, re-arms `eosFired` (no more freeze on second replay), and restarts the audio player so audio replays too.
 - **Native runtime bootstrap** — libvlc + SQLite runtimes are collected from official VideoLAN distributions by CI and downloaded at runtime into `./dreamdisplayx/natives/`; libvlc upgraded 3.0.21 → 3.0.22.
@@ -49,7 +50,7 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
 
 - SQLite native build split into a standalone workflow; CI skips builds on doc/workflow-only changes.
 - Commit ID stamped into the build and shown in F3 (`Commit: <hash>`).
-- Natives workflow collects the official LibVLC runtime for 9 platforms: 7 desktop plus Android ARM64/x86_64 (extracted from the official VLC-Android APK, monolithic `libvlc.so`).
+- Natives workflow collects the official LibVLC runtime for 9 platforms: 7 desktop plus Android ARM64/x86_64 (from the official `libvlc-all` Maven AAR, monolithic `libvlc.so`, libc++ renamed to a unique SONAME).
 
 # 1.9.3.3 Release
 

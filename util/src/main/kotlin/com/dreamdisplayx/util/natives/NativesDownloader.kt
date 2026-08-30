@@ -271,7 +271,15 @@ object NativesDownloader {
             OsInfo.isMac -> "libvlc.dylib"
             else -> "libvlc.so"
         }
-        return File(dir, probeName).isFile
+        if (!File(dir, probeName).isFile) return false
+        // Cache format check: since the Android AAR switch (unique libc++ SONAME), a valid
+        // cache MUST carry the renamed libc++ companion. Old APK-based caches (libc++_shared.so
+        // + libmla.so) are invalid and must be re-downloaded, otherwise the stale libc++ would
+        // keep libvlc.so's dlopen failing with "cannot locate symbol".
+        if (OsInfo.isAndroid) {
+            return File(dir, "libc++_dreamdisplayx.so").isFile
+        }
+        return true
     }
 
     // ── Minimal JSON helpers ───────────────────────────────────────────────

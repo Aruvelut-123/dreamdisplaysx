@@ -124,10 +124,19 @@
   therefore loads the exact extracted `libvlc.so` path on Android via
   `LibVlcNativesLoader.jnaLoadTarget()` (desktop keeps the plain `"libvlc"` name). The Android
   linker ALSO does not search a library's own directory for its `DT_NEEDED` deps, so the
-  VLC-Android companions (`libc++_shared.so` / `libmla.so` / `libvlcjni.so`, same directory)
+  Android companions (unique-SONAME `libc++_dreamdisplayx.so` / `libvlcjni.so`, same directory)
   are preloaded first with `RTLD_GLOBAL` (`System.load`, multi-pass until no progress) in
   `LibVlcNativesLoader.preloadAndroidCompanions()` before `libvlc.so` is opened; without it
   dlopen dies on `cannot locate symbol _ZTTNSt6__ndk118basic_stringstream...`.
+- Android natives source: the official `org.videolan.android:libvlc-all` Maven AAR (3.7.5)
+  instead of the VLC-Android APK — the library-form runtime squi2rel/VideoPlayer also uses
+  (`libvlc.so` + `libvlcjni.so` + full `libc++_shared.so`; no `libmla.so`). `native/libvlc/build.sh`
+  renames libc++ to a unique SONAME (`libc++_dreamdisplayx.so`) and rewrites `libvlc.so`'s
+  `DT_NEEDED` via `patchelf` so the Android linker can never deduplicate it against the
+  same-named `libc++_shared.so` that Pojav-style launchers (Zalith/FCL) already loaded from
+  their own runtime dir — that stale copy silently bound before and lacked the stream vtable
+  symbol libvlc needs. `NativesDownloader.hasLibVlc()` additionally requires the renamed
+  libc++ on Android, so old APK-format caches are invalidated and re-downloaded.
 - AWT guards: `VideoPopoutWindow.isAvailable` returns false on Android and `ModTitleLabel`
   catches `LinkageError` (no `java.desktop` module); Thumbnails/ScrubPreview decode paths were
   already `runCatching`-guarded and degrade gracefully

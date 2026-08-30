@@ -17,20 +17,27 @@
 #   Windows aarch64         → MSYS2 mingw-w64-clang-aarch64-vlc
 #   Mac x86_64              → get.videolan.org intel64 .dmg
 #   Mac aarch64             → get.videolan.org arm64 .dmg
-#   Android aarch64 / x86_64→ get.videolan.org vlc-android APK (monolithic
-#                             libvlc.so with statically linked plugins; the
-#                             vlc-android 3.x line is built from VLC 3.0 like
-#                             the desktop runtimes)
+#   Android aarch64 / x86_64→ Maven org.videolan.android:libvlc-all AAR
+#                             (the official library-form LibVLC for Android,
+#                             monolithic libvlc.so with statically linked
+#                             plugins, shipped with libvlcjni.so +
+#                             libc++_shared.so). The vlc-android 3.x line is
+#                             built from VLC 3.0 like the desktop runtimes.
 #
 # Environment:
 #   OUT_DIR      output directory (default $PWD/out)
-#   VLC_ANDROID_VER  VLC-Android app version to fetch (default 3.7.1)
+#   LIBVLC_ALL_VER  org.videolan.android:libvlc-all version (default 3.7.5)
 set -euo pipefail
 
 OS_NAME="${1:-}"
 OS_ARCH="${2:-}"
 VLC_VER="${3:-3.0.22}"
-VLC_ANDROID_VER="${VLC_ANDROID_VER:-3.7.1}"
+LIBVLC_ALL_VER="${LIBVLC_ALL_VER:-3.7.5}"
+# Unique SONAME for the bundled libc++ so the Android linker can never
+# deduplicate it against a same-named libc++_shared.so that a Pojav-style
+# launcher (Zalith/FCL) already loaded from its own runtime dir. libvlc.so's
+# DT_NEEDED is rewritten to this name during packaging (patchelf below).
+ANDROID_CXX_SONAME="libc++_dreamdisplayx.so"
 
 if [[ -z "$OS_NAME" || -z "$OS_ARCH" ]]; then
   echo "usage: build.sh <Linux|Windows|Mac|Android> <x86_64|aarch64> [vlc_version]" >&2
@@ -196,13 +203,19 @@ case "$OS_NAME" in
     ;;
 
   Android)
-    # Official VLC-Android APK: monolithic libvlc.so (all plugins statically
-    # linked), libvlccore merged into it, plus libc++_shared / libmla /
-    # libvlcjni companions. The APK is a plain (non-zip64) zip that java's
-    # ZipFile and unzip can both read. We ship only the four .so files —
-    # libvlcjni is kept because libvlc.so's JNI surface references it on
-    # some builds, and dlopen("libvlc.so") will pull its deps from the same
-    # directory.
+    # Official org.videolan.android:libvlc-all Maven AAR: monolithic libvlc.so
+    # (all plugins statically linked, libvlccore merged in), shipped as a
+    # library-form runtime alongside libvlcjni.so and the full libc++_shared.so.
+    # This is the same source squi2rel/VideoPlayer uses for Android.
+    #
+    # SONAME hardening: Pojav-style launchers (Zalith/FCL) already load their own
+    # libc++_shared.so into the process before our JVM code runs. The Android
+    # linker deduplicates by SONAME, so `System.load(<our libc++>)` silently
+    # binds to that pre-existing library — whose NDK version often lacks the
+    # `_ZTTNSt6__ndk118basic_stringstream...` vtable symbol libvlc.so needs
+    # (dlopen dies with `cannot locate symbol`). We therefore rename our libc++
+    # to a unique SONAME AND rewrite libvlc.so's DT_NEEDED to that name, so the
+    # linker can only bind to the copy we ship.
     case "$OS_ARCH" in
       aarch64) ANDROID_ABI="arm64-v8a" ;;
       x86_64)  ANDROID_ABI="x86_64" ;;
@@ -211,29 +224,50 @@ case "$OS_NAME" in
         exit 2
         ;;
     esac
-    APK_URL="https://get.videolan.org/vlc-android/${VLC_ANDROID_VER}/VLC-Android-${VLC_ANDROID_VER}-${ANDROID_ABI}.apk"
-    APK_FILE="VLC-Android-${VLC_ANDROID_VER}-${ANDROID_ABI}.apk"
-    echo ">>> Downloading $APK_URL"
-    curl -fL --retry 3 --retry-all-errors -o "$APK_FILE" "$APK_URL"
+    AAR_URL="https://repo1.maven.org/maven2/org/videolan/android/libvlc-all/${LIBVLC_ALL_VER}/libvlc-all-${LIBVLC_ALL_VER}.aar"
+    AAR_FILE="libvlc-all-${LIBVLC_ALL_VER}.aar"
+    echo ">>> Downloading $AAR_URL"
+    curl -fL --retry 3 --retry-all-errors -o "$AAR_FILE" "$AAR_URL"
 
-    echo ">>> Extracting $ANDROID_ABI libs from the APK"
-    EXTRACT_DIR="vlc-android-extract"
+    echo ">>> Extracting $ANDROID_ABI libs from the AAR"
+    EXTRACT_DIR="vlc-aar-extract"
     rm -rf "$EXTRACT_DIR"
     mkdir -p "$EXTRACT_DIR"
     if command -v unzip &>/dev/null; then
-      unzip -q "$APK_FILE" "lib/${ANDROID_ABI}/*" -d "$EXTRACT_DIR"
+      unzip -q "$AAR_FILE" "jni/${ANDROID_ABI}/*" -d "$EXTRACT_DIR"
     else
       # MSYS2-less environments: use the JDK's jar tool (a plain zip reader).
       JDK_BIN="$(dirname "$(readlink -f "$(command -v java)")")"
-      "$JDK_BIN/jar" xf "$APK_FILE" "lib/${ANDROID_ABI}/libc++_shared.so" \
-        "lib/${ANDROID_ABI}/libmla.so" \
-        "lib/${ANDROID_ABI}/libvlc.so" \
-        "lib/${ANDROID_ABI}/libvlcjni.so"
-      mkdir -p "$EXTRACT_DIR/lib/${ANDROID_ABI}"
-      mv "lib/${ANDROID_ABI}/"*.so "$EXTRACT_DIR/lib/${ANDROID_ABI}/"
+      "$JDK_BIN/jar" xf "$AAR_FILE" "jni/${ANDROID_ABI}/libc++_shared.so" \
+        "jni/${ANDROID_ABI}/libvlc.so" \
+        "jni/${ANDROID_ABI}/libvlcjni.so"
+      mkdir -p "$EXTRACT_DIR/jni/${ANDROID_ABI}"
+      mv "jni/${ANDROID_ABI}/"*.so "$EXTRACT_DIR/jni/${ANDROID_ABI}/"
     fi
-    cp -a "$EXTRACT_DIR/lib/${ANDROID_ABI}/"*.so "$OUT_LIBDIR/"
-    rm -rf "$EXTRACT_DIR" "$APK_FILE"
+
+    echo ">>> Renaming libc++ to unique SONAME $ANDROID_CXX_SONAME"
+    CXX_SRC="$EXTRACT_DIR/jni/${ANDROID_ABI}/libc++_shared.so"
+    CXX_DST="$EXTRACT_DIR/jni/${ANDROID_ABI}/$ANDROID_CXX_SONAME"
+    if ! command -v patchelf &>/dev/null; then
+      echo ">>> Installing patchelf (SONAME rewrite requires it)"
+      sudo apt-get update -qq && sudo apt-get install -y -qq patchelf
+    fi
+    mv "$CXX_SRC" "$CXX_DST"
+    patchelf --set-soname "$ANDROID_CXX_SONAME" "$CXX_DST"
+    # Point libvlc.so (and libvlcjni.so, if it carries the dep) at the renamed
+    # libc++. --replace-needed fails when the original name is absent, so guard
+    # with --print-needed first.
+    for SO in "$EXTRACT_DIR/jni/${ANDROID_ABI}/libvlc.so" "$EXTRACT_DIR/jni/${ANDROID_ABI}/libvlcjni.so"; do
+      if patchelf --print-needed "$SO" | grep -qx "libc++_shared.so"; then
+        patchelf --replace-needed libc++_shared.so "$ANDROID_CXX_SONAME" "$SO"
+        echo "  rewrote DT_NEEDED in $(basename "$SO") -> $ANDROID_CXX_SONAME"
+      else
+        echo "  $(basename "$SO") does not depend on libc++_shared.so; left as-is"
+      fi
+    done
+
+    cp -a "$EXTRACT_DIR/jni/${ANDROID_ABI}/"*.so "$OUT_LIBDIR/"
+    rm -rf "$EXTRACT_DIR" "$AAR_FILE"
     ;;
 
   *)
@@ -261,11 +295,11 @@ case "$OS_NAME" in
     ;;
   Android)
     # Monolithic build: libvlc.so embeds libvlccore + all plugins, so only the
-    # four companion .so files are required.
+    # three .so files are required (libc++ carries a unique SONAME after the
+    # patchelf step above).
     require_file "libvlc.so"         "libvlc.so"
     require_file "libvlcjni.so"      "libvlcjni.so"
-    require_file "libc++_shared.so"  "libc++_shared.so"
-    require_file "libmla.so"         "libmla.so"
+    require_file "$ANDROID_CXX_SONAME" "$ANDROID_CXX_SONAME"
     ;;
 esac
 
