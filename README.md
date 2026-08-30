@@ -180,7 +180,13 @@ differences:
   `dlopen` never invokes JNI entry points, the loader also calls `libvlc.so`'s exported
   `JNI_OnLoad` with the live JavaVM (obtained via `JNI_GetCreatedJavaVMs` from `libjvm.so`)
   so VLC-Android's AndroidBridge initialises and `libvlc_new` succeeds — mirroring the native
-  bridge squi2rel/VideoPlayer ships, done in pure JNA. Desktop loading by name is unchanged.
+  bridge squi2rel/VideoPlayer ships, done in pure JNA. **Never pass `--plugin-path` on
+  Android**: the monolithic libvlc-all AAR builds VLC with loadplugins disabled, so that option
+  is compiled out entirely and `libvlc_new` returns null on the unknown option (observed:
+  `vlc: unknown option or missing mandatory argument --plugin-path=...` → `libvlc_new returned
+  null`). Audio output is forced with `--aout=opensles` (the module's real name — `opensl`
+  does not exist) and hardware decode with `--codec=mediacodec_ndk,mediacodec_jni,any`.
+  Desktop loading by name is unchanged.
 
 The natives are extracted to app-internal storage automatically (the game directory on
 emulated storage is mounted noexec, so `.so` files there cannot be loaded).

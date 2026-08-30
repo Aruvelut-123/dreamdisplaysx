@@ -114,11 +114,15 @@
   app-internal storage (`java.io.tmpdir` → `user.home` → `/data/user/0/<pkg>/cache`)
 - Audio: `javax.sound` does not exist on Android, so `LibVlcSessionManager.audioOutput` is
   nullable and NOT instantiated there (`systemAudio` flag); `audioPlayer()` returns null; the
-  video player keeps its own audio and libvlc plays it via `--aout=opensl`; volume goes through
+  video player keeps its own audio and libvlc plays it via `--aout=opensles`; volume goes through
   `libvlc_audio_set_volume`. Desktop path unchanged.
-- Video/instance: Android passes `--plugin-path=<natives dir>` + `--aout=opensl` +
+- Video/instance: Android passes `--aout=opensles` +
   `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode); no
-  `--avcodec-hw` (desktop-only concept)
+  `--avcodec-hw` (desktop-only concept). **Never pass `--plugin-path` on Android**: the
+  monolithic libvlc-all AAR builds VLC with loadplugins disabled, so the option is compiled out
+  entirely and `libvlc_new` returns null on an unknown option (observed: "vlc: unknown option or
+  missing mandatory argument `--plugin-path=...'" → `LibVLC low-level load failed`).
+  Also note the aout module's real name is `opensles` (OpenSL ES), not `opensl`.
 - Native loading: Android JVMs report `os.name=Linux-Android`, so JNA's generic-Linux name
   mapping turns `Native.load("libvlc", ...)` into a doubled `liblibvlc.so` lookup. `LibVlc`
   therefore loads the exact extracted `libvlc.so` path on Android via

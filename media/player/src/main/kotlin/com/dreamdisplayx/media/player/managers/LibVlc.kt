@@ -114,18 +114,19 @@ object LibVlc {
             //   Linux   → vaapi (drm copy-back works with vmem)
             //   Mac     → videotoolbox
             // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. dxva2, any, or "" to disable).
-            // Android: the single monolithic libvlc.so needs its own directory passed via
-            // --plugin-path so libvlccore can find the statically registered module bank, and
-            // the OpenSL ES audio output must be forced (--aout=opensl): the PulseAudio/ALSA
-            // probes would otherwise abort the aout module bank on Android where neither
-            // exists. Hardware decode runs through the MediaCodec decoder module (NOT
-            // --avcodec-hw, which has no Android entry): fed a vmem output the module cannot
-            // use its direct Surface path, so it decodes in ByteBuffer (copy) mode and hands
-            // plain frames to our lock callback — the same copy-back contract as the desktop
-            // backends. mediacodec_ndk covers API 21+, mediacodec_jni is the legacy fallback.
+            // Android: the single monolithic libvlc.so has EVERY plugin statically linked
+            // (VLC-Android builds it with loadplugins disabled — the `--plugin-path` option is
+            // compiled out entirely, so passing it makes libvlc_new return null), so no plugin
+            // path is needed or accepted here. The OpenSL ES audio output must be forced
+            // (`--aout=opensles` — note the module's real name; `opensl` does not exist and the
+            // aout bank would fall back to PulseAudio/ALSA probes that abort on Android).
+            // Hardware decode runs through the MediaCodec decoder modules (NOT `--avcodec-hw`,
+            // which has no Android entry): fed a vmem output they cannot use their direct
+            // Surface path, so they decode in ByteBuffer (copy) mode and hand plain frames to
+            // our lock callback — the same copy-back contract as the desktop backends.
+            // mediacodec_ndk covers API 21+, mediacodec_jni is the legacy fallback.
             if (com.dreamdisplayx.util.OsInfo.isAndroid) {
-                opts.add("--plugin-path=" + System.getProperty("jna.library.path", ""))
-                opts.add("--aout=opensl")
+                opts.add("--aout=opensles")
                 androidDecoderModule()?.let { opts.add("--codec=$it") }
             } else {
                 val backend = configuredHwBackend()
