@@ -1,6 +1,10 @@
 package com.dreamdisplayx.media.player.util
 
 import com.dreamdisplayx.util.natives.NativesDownloader
+import com.sun.jna.Memory
+import com.sun.jna.Native
+import com.sun.jna.NativeLibrary
+import com.sun.jna.Pointer
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileOutputStream
@@ -125,6 +129,74 @@ object LibVlcNativesLoader {
             remaining = failed
         }
     }
+
+    /**
+     * Injects the JVM's JavaVM pointer into the loaded `libvlc.so` on Android by invoking its
+     * `JNI_OnLoad` export directly.
+     *
+     * VLC-Android's monolithic `libvlc.so` expects to be initialised through the vlcjni JNI
+     * path, which calls `JNI_OnLoad` with the real JavaVM so the `libvlc` module can reach
+     * the Android app context (cache dirs, OpenSL ES, MediaCodec). Plain JNA `Native.load`
+     * just `dlopen`s the library and never triggers `JNI_OnLoad`, so on Android the VLC
+     * AndroidBridge stays uninitialised and `libvlc_new` returns null (or VLC spawns worker
+     * threads whose start routines dereference the missing bridge → SIGSEGV in
+     * `__pthread_start`). This mirrors what squi2rel/VideoPlayer's `libvlc_jvm_bridge.so`
+     * does, but through JNA alone:
+     *
+     *   1. find `libjvm.so` via `java.home` and call `JNI_GetCreatedJavaVMs` to obtain the
+     *      live JavaVM pointer;
+     *   2. call `libvlc.so`'s exported `JNI_OnLoad(JavaVM*, void*)` with that pointer.
+     *
+     * Best-effort: any failure is logged and swallowed — the library is already dlopen'd, so
+     * a broken bridge must not prevent playback from being attempted.
+     */
+    @JvmStatic
+    fun injectAndroidJniOnLoad() {
+        if (!com.dreamdisplayx.util.OsInfo.isAndroid) return
+        try {
+            // 1. Locate libjvm.so (the running JVM exports JNI_GetCreatedJavaVMs).
+            val javaHome = File(System.getProperty("java.home") ?: return)
+            val jvmCandidates = listOf(
+                File(javaHome, "lib/server/libjvm.so"),
+                File(javaHome, "lib/libjvm.so"),
+                File(javaHome, "jre/lib/server/libjvm.so"),
+            )
+            val libjvm = jvmCandidates.firstOrNull { it.isFile }
+                ?: run {
+                    logger.warn("JNI bridge: libjvm.so not found under {}", javaHome)
+                    return
+                }
+            val jvmLib = NativeLibrary.getInstance(libjvm.absolutePath)
+            val getCreatedJavaVMs = jvmLib.getFunction("JNI_GetCreatedJavaVMs")
+            // jint JNI_GetCreatedJavaVMs(JavaVM** vmBuf, jsize bufLen, jsize* nVMs)
+            val vmBuf = Memory(Native.POINTER_SIZE.toLong())
+            val nVMs = Memory((Integer.SIZE / 8).toLong())
+            val rc = getCreatedJavaVMs.invokeInt(arrayOf(vmBuf, 1, nVMs))
+            val javaVM = vmBuf.getPointer(0)
+            if (rc != 0 || javaVM == null || Pointer.nativeValue(javaVM) == 0L) {
+                logger.warn("JNI bridge: JNI_GetCreatedJavaVMs failed (rc={}, vm={})", rc, javaVM)
+                return
+            }
+
+            // 2. Call libvlc.so's JNI_OnLoad with the real JavaVM. The library is already
+            //    loaded by JNA (Native.load), so NativeLibrary.getInstance reuses the handle.
+            val libvlcSo = libvlcSoPath() ?: return
+            val vlcLib = NativeLibrary.getInstance(libvlcSo)
+            val jniOnLoad = vlcLib.getFunction("JNI_OnLoad")
+            val jniRc = jniOnLoad.invokeInt(arrayOf(javaVM, null as Pointer?))
+            logger.info("Injected JavaVM into libvlc.so JNI_OnLoad (rc={})", jniRc)
+        } catch (t: Throwable) {
+            // Never let a bridge failure take down the mod.
+            logger.warn("JNI bridge injection failed (non-fatal): {}", t.message)
+        }
+    }
+
+    /** Resolves the absolute path of the extracted libvlc.so, or null if unavailable. */
+    private fun libvlcSoPath(): String? =
+        listOfNotNull(resolveDownloadDir(), extractedDir)
+            .map { File(it, "libvlc.so") }
+            .firstOrNull { it.isFile }
+            ?.absolutePath
 
     /**
      * Extracts the bundled libvlc natives (if any) and sets up the system

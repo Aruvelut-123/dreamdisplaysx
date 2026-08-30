@@ -89,6 +89,10 @@ object LibVlc {
             // NOT read the Java system property).
             com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
             Native.load(libVlcLoadTarget(), LibVlcNative::class.java)
+            // On Android, plain dlopen (JNA) never triggers libvlc.so's JNI_OnLoad, which is
+            // how VLC-Android's AndroidBridge learns the JavaVM. Without it libvlc_new fails
+            // (or VLC worker threads crash with SIGSEGV in __pthread_start). Inject it now.
+            com.dreamdisplayx.media.player.util.LibVlcNativesLoader.injectAndroidJniOnLoad()
             val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--quiet",
                 "--no-keyboard-events", "--no-mouse-events",
                 "--network-caching=${networkCachingMs()}",

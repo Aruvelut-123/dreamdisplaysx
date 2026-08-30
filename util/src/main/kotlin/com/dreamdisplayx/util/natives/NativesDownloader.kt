@@ -129,6 +129,15 @@ object NativesDownloader {
         // LibVLC
         if (libvlcAsset != null) {
             val libvlcDir = File(nativesDir, "libvlc")
+            if (OsInfo.isAndroid) {
+                // A previous release shipped four APK-era companions (libc++_shared.so /
+                // libmla.so / libvlcjni.so). Since the AAR switch those files are stale and
+                // must never linger next to the new libc++_dreamdisplayx.so: two libc++
+                // runtimes in the same process is a guaranteed native crash (VLC thread
+                // start routines jump to unmapped addresses). Heal existing dirty caches
+                // even when hasLibVlc() below reports the cache as valid.
+                cleanAndroidStaleNatives(libvlcDir)
+            }
             if (!hasLibVlc(libvlcDir)) {
                 logger.info("LibVLC natives not cached at {}; downloading {}", libvlcDir, libvlcAsset)
                 downloadAndExtractTarGz(manifest.release_base, libvlcAsset, libvlcDir)
@@ -231,8 +240,15 @@ object NativesDownloader {
      * Moves the extracted content into [destDir]. Release archives contain a
      * leading `<os>/<arch>/` directory (e.g. `Linux/x86_64/`); if that structure
      * is present we flatten it, otherwise the content is copied as-is.
+     *
+     * The destination is wiped first so stale files from an older archive format
+     * (e.g. APK-era `libc++_shared.so` / `libmla.so`) can never linger beside new
+     * companions. `copyRecursively(overwrite=true)` only overwrites same-named
+     * files, so without the wipe a mixed cache (two libc++ in one process) could
+     * crash native code with SIGSEGV on Android.
      */
     private fun flattenPlatformDir(staging: File, destDir: File) {
+        if (destDir.exists()) destDir.deleteRecursively()
         destDir.mkdirs()
         val nested = File(staging, "$osDir/$archDir")
         val sourceRoot = if (nested.isDirectory) nested else staging
@@ -261,6 +277,28 @@ object NativesDownloader {
     }
 
     // ── Cache validation ───────────────────────────────────────────────────
+
+    /** Android companions that belong in the AAR-era cache. Anything else is stale. */
+    private val androidWhitelist = setOf("libvlc.so", "libvlcjni.so", "libc++_dreamdisplayx.so")
+
+    /**
+     * Removes every `.so` in [dir] that is not part of the current Android runtime format.
+     *
+     * Stale APK-era companions (`libc++_shared.so` / `libmla.so`) must never be preloaded
+     * next to the renamed `libc++_dreamdisplayx.so`: two libc++ copies loaded RTLD_GLOBAL
+     * into one process corrupt each other's vtable / thread-start pointers (observed as
+     * `SIGSEGV in __pthread_start`). This is called on every Android startup so even a
+     * cache that was previously mixed heals itself without a full re-download.
+     */
+    private fun cleanAndroidStaleNatives(dir: File) {
+        if (!dir.isDirectory) return
+        dir.listFiles()?.forEach { file ->
+            if (file.isFile && file.name.endsWith(".so") && file.name !in androidWhitelist) {
+                logger.warn("Removing stale Android native companion {}", file.name)
+                file.delete()
+            }
+        }
+    }
 
     private fun hasLibVlc(dir: File): Boolean {
         if (!dir.isDirectory) return false

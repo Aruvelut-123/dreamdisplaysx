@@ -128,6 +128,23 @@
   are preloaded first with `RTLD_GLOBAL` (`System.load`, multi-pass until no progress) in
   `LibVlcNativesLoader.preloadAndroidCompanions()` before `libvlc.so` is opened; without it
   dlopen dies on `cannot locate symbol _ZTTNSt6__ndk118basic_stringstream...`.
+- Android native cache hygiene: `NativesDownloader.flattenPlatformDir()` wipes the destination
+  before overlaying the extracted archive, and on every Android startup
+  `cleanAndroidStaleNatives()` deletes any `.so` outside the AAR-era whitelist
+  (`libvlc.so` / `libvlcjni.so` / `libc++_dreamdisplayx.so`). Without this an old APK-era
+  `libc++_shared.so` / `libmla.so` could survive beside the renamed libc++, and two libc++
+  copies loaded `RTLD_GLOBAL` corrupt each other's C++ vtables / thread-start pointers —
+  observed crash signature when a video starts: `SIGSEGV in __pthread_start` (thread jumps to
+  an unmapped address).
+- Android JNI bridge: plain JNA `Native.load` only `dlopen`s `libvlc.so` and never triggers
+  its `JNI_OnLoad`, so VLC-Android's AndroidBridge never learns the JavaVM and `libvlc_new`
+  returns null. `LibVlcNativesLoader.injectAndroidJniOnLoad()` (called from `LibVlc.ensureLoaded`
+  right after the JNA load) obtains the live JavaVM via `JNI_GetCreatedJavaVMs` from `libjvm.so`
+  (`java.home`) and invokes `libvlc.so`'s exported `JNI_OnLoad(JavaVM*, NULL)` through JNA
+  `NativeLibrary` — the same bridge step squi2rel/VideoPlayer performs with its
+  `libvlc_jvm_bridge.so` shim, done in pure JNA. Best-effort: failures are logged and swallowed
+  so playback is still attempted. libvlc.so's JNI_OnLoad stores the JavaVM in a global on entry
+  and gracefully skips native registration when the `org.videolan.*` Java classes are absent.
 - Android natives source: the official `org.videolan.android:libvlc-all` Maven AAR (3.7.5)
   instead of the VLC-Android APK — the library-form runtime squi2rel/VideoPlayer also uses
   (`libvlc.so` + `libvlcjni.so` + full `libc++_shared.so`; no `libmla.so`). `native/libvlc/build.sh`
