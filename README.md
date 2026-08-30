@@ -148,7 +148,7 @@ That's it — no extra dependencies required.
 
 ## Android (PojavLauncher / FCL / Zalith)
 
-The mod runs on Android launchers on **ARM64** and **x86_64** devices, with two platform
+The mod runs on Android launchers on **ARM64** and **x86_64** devices, with a few platform
 differences:
 
 - **Audio** plays through libvlc's own OpenSL ES output. The desktop 3D positional audio
@@ -160,6 +160,9 @@ differences:
   Android native, so a Bionic build (16 KB page aligned, from xerial's `-sources` jar) is
   bundled in the mod and loaded via `org.sqlite.lib.path` / `org.sqlite.lib.name` — display
   and credential storage keep working on-device.
+- **LibVLC loads by absolute path**: the Android JVM reports `os.name=Linux-Android`, which
+  makes JNA's generic-Linux name mapping turn `libvlc` into a doubled `liblibvlc.so`; the mod
+  dlopens the exact extracted `libvlc.so` path instead. Desktop loading by name is unchanged.
 
 The natives are extracted to app-internal storage automatically (the game directory on
 emulated storage is mounted noexec, so `.so` files there cannot be loaded).

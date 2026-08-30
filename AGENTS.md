@@ -119,6 +119,10 @@
 - Video/instance: Android passes `--plugin-path=<natives dir>` + `--aout=opensl` +
   `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode); no
   `--avcodec-hw` (desktop-only concept)
+- Native loading: Android JVMs report `os.name=Linux-Android`, so JNA's generic-Linux name
+  mapping turns `Native.load("libvlc", ...)` into a doubled `liblibvlc.so` lookup. `LibVlc`
+  therefore loads the exact extracted `libvlc.so` path on Android via
+  `LibVlcNativesLoader.jnaLoadTarget()` (desktop keeps the plain `"libvlc"` name).
 - AWT guards: `VideoPopoutWindow.isAvailable` returns false on Android and `ModTitleLabel`
   catches `LinkageError` (no `java.desktop` module); Thumbnails/ScrubPreview decode paths were
   already `runCatching`-guarded and degrade gracefully

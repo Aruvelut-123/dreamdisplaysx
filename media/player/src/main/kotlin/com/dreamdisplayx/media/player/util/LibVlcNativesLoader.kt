@@ -39,6 +39,27 @@ object LibVlcNativesLoader {
     private var extractedDir: File? = null
 
     /**
+     * The library name (desktop) or absolute .so path (Android) that JNA should load for libvlc.
+     *
+     * On Android the JVM reports `os.name=Linux-Android`, so JNA walks its generic-Linux name
+     * mapping and turns `Native.load("libvlc", ...)` into a `dlopen("liblibvlc.so")` lookup — a
+     * doubled `lib` prefix the downloaded file never satisfies. Passing the absolute path to the
+     * extracted `libvlc.so` makes JNA `dlopen` that exact file and skips name mapping entirely.
+     * Returns null on desktop (the plain `"libvlc"` name is used there, matching every platform's
+     * actual file name via `jna.library.path`).
+     */
+    @JvmStatic
+    fun jnaLoadTarget(): String? {
+        if (!com.dreamdisplayx.util.OsInfo.isAndroid) return null
+        val candidates = listOfNotNull(resolveDownloadDir(), extractedDir)
+        for (dir in candidates) {
+            val so = File(dir, "libvlc.so")
+            if (so.isFile) return so.absolutePath
+        }
+        return null
+    }
+
+    /**
      * Extracts the bundled libvlc natives (if any) and sets up the system
      * properties so vlcj's `NativeDiscovery` can find them.
      *
@@ -265,7 +286,10 @@ object LibVlcNativesLoader {
      */
     private fun cacheVersionFromExtracted() {
         try {
-            val api = com.sun.jna.Native.load("libvlc", com.dreamdisplayx.media.player.managers.LibVlc.LibVlcNative::class.java)
+            val api = com.sun.jna.Native.load(
+                jnaLoadTarget() ?: "libvlc",
+                com.dreamdisplayx.media.player.managers.LibVlc.LibVlcNative::class.java,
+            )
             val verPtr = api.libvlc_get_version()
             val ver = if (verPtr == null) null else verPtr.getString(0)
             if (!ver.isNullOrBlank()) {

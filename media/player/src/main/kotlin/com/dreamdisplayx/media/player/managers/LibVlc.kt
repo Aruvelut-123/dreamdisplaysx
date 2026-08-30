@@ -63,8 +63,16 @@ object LibVlc {
         // NOTE: do NOT call ensureLoaded() here — ensureLoaded() itself resolves `lib` while
         // creating the instance, which would deadlock on the lazy initializer. The caller is
         // expected to call ensureLoaded() (via the session manager) before touching `lib`.
-        Native.load("libvlc", LibVlcNative::class.java)
+        Native.load(libVlcLoadTarget(), LibVlcNative::class.java)
     }
+
+    /**
+     * Returns the JNA load target for libvlc: the absolute .so path on Android (JNA's generic
+     * Linux name mapping would otherwise turn "libvlc" into a doubled "liblibvlc.so"), or the
+     * plain "libvlc" library name on desktop.
+     */
+    private fun libVlcLoadTarget(): String =
+        com.dreamdisplayx.media.player.util.LibVlcNativesLoader.jnaLoadTarget() ?: "libvlc"
 
     /** Returns the singleton libvlc instance pointer. */
     val libvlcInstance: Pointer get() = instance ?: throw IllegalStateException("LibVLC not loaded")
@@ -80,7 +88,7 @@ object LibVlc {
             // pass the plugin path explicitly to libvlc_new (vlcj does this internally; libvlc does
             // NOT read the Java system property).
             com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
-            Native.load("libvlc", LibVlcNative::class.java)
+            Native.load(libVlcLoadTarget(), LibVlcNative::class.java)
             val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--quiet",
                 "--no-keyboard-events", "--no-mouse-events",
                 "--network-caching=${networkCachingMs()}",
