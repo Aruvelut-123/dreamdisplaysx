@@ -117,18 +117,27 @@
   video player keeps its own audio and libvlc plays it via `--aout=opensles`; volume goes through
   `libvlc_audio_set_volume`. Desktop path unchanged.
 - Video/instance: Android passes `--aout=opensles` +
-  `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode) + always
-  `--http-proxy=direct://`; no `--avcodec-hw` (desktop-only concept). **Never pass
-  `--plugin-path` on Android**: the monolithic libvlc-all AAR builds VLC with loadplugins
+  `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode); no
+  `--avcodec-hw` (desktop-only concept). **Never pass `--plugin-path` on Android**: the
+  monolithic libvlc-all AAR builds VLC with loadplugins
   disabled, so the option is compiled out entirely and `libvlc_new` returns null on an unknown
   option (observed: "vlc: unknown option or missing mandatory argument `--plugin-path=...'"
   → `LibVLC low-level load failed`). Also note the aout module's real name is `opensles`
-  (OpenSL ES), not `opensl`. **Always force `--http-proxy=direct://` on Android**: VLC-Android's
-  http access module only calls `vlc_getProxyUrl()` (its JNI system-proxy probe reading the Java
-  `http.proxyHost` property) when `http-proxy` is unset, and on Pojav-style game JVMs that JNI
-  call crashes the JVM from inside (`SIGSEGV in libjvm.so`, thread `config_GetGenericDir`) —
-  verified when opening a Bilibili http URL after the `--plugin-path` fix. The `direct://` marker
-  is used verbatim, so the JNI probe never runs.
+  (OpenSL ES), not `opensl`. **Do NOT pass `--http-proxy` either** — this AAR compiles that
+  option out too (it logs "Warning: option --http-proxy no longer exists"), and VLC-Android's
+  http access module unconditionally calls `vlc_getProxyUrl()` regardless, so the option can
+  neither skip nor redirect the JNI system-proxy probe. The probe itself is what must be safe:
+  it crashes the JVM from inside (`SIGSEGV in libjvm.so`, thread `config_GetGenericDir`)
+  because libvlc's `JNI_OnLoad` bails out with `JNI_ERR` at its very first
+  `FindClass("android/os/Environment")` on Pojav-style game JVMs (desktop OpenJDK, no
+  `android.*` framework classes) — so the cached `java/lang/System.getProperty` jclass +
+  jmethodID stay NULL, and `vlc_getProxyUrl` later calls `CallStaticObjectMethod` with NULL
+  class/method. Fix: the mod ships its OWN `android.os.Environment` stub (see
+  `media/player/src/main/kotlin/android/os/Environment.kt` — the same trick squi2rel/VideoPlayer
+  uses, independently implemented): `FindClass` then succeeds, `JNI_OnLoad` completes and caches
+  `System.getProperty`, `vlc_getProxyUrl` reads `http.proxyHost` → null (unset on a game JVM) →
+  "no proxy" → direct connection. `ensureAndroidEnvironmentStubVisible()` pre-warms the stub
+  before injecting `JNI_OnLoad`.
 - Native loading: Android JVMs report `os.name=Linux-Android`, so JNA's generic-Linux name
   mapping turns `Native.load("libvlc", ...)` into a doubled `liblibvlc.so` lookup. `LibVlc`
   therefore loads the exact extracted `libvlc.so` path on Android via
@@ -166,9 +175,21 @@
   right after the JNA load) obtains the live JavaVM via `JNI_GetCreatedJavaVMs` from `libjvm.so`
   (`java.home`) and invokes `libvlc.so`'s exported `JNI_OnLoad(JavaVM*, NULL)` through JNA
   `NativeLibrary` — the same bridge step squi2rel/VideoPlayer performs with its
-  `libvlc_jvm_bridge.so` shim, done in pure JNA. Best-effort: failures are logged and swallowed
-  so playback is still attempted. libvlc.so's JNI_OnLoad stores the JavaVM in a global on entry
-  and gracefully skips native registration when the `org.videolan.*` Java classes are absent.
+  `libvlc_jvm_bridge.so` shim, done in pure JNA. libvlc.so's JNI_OnLoad stores the JavaVM in a
+  global on entry; it does NOT gracefully skip when a class is missing — its very first
+  `FindClass("android/os/Environment")` throws on a Pojav-style game JVM (no `android.*`
+  framework classes), it bails with `JNI_ERR`, and the AndroidBridge caches it would have
+  filled (including `java/lang/System.getProperty` jclass+jmethodID) stay NULL — that NULL
+  cache is what later crashes `vlc_getProxyUrl` (`CallStaticObjectMethod` with NULL class/
+  method → `SIGSEGV in libjvm.so`, thread `config_GetGenericDir`). So `injectAndroidJniOnLoad`
+  first calls `ensureAndroidEnvironmentStubVisible()`, which pre-warms the mod's OWN
+  `android.os.Environment` stub (see `media/player/src/main/kotlin/android/os/Environment.kt`,
+  an independent implementation of the trick squi2rel/VideoPlayer ships: their mod source tree
+  includes a stub `Environment` class so their bridge's `JNI_OnLoad` completes) — with
+  `FindClass("android/os/Environment")` satisfied, `JNI_OnLoad` runs to completion (caching
+  `System.getProperty`), `vlc_getProxyUrl` reads `http.proxyHost` → null → no proxy → direct.
+  The stub is inert on desktop (never referenced outside the Android bridge). Best-effort:
+  bridge failures are logged and swallowed so playback is still attempted.
 - Android natives source: the official `org.videolan.android:libvlc-all` Maven AAR (3.7.5)
   instead of the VLC-Android APK — the library-form runtime squi2rel/VideoPlayer also uses
   (`libvlc.so` + `libvlcjni.so` + full `libc++_shared.so`; no `libmla.so`). `native/libvlc/build.sh`

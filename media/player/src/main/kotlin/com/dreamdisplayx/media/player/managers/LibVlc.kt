@@ -127,16 +127,16 @@ object LibVlc {
             // mediacodec_ndk covers API 21+, mediacodec_jni is the legacy fallback.
             if (com.dreamdisplayx.util.OsInfo.isAndroid) {
                 opts.add("--aout=opensles")
-                // Force a proxy value so VLC's http access module never probes the system proxy.
-                // With the option unset, VLC-Android calls vlc_getProxyUrl(), which reads the
-                // Java system proxy via JNI ("http.proxyHost") and calls into Android-only code
-                // paths; on Pojav-style game JVMs (no android.* framework classes, half-initialised
-                // JavaVM from our JNI bridge) that JNI call crashes the JVM from the inside
-                // (observed: SIGSEGV in libjvm.so during vlc_getProxyUrl when opening a Bilibili
-                // http URL, thread "config_GetGenericDir"). "direct://" is VLC's standard
-                // "no proxy" marker, so the access module uses it directly and never calls
-                // vlc_getProxyUrl.
-                opts.add("--http-proxy=direct://")
+                // No proxy option is passed: this libvlc-all AAR compiled `--http-proxy` out
+                // entirely (it warns "option --http-proxy no longer exists"), and VLC-Android's
+                // http access module unconditionally calls vlc_getProxyUrl() regardless, so the
+                // option can neither skip nor redirect the JNI system-proxy probe. Instead the
+                // probe itself is made safe: libvlc's JNI_OnLoad only completes (caching the
+                // java/lang/System.getProperty jclass/jmethodID) when the android.os.Environment
+                // stub shipped in this mod is visible to FindClass — see
+                // LibVlcNativesLoader.ensureAndroidEnvironmentStubVisible(). With the bridge fully
+                // initialised, vlc_getProxyUrl reads http.proxyHost via JNI, gets null (unset on
+                // a game JVM) and treats it as "no proxy" → direct connection, no crash.
                 androidDecoderModule()?.let { opts.add("--codec=$it") }
             } else {
                 val backend = configuredHwBackend()

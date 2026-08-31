@@ -186,10 +186,14 @@ differences:
   `vlc: unknown option or missing mandatory argument --plugin-path=...` → `libvlc_new returned
   null`). Audio output is forced with `--aout=opensles` (the module's real name — `opensl`
   does not exist), hardware decode with `--codec=mediacodec_ndk,mediacodec_jni,any`, and
-  `--http-proxy=direct://` is forced so VLC-Android's http access module never runs its
-  JNI system-proxy probe (`vlc_getProxyUrl`, which reads the Java `http.proxyHost` property
-  over JNI and crashed the game JVM from inside — `SIGSEGV in libjvm.so` — on Pojav-style
-  JVMs that lack the `android.*` classes it walks).
+  `--http-proxy` is NOT passed (this AAR compiles that option out — "option --http-proxy no
+  longer exists" — and VLC-Android's http access module calls `vlc_getProxyUrl()` regardless).
+  The JNI system-proxy probe is made safe instead: libvlc.so's `JNI_OnLoad` only completes
+  (caching `java/lang/System.getProperty`) when the `android.os.Environment` class it resolves
+  first exists, so the mod ships its own `android.os.Environment` stub — the same trick
+  squi2rel/VideoPlayer uses — and pre-warms it before injecting `JNI_OnLoad`. Without this the
+  cached `getProperty` refs stay NULL and `vlc_getProxyUrl` crashes the game JVM from inside
+  (`SIGSEGV in libjvm.so` — observed on Pojav-style JVMs that lack the `android.*` classes).
   Desktop loading by name is unchanged.
 
 The natives are extracted to app-internal storage automatically (the game directory on

@@ -127,6 +127,37 @@ object LibVlcNativesLoader {
     }
 
     /**
+     * Ensures the `android.os.Environment` stub shipped in this mod is visible to JNI
+     * `FindClass` while libvlc's `JNI_OnLoad` runs (see `android/os/Environment.kt`).
+     *
+     * VLC-Android's AndroidBridge caches `java.lang.System.getProperty` (jclass +
+     * jmethodID) into libvlc.so globals during `JNI_OnLoad` — but only *after* resolving
+     * `android.os.Environment`. On Pojav-style game JVMs (desktop OpenJDK, no `android.*`
+     * framework classes) that first `FindClass` throws `NoClassDefFoundError`, libvlc bails
+     * out with `JNI_ERR`, the cached `getProperty` references stay NULL, and the http
+     * access module's `vlc_getProxyUrl()` later crashes the JVM from the inside with a
+     * NULL-class/NULL-method `CallStaticObjectMethod` (`SIGSEGV in libjvm.so`, thread
+     * `config_GetGenericDir`, si_addr=0). This is the exact mechanism squi2rel/VideoPlayer
+     * relies on — their mod ships an `android.os.Environment` stub so their
+     * `libvlc_jvm_bridge.so` `JNI_OnLoad` call completes; this is our independent
+     * implementation of the same trick.
+     *
+     * Pre-touching the class through our own loader is what matters: on Fabric/Zalith the
+     * game and mods share one KnotClassLoader, so once the stub is loaded here (with the
+     * request visible), JNI `FindClass`, which resolves through the caller's loader, finds
+     * the same class and `JNI_OnLoad` completes.
+     */
+    private fun ensureAndroidEnvironmentStubVisible() {
+        runCatching {
+            Class.forName("android.os.Environment").let {
+                logger.info("android.os.Environment stub visible (loader={})", it.classLoader)
+            }
+        }.onFailure {
+            logger.warn("android.os.Environment stub not loadable: {}", it.message)
+        }
+    }
+
+    /**
      * Injects the JVM's JavaVM pointer into the loaded `libvlc.so` on Android by invoking its
      * `JNI_OnLoad` export directly.
      *
@@ -143,6 +174,11 @@ object LibVlcNativesLoader {
      *      live JavaVM pointer;
      *   2. call `libvlc.so`'s exported `JNI_OnLoad(JavaVM*, void*)` with that pointer.
      *
+     * Before the call, [ensureAndroidEnvironmentStubVisible] warms the `android.os.Environment`
+     * stub so libvlc's AndroidBridge cache (including `System.getProperty`) initialises fully
+     * instead of bailing at the first `FindClass` and leaving NULL cached refs that later
+     * crash `vlc_getProxyUrl`.
+     *
      * Best-effort: any failure is logged and swallowed — the library is already dlopen'd, so
      * a broken bridge must not prevent playback from being attempted.
      */
@@ -150,6 +186,8 @@ object LibVlcNativesLoader {
     fun injectAndroidJniOnLoad() {
         if (!com.dreamdisplayx.util.OsInfo.isAndroid) return
         try {
+            ensureAndroidEnvironmentStubVisible()
+
             // 1. Locate libjvm.so (the running JVM exports JNI_GetCreatedJavaVMs).
             val javaHome = File(System.getProperty("java.home") ?: return)
             val jvmCandidates = listOf(
