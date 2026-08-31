@@ -120,6 +120,10 @@ class MediaPlayer(
     /** Terminated? */
     private val terminated = AtomicBoolean(false)
 
+    /** Released once [stop]'s teardown ([doStop]) has fully completed, for callers that must not
+     *  overlap two native players on one display (Android TLS-destructor UAF, see LibVlcSessionManager). */
+    private val stoppedLatch = java.util.concurrent.CountDownLatch(1)
+
     /** Restart pending? (set when a stall recovery is requested while one is already in progress). */
     private val restartPending = AtomicBoolean(false)
 
@@ -285,13 +289,32 @@ class MediaPlayer(
                 try {
                     doStop()
                 } finally {
+                    stoppedLatch.countDown()
                     controlExecutor.shutdown()
                 }
             }
         }.isSuccess
         if (!submitted) {
-            daemon({ doStop() }, "MediaPlayer-stop").start()
+            daemon({
+                try {
+                    doStop()
+                } finally {
+                    stoppedLatch.countDown()
+                }
+            }, "MediaPlayer-stop").start()
         }
+    }
+
+    /**
+     * Blocks until [stop]'s teardown has fully completed, or [timeoutMs] elapses. Returns true when
+     * the player is fully stopped (including a never-started player). On Android this is required
+     * before creating a replacement player for the same display: overlapping native libvlc players
+     * leave the previous one's VLC worker threads exiting against freed TLS state (SIGSEGV in
+     * pthread_key_clean_all, libvlc.so+0xef7418).
+     */
+    fun awaitStopped(timeoutMs: Long = 5_000L): Boolean {
+        if (!terminated.get()) return true
+        return runCatching { stoppedLatch.await(timeoutMs, TimeUnit.MILLISECONDS) }.getOrDefault(false)
     }
 
     /** Seeks to an absolute position in nanos. [fire] triggers [DisplayScreen.afterSeek]. */

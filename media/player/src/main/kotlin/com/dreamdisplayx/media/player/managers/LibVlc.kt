@@ -295,28 +295,38 @@ object LibVlc {
      * [configuredHwBackend] so the F3 overlay reports the intended backend ("dxva2") instead of
      * staying at the default "software" even though decoding IS on the GPU.
      */
-    fun videoDecoderName(player: Pointer): String? = try {
-        val dec = PointerByReference()
-        val enc = PointerByReference()
-        if (lib.libvlc_media_player_get_video_decoder_info(player, dec, enc) != 0) {
-            org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
-                .debug("get_video_decoder_info returned non-zero for player; falling back to configured backend.")
-            return configuredHwBackend()
+    fun videoDecoderName(player: Pointer): String? {
+        // The libvlc-all AAR's monolithic libvlc.so (VLC-Android 3.7.5) does NOT export
+        // libvlc_media_player_get_video_decoder_info / libvlc_media_decoder_info_release
+        // (verified against its .dynsym: the symbols are absent). Calling them through JNA
+        // throws UnsatisfiedLinkError on every F3 refresh (observed twice in hs_err_pid19065.log,
+        // threads 0x76d4f93260 / 0x76d5680aa0). Report the configured MediaCodec chain instead.
+        if (com.dreamdisplayx.util.OsInfo.isAndroid) {
+            return androidDecoderModule() ?: configuredHwBackend()
         }
-        val d = dec.value ?: return configuredHwBackend()
-        // libvlc_media_decoder_info_t { char *psz_name; char *psz_description; int i_type; }
-        // psz_name is usually just the module ("avcodec"); psz_description carries the concrete
-        // backend (e.g. "H.264/AVC (DXVA2.0 by AMD)" or "FFmpeg..."). Prefer the description and
-        // fall back to the name so the F3 overlay shows the real decoder (DXVA2/d3d11va/vaapi)
-        // instead of always reading back "software".
-        val name = runCatching { d.getPointer(0)?.getString(0, "UTF-8")?.takeIf { it.isNotBlank() } }
-            .getOrNull()
-        val description = runCatching { d.getPointer(Native.POINTER_SIZE.toLong())?.getString(0, "UTF-8") }
-            .getOrNull()?.takeIf { it.isNotBlank() }
-        runCatching { lib.libvlc_media_decoder_info_release(d) }
-        runCatching { enc.value?.let { lib.libvlc_media_decoder_info_release(it) } }
-        description ?: name ?: configuredHwBackend()
-    } catch (_: Throwable) { configuredHwBackend() }
+        return try {
+            val dec = PointerByReference()
+            val enc = PointerByReference()
+            if (lib.libvlc_media_player_get_video_decoder_info(player, dec, enc) != 0) {
+                org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
+                    .debug("get_video_decoder_info returned non-zero for player; falling back to configured backend.")
+                return configuredHwBackend()
+            }
+            val d = dec.value ?: return configuredHwBackend()
+            // libvlc_media_decoder_info_t { char *psz_name; char *psz_description; int i_type; }
+            // psz_name is usually just the module ("avcodec"); psz_description carries the concrete
+            // backend (e.g. "H.264/AVC (DXVA2.0 by AMD)" or "FFmpeg..."). Prefer the description and
+            // fall back to the name so the F3 overlay shows the real decoder (DXVA2/d3d11va/vaapi)
+            // instead of always reading back "software".
+            val name = runCatching { d.getPointer(0)?.getString(0, "UTF-8")?.takeIf { it.isNotBlank() } }
+                .getOrNull()
+            val description = runCatching { d.getPointer(Native.POINTER_SIZE.toLong())?.getString(0, "UTF-8") }
+                .getOrNull()?.takeIf { it.isNotBlank() }
+            runCatching { lib.libvlc_media_decoder_info_release(d) }
+            runCatching { enc.value?.let { lib.libvlc_media_decoder_info_release(it) } }
+            description ?: name ?: configuredHwBackend()
+        } catch (_: Throwable) { configuredHwBackend() }
+    }
 
     // ── Callback interfaces ──────────────────────────────────────────────────
     // The Pointer parameters are nullable because libvlc passes a null `opaque` (and null

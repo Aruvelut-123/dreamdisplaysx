@@ -49,6 +49,16 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         screen.mediaError = null
         screen.timelineFollower.reset()
         oldPlayer?.stop()
+        // Android: never stack a second native libvlc player on the same display while the previous
+        // one is still tearing down. VLC-Android's jni TLS destructor (jni_detach_thread) runs when a
+        // VLC worker thread exits and dereferences thread-local state; if the previous player's
+        // release already freed that state, the thread exit crashes in pthread_key_clean_all
+        // (SIGSEGV at libvlc.so+0xef7418, observed with 3 concurrent players on one display id).
+        // Wait for the old player's stop() to finish before constructing the new one.
+        if (oldPlayer != null && !oldPlayer.awaitStopped()) {
+            org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/DisplayMediaController")
+                .warn("Old player did not stop within timeout; creating replacement anyway.")
+        }
 
         screen.onVideoSwapped(videoUrl, lang)
         // The video changed: drop the long-lived scrub extractor (and its cached thumbnails) for the

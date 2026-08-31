@@ -190,6 +190,22 @@
   `System.getProperty`), `vlc_getProxyUrl` reads `http.proxyHost` → null → no proxy → direct.
   The stub is inert on desktop (never referenced outside the Android bridge). Best-effort:
   bridge failures are logged and swallowed so playback is still attempted.
+- Android teardown ordering (thread-exit crash): VLC-Android registers a `pthread_key` whose TLS
+  destructor is `jni_detach_thread` (`modules/video_output/android/utils.c`). When a VLC native
+  worker thread exits it runs `pthread_key_clean_all`, and the destructor dereferences the
+  thread-local value — a use-after-free if the player was released while the thread was still
+  alive (observed `SIGSEGV at libvlc.so+0xef7418` inside `pthread_key_clean_all` right after the
+  first frame was delivered). Therefore `LibVlcSessionManager.cleanup()` MUST stop before it
+  releases: `libvlc_media_player_stop` blocks until the input layer and its worker threads have
+  exited, then `libvlc_media_player_release` frees the objects. The old code called the async
+  `stop()` (whose queued task a following `shutdownNow()` could cancel) and released
+  synchronously right after, so the release routinely beat the stop. Never release a player
+  without stopping it first on Android. Also: `libvlc_media_player_get_video_decoder_info` /
+  `libvlc_media_decoder_info_release` are NOT exported by the libvlc-all AAR's monolithic
+  `libvlc.so` (desktop-only 3.0.7+ API) — `LibVlc.videoDecoderName()` must not call them on
+  Android (UnsatisfiedLinkError per F3 refresh); it reports the configured MediaCodec chain.
+  Finally, do not stack multiple native players on one display: `DisplayMediaController.load()`
+  waits for the old player's `MediaPlayer.awaitStopped()` before constructing a replacement.
 - Android natives source: the official `org.videolan.android:libvlc-all` Maven AAR (3.7.5)
   instead of the VLC-Android APK — the library-form runtime squi2rel/VideoPlayer also uses
   (`libvlc.so` + `libvlcjni.so` + full `libc++_shared.so`; no `libmla.so`). `native/libvlc/build.sh`

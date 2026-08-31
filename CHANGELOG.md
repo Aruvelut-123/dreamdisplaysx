@@ -47,6 +47,25 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
   PulseAudio/ALSA probes that abort on Android). Verified by scanning the AAR binary:
   `plugin-path` appears 0 times, `opensles_android.c` confirms the opensles module.
   Desktop platforms are unaffected.
+- **Android: fix thread-exit crash after playback (`SIGSEGV at libvlc.so+0xef7418`)** — once the
+  video actually played, a NEW crash appeared: VLC's own native worker threads exit through
+  `pthread_exit` → `pthread_key_clean_all`, and the registered TLS destructor
+  (`jni_detach_thread`, VLC-Android `modules/video_output/android/utils.c`) dereferences
+  thread-local state. If the libvlc player was released while those threads were still alive, the
+  value was already freed → use-after-free. Root cause in our teardown: `LibVlcSessionManager.cleanup()`
+  called the ASYNC `stop()` (whose queued task a following `shutdownNow()` could cancel before it
+  ever ran) and then released synchronously, so the release routinely beat the stop. `cleanup()` now
+  runs stop→release serially on the control executor and awaits completion, so VLC worker threads
+  exit before the player object is freed. The crash was amplified by the client stacking multiple
+  native players on one display: `DisplayMediaController.load()` fired the old player's `stop()`
+  fire-and-forget and built the replacement immediately (game log showed 3 concurrent players on
+  the same display id; first-frame-timeout + CDN re-rank kept creating new ones). `MediaPlayer` now
+  exposes `awaitStopped()` and the loader waits for the previous player's teardown before
+  constructing the new one. Also stops calling `libvlc_media_player_get_video_decoder_info` on
+  Android — the libvlc-all AAR's monolithic `libvlc.so` does not export that symbol (verified
+  against its `.dynsym`), so the F3 decoder-name refresh threw `UnsatisfiedLinkError` twice per
+  session (seen in the same hs_err); it reports the configured MediaCodec chain instead.
+  Desktop platforms are unaffected.
 - **A/V auto-resync (bidirectional)** — flushes and re-anchors when the audio buffer drifts >300ms in either direction, plus a 1.5s initial sync after playback/replay start.
 - **Loop/replay fixes** — ENDED path does `stop()`+`play()`, re-arms `eosFired` (no more freeze on second replay), and restarts the audio player so audio replays too.
 - **Native runtime bootstrap** — libvlc + SQLite runtimes are collected from official VideoLAN distributions by CI and downloaded at runtime into `./dreamdisplayx/natives/`; libvlc upgraded 3.0.21 → 3.0.22.

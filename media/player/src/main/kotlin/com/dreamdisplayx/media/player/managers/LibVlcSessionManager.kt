@@ -783,26 +783,60 @@ internal class LibVlcSessionManager(
 
     /**
      * Releases the single player and all resources. GPU teardown is deferred to the render thread.
+     *
+     * Teardown ordering is critical on Android: `libvlc_media_player_release` must NEVER run while
+     * VLC's own worker threads are still alive. Each VLC worker thread carries thread-local state
+     * (the `jni_key` TLS slot) that is cleaned by `pthread_key_clean_all` → the
+     * `jni_detach_thread` TLS destructor when that thread exits. If the player object was already
+     * freed, the destructor dereferences the dangling value and crashes — observed SIGSEGV at
+     * `libvlc.so+0xef7418` inside `pthread_key_clean_all` immediately after the first frame was
+     * delivered. The previous code called the ASYNC [stop] (whose queued task a following
+     * `shutdownNow()` could cancel before it ever ran) and then released synchronously, so the
+     * release routinely beat the stop. Here we stop synchronously first — `libvlc_media_player_stop`
+     * blocks until the input layer and its worker threads have exited — and only then release.
      */
     fun cleanup() {
-        stop()
+        isPlaying = false
+        parkFlag.set(false)
+        eosReached = true
+        stopped.set(true)
         released.set(true)
         val mp = mediaPlayer
         mediaPlayer = null
-        if (mp != null) {
-            try {
-                LibVlc.lib.libvlc_media_player_release(mp)
-            } catch (_: Exception) { }
-        }
         val ap = audioPlayer
         audioPlayer = null
-        if (ap != null) {
-            try {
-                LibVlc.lib.libvlc_media_player_release(ap)
-            } catch (_: Exception) { }
+        // Stop -> release must run serialised on the control executor and COMPLETE before this
+        // method returns: VLC's worker threads carry thread-local state that is torn down on exit
+        // (pthread_key_clean_all -> the jni_detach_thread TLS destructor on Android), and releasing
+        // the player while those threads are still alive frees the very object the destructor is
+        // about to dereference -> SIGSEGV (observed at libvlc.so+0xef7418 in pthread_key_clean_all,
+        // right after the first frame was delivered). The old code submitted the stop
+        // asynchronously, then released synchronously right after — so the release routinely beat
+        // the stop (and shutdownNow() could cancel the queued stop entirely). Awaiting the paired
+        // stop+release on the control executor removes both races.
+        val done = CountDownLatch(1)
+        try {
+            controlExecutor.execute {
+                try {
+                    if (mp != null) {
+                        runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
+                        runCatching { LibVlc.lib.libvlc_media_player_release(mp) }
+                    }
+                    if (ap != null) {
+                        runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                        runCatching { LibVlc.lib.libvlc_media_player_release(ap) }
+                    }
+                } finally {
+                    done.countDown()
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            done.countDown()
         }
+        runCatching { done.await(15, TimeUnit.SECONDS) }
         runCatching { controlExecutor.shutdownNow() }
         audioOutput?.close()
+        surface.clear()
         renderExecutor.execute { surface.cleanup() }
     }
 
