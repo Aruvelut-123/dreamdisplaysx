@@ -376,10 +376,18 @@ internal class LibVlcSessionManager(
      */
     fun setVolume(volume: Double) {
         audioOutput?.setVolume(volume)
-        // Android (system audio): route the volume into libvlc's own output.
+        // Android (system audio): route the volume into libvlc's own output. Both the video player
+        // and the separate DASH audio player (created in audioPlayer()) need it — libvlc volume is
+        // per-player, so the audio m4s alone would otherwise play at 100%.
         if (systemAudio) {
-            val ap = mediaPlayer ?: return
-            runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, (volume.coerceIn(0.0, 1.0) * 100).toInt()) }
+            val mp = mediaPlayer
+            if (mp != null) {
+                runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, (volume.coerceIn(0.0, 1.0) * 100).toInt()) }
+            }
+            val ap = audioPlayer
+            if (ap != null) {
+                runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, (volume.coerceIn(0.0, 1.0) * 100).toInt()) }
+            }
         }
     }
 
@@ -621,15 +629,17 @@ internal class LibVlcSessionManager(
 
     /**
      * Returns the dedicated AUDIO-only libvlc media player, creating it on first use and never
-     * rebuilding it. It only registers the audio callbacks that feed the 3D DSP + Java Sound line
-     * ([LibVlcAudioOutput]); its media gets `:no-video`. No events are attached: its END_REACHED
-     * (Bilibili DASH audio slaves run shorter than the video) must NOT trigger the session EOS.
-     * Skipped entirely when [LibVlcDiagnostics.noAudioCallback] is set (bisection).
+     * rebuilding it. On desktop it only registers the audio callbacks that feed the 3D DSP + Java
+     * Sound line ([LibVlcAudioOutput]); its media gets `:no-video`. No events are attached: its
+     * END_REACHED (Bilibili DASH audio slaves run shorter than the video) must NOT trigger the
+     * session EOS. Skipped entirely when [LibVlcDiagnostics.noAudioCallback] is set (bisection).
+     * On Android no callback pipeline exists (no javax.sound): the player is created WITHOUT
+     * audio callbacks so libvlc's own OpenSL ES output (instance-level `--aout=opensles`) plays
+     * the DASH audio m4s directly — without it the separate audio URL on a video-only Bilibili
+     * DASH m4s is never played and there is no sound at all.
      */
     private fun audioPlayer(): Pointer? {
         if (LibVlcDiagnostics.noAudioCallback) return null
-        // Android: no callback audio pipeline — libvlc's OpenSL ES output owns sound.
-        if (systemAudio) return null
         val existing = audioPlayer
         if (existing != null) return existing
         return try {
@@ -640,12 +650,14 @@ internal class LibVlcSessionManager(
                 logger.error("$debugLabel libvlc audio player new returned null: ${LibVlc.errmsg()}")
                 return null
             }
-            // Audio callbacks (once; held strongly) feed the 3D DSP + Java Sound line. The line is
-            // pre-opened here so the first PCM block has a destination (also primes the default format).
-            openAudioLine()
-            lib.libvlc_audio_set_format_callbacks(ap, audioFormatSetupCallback, audioFormatCleanupCallback)
-            lib.libvlc_audio_set_callbacks(ap, audioPlayCallback, audioPauseCallback,
-                audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
+            if (!systemAudio) {
+                // Desktop only: audio callbacks feed the 3D DSP + Java Sound line. The line is
+                // pre-opened here so the first PCM block has a destination (also primes the default format).
+                openAudioLine()
+                lib.libvlc_audio_set_format_callbacks(ap, audioFormatSetupCallback, audioFormatCleanupCallback)
+                lib.libvlc_audio_set_callbacks(ap, audioPlayCallback, audioPauseCallback,
+                    audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
+            }
             audioPlayer = ap
             if (MediaPlayer.DEBUG) logger.debug("$debugLabel created dedicated libvlc audio player.")
             ap
@@ -782,18 +794,20 @@ internal class LibVlcSessionManager(
     }
 
     /**
-     * Releases the single player and all resources. GPU teardown is deferred to the render thread.
+     * Stops the session and releases resources. GPU teardown is deferred to the render thread.
      *
-     * Teardown ordering is critical on Android: `libvlc_media_player_release` must NEVER run while
-     * VLC's own worker threads are still alive. Each VLC worker thread carries thread-local state
-     * (the `jni_key` TLS slot) that is cleaned by `pthread_key_clean_all` → the
-     * `jni_detach_thread` TLS destructor when that thread exits. If the player object was already
-     * freed, the destructor dereferences the dangling value and crashes — observed SIGSEGV at
-     * `libvlc.so+0xef7418` inside `pthread_key_clean_all` immediately after the first frame was
-     * delivered. The previous code called the ASYNC [stop] (whose queued task a following
-     * `shutdownNow()` could cancel before it ever ran) and then released synchronously, so the
-     * release routinely beat the stop. Here we stop synchronously first — `libvlc_media_player_stop`
-     * blocks until the input layer and its worker threads have exited — and only then release.
+     * Teardown ordering is critical on Android: VLC-Android registers a `pthread_key` whose TLS
+     * destructor (`jni_detach_thread`, `modules/video_output/android/utils.c`) runs when ANY VLC
+     * native worker thread exits, and it dereferences thread-local state. On this build
+     * `libvlc_media_player_stop` does NOT join every worker thread (OpenSL ES aout, MediaCodec
+     * decoder, vout display threads can still be winding down when stop returns), so a
+     * `libvlc_media_player_release` that runs right after stop frees objects those late threads are
+     * about to touch — observed SIGSEGV at `libvlc.so+0xef7418` inside `pthread_key_clean_all` on
+     * plain world exit, even with stop serialised before release. The reliable fix (the same model
+     * squi2rel/VideoPlayer ships) is to NEVER release the libvlc players on Android: keep them
+     * stopped-but-allocated for the JVM's lifetime, so a worker thread exiting at any later moment
+     * always finds its TLS object still valid. The OS reclaims everything when the process exits.
+     * Desktop has no such TLS destructor and keeps stop -> release ordering (also serialised below).
      */
     fun cleanup() {
         isPlaying = false
@@ -805,26 +819,23 @@ internal class LibVlcSessionManager(
         mediaPlayer = null
         val ap = audioPlayer
         audioPlayer = null
-        // Stop -> release must run serialised on the control executor and COMPLETE before this
-        // method returns: VLC's worker threads carry thread-local state that is torn down on exit
-        // (pthread_key_clean_all -> the jni_detach_thread TLS destructor on Android), and releasing
-        // the player while those threads are still alive frees the very object the destructor is
-        // about to dereference -> SIGSEGV (observed at libvlc.so+0xef7418 in pthread_key_clean_all,
-        // right after the first frame was delivered). The old code submitted the stop
-        // asynchronously, then released synchronously right after — so the release routinely beat
-        // the stop (and shutdownNow() could cancel the queued stop entirely). Awaiting the paired
-        // stop+release on the control executor removes both races.
+        // Stop must run serialised on the control executor and (on desktop) release MUST run only
+        // after stop has completed; on Android stop is enough — the players are kept alive.
         val done = CountDownLatch(1)
         try {
             controlExecutor.execute {
                 try {
                     if (mp != null) {
                         runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
-                        runCatching { LibVlc.lib.libvlc_media_player_release(mp) }
+                        if (!systemAudio) {
+                            runCatching { LibVlc.lib.libvlc_media_player_release(mp) }
+                        }
                     }
                     if (ap != null) {
                         runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
-                        runCatching { LibVlc.lib.libvlc_media_player_release(ap) }
+                        if (!systemAudio) {
+                            runCatching { LibVlc.lib.libvlc_media_player_release(ap) }
+                        }
                     }
                 } finally {
                     done.countDown()

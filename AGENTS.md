@@ -194,14 +194,18 @@
   destructor is `jni_detach_thread` (`modules/video_output/android/utils.c`). When a VLC native
   worker thread exits it runs `pthread_key_clean_all`, and the destructor dereferences the
   thread-local value — a use-after-free if the player was released while the thread was still
-  alive (observed `SIGSEGV at libvlc.so+0xef7418` inside `pthread_key_clean_all` right after the
-  first frame was delivered). Therefore `LibVlcSessionManager.cleanup()` MUST stop before it
-  releases: `libvlc_media_player_stop` blocks until the input layer and its worker threads have
-  exited, then `libvlc_media_player_release` frees the objects. The old code called the async
-  `stop()` (whose queued task a following `shutdownNow()` could cancel) and released
-  synchronously right after, so the release routinely beat the stop. Never release a player
-  without stopping it first on Android. Also: `libvlc_media_player_get_video_decoder_info` /
-  `libvlc_media_decoder_info_release` are NOT exported by the libvlc-all AAR's monolithic
+  alive (observed `SIGSEGV at libvlc.so+0xef7418` inside `pthread_key_clean_all`, `si_addr=0x6d8`
+  on world exit and `si_addr=0x1000006d8` after the first frame). CRITICAL: this libvlc-all
+  AAR's `libvlc_media_player_stop` does NOT join every worker thread — OpenSL ES aout, MediaCodec
+  decoder, and vout display threads can still be winding down when stop returns — so even a
+  correctly serialised stop→release frees the very object those late threads' TLS destructor is
+  about to dereference. Therefore `LibVlcSessionManager.cleanup()` MUST NEVER call
+  `libvlc_media_player_release` on Android: keep the players stopped-but-allocated for the JVM's
+  lifetime (the squi2rel/VideoPlayer model), so a worker thread exiting at any later moment always
+  finds its TLS object still valid; the OS reclaims everything on process exit. Desktop keeps the
+  serialised stop→release ordering. The same no-release rule applies to
+  `LibVlcFrameExtractor`'s scrub-session player. Also: `libvlc_media_player_get_video_decoder_info`
+  / `libvlc_media_decoder_info_release` are NOT exported by the libvlc-all AAR's monolithic
   `libvlc.so` (desktop-only 3.0.7+ API) — `LibVlc.videoDecoderName()` must not call them on
   Android (UnsatisfiedLinkError per F3 refresh); it reports the configured MediaCodec chain.
   Finally, do not stack multiple native players on one display: `DisplayMediaController.load()`

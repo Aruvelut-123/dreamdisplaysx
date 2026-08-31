@@ -152,7 +152,14 @@ The mod runs on Android launchers on **ARM64** and **x86_64** devices, with a fe
 differences:
 
 - **Audio** plays through libvlc's own OpenSL ES output. The desktop 3D positional audio
-  (panning / occlusion / reverb) needs `javax.sound`, which Android JVMs don't ship.
+  (panning / occlusion / reverb) needs `javax.sound`, which Android JVMs don't ship. DASH
+  streams (e.g. Bilibili's video-only m4s + separate audio m4s) get their audio from the
+  separate audio-only libvlc player — created on Android without the desktop Java Sound
+  callbacks, so libvlc's own `--aout=opensles` plays the audio m4s directly; volume is routed
+  to both players and the existing A/V auto-resync keeps them in sync. Android libvlc players
+  are never released by the mod (only stopped) — this build's `libvlc_media_player_stop` does
+  not join every worker thread, so releasing frees objects VLC's TLS destructor still touches
+  (world-exit crash); the OS reclaims them on process exit.
 - **Hardware decode** uses MediaCodec ( ByteBuffer copy mode feeding the same frame
   callbacks); override with `-Ddreamdisplayx.hwDecode=<module>` or disable it with an empty
   value, same as desktop.
