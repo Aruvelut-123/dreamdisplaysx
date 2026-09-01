@@ -223,18 +223,23 @@ object LibVlcFrameExtractor {
 
         /**
          * Stops and releases the native player; the session cannot be reused after this. On Android
-         * the player is only stopped, never released: VLC-Android's TLS destructor
-         * (`jni_detach_thread` in modules/video_output/android/utils.c) dereferences thread-local
-         * state when a worker thread exits, and this build's `libvlc_media_player_stop` does not
-         * join every worker thread (OpenSL ES / MediaCodec / vout threads can still be winding
-         * down), so a release frees objects those late threads touch -> SIGSEGV in
-         * pthread_key_clean_all (libvlc.so+0xef7418). Keeping the player allocated for the JVM
-         * lifetime matches the squi2rel/VideoPlayer model; the OS reclaims it on process exit.
+         * the player is only PAUSED, never stopped or released: this libvlc-all AAR's
+         * `libvlc_media_player_stop` force-tears input/vout/aout so VLC worker threads detach while
+         * exiting and their TLS destructor (`jni_detach_thread` in modules/video_output/android/
+         * utils.c) dereferences freed state -> SIGSEGV in pthread_key_clean_all (libvlc.so+0xef7418),
+         * even when the player is never released. Pausing keeps every VLC thread alive, so the
+         * destructor never runs with stale state, and the OS reclaims the player on process exit.
          */
         fun close() {
             if (!opened.compareAndSet(true, false)) {
-                // Even if never fully opened, release a partially created player.
-                mp?.let { runCatching { lib.libvlc_media_player_stop(it) } }
+                // Even if never fully opened, release a partially created player. On Android this
+                // is a pause instead of stop+release: this libvlc-all AAR's `libvlc_media_player_stop`
+                // force-tears worker threads whose TLS destructor (jni_detach_thread) then reads
+                // freed state (SIGSEGV in pthread_key_clean_all, libvlc.so+0xef7418) even without
+                // release. Pausing keeps every thread alive; the OS reclaims on process exit.
+                mp?.let { if (com.dreamdisplayx.util.OsInfo.isAndroid) {
+                    runCatching { lib.libvlc_media_player_set_pause(it, 1) }
+                } else runCatching { lib.libvlc_media_player_stop(it) } }
                 if (!com.dreamdisplayx.util.OsInfo.isAndroid) {
                     mp?.let { runCatching { lib.libvlc_media_player_release(it) } }
                 }
@@ -242,8 +247,10 @@ object LibVlcFrameExtractor {
                 return
             }
             mp?.let {
-                runCatching { lib.libvlc_media_player_stop(it) }
-                if (!com.dreamdisplayx.util.OsInfo.isAndroid) {
+                if (com.dreamdisplayx.util.OsInfo.isAndroid) {
+                    runCatching { lib.libvlc_media_player_set_pause(it, 1) }
+                } else {
+                    runCatching { lib.libvlc_media_player_stop(it) }
                     runCatching { lib.libvlc_media_player_release(it) }
                 }
             }

@@ -75,18 +75,26 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
   the Java Sound callback pipeline). `setVolume()` now routes the gain to BOTH players on
   Android; the existing A/V auto-resync snaps the audio player to the video clock on drift.
   Desktop platforms are unaffected.
-- **Android: never release libvlc players in `cleanup()` (fixes world-exit crash)** — after the
-  stop→release serialisation landed, exiting the world still crashed with `SIGSEGV at
-  libvlc.so+0xef7418` inside `pthread_key_clean_all` (`si_addr=0x6d8`, a zeroed TLS object —
-  this build's `libvlc_media_player_stop` does NOT join every worker thread: OpenSL ES aout,
-  MediaCodec decoder, and vout display threads can still be winding down when stop returns). A
-  release that runs right after stop frees the very object those late threads' `jni_detach_thread`
-  TLS destructor is about to dereference. The reliable fix (the same model squi2rel/VideoPlayer
-  ships) is to NEVER release the libvlc players on Android — keep them stopped-but-allocated for
-  the JVM lifetime so a worker thread exiting at any later moment always finds its TLS object
-  still valid; the OS reclaims everything on process exit. Desktop keeps the serialised
-  stop→release ordering. The same guard was applied to `LibVlcFrameExtractor`'s scrub-session
-  player. Desktop platforms are unaffected.
+- **Android: never stop OR release libvlc players (fixes video-switch crash)** — the earlier
+  stop→release serialisation and never-release fixes reduced the crashes but did NOT eliminate
+  them: switching videos (or opening the pause menu / leaving the world) still died with
+  `SIGSEGV at libvlc.so+0xef7418` inside `pthread_key_clean_all` (`si_addr=0x6d8`). A binary +
+  source audit (`vlc 3.0.x modules/video_output/android/utils.c`) showed the TLS destructor's
+  value is a plain `JNIEnv*` stored by `android_getEnvCommon` (the only `pthread_setspecific`
+  caller for `jni_env_key`, libvlc.so+0xef63e8), and that this AAR's `libvlc_media_player_stop`
+  itself force-tears input/vout/aout so worker threads detach while winding down — i.e. `stop`
+  (not `release`) is what frees the object the late threads' `jni_detach_thread` TLS destructor
+  dereferences, so the crash happens even with players NEVER released (observed on the first
+  video switch at "Saving and pausing game..." +00:02). The audio stopping after ~1 minute was
+  the same event — the video switch stopped the old player and took its audio down with it.
+  Fix: on Android EVERY teardown path avoids `libvlc_media_player_stop` — `stop()` /
+  `cleanup()` and the reload-safety stop in `start()` pause the players instead
+  (`libvlc_media_player_set_pause(p,1)`); the ENDED restart in `beginSeek` re-binds media via
+  `set_media` (synchronous input replacement) instead of stop+play; `LibVlcFrameExtractor`'s
+  scrub-session `close()` pauses too. Pausing keeps every VLC worker thread alive, so the TLS
+  destructor never runs with stale state, and the OS reclaims the players on process exit
+  (players accumulate per session — acceptable). Desktop keeps the serialised stop→release
+  ordering. Desktop platforms are otherwise unaffected.
 - **A/V auto-resync (bidirectional)** — flushes and re-anchors when the audio buffer drifts >300ms in either direction, plus a 1.5s initial sync after playback/replay start.
 - **Loop/replay fixes** — ENDED path does `stop()`+`play()`, re-arms `eosFired` (no more freeze on second replay), and restarts the audio player so audio replays too.
 - **Native runtime bootstrap** — libvlc + SQLite runtimes are collected from official VideoLAN distributions by CI and downloaded at runtime into `./dreamdisplayx/natives/`; libvlc upgraded 3.0.21 → 3.0.22.

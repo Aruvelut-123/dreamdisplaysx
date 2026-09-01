@@ -191,20 +191,30 @@
   The stub is inert on desktop (never referenced outside the Android bridge). Best-effort:
   bridge failures are logged and swallowed so playback is still attempted.
 - Android teardown ordering (thread-exit crash): VLC-Android registers a `pthread_key` whose TLS
-  destructor is `jni_detach_thread` (`modules/video_output/android/utils.c`). When a VLC native
-  worker thread exits it runs `pthread_key_clean_all`, and the destructor dereferences the
-  thread-local value — a use-after-free if the player was released while the thread was still
-  alive (observed `SIGSEGV at libvlc.so+0xef7418` inside `pthread_key_clean_all`, `si_addr=0x6d8`
-  on world exit and `si_addr=0x1000006d8` after the first frame). CRITICAL: this libvlc-all
-  AAR's `libvlc_media_player_stop` does NOT join every worker thread — OpenSL ES aout, MediaCodec
-  decoder, and vout display threads can still be winding down when stop returns — so even a
-  correctly serialised stop→release frees the very object those late threads' TLS destructor is
-  about to dereference. Therefore `LibVlcSessionManager.cleanup()` MUST NEVER call
-  `libvlc_media_player_release` on Android: keep the players stopped-but-allocated for the JVM's
-  lifetime (the squi2rel/VideoPlayer model), so a worker thread exiting at any later moment always
-  finds its TLS object still valid; the OS reclaims everything on process exit. Desktop keeps the
-  serialised stop→release ordering. The same no-release rule applies to
-  `LibVlcFrameExtractor`'s scrub-session player. Also: `libvlc_media_player_get_video_decoder_info`
+  destructor is `jni_detach_thread` (`modules/video_output/android/utils.c`, `pthread_key_create`
+  around libvlc.so+0xef73e0). Binary + source audit (vlc 3.0.x utils.c): the key's value is a
+  plain `JNIEnv*` stored by `android_getEnvCommon` (the only `pthread_setspecific` caller for
+  `jni_env_key`, at libvlc.so+0xef63e8; the other three `pthread_setspecific` sites use unrelated
+  keys). When a VLC native worker thread exits, `pthread_key_clean_all` runs the destructor which
+  does `(*env)->GetJavaVM(env, &jvm)` — dereferencing `env->functions` (offset 0). On this build
+  the value sometimes points at freed-and-zeroed scudo heap memory (`[R0]=0`, crash at
+  `ldr x8,[x8,#0x6d8]` = `libvlc.so+0xef7418`, `si_addr=0x6d8`), so the JNIEnv becomes invalid
+  while the thread is still alive. CRITICAL: this AAR's `libvlc_media_player_stop` itself
+  force-tears input/vout/aout and its worker threads detach while winding down — therefore
+  `SIGSEGV at libvlc.so+0xef7418` happens even with players NEVER released (observed on video
+  switch: game log "Saving and pausing game..." at 09:36:03, crash 09:36:05; also earlier on
+  world exit and after first frame). `libvlc_media_player_release` is NOT the culprit; `stop` IS.
+  Audio stopping after ~1 min was the same event: switching the video stopped the old player and
+  took its audio down with it. Therefore on Android EVERY teardown path MUST avoid
+  `libvlc_media_player_stop`: `LibVlcSessionManager.stop()`/`cleanup()` and the reload-safety
+  stop in `start()` pause the players instead (`libvlc_media_player_set_pause(p,1)`), the ENDED
+  restart in `beginSeek` re-binds media via `set_media` (synchronous input replacement) instead
+  of stop+play, and `LibVlcFrameExtractor`'s scrub-session `close()` pauses too. Pausing keeps
+  every VLC thread alive, so the TLS destructor never runs with stale state, and the OS reclaims
+  the players on process exit (players accumulate per session — acceptable; same keep-alive idea
+  as squi2rel/VideoPlayer but WITHOUT their stop+release teardown, which is unverified on Android
+  and equally exposes the destructor). Desktop has no Android TLS destructor and keeps the
+  serialised stop→release ordering. Also: `libvlc_media_player_get_video_decoder_info`
   / `libvlc_media_decoder_info_release` are NOT exported by the libvlc-all AAR's monolithic
   `libvlc.so` (desktop-only 3.0.7+ API) — `LibVlc.videoDecoderName()` must not call them on
   Android (UnsatisfiedLinkError per F3 refresh); it reports the configured MediaCodec chain.

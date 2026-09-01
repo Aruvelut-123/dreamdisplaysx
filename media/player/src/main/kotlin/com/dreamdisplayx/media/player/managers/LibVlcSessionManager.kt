@@ -533,7 +533,15 @@ internal class LibVlcSessionManager(
                 // format setup and crashes natively (EXCEPTION_ACCESS_VIOLATION right after the new
                 // "libvlc video setup" line, before the first frame). libvlc_media_player_stop is
                 // synchronous on the control executor, so the old input fully releases first.
-                runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
+                // Android: NEVER call libvlc_media_player_stop. This AAR's stop() force-tears
+                // input/vout/aout and VLC-Android's worker threads detach while exiting — their
+                // TLS destructor (jni_detach_thread) then dereferences freed state (SIGSEGV in
+                // pthread_key_clean_all at libvlc.so+0xef7418), even with players never released.
+                // libvlc_media_player_set_media itself stops the previous input synchronously, so
+                // the explicit stop is only needed to pacify the desktop vout/aout drain race.
+                if (!systemAudio) {
+                    runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
+                }
                 val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
                 LibVlc.lib.libvlc_media_player_set_media(mp, media)
                 LibVlc.lib.libvlc_media_release(media) // the player holds its own reference
@@ -542,7 +550,12 @@ internal class LibVlcSessionManager(
                 // separate audio URL (e.g. the merged audio was already in the video container).
                 val ap = audioPlayer()
                 if (ap != null && audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
-                    runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                    // Same rule as above: never stop() on Android — set_media replaces the old
+                    // input synchronously; an explicit stop would tear worker threads and hit the
+                    // VLC-Android TLS destructor UAF (pthread_key_clean_all, libvlc.so+0xef7418).
+                    if (!systemAudio) {
+                        runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                    }
                     val audioOptions = mutableListOf(*LibVlcMediaOptions.forUrl(audioUrl))
                     audioOptions.add(":no-video")
                     val audioMedia = LibVlc.createMedia(audioUrl, audioOptions.toTypedArray())
@@ -697,16 +710,49 @@ internal class LibVlcSessionManager(
             val state = try { LibVlc.lib.libvlc_media_player_get_state(mp) } catch (_: Throwable) { -1 }
             if (state == LibVlc.LIBVLC_STATE_ENDED) {
                 try {
-                    LibVlc.lib.libvlc_media_player_stop(mp)
-                    LibVlc.lib.libvlc_media_player_play(mp)
-                    // The audio player must be restarted too: its own stream also reached ENDED
-                    // (Bilibili DASH audio is often shorter than the video), so a bare set_time on
-                    // an ENDED audio player does nothing — video replays but audio stays silent.
-                    val ap = audioPlayer
-                    if (ap != null) {
-                        runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
-                        runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
-                        runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                    if (systemAudio) {
+                        // Android: never call stop() — it tears worker threads and hits the
+                        // VLC-Android TLS destructor UAF (pthread_key_clean_all, libvlc.so+0xef7418).
+                        // Rebind the same media (set_media synchronously replaces the ended input)
+                        // then play from the requested position. No :avcodec-hw on Android
+                        // (MediaCodec is chosen at instance level via --codec=mediacodec_*).
+                        val vUrl = streamSet.currentVideo.url
+                        val vOpts = mutableListOf(*LibVlcMediaOptions.forUrl(vUrl))
+                        val vMedia = runCatching { LibVlc.createMedia(vUrl, vOpts.toTypedArray()) }.getOrNull()
+                        if (vMedia != null) {
+                            runCatching { LibVlc.lib.libvlc_media_player_set_media(mp, vMedia) }
+                            runCatching { LibVlc.lib.libvlc_media_release(vMedia) }
+                            runCatching { LibVlc.lib.libvlc_media_player_play(mp) }
+                            runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
+                        }
+                        // Audio player: same — never stop, rebind and replay.
+                        val ap = audioPlayer
+                        val aUrl = streamSet.currentAudio.url
+                        if (ap != null && aUrl.isNotBlank() && !aUrl.equals(vUrl, ignoreCase = true)) {
+                            val aOpts = mutableListOf(*LibVlcMediaOptions.forUrl(aUrl))
+                            aOpts.add(":no-video")
+                            val aMedia = runCatching { LibVlc.createMedia(aUrl, aOpts.toTypedArray()) }.getOrNull()
+                            if (aMedia != null) {
+                                runCatching { LibVlc.lib.libvlc_media_player_set_media(ap, aMedia) }
+                                runCatching { LibVlc.lib.libvlc_media_release(aMedia) }
+                                runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
+                                runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                            }
+                        }
+                    } else {
+                        // Desktop: stop() first, then play() restarts from the beginning
+                        // (loop/replay path; desktop has no Android TLS destructor).
+                        LibVlc.lib.libvlc_media_player_stop(mp)
+                        LibVlc.lib.libvlc_media_player_play(mp)
+                        // The audio player must be restarted too: its own stream also reached ENDED
+                        // (Bilibili DASH audio is often shorter than the video), so a bare set_time on
+                        // an ENDED audio player does nothing — video replays but audio stays silent.
+                        val ap = audioPlayer
+                        if (ap != null) {
+                            runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                            runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
+                            runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                        }
                     }
                     // Re-arm the EOS gate: the loop/replay restart path (beginSeek from ENDED) must
                     // let the NEXT end-of-stream fire handleStreamEnd again, otherwise the second
@@ -772,8 +818,14 @@ internal class LibVlcSessionManager(
     }
 
     /**
-     * Stops the session. The single player is kept alive (never released) so its JNA callbacks
-     * stay valid across restarts. Call [cleanup] to release the player and all resources.
+     * Stops the session. To the extent possible the libvlc players are NOT stopped on Android:
+     * this libvlc-all AAR's `libvlc_media_player_stop` does not join every VLC worker thread, and
+     * `pthread_key_clean_all` on an exiting thread runs VLC-Android's `jni_detach_thread` TLS
+     * destructor which dereferences thread-local state — observed SIGSEGV at `libvlc.so+0xef7418`
+     * on plain world exit AND on audio DASH stream end even with stop serialised and never released.
+     * Pausing keeps every worker thread alive, so the TLS destructor never runs with stale state;
+     * the players then stay allocated for the JVM lifetime and the OS reclaims them on exit.
+     * Desktop keeps stop (its threads join synchronously and there is no Android TLS destructor).
      */
     fun stop() {
         isPlaying = false
@@ -783,14 +835,26 @@ internal class LibVlcSessionManager(
         submit {
             val mp = mediaPlayer
             if (mp != null) {
-                runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
+                stopOrPause(mp)
             }
             val ap = audioPlayer
             if (ap != null) {
-                runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                stopOrPause(ap)
             }
         }
         surface.clear()
+    }
+
+    /**
+     * Android: pause instead of stop (see [stop] KDoc) — worker threads stay alive, the TLS
+     * destructor never observes freed state. Desktop: plain stop.
+     */
+    private fun stopOrPause(p: Pointer) {
+        if (systemAudio) {
+            runCatching { LibVlc.lib.libvlc_media_player_set_pause(p, 1) }
+        } else {
+            runCatching { LibVlc.lib.libvlc_media_player_stop(p) }
+        }
     }
 
     /**
@@ -798,16 +862,16 @@ internal class LibVlcSessionManager(
      *
      * Teardown ordering is critical on Android: VLC-Android registers a `pthread_key` whose TLS
      * destructor (`jni_detach_thread`, `modules/video_output/android/utils.c`) runs when ANY VLC
-     * native worker thread exits, and it dereferences thread-local state. On this build
+     * native worker thread exits, and it dereferences thread-local state. This AAR's
      * `libvlc_media_player_stop` does NOT join every worker thread (OpenSL ES aout, MediaCodec
-     * decoder, vout display threads can still be winding down when stop returns), so a
-     * `libvlc_media_player_release` that runs right after stop frees objects those late threads are
-     * about to touch — observed SIGSEGV at `libvlc.so+0xef7418` inside `pthread_key_clean_all` on
-     * plain world exit, even with stop serialised before release. The reliable fix (the same model
-     * squi2rel/VideoPlayer ships) is to NEVER release the libvlc players on Android: keep them
-     * stopped-but-allocated for the JVM's lifetime, so a worker thread exiting at any later moment
-     * always finds its TLS object still valid. The OS reclaims everything when the process exits.
-     * Desktop has no such TLS destructor and keeps stop -> release ordering (also serialised below).
+     * decoder, vout display threads can still be winding down when stop returns) — a worker
+     * thread exiting at ANY later moment dereferences freed state and dies with SIGSEGV at
+     * `libvlc.so+0xef7418` inside `pthread_key_clean_all` (observed on plain world exit AND on
+     * DASH audio stream end, even with stop serialised and never released). On Android the only
+     * safe teardown is to PAUSE the players instead of stopping them, so every worker thread
+     * stays alive for the JVM's lifetime and the TLS destructor never runs with stale state; the
+     * OS reclaims everything on process exit. Desktop has no such TLS destructor and keeps
+     * serialised stop -> release.
      */
     fun cleanup() {
         isPlaying = false
@@ -819,20 +883,21 @@ internal class LibVlcSessionManager(
         mediaPlayer = null
         val ap = audioPlayer
         audioPlayer = null
-        // Stop must run serialised on the control executor and (on desktop) release MUST run only
-        // after stop has completed; on Android stop is enough — the players are kept alive.
+        // On desktop, stop must run serialised on the control executor and release MUST run only
+        // after stop has completed. On Android the players are only paused (never stopped) and
+        // kept alive.
         val done = CountDownLatch(1)
         try {
             controlExecutor.execute {
                 try {
                     if (mp != null) {
-                        runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
+                        stopOrPause(mp)
                         if (!systemAudio) {
                             runCatching { LibVlc.lib.libvlc_media_player_release(mp) }
                         }
                     }
                     if (ap != null) {
-                        runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                        stopOrPause(ap)
                         if (!systemAudio) {
                             runCatching { LibVlc.lib.libvlc_media_player_release(ap) }
                         }

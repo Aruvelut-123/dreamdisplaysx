@@ -157,9 +157,12 @@ differences:
   separate audio-only libvlc player — created on Android without the desktop Java Sound
   callbacks, so libvlc's own `--aout=opensles` plays the audio m4s directly; volume is routed
   to both players and the existing A/V auto-resync keeps them in sync. Android libvlc players
-  are never released by the mod (only stopped) — this build's `libvlc_media_player_stop` does
-  not join every worker thread, so releasing frees objects VLC's TLS destructor still touches
-  (world-exit crash); the OS reclaims them on process exit.
+  are **never stopped or released** by the mod: this build's `libvlc_media_player_stop` itself
+  force-tears input/vout/aout so VLC worker threads detach while winding down, and their TLS
+  destructor (`jni_detach_thread`) then dereferences freed state — `SIGSEGV at
+  libvlc.so+0xef7418` on video switch / world exit even with players never released. Every
+  teardown path instead PAUSES the players (`libvlc_media_player_set_pause`), keeping every
+  VLC thread alive for the JVM lifetime; the OS reclaims them on process exit.
 - **Hardware decode** uses MediaCodec ( ByteBuffer copy mode feeding the same frame
   callbacks); override with `-Ddreamdisplayx.hwDecode=<module>` or disable it with an empty
   value, same as desktop.
