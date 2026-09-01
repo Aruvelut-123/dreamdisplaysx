@@ -249,8 +249,26 @@ internal class LibVlcSessionManager(
     // ── Low-level callbacks (held strongly for life) ───────────────────────
 
     private val eventCallback = LibVlc.EventCallback { event, _ -> handleEvent(event) }
-    /** Triple-buffered video frame pool + callbacks (VideoPlayer TextureRenderCallback model). */
-    private val videoFrames = TextureRenderCallback()
+
+    /**
+     * Every native player gets its own callback object and direct-buffer pool. This is important on
+     * Android: an old player's delayed vout callback must never use the replacement player's frame
+     * pointers while libvlc is copying a picture.
+     */
+    private val videoCallbackSets = java.util.Collections.synchronizedList(mutableListOf<VideoCallbackSet>())
+
+    private inner class VideoCallbackSet {
+        val frames = TextureRenderCallback()
+        val format = LibVlc.VideoFormatCallback { opaque, chroma, width, height, pitches, lines ->
+            frames.setup(opaque, chroma, width, height, pitches, lines)
+        }
+        val cleanup = LibVlc.VideoCleanupCallback { opaque -> frames.cleanup(opaque) }
+        val lock = LibVlc.VideoLockCallback { opaque, planes -> frames.lock(opaque, planes) }
+        val unlock = LibVlc.VideoUnlockCallback { opaque, picture, planes ->
+            frames.unlock(opaque, picture, planes)
+        }
+        val display = LibVlc.VideoDisplayCallback { opaque, picture -> frames.display(opaque, picture) }
+    }
 
     // ── Audio callbacks (held strongly; feed the 3D DSP + Java Sound line) ───
 
@@ -282,21 +300,6 @@ internal class LibVlcSessionManager(
         audioOutput?.onDrain(data)
     }
 
-    private val videoFormatCallback = LibVlc.VideoFormatCallback { opaque, chroma, width, height, pitches, lines ->
-        videoFrames.setup(opaque, chroma, width, height, pitches, lines)
-    }
-
-    private val videoCleanupCallback = LibVlc.VideoCleanupCallback { opaque -> videoFrames.cleanup(opaque) }
-
-    private val videoLockCallback = LibVlc.VideoLockCallback { opaque, planes -> videoFrames.lock(opaque, planes) }
-
-    private val videoUnlockCallback = LibVlc.VideoUnlockCallback { opaque, picture, planes ->
-        videoFrames.unlock(opaque, picture, planes)
-    }
-
-    private val videoDisplayCallback = LibVlc.VideoDisplayCallback { opaque, picture ->
-        videoFrames.display(opaque, picture)
-    }
 
     // ── Event handling ──────────────────────────────────────────────────────
 
@@ -624,10 +627,14 @@ internal class LibVlcSessionManager(
                 logger.error("$debugLabel libvlc_media_player_new returned null: ${LibVlc.errmsg()}")
                 return null
             }
-            // Video callbacks (once; held strongly). Skippable via diagnostic switch for bisection.
+            // Each native player gets an independent callback set and direct-buffer pool. Skippable
+            // via the diagnostic switch for bisection; callback sets are retained for delayed callbacks
+            // from retired Android players.
             if (!LibVlcDiagnostics.noVideoCallback) {
-                lib.libvlc_video_set_format_callbacks(mp, videoFormatCallback, videoCleanupCallback)
-                lib.libvlc_video_set_callbacks(mp, videoLockCallback, videoUnlockCallback, videoDisplayCallback, null)
+                val callbacks = VideoCallbackSet()
+                videoCallbackSets += callbacks
+                lib.libvlc_video_set_format_callbacks(mp, callbacks.format, callbacks.cleanup)
+                lib.libvlc_video_set_callbacks(mp, callbacks.lock, callbacks.unlock, callbacks.display, null)
             }
             // Events (once). The video player drives the session state (playing/end/error).
             val em = lib.libvlc_media_player_event_manager(mp)

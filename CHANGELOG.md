@@ -44,9 +44,9 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
   after media playback; retired players are paused and retained while fresh players handle reloads.
 - **Android: restore separate DASH audio** — the audio-only player is created on Android too,
   played through OpenSL ES, volume routed to both players.
-- **Android: never stop or release libvlc players** — every teardown path pauses instead, so
-  worker threads stay alive and the TLS destructor never reads freed state (fixes the
-  video-switch and world-exit crash).
+- **Android: safer libvlc player switching** — old players are paused instead of stopped or
+  released, and each player uses an isolated video callback/buffer pool to prevent delayed frames
+  from corrupting the replacement player.
 - **A/V auto-resync (bidirectional)** — flushes and re-anchors when the audio buffer drifts
   >300ms in either direction, plus a 1.5s initial sync.
 - **Loop/replay fixes** — ENDED path does `stop()` + `play()`, re-arms `eosFired` (no more
