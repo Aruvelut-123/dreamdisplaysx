@@ -185,11 +185,14 @@ internal class LibVlcSessionManager(
     /**
      * Second libvlc media player dedicated to audio-only playback. Decoupled from the video player
      * so its audio-clock (Java Sound `write()` blocking) never throttles the video vout. Created
-     * alongside [mediaPlayer] on first use and never rebuilt. Audio callbacks are registered on
+     * alongside [mediaPlayer] for desktop; Android rotates to a fresh player for each media session. Audio callbacks are registered on
      * this player only; the video player has `:no-audio` and runs on the system clock.
      */
     @Volatile
     private var audioPlayer: Pointer? = null
+
+    /** Retired Android players stay strongly referenced and paused until process exit. */
+    private val retiredAndroidPlayers = java.util.Collections.synchronizedList(mutableListOf<Pointer>())
 
     private val released = AtomicBoolean(false)
     private val stopped = AtomicBoolean(false)
@@ -521,6 +524,9 @@ internal class LibVlcSessionManager(
         }
 
         submit {
+            // Android never reuses a player that has already carried media: even set_media() may
+            // tear down its old input/vout/aout and trigger VLC-Android's unsafe TLS destructor.
+            if (systemAudio) retireAndroidPlayers()
             val mp = player()
             if (mp == null) {
                 errorMessage = "libvlc player unavailable"
@@ -533,17 +539,16 @@ internal class LibVlcSessionManager(
                 // format setup and crashes natively (EXCEPTION_ACCESS_VIOLATION right after the new
                 // "libvlc video setup" line, before the first frame). libvlc_media_player_stop is
                 // synchronous on the control executor, so the old input fully releases first.
-                // Android: NEVER call libvlc_media_player_stop. This AAR's stop() force-tears
-                // input/vout/aout and VLC-Android's worker threads detach while exiting — their
-                // TLS destructor (jni_detach_thread) then dereferences freed state (SIGSEGV in
-                // pthread_key_clean_all at libvlc.so+0xef7418), even with players never released.
-                // libvlc_media_player_set_media itself stops the previous input synchronously, so
-                // the explicit stop is only needed to pacify the desktop vout/aout drain race.
+                // Android: NEVER call stop/release, and do not reuse a player after it has carried
+                // media. Even set_media() can implicitly tear down the old input/vout/aout in this
+                // VLC-Android AAR and reach the same TLS destructor UAF. The old player was retired
+                // before this block; this player is fresh and may receive the new media.
                 if (!systemAudio) {
                     runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
                 }
+                val activeMp = mp
                 val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
-                LibVlc.lib.libvlc_media_player_set_media(mp, media)
+                LibVlc.lib.libvlc_media_player_set_media(activeMp, media)
                 LibVlc.lib.libvlc_media_release(media) // the player holds its own reference
                 // Start the SEPARATE audio player with the DASH audio URL (:no-video so no vout is
                 // built; audio callbacks on it feed the Java Sound line). Skipped when there is no
@@ -565,7 +570,7 @@ internal class LibVlcSessionManager(
                 } else {
                     logger.info("$debugLabel audio player skipped (no separate audio URL).")
                 }
-                LibVlc.lib.libvlc_media_player_play(mp)
+                LibVlc.lib.libvlc_media_player_play(activeMp)
                 isPlaying = true
                 // Initial A/V sync: both players start independently, so the audio player's clock can
                 // drift from the video's right from the start. Schedule an early correction (~1.5s)
@@ -711,22 +716,23 @@ internal class LibVlcSessionManager(
             if (state == LibVlc.LIBVLC_STATE_ENDED) {
                 try {
                     if (systemAudio) {
-                        // Android: never call stop() — it tears worker threads and hits the
-                        // VLC-Android TLS destructor UAF (pthread_key_clean_all, libvlc.so+0xef7418).
-                        // Rebind the same media (set_media synchronously replaces the ended input)
-                        // then play from the requested position. No :avcodec-hw on Android
-                        // (MediaCodec is chosen at instance level via --codec=mediacodec_*).
+                        // Android: never stop() or set_media() on an ended player. Both operations can
+                        // tear down VLC-Android workers and hit its unsafe TLS destructor. Retire the
+                        // ended players (pause + retain), then bind fresh players instead.
+                        retireAndroidPlayers()
+                        val freshMp = player()
+                        if (freshMp == null) throw IllegalStateException("libvlc video player unavailable")
                         val vUrl = streamSet.currentVideo.url
                         val vOpts = mutableListOf(*LibVlcMediaOptions.forUrl(vUrl))
                         val vMedia = runCatching { LibVlc.createMedia(vUrl, vOpts.toTypedArray()) }.getOrNull()
                         if (vMedia != null) {
-                            runCatching { LibVlc.lib.libvlc_media_player_set_media(mp, vMedia) }
+                            runCatching { LibVlc.lib.libvlc_media_player_set_media(freshMp, vMedia) }
                             runCatching { LibVlc.lib.libvlc_media_release(vMedia) }
-                            runCatching { LibVlc.lib.libvlc_media_player_play(mp) }
-                            runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
+                            runCatching { LibVlc.lib.libvlc_media_player_play(freshMp) }
+                            runCatching { LibVlc.lib.libvlc_media_player_set_time(freshMp, offsetNanos / 1_000_000L) }
                         }
-                        // Audio player: same — never stop, rebind and replay.
-                        val ap = audioPlayer
+                        // Audio player: bind the fresh player too, never reuse the ended one.
+                        val ap = audioPlayer()
                         val aUrl = streamSet.currentAudio.url
                         if (ap != null && aUrl.isNotBlank() && !aUrl.equals(vUrl, ignoreCase = true)) {
                             val aOpts = mutableListOf(*LibVlcMediaOptions.forUrl(aUrl))
@@ -778,9 +784,12 @@ internal class LibVlcSessionManager(
             // is a normal transient after a backwards seek and MUST NOT be play()ed — that would
             // interrupt the seek and freeze the picture (the "backwards seek sometimes sticks" bug).
             try {
-                val after = LibVlc.lib.libvlc_media_player_get_state(mp)
+                // Android may have retired the player in the ENDED branch above; never query or
+                // resume that stale pointer after rotation. Use only the current active player.
+                val currentMp = mediaPlayer ?: return@submit
+                val after = LibVlc.lib.libvlc_media_player_get_state(currentMp)
                 if (after == LibVlc.LIBVLC_STATE_STOPPED || after == LibVlc.LIBVLC_STATE_ENDED) {
-                    LibVlc.lib.libvlc_media_player_play(mp)
+                    LibVlc.lib.libvlc_media_player_play(currentMp)
                 }
             } catch (_: Throwable) { }
         }
@@ -855,6 +864,25 @@ internal class LibVlcSessionManager(
         } else {
             runCatching { LibVlc.lib.libvlc_media_player_stop(p) }
         }
+    }
+
+    /**
+     * Retires Android players without invoking stop, release, or set_media on them.
+     * The VLC-Android AAR may tear down native workers from set_media too, so retired players
+     * remain paused and strongly referenced until process exit; the OS then reclaims them.
+     */
+    private fun retireAndroidPlayers() {
+        if (!systemAudio) return
+        mediaPlayer?.let { player ->
+            runCatching { LibVlc.lib.libvlc_media_player_set_pause(player, 1) }
+            retiredAndroidPlayers += player
+        }
+        audioPlayer?.let { player ->
+            runCatching { LibVlc.lib.libvlc_media_player_set_pause(player, 1) }
+            retiredAndroidPlayers += player
+        }
+        mediaPlayer = null
+        audioPlayer = null
     }
 
     /**

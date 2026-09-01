@@ -206,10 +206,11 @@
   world exit and after first frame). `libvlc_media_player_release` is NOT the culprit; `stop` IS.
   Audio stopping after ~1 min was the same event: switching the video stopped the old player and
   took its audio down with it. Therefore on Android EVERY teardown path MUST avoid
-  `libvlc_media_player_stop`: `LibVlcSessionManager.stop()`/`cleanup()` and the reload-safety
-  stop in `start()` pause the players instead (`libvlc_media_player_set_pause(p,1)`), the ENDED
-  restart in `beginSeek` re-binds media via `set_media` (synchronous input replacement) instead
-  of stop+play, and `LibVlcFrameExtractor`'s scrub-session `close()` pauses too. Pausing keeps
+  `libvlc_media_player_stop`, `libvlc_media_player_release`, and reusing a player after media has
+  been attached: `LibVlcSessionManager.stop()`/`cleanup()` pause the players instead
+  (`libvlc_media_player_set_pause(p,1)`), while `start()` and the ENDED restart in `beginSeek`
+  retire the old players and bind fresh ones. `LibVlcFrameExtractor`'s scrub-session `close()`
+  pauses too. Pausing keeps
   every VLC thread alive, so the TLS destructor never runs with stale state, and the OS reclaims
   the players on process exit (players accumulate per session — acceptable; same keep-alive idea
   as squi2rel/VideoPlayer but WITHOUT their stop+release teardown, which is unverified on Android

@@ -162,7 +162,9 @@ differences:
   destructor (`jni_detach_thread`) then dereferences freed state — `SIGSEGV at
   libvlc.so+0xef7418` on video switch / world exit even with players never released. Every
   teardown path instead PAUSES the players (`libvlc_media_player_set_pause`), keeping every
-  VLC thread alive for the JVM lifetime; the OS reclaims them on process exit.
+  VLC thread alive for the JVM lifetime; the OS reclaims them on process exit. When media is
+  reloaded, the old paused players are retained and fresh players are created instead of calling
+  `set_media` on a player that already carried media.
 - **Hardware decode** uses MediaCodec ( ByteBuffer copy mode feeding the same frame
   callbacks); override with `-Ddreamdisplayx.hwDecode=<module>` or disable it with an empty
   value, same as desktop.

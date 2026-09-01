@@ -40,8 +40,8 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
   system-proxy probe no longer crashes the game JVM.
 - **Android: stop passing `--plugin-path`** — the option is compiled out of the monolithic AAR;
   corrected the forced aout module name to `opensles`.
-- **Android: fix thread-exit crash after playback** — serialised stop→release and
-  `awaitStopped()` before building a replacement player.
+- **Android: fix thread-exit TLS crash after playback** — never stop, release, or reuse a player
+  after media playback; retired players are paused and retained while fresh players handle reloads.
 - **Android: restore separate DASH audio** — the audio-only player is created on Android too,
   played through OpenSL ES, volume routed to both players.
 - **Android: never stop or release libvlc players** — every teardown path pauses instead, so
