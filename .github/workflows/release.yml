@@ -366,19 +366,16 @@ jobs:
         id: versions
         run: |
           python3 - <<'EOF'
+          import json
           import os
 
           mc = "${{ matrix.task.mc }}"
-          props = {}
 
-          with open(f"versions/{mc}/gradle.properties") as f:
-              for line in f:
-                  line = line.strip()
-                  if not line or line.startswith("#") or "=" not in line:
-                      continue
-
-                  key, value = line.split("=", 1)
-                  props[key.strip()] = value.strip()
+          # Version metadata moved from versions/<mc>/gradle.properties to versions.json
+          # (upstream 3859aeba); the old per-version properties files no longer exist.
+          with open("versions.json", encoding="utf-8") as f:
+              versions_data = json.load(f)
+          props = versions_data["versions"].get(mc, {})
 
           minecraft_version = props.get("minecraft.version", mc)
 

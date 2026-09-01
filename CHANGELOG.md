@@ -4,203 +4,104 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
 
 ## Highlights
 
-- **Full libvlc rewrite (vlcj removed)** — the media pipeline is ported from JavaCPP/FFmpeg to a low-level JNA 
-  libvlc binding: single libvlc instance + player, never rebuilt, video via lock/unlock/display callbacks into a
-  grow-only triple-buffer pool. No more `JNA: callback garbage collected` spam, switch flicker, or stutter.
-- **Two-player A/V split** — the video player runs `:no-audio` (system clock → full source FPS); a separate 
-  audio-only player (`:no-video`) feeds the 3D DSP + Java Sound. Audio snaps to video every ~10s on drift 
-  >300ms. Fixed the audio-clock throttle that kept the vout at ~60% of source FPS.
-- **3D DSP audio restored** — libvlc audio callbacks deliver decoded PCM through the per-display `AudioDspStage`
-  (direction, occlusion, reverb) to a Java Sound `SourceDataLine`; volume as PCM gain.
-- **Hardware decode: d3d11va default on Windows** — explicit per-OS backend (d3d11va / vaapi / videotoolbox), 
-  `-Ddreamdisplayx.hwDecode` override, F3 shows the real decoder.
-- **Scrub preview on demand** — per-hover extraction from the lowest-quality (≤360p) H.264 stream via a 
-  long-lived software-decoded player; no more pre-generated sample frames.
-- **Stretch mode + GPU-scaled rendering** — video is drawn at native aspect with the GPU doing the scaling; 
-  STRETCH / LETTERBOX / CROP UV modes; z-fighting flicker fixed.
-- **Ported upstream 1.9.5 fixes** — displays no longer turn black behind water / glass (drawn before translucent
-  terrain + shader-pack replay pass), partially-written persistent PBO uploads no longer corrupt textures on 
-  Windows, and the NeoForge `sqlite-jdbc` clash is fixed by shipping it as a jar-in-jar.
-- **Render-distance menu slider removed** — displays now unload by the client's own chunk render distance 
-  (upstream behavior); the distance-based quality scaler is untouched.
-- **Android support restored** — runs under PojavLauncher / FCL / Zalith launchers on ARM64 and x86_64 devices: 
-  the natives cache moves to exec-friendly app-internal storage, audio plays through libvlc's OpenSL ES output 
-  (3D positional audio unavailable there), and hardware decoding uses MediaCodec (ByteBuffer copy mode). 
-  **SQLite persistence works too** — the stock `sqlite-jdbc` jar ships no Android native, so a Bionic build 
-  (extracted from xerial's own `-sources` artifact) is bundled and loaded via `org.sqlite.lib.path` / 
-  `org.sqlite.lib.name`, keeping display + credential storage on-device. 
-  **LibVLC loads by absolute path on Android, with its companion natives preloaded** — the JVM reports 
-  `os.name=Linux-Android`, so JNA's generic-Linux name mapping turns `libvlc` into a doubled `liblibvlc.so`; we 
-  dlopen the exact extracted `.so` instead. The VLC-Android runtime's `DT_NEEDED` deps (`libc++_shared.so` / 
-  `libmla.so` / `libvlcjni.so`) live in the same directory but the Android linker does not search it, so they 
-  are loaded first with `RTLD_GLOBAL` via `System.load` before `libvlc.so` is opened. Desktop platforms are 
-  unaffected.
+- **Full libvlc rewrite (vlcj removed)** — the media pipeline is ported from JavaCPP/FFmpeg to a
+  low-level JNA libvlc binding; no more `JNA: callback garbage collected` spam, switch flicker,
+  or stutter.
+- **Two-player A/V split** — video runs `:no-audio`, a separate audio player is snapped to the
+  video clock every ~10s on drift; no more audio-clock throttling of the vout.
+- **3D DSP audio restored** — decoded PCM flows through direction / occlusion / reverb into Java
+  Sound; volume as PCM gain.
+- **Hardware decode: d3d11va default on Windows** — per-OS backend (d3d11va / vaapi /
+  videotoolbox) with `-Ddreamdisplayx.hwDecode` override; F3 shows the real decoder.
+- **Scrub preview on demand** — per-hover extraction from the lowest-quality (≤360p) H.264
+  stream via a long-lived software-decoded player.
+- **Stretch mode + GPU-scaled rendering** — STRETCH / LETTERBOX / CROP UV modes; z-fighting
+  flicker fixed.
+- **Ported upstream 1.9.5 fixes** — water/glass display fix, PBO barrier fix on Windows,
+  NeoForge `sqlite-jdbc` clash fixed via jar-in-jar.
+- **Render-distance menu slider removed** — displays unload by the client's own chunk render
+  distance.
+- **Android support restored** — runs under PojavLauncher / FCL / Zalith on ARM64 and x86_64:
+  OpenSL ES audio, MediaCodec decode, SQLite persistence, LibVLC loaded by absolute path with
+  companion natives preloaded.
 
 ## Playback
 
-- **Pause/resume crash fixes** — render thread no longer touches the audio line (0xC0000374 heap corruption); 
-  drop buffer padded to a full frame (0xC0000374 on seek); audio callback window clamped ~0.25s (0xC0000409); no
-  more `SourceDataLine.stop()/start()` (0xC0000409/0xC0000005).
-- **Android: libvlc natives switch to the official libvlc-all AAR with a unique libc++ SONAME** — the Android 
-  runtime now comes from the `org.videolan.android:libvlc-all` Maven artifact (3.7.5, the same library-form 
-  distribution squi2rel/VideoPlayer uses) instead of the VLC-Android APK. Preloading companions alone was not 
-  enough: Pojav-style launchers (Zalith/FCL) load their own `libc++_shared.so` first, and the Android linker 
-  deduplicates by SONAME, so libvlc.so silently bound to that stale copy and dlopen still died on 
-  `cannot locate symbol _ZTTNSt6__ndk118basic_stringstream...`. `native/libvlc/build.sh` now renames libc++ to a
-  unique SONAME (`libc++_dreamdisplayx.so`) and rewrites libvlc.so's `DT_NEEDED` via `patchelf`, so the linker 
-  can only bind to the copy we ship; `NativesDownloader` requires the renamed file on Android so old APK-format 
-  caches are re-downloaded automatically. Desktop platforms are unaffected.
-- **Android playback crash fixes (three separate root causes)** — (1) stale APK-era companions (
-  `libc++_shared.so` / `libmla.so`) could survive beside the new AAR natives in the cache: `flattenPlatformDir` 
-  copied over them without wiping, so the process ended up with two libc++ copies loaded `RTLD_GLOBAL`, 
-  corrupting C++ vtables/thread-start pointers (crash signature: `SIGSEGV in __pthread_start` jumping to an 
-  unmapped address when a video starts). The extractor now wipes the destination first, and startup heals 
-  already-dirty caches by deleting any `.so` outside the AAR-era whitelist. (2) plain JNA `Native.load` only 
-  `dlopen`s `libvlc.so` and never triggers its `JNI_OnLoad`, so VLC-Android's AndroidBridge never learns the 
-  JavaVM and `libvlc_new` returns null. The loader now obtains the live JavaVM via `JNI_GetCreatedJavaVMs` from 
-  `libjvm.so` and calls `libvlc.so`'s exported `JNI_OnLoad` with it — the same bridge step squi2rel/VideoPlayer 
-  performs through its native shim, done here in pure JNA (best-effort, never blocks playback). (3) 
-  **never preload `libvlcjni.so`** — it is the org.videolan Java-layer JNI glue, not a dependency of `libvlc.so`
-  (the AAR's `DT_NEEDED` lists only libc++/libm/libEGL/etc.; the "libvlcjni" strings inside libvlc.so are 
-  build-path macros, not runtime dlopens). If it is ever `System.load`'ed, its `JNI_OnLoad` calls 
-  `FindClass("android/os/Build$VERSION")`, which does not exist on Pojav-style game JVMs, so it throws 
-  `NoClassDefFoundError`; the JVM then dlcloses the library, but `JNI_OnLoad` has already spawned native worker 
-  threads whose start routines point into libvlcjni's own text, and once unmapped they jump into a hole — the 
-  `SIGSEGV in __pthread_start` that kept recurring even after the cache hygiene fix (both crash logs showed the 
-  same `NoClassDefFoundError: android/os/Build$VERSION` → `Unloaded shared library` → `SIGSEGV` sequence). 
-  `preloadAndroidCompanions` now loads only the renamed libc++, and `libvlcjni.so` is excluded from the 
-  stale-clean whitelist so it is removed from the cache entirely. Desktop platforms are unaffected.
-- **Android: ship an `android.os.Environment` stub so libvlc's JNI bridge completes (fixes the
-  video-load crash + exit crash)** — the earlier `--http-proxy=direct://` workaround was invalid:
-  this libvlc-all AAR compiles `--http-proxy` out entirely (it logs "Warning: option --http-proxy
-  no longer exists"), and VLC-Android's http access module unconditionally calls `vlc_getProxyUrl()`
-  anyway, so no VLC option can skip the JNI system-proxy probe. The real crash cause was a NULL
-  AndroidBridge cache: libvlc.so's `JNI_OnLoad` bails out with `JNI_ERR` at its very first
-  `FindClass("android/os/Environment")` on Pojav-style game JVMs (desktop OpenJDK, no `android.*`
-  framework classes), so the cached `java/lang/System.getProperty` jclass + jmethodID stay NULL,
-  and `vlc_getProxyUrl` later calls `CallStaticObjectMethod` with NULL class/method →
-  `SIGSEGV in libjvm.so` (thread `config_GetGenericDir`, si_addr=0) when opening any http URL.
-  The mod now ships its OWN `android.os.Environment` stub
-  (`media/player/src/main/kotlin/android/os/Environment.kt` — an independent implementation of
-  the mechanism squi2rel/VideoPlayer uses; their repo is ARR so nothing was copied), and
-  `injectAndroidJniOnLoad` pre-warms it via `ensureAndroidEnvironmentStubVisible()` before
-  invoking `JNI_OnLoad`. With the class resolvable, `JNI_OnLoad` runs to completion (caching
-  `System.getProperty`), `vlc_getProxyUrl` reads `http.proxyHost` → null (unset on a game JVM) →
-  "no proxy" → direct connection, no crash. `--http-proxy=direct://` is no longer passed.
-  Desktop platforms are unaffected.
-- **Android: stop passing `--plugin-path` (and fix the aout module name)** — the monolithic
-  `libvlc-all` AAR builds VLC with `loadplugins` disabled, so the `--plugin-path` option is
-  compiled out entirely; passing it made `libvlc_new` fail hard with
-  `vlc: unknown option or missing mandatory argument --plugin-path=...` → `libvlc_new returned
-  null` → `LibVLC not loaded` (video displays stayed black). The Android branch no longer adds
-  that option. Also corrected the forced audio output to the module's real name
-  `--aout=opensles` (OpenSL ES; `opensl` does not exist and the aout bank would fall back to
-  PulseAudio/ALSA probes that abort on Android). Verified by scanning the AAR binary:
-  `plugin-path` appears 0 times, `opensles_android.c` confirms the opensles module.
-  Desktop platforms are unaffected.
-- **Android: fix thread-exit crash after playback (`SIGSEGV at libvlc.so+0xef7418`)** — once the
-  video actually played, a NEW crash appeared: VLC's own native worker threads exit through
-  `pthread_exit` → `pthread_key_clean_all`, and the registered TLS destructor
-  (`jni_detach_thread`, VLC-Android `modules/video_output/android/utils.c`) dereferences
-  thread-local state. If the libvlc player was released while those threads were still alive, the
-  value was already freed → use-after-free. Root cause in our teardown: `LibVlcSessionManager.cleanup()`
-  called the ASYNC `stop()` (whose queued task a following `shutdownNow()` could cancel before it
-  ever ran) and then released synchronously, so the release routinely beat the stop. `cleanup()` now
-  runs stop→release serially on the control executor and awaits completion, so VLC worker threads
-  exit before the player object is freed. The crash was amplified by the client stacking multiple
-  native players on one display: `DisplayMediaController.load()` fired the old player's `stop()`
-  fire-and-forget and built the replacement immediately (game log showed 3 concurrent players on
-  the same display id; first-frame-timeout + CDN re-rank kept creating new ones). `MediaPlayer` now
-  exposes `awaitStopped()` and the loader waits for the previous player's teardown before
-  constructing the new one. Also stops calling `libvlc_media_player_get_video_decoder_info` on
-  Android — the libvlc-all AAR's monolithic `libvlc.so` does not export that symbol (verified
-  against its `.dynsym`), so the F3 decoder-name refresh threw `UnsatisfiedLinkError` twice per
-  session (seen in the same hs_err); it reports the configured MediaCodec chain instead.
-  Desktop platforms are unaffected.
-- **Android: restore separate DASH audio playback (no sound on video-only m4s)** — with the
-  video playing, Bilibili's DASH streams stayed silent: the video m4s is video-only, and the
-  separate audio m4s was never played because `LibVlcSessionManager.audioPlayer()` returned null
-  on Android (the old design assumed libvlc's OpenSL ES output owned all audio inside the video
-  player). The separate audio-only player is now created on Android too — WITHOUT audio
-  callbacks, so libvlc's own `--aout=opensles` plays the DASH audio m4s directly (desktop keeps
-  the Java Sound callback pipeline). `setVolume()` now routes the gain to BOTH players on
-  Android; the existing A/V auto-resync snaps the audio player to the video clock on drift.
-  Desktop platforms are unaffected.
-- **Android: never stop OR release libvlc players (fixes video-switch crash)** — the earlier
-  stop→release serialisation and never-release fixes reduced the crashes but did NOT eliminate
-  them: switching videos (or opening the pause menu / leaving the world) still died with
-  `SIGSEGV at libvlc.so+0xef7418` inside `pthread_key_clean_all` (`si_addr=0x6d8`). A binary +
-  source audit (`vlc 3.0.x modules/video_output/android/utils.c`) showed the TLS destructor's
-  value is a plain `JNIEnv*` stored by `android_getEnvCommon` (the only `pthread_setspecific`
-  caller for `jni_env_key`, libvlc.so+0xef63e8), and that this AAR's `libvlc_media_player_stop`
-  itself force-tears input/vout/aout so worker threads detach while winding down — i.e. `stop`
-  (not `release`) is what frees the object the late threads' `jni_detach_thread` TLS destructor
-  dereferences, so the crash happens even with players NEVER released (observed on the first
-  video switch at "Saving and pausing game..." +00:02). The audio stopping after ~1 minute was
-  the same event — the video switch stopped the old player and took its audio down with it.
-  Fix: on Android EVERY teardown path avoids `libvlc_media_player_stop` — `stop()` /
-  `cleanup()` and the reload-safety stop in `start()` pause the players instead
-  (`libvlc_media_player_set_pause(p,1)`); the ENDED restart in `beginSeek` re-binds media via
-  `set_media` (synchronous input replacement) instead of stop+play; `LibVlcFrameExtractor`'s
-  scrub-session `close()` pauses too. Pausing keeps every VLC worker thread alive, so the TLS
-  destructor never runs with stale state, and the OS reclaims the players on process exit
-  (players accumulate per session — acceptable). Desktop keeps the serialised stop→release
-  ordering. Desktop platforms are otherwise unaffected.
-- **A/V auto-resync (bidirectional)** — flushes and re-anchors when the audio buffer drifts >300ms in either 
-  direction, plus a 1.5s initial sync after playback/replay start.
-- **Loop/replay fixes** — ENDED path does `stop()`+`play()`, re-arms `eosFired` (no more freeze on second 
-  replay), and restarts the audio player so audio replays too.
-- **Native runtime bootstrap** — libvlc + SQLite runtimes are collected from official VideoLAN distributions by 
-  CI and downloaded at runtime into `./dreamdisplayx/natives/`; libvlc upgraded 3.0.21 → 3.0.22.
+- **Pause/resume crash fixes** — render thread no longer touches the audio line; drop buffer
+  padded to a full frame; audio callback window clamped ~0.25s; no more
+  `SourceDataLine.stop()/start()`.
+- **Android: libvlc natives from the official `libvlc-all` AAR** — unique libc++ SONAME so the
+  Android linker can't bind libvlc to a stale launcher copy; old APK-format caches
+  re-downloaded automatically.
+- **Android playback crash fixes** — cache wiped before extraction + startup cleanup of stray
+  `.so`; live JavaVM injected via `JNI_OnLoad` so `libvlc_new` succeeds; `libvlcjni.so` never
+  loaded (its `JNI_OnLoad` would crash Pojav-style game JVMs).
+- **Android: `android.os.Environment` stub** — lets libvlc's JNI bridge complete so the http
+  system-proxy probe no longer crashes the game JVM.
+- **Android: stop passing `--plugin-path`** — the option is compiled out of the monolithic AAR;
+  corrected the forced aout module name to `opensles`.
+- **Android: fix thread-exit crash after playback** — serialised stop→release and
+  `awaitStopped()` before building a replacement player.
+- **Android: restore separate DASH audio** — the audio-only player is created on Android too,
+  played through OpenSL ES, volume routed to both players.
+- **Android: never stop or release libvlc players** — every teardown path pauses instead, so
+  worker threads stay alive and the TLS destructor never reads freed state (fixes the
+  video-switch and world-exit crash).
+- **A/V auto-resync (bidirectional)** — flushes and re-anchors when the audio buffer drifts
+  >300ms in either direction, plus a 1.5s initial sync.
+- **Loop/replay fixes** — ENDED path does `stop()` + `play()`, re-arms `eosFired` (no more
+  freeze on second replay), and restarts the audio player so audio replays too.
+- **Native runtime bootstrap** — libvlc + SQLite runtimes are collected from official VideoLAN
+  distributions by CI and downloaded at runtime; libvlc upgraded 3.0.21 → 3.0.22.
 
 ## Scrub preview
 
-- Per-hover single extraction (coalesced), prefers H.264 ≤360p, `:network-caching=300`, seek-while-playing gated
-  past the target so backward seeks never cache a stale frame; failed frames keep the nearest valid thumbnail.
+- Per-hover single extraction (coalesced), prefers H.264 ≤360p, `:network-caching=300`,
+  seek-while-playing gated past the target so backward seeks never cache a stale frame.
 
 ## Debug overlay
 
-- F3 shows `Video FPS`, `Stream` (codec/resolution/fps), `Frame int` (min/avg/max ms — vout dropping vs decoder 
-  slow), the real decoder name, and commit id. `-Ddreamdisplayx.debugFps=true` draws the live FPS on the menu 
-  preview.
+- F3 shows `Video FPS`, `Stream` (codec/resolution/fps), `Frame int` (min/avg/max ms — vout
+  dropping vs decoder slow), the real decoder name, and commit id.
+  `-Ddreamdisplayx.debugFps=true` draws the live FPS on the menu preview.
 
 ## Tunable diagnostics
 
-- JVM flags: `-Ddreamdisplayx.networkCachingMs=<ms>` (default 300), `-Ddreamdisplayx.audioBufferMs=<ms>` 
-  (default 100), `-Ddreamdisplayx.hwDecode=<backend>`, `-Ddreamdisplayx.verboseLibvlc=true`, 
-  `-Ddreamdisplayx.noDropLateFrames=true`, plus bisection switches `silentAudio` / `noAudioCallback` / 
-  `noFrameSink` / `noVideoPublish` / `noAutoResync` / `noHardwareAccel`. See README for details.
+- JVM flags: `-Ddreamdisplayx.networkCachingMs=<ms>` (default 300),
+  `-Ddreamdisplayx.audioBufferMs=<ms>` (default 100), `-Ddreamdisplayx.hwDecode=<backend>`,
+  `-Ddreamdisplayx.verboseLibvlc=true`, `-Ddreamdisplayx.noDropLateFrames=true`, plus bisection
+  switches `silentAudio` / `noAudioCallback` / `noFrameSink` / `noVideoPublish` /
+  `noAutoResync` / `noHardwareAccel`. See README for details.
 
 ## Code quality
 
-- Routine/diagnostic logs moved from WARN/INFO to DEBUG; dead code (`Processes.kt`) and unused imports removed; 
-  per-call Regex/MD5 hoisted to cached fields; audio DSP hot path optimized (LoudnessMeter alpha precomputed, 
-  ParametricBinaural `read(0f)` skipped — bit-equivalent); `BilibiliAccountLabel` gets a 30s failure backoff.
-- **CI: fix `preview` publish crash on first preview build** — `_build.yml`'s "Get version" step computed the 
-  next preview ordinal from existing `v<ver>-preview.N` tags via a `grep`-based pipeline; with 
-  `set -euo pipefail`, a missing match made `grep` exit non-zero and aborted the whole step (exit 1) before the 
-  empty-`MAX_N` → `preview.0` fallback could run. The command substitution now ends with `|| true`, so a repo 
-  with no preview tags yet resolves to `preview.0` instead of failing. Verified by simulating both branches in 
-  Git Bash.
+- Routine/diagnostic logs moved from WARN/INFO to DEBUG; dead code (`Processes.kt`) and unused
+  imports removed; per-call Regex/MD5 hoisted to cached fields; audio DSP hot path optimized;
+  `BilibiliAccountLabel` gets a 30s failure backoff.
+- **CI: fix `preview` publish crash on first preview build** — the `Get version` step now
+  tolerates a repo with no preview tags yet (resolves to `preview.0` instead of failing under
+  `set -euo pipefail`).
 
 ## Sources
 
 - Bilibili quality selector shows canonical resolution labels (360P / 480P / 720P / 1080P / 4K).
-- Bilibili CDN mirror selection with startup bandwidth ranking (based on 
-  [PiliPlus](https://github.com/piliplus/piliplus)) and `bilibili-cdn-mirror` config; session refresh removed 
-  (endpoint always errors).
-- Removed `yt-dlp` orchestrator and the YouTube resolver chain (`NewPipeExtractor`); search is now 
-  `DirectSearchService` (URL paste → info card, `BV`/`av` → Bilibili video).
-- Bilibili unreleased content filtered from search; resolution resolved fresh on every play (no stale 30-minute 
-  cache); fixed 4K blur by allocating the texture at the source height.
+- Bilibili CDN mirror selection with startup bandwidth ranking (based on
+  [PiliPlus](https://github.com/piliplus/piliplus)) and `bilibili-cdn-mirror` config; session
+  refresh removed (endpoint always errors).
+- Removed `yt-dlp` orchestrator and the YouTube resolver chain (`NewPipeExtractor`); search is
+  now `DirectSearchService` (URL paste → info card, `BV`/`av` → Bilibili video).
+- Bilibili unreleased content filtered from search; resolution resolved fresh on every play (no
+  stale 30-minute cache); fixed 4K blur by allocating the texture at the source height.
 - Login/logout i18n + full Chinese server translation.
 
 ## CI / Build
 
-- SQLite native build split into a standalone workflow; CI skips builds on doc/workflow-only changes.
+- SQLite native build split into a standalone workflow; CI skips builds on doc/workflow-only
+  changes.
 - Commit ID stamped into the build and shown in F3 (`Commit: <hash>`).
-- Natives workflow collects the official LibVLC runtime for 9 platforms: 7 desktop plus Android ARM64/x86_64 
-  (from the official `libvlc-all` Maven AAR, monolithic `libvlc.so`, libc++ renamed to a unique SONAME).
+- Natives workflow collects the official LibVLC runtime for 9 platforms: 7 desktop plus Android
+  ARM64/x86_64 (from the official `libvlc-all` Maven AAR, monolithic `libvlc.so`, libc++
+  renamed to a unique SONAME).
 
 # 1.9.3.3 Release
 
