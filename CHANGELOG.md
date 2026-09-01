@@ -114,6 +114,7 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
 ## Code quality
 
 - Routine/diagnostic logs moved from WARN/INFO to DEBUG; dead code (`Processes.kt`) and unused imports removed; per-call Regex/MD5 hoisted to cached fields; audio DSP hot path optimized (LoudnessMeter alpha precomputed, ParametricBinaural `read(0f)` skipped — bit-equivalent); `BilibiliAccountLabel` gets a 30s failure backoff.
+- **CI: fix `preview` publish crash on first preview build** — `_build.yml`'s "Get version" step computed the next preview ordinal from existing `v<ver>-preview.N` tags via a `grep`-based pipeline; with `set -euo pipefail`, a missing match made `grep` exit non-zero and aborted the whole step (exit 1) before the empty-`MAX_N` → `preview.0` fallback could run. The command substitution now ends with `|| true`, so a repo with no preview tags yet resolves to `preview.0` instead of failing. Verified by simulating both branches in Git Bash.
 
 ## Sources
 
