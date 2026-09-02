@@ -16,6 +16,26 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
+    WorldGuard:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    GriefPrevention:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Residence:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Lands:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Towny:
+      load: BEFORE
+      required: false
+      join-classpath: true
 permissions:
   dreamdisplayx.create:
     default: true
