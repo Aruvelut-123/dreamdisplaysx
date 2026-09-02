@@ -76,20 +76,25 @@ object ScreenRenderer : ClientRenderService {
             camera.position()
         //?} else
         /*camera.getPosition()*/
-        for (displayScreen in DisplayRegistry.getScreens()) {
-            displayScreen.syncReplayFrame()
-            if (displayScreen.isDormant || !displayScreen.hasTexture) continue
+        if (replay) ReplayModCompat.beginRenderFrame()
+        try {
+            for (displayScreen in DisplayRegistry.getScreens()) {
+                displayScreen.syncReplayFrame()
+                if (displayScreen.isDormant || !displayScreen.hasTexture) continue
 
-            stack.pushPose()
+                stack.pushPose()
 
-            val pos = displayScreen.pos
-            val screenCenter = Vec3.atLowerCornerOf(pos)
-            val relativePos = screenCenter.subtract(cameraPos)
-            stack.translate(relativePos.x, relativePos.y, relativePos.z)
+                val pos = displayScreen.pos
+                val screenCenter = Vec3.atLowerCornerOf(pos)
+                val relativePos = screenCenter.subtract(cameraPos)
+                stack.translate(relativePos.x, relativePos.y, relativePos.z)
 
-            renderScreenTexture(displayScreen, stack, replay, drawQuad)
+                renderScreenTexture(displayScreen, stack, replay, drawQuad)
 
-            stack.popPose()
+                stack.popPose()
+            }
+        } finally {
+            if (replay) ReplayModCompat.endRenderFrame()
         }
 
         // The registered RenderHook extends the world pass after the mod's own screens.

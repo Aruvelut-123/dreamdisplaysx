@@ -1137,8 +1137,11 @@ class DisplayScreen(
             return
         }
         val previous = replayLastTimelineMs
-        if (previous >= 0L && timelineMs >= previous) {
-            com.dreamdisplayx.platform.client.render.ReplayModCompat.consumeActions(previous, timelineMs) { action, id, payload ->
+        val rewound = previous >= 0L && timelineMs < previous
+        if (rewound) replayActionsConsumedThroughMs = -1L
+        if (timelineMs >= 0L && (previous < 0L || rewound || timelineMs >= previous)) {
+            val from = if (rewound) -1L else previous
+            com.dreamdisplayx.platform.client.render.ReplayModCompat.consumeActions(from, timelineMs) { action, id, payload ->
                 if (id == uuid) applyReplayAction(action, payload)
             }
         }

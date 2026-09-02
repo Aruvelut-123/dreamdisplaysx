@@ -6,6 +6,15 @@ import java.util.Base64
 
 /** Optional ReplayMod bridge. Reflection keeps ReplayMod out of the hard dependency graph. */
 object ReplayModCompat {
+    @Volatile
+    private var renderingFrame = false
+
+    /** True while Dream DisplaysX is rendering a ReplayMod video frame. */
+    val isReplayRendering: Boolean get() = renderingFrame
+
+    fun beginRenderFrame() { renderingFrame = true }
+    fun endRenderFrame() { renderingFrame = false }
+
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/ReplayModCompat")
     private val replayClassNames = listOf(
         "com.replaymod.replay.ReplayModReplay",
