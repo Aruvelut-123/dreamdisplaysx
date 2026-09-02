@@ -51,6 +51,10 @@ object Initializer {
         // anything tries to use it. No-ops when already cached.
         NativesDownloader.ensure()
 
+        // Patch only the selected Complementary r5.8.1 pack into a disposable copy before the
+        // shader loader initializes. BSL and unknown packs are intentionally left untouched.
+        com.dreamdisplayx.platform.client.render.ComplementaryShaderPatcher.patchAtStartup()
+
         logger.info("Dream DisplaysX v${GeneralUtil.getPrettyModVersion()} (${GeneralUtil.getCommitId()}) starting...")
         ClientStartupManager.start()
     }

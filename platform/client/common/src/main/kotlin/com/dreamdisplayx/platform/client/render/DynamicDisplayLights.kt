@@ -66,7 +66,7 @@ object DynamicDisplayLights {
             when (method.name) {
                 "lightAtPos" -> SourceState.lightAtPos(id, args?.getOrNull(0) as? BlockPos)
                 "getBoundingBox" -> SourceState.boundingBox(id)
-                "hasChanged" -> true
+                "hasChanged" -> SourceState.hasChanged(id)
                 "isRemoved" -> false
                 "toString" -> "DreamDisplaysX-$id"
                 "hashCode" -> id.hashCode()
@@ -87,6 +87,8 @@ object DynamicDisplayLights {
     private object SourceState {
         private val positions = ConcurrentHashMap<UUID, BlockPos>()
         private val levels = ConcurrentHashMap<UUID, Int>()
+        private val revisions = ConcurrentHashMap<UUID, Int>()
+        private val observedRevisions = ConcurrentHashMap<UUID, Int>()
 
         fun update(source: Any, pos: BlockPos, color: Int) {
             val id = source.toString().removePrefix("DreamDisplaysX-").let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return
@@ -95,7 +97,10 @@ object DynamicDisplayLights {
             val g = (color ushr 8) and 255
             val b = color and 255
             levels[id] = ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 17.0).toInt().coerceIn(1, 15)
+            revisions[id] = (revisions[id] ?: 0) + 1
         }
+
+        fun hasChanged(id: UUID): Boolean = observedRevisions[id] != (revisions[id] ?: 0)
 
         fun lightAtPos(id: UUID, query: BlockPos?): Double {
             val origin = positions[id] ?: return 0.0
@@ -103,6 +108,7 @@ object DynamicDisplayLights {
             val dx = q.x - origin.x.toDouble()
             val dy = q.y - origin.y.toDouble()
             val dz = q.z - origin.z.toDouble()
+            observedRevisions[id] = revisions[id] ?: 0
             return (levels[id] ?: 0) - sqrt(dx * dx + dy * dy + dz * dz)
         }
 
