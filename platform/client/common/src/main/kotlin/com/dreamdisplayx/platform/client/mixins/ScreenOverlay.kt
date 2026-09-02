@@ -47,6 +47,7 @@ open class ScreenOverlay {
             require = 0
         )
         open fun onRenderHead(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float, ci: CallbackInfo) {*/
+        if (!com.dreamdisplayx.platform.client.render.FlashbackCompat.shouldRenderHud) return
         if (FullscreenOverlayManager.isEmpty) return
         val mc = Minecraft.getInstance()
         FullscreenOverlayManager.onClientTick(mc)
@@ -84,6 +85,7 @@ open class ScreenOverlay {
         )
         open fun onRenderReturn(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float, ci: CallbackInfo) {*/
         val mc = Minecraft.getInstance()
+        if (!com.dreamdisplayx.platform.client.render.FlashbackCompat.shouldRenderHud) return
         if (!FullscreenOverlayManager.isEmpty &&
             MinecraftScreenUtil.isTransientLoadingScreen(MinecraftScreenUtil.currentScreen(mc))
         ) {

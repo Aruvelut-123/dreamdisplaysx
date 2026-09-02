@@ -47,6 +47,20 @@ internal object NeoForgeClothConfigScreen {
                 .build(),
         )
 
+        general.addEntry(
+            entryBuilder.startBooleanToggle(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_HUD), config.flashbackRenderHud)
+                .setDefaultValue(true)
+                .setTooltip(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_HUD_TOOLTIP))
+                .setSaveConsumer { v: Boolean -> config.flashbackRenderHud = v }
+                .build(),
+        )
+        general.addEntry(
+            entryBuilder.startBooleanToggle(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_DISPLAYS), config.flashbackRenderDisplays)
+                .setDefaultValue(true)
+                .setTooltip(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_DISPLAYS_TOOLTIP))
+                .setSaveConsumer { v: Boolean -> config.flashbackRenderDisplays = v }
+                .build(),
+        )
         // Prefer 60fps
         general.addEntry(
             entryBuilder.startBooleanToggle(

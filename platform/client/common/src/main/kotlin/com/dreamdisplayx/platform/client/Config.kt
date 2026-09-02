@@ -34,6 +34,19 @@ class Config(private val baseDir: File) {
     /** Whether displays are enabled at all. */
     var displaysEnabled: Boolean = true
 
+    /** Whether Dream DisplaysX HUD overlays are rendered during replay/export. */
+    var flashbackRenderHud: Boolean = true
+
+    /** Whether world displays are rendered during replay/export. */
+    var flashbackRenderDisplays: Boolean = true
+
+    /** Global multiplier applied to every display's audio output. */
+    var globalAudioMultiplier: Double = 1.0
+        set(value) {
+            field = value.coerceIn(0.0, 2.0)
+            System.setProperty("dreamdisplayx.audio.globalMultiplier", field.toString())
+        }
+
     /** Whether to use hardware-accelerated video decoding (libvlc auto-detects). */
     var useHwAccel: Boolean = true
 
@@ -137,6 +150,9 @@ class Config(private val baseDir: File) {
         }
         t?.getDouble("default-display-volume")?.let { defaultDisplayVolume = it }
         displaysEnabled = t?.getBoolean("displays-enabled") ?: displaysEnabled
+        flashbackRenderHud = t?.getBoolean("flashback-render-hud") ?: flashbackRenderHud
+        flashbackRenderDisplays = t?.getBoolean("flashback-render-displays") ?: flashbackRenderDisplays
+        t?.getDouble("global-audio-multiplier")?.let { globalAudioMultiplier = it.coerceIn(0.0, 2.0) }
         useHwAccel = t?.getBoolean("use-hw-accel") ?: useHwAccel
         preferFps60 = t?.getBoolean("prefer-fps60") ?: preferFps60
         t?.getString("audio-acoustics")?.let { token ->
@@ -147,8 +163,11 @@ class Config(private val baseDir: File) {
             "speakers" -> audioBinauralOutput = false
             "headphones", "auto" -> audioBinauralOutput = true
         }
-        // Expose to the media player / stream selector, which read it via system property.
+        // Expose client-owned runtime options to the media player without a compile-time client dependency.
+        globalAudioMultiplier = globalAudioMultiplier
         System.setProperty("dreamdisplayx.stream.preferFps60", preferFps60.toString())
+        System.setProperty("dreamdisplayx.flashback.renderHud", flashbackRenderHud.toString())
+        System.setProperty("dreamdisplayx.flashback.renderDisplays", flashbackRenderDisplays.toString())
     }
 
     /**
@@ -162,6 +181,20 @@ class Config(private val baseDir: File) {
             ConfigEntryType.BOOLEAN,
             get = { displaysEnabled },
             apply = { displaysEnabled = it; save() },
+        ),
+        ConfigEntry(
+            "flashback-render-hud", "Flashback HUD rendering",
+            "Render Dream DisplaysX HUD overlays during Flashback replay/export.",
+            ConfigEntryType.BOOLEAN,
+            get = { flashbackRenderHud },
+            apply = { flashbackRenderHud = it; save() },
+        ),
+        ConfigEntry(
+            "flashback-render-displays", "Flashback display rendering",
+            "Render world displays during Flashback replay/export.",
+            ConfigEntryType.BOOLEAN,
+            get = { flashbackRenderDisplays },
+            apply = { flashbackRenderDisplays = it; save() },
         ),
         ConfigEntry(
             "prefer-fps60", "Prefer 60fps",
@@ -225,12 +258,18 @@ class Config(private val baseDir: File) {
     /** Persists the current configuration values to disk as standard TOML. */
     fun save() {
         baseDir.mkdirs()
+        globalAudioMultiplier = globalAudioMultiplier
+        System.setProperty("dreamdisplayx.flashback.renderHud", flashbackRenderHud.toString())
+        System.setProperty("dreamdisplayx.flashback.renderDisplays", flashbackRenderDisplays.toString())
         file.writeText(buildString {
             appendLine("# Dream DisplaysX client configuration")
             appendLine("mute-on-alt-tab = $muteOnAltTab")
             appendLine("default-render-distance = $defaultDistance")
             appendLine("default-display-volume = $defaultDisplayVolume")
             appendLine("displays-enabled = $displaysEnabled")
+            appendLine("flashback-render-hud = $flashbackRenderHud")
+            appendLine("flashback-render-displays = $flashbackRenderDisplays")
+            appendLine("global-audio-multiplier = $globalAudioMultiplier")
             appendLine("use-hw-accel = $useHwAccel")
             appendLine("prefer-fps60 = $preferFps60")
             appendLine("audio-acoustics = \"${audioAcoustics.name.lowercase()}\"")

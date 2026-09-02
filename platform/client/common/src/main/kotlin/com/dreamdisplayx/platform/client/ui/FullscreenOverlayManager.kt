@@ -36,7 +36,8 @@ object FullscreenOverlayManager {
      * True while the vanilla HUD (hotbar, health / hunger, chat, ...) should stay hidden behind a
      * fullscreen video.
      */
-    val shouldHideVanillaHud: Boolean get() = !isEmpty
+    val shouldHideVanillaHud: Boolean
+        get() = !isEmpty && com.dreamdisplayx.platform.client.render.FlashbackCompat.shouldRenderHud
 
     /** True while an immersive-mode overlay is active; used to suppress the crosshair. */
     val isImmersiveActive: Boolean

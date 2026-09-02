@@ -25,9 +25,15 @@ object FlashbackCompat {
 
     /** Optional render switches for Flashback sessions; defaults preserve normal rendering. */
     val renderDisplays: Boolean
-        get() = System.getProperty("dreamdisplayx.flashback.renderDisplays")?.toBooleanStrictOrNull() ?: true
+        get() = System.getProperty("dreamdisplayx.flashback.renderDisplays")?.toBooleanStrictOrNull()
+            ?: runCatching { com.dreamdisplayx.platform.client.managers.ClientStateManager.config.flashbackRenderDisplays }
+                .getOrDefault(true)
     val renderHud: Boolean
-        get() = System.getProperty("dreamdisplayx.flashback.renderHud")?.toBooleanStrictOrNull() ?: true
+        get() = System.getProperty("dreamdisplayx.flashback.renderHud")?.toBooleanStrictOrNull()
+            ?: runCatching { com.dreamdisplayx.platform.client.managers.ClientStateManager.config.flashbackRenderHud }
+                .getOrDefault(true)
+
+    val shouldRenderHud: Boolean get() = !isReplayActive || renderHud
 
     /** Returns the current Flashback replay tick, retaining fractional export ticks. */
     fun currentReplayTick(): Double? {

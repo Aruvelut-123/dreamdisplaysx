@@ -113,8 +113,7 @@ object Initializer {
         //?} else
         /*fun onRenderHud(mc: Minecraft, graphics: GuiGraphics, partialTick: Float) {*/
         if (mc.level == null || mc.player == null) return
-        if (!com.dreamdisplayx.platform.client.render.FlashbackCompat.renderHud &&
-            com.dreamdisplayx.platform.client.render.FlashbackCompat.isReplayActive) return
+        if (!com.dreamdisplayx.platform.client.render.FlashbackCompat.shouldRenderHud) return
         if (MinecraftScreenUtil.currentScreen(mc) != null) return
         //? if >=1.21.11 {
         graphics.nextStratum()

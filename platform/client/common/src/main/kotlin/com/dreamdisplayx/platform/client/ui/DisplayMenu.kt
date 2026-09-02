@@ -2,6 +2,8 @@ package com.dreamdisplayx.platform.client.ui
 
 //? if >=1.21.11 {
 import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.input.KeyEvent
+import net.minecraft.client.input.CharacterEvent
 //?}
 import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.service.keys.DisplayServices
@@ -48,6 +50,12 @@ import kotlin.time.Duration.Companion.milliseconds
 class DisplayMenu private constructor(
     val displayScreen: DisplayScreen,
 ) : UiScreenBase(Component.translatable("dreamdisplayx.ui.title")) {
+
+    private val openedDuringReplay =
+        com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive
+
+    private val replayReadOnly: Boolean
+        get() = openedDuringReplay || com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive
 
     private val modLabel = ModTitleLabel()
     private val popout = DreamServices.registry.get<PopoutManager>()
@@ -546,12 +554,15 @@ class DisplayMenu private constructor(
         sync.syncToCurrent()
     }
 
-    override fun onMouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean =
-        settings.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY) ||
+    override fun onMouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
+        if (replayReadOnly) return true
+        return settings.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY) ||
             audioTrackDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
+    }
 
     //? if >=1.21.11 {
     override fun onMouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
+        if (replayReadOnly) return true
         val mx = event.x().toInt()
         val my = event.y().toInt()
         if (event.button() == 0 && settings.handleScrollbarPress(mx, my)) return true
@@ -566,16 +577,29 @@ class DisplayMenu private constructor(
         return modLabel.handleClick(mx, my)
     }
 
-    override fun onMouseDragged(event: MouseButtonEvent, dragX: Double, dragY: Double): Boolean =
-        settings.handleScrollbarDrag(event.y().toInt()) ||
+    override fun onMouseDragged(event: MouseButtonEvent, dragX: Double, dragY: Double): Boolean {
+        if (replayReadOnly) return true
+        return settings.handleScrollbarDrag(event.y().toInt()) ||
             audioTrackDropdown.handleDrag(event.y().toInt())
+    }
 
-    override fun onMouseReleased(event: MouseButtonEvent): Boolean =
-        settings.handleScrollbarRelease() ||
+    override fun onMouseReleased(event: MouseButtonEvent): Boolean {
+        if (replayReadOnly) return true
+        return settings.handleScrollbarRelease() ||
             audioTrackDropdown.handleRelease() ||
             progress.commitDragIfActive()
+    }
+
+    override fun tick() {
+        if (openedDuringReplay && !com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) {
+            onClose()
+            return
+        }
+        super.tick()
+    }
     //?} else
     /*override fun onMouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
+        if (replayReadOnly) return true
         val mx = mouseX.toInt()
         val my = mouseY.toInt()
         if (button == 0 && settings.handleScrollbarPress(mx, my)) return true
@@ -595,6 +619,34 @@ class DisplayMenu private constructor(
             audioTrackDropdown.handleRelease() ||
             progress.commitDragIfActive()*/
 
+
+    override fun onClose() {
+        if (!com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) {
+            com.dreamdisplayx.platform.client.render.ReplayModCompat.recordAction("close", displayScreen.uuid)
+        }
+        super.onClose()
+    }
+
+    //? if >=1.21.11 {
+    override fun keyPressed(event: KeyEvent): Boolean {
+        if (replayReadOnly) return true
+        return super.keyPressed(event)
+    }
+
+    override fun charTyped(event: CharacterEvent): Boolean {
+        if (replayReadOnly) return true
+        return super.charTyped(event)
+    }
+    //?} else
+    /*override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
+        if (replayReadOnly) return true
+        return super.keyPressed(keyCode, scanCode, modifiers)
+    }
+
+    override fun charTyped(codePoint: Char, modifiers: Int): Boolean {
+        if (replayReadOnly) return true
+        return super.charTyped(codePoint, modifiers)
+    }*/
 
     override fun isPauseScreen(): Boolean = false
 

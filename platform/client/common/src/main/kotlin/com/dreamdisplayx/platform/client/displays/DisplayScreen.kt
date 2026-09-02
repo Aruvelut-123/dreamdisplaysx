@@ -762,7 +762,10 @@ class DisplayScreen(
 
     /** Applies effective volume (0 if muted/unfocused, else user volume). */
     internal fun applyEffectiveVolume() {
-        setVideoVolume(if (muted || focusMuted) 0f else volume)
+        val global = runCatching {
+            com.dreamdisplayx.platform.client.managers.ClientStateManager.config.globalAudioMultiplier
+        }.getOrDefault(1.0).coerceIn(0.0, 2.0)
+        setVideoVolume(if (muted || focusMuted) 0f else (volume * global).toFloat())
     }
 
     /** Opens or focuses the `GLFW` window mode. Closes PiP if active. */
@@ -834,6 +837,10 @@ class DisplayScreen(
             "seek" -> payload.toLongOrNull()?.let { mediaPlayer?.seekTo(it * 1_000_000L, false) }
             "video" -> if (payload.isNotBlank()) loadVideoInternal(payload, lang ?: "", true)
             "open" -> DisplayMenu.open(this)
+            "close" -> {
+                val screen = MinecraftScreenUtil.currentScreen(Minecraft.getInstance())
+                if (screen is DisplayMenu && screen.displayScreen === this) screen.onClose()
+            }
         }
     }
 
