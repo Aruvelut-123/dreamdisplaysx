@@ -8,6 +8,5 @@
 - 同内容播放支持（Same content playback，归入 V3 协议）：多个显示器同步播放同一内容，播放状态与进度保持一致
 - Playlists & Queue（V3 协议）
 - Flashback 回放支持
-- ReplayMod 导出音频桥接（当前 ReplayMod 无公开外部 PCM 注入 API）
 - 屏幕投屏（Screen casting，归入 V3 协议）
 - 远程控制（Remote control，归入 V3 协议）
