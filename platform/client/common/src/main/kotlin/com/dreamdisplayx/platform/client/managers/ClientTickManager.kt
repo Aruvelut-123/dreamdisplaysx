@@ -56,6 +56,8 @@ object ClientTickManager {
     /** Main per-tick update: level changes, hover, render-distance (un)loading, and the menu shortcut. */
     fun tick(minecraft: Minecraft) {
         tickCount++
+        // ReplayMod owns the camera timeline while a replay is open. Keep Dream DisplaysX media
+        // rendering alive, but prevent replay-only state from being persisted upstream.
         DreamServices.registry.getOrNull<ClientApplication>()
             ?.emit(ClientLifecycleEvent.Tick(tickCount))
 

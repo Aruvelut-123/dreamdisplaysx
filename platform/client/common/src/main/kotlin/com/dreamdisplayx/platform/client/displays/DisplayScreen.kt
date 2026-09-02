@@ -1008,6 +1008,9 @@ class DisplayScreen(
 
     /** Reports this LOCAL display's playback position to the server (throttled) so it can persist it. */
     private fun reportPositionToServer() {
+        // ReplayMod changes the client camera timeline independently of server time. Never persist
+        // a replay camera's temporary media position back to the live server display.
+        if (com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) return
         if (mode != PlaybackMode.LOCAL || watchParty != null || paused) return
         if (++positionReportTicks % POSITION_REPORT_INTERVAL_TICKS != 0) return
         val nanos = currentTimeNanos
