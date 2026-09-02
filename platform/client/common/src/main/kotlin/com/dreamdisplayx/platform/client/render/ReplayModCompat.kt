@@ -12,6 +12,10 @@ object ReplayModCompat {
         "com.replaymod.replay.ReplayHandler",
     )
 
+    private var lastKnownReplayActive = false
+    private var lastKnownPaused = false
+    private var lastKnownTimelineMs = -1L
+
     /** Current replay timeline in milliseconds, or null when ReplayMod is not playing a replay. */
     fun currentTimelineMs(): Long? = runCatching {
         val module = Class.forName(replayClassNames[0])
@@ -25,6 +29,13 @@ object ReplayModCompat {
 
     /** True when ReplayMod is present and a replay handler is currently active. */
     val isReplayActive: Boolean get() = currentTimelineMs() != null
+
+    /** Clears cached replay edge state after a timeline seek or replay close. */
+    fun resetTimelineState() {
+        lastKnownReplayActive = false
+        lastKnownPaused = false
+        lastKnownTimelineMs = -1L
+    }
 
     /** True when the active replay timeline is paused. */
     val isReplayPaused: Boolean

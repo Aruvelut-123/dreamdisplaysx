@@ -900,7 +900,13 @@ class DisplayScreen(
     fun seekVideoRelative(seconds: Double) {
         if (!canSeekHere) return
         val mp = mediaPlayer ?: return
-        if (mp.canSeek()) mp.seekRelative(seconds)
+        if (mp.canSeek()) {
+            val targetMs = (mp.getCurrentTime() / 1_000_000L + (seconds * 1000.0).toLong()).coerceAtLeast(0L)
+            if (!com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) {
+                com.dreamdisplayx.platform.client.render.ReplayModCompat.recordAction("seek", uuid, targetMs)
+            }
+            mp.seekRelative(seconds)
+        }
     }
 
     /** Seeks to an absolute position [nanos] without firing the sync event (used for incoming sync packets). */
@@ -1111,6 +1117,7 @@ class DisplayScreen(
 
     /** Last ReplayMod pause state applied to this display. */
     private var replayPauseApplied = false
+    private var replayMediaHeld = false
     private var replayLastTimelineMs = -1L
     private var replayActionsConsumedThroughMs = -1L
 
@@ -1118,8 +1125,9 @@ class DisplayScreen(
     internal fun syncReplayFrame() {
         val timelineMs = com.dreamdisplayx.platform.client.render.ReplayModCompat.currentTimelineMs()
         if (timelineMs == null) {
-            if (replayPauseApplied) {
+            if (replayPauseApplied || replayMediaHeld) {
                 replayPauseApplied = false
+                replayMediaHeld = false
                 if (mode == PlaybackMode.LOCAL && !paused) mediaPlayer?.play()
             }
             replayLastTimelineMs = -1L
@@ -1134,10 +1142,14 @@ class DisplayScreen(
         }
         replayActionsConsumedThroughMs = timelineMs
         val replayPaused = com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayPaused
-        if (replayPaused != replayPauseApplied) {
-            replayPauseApplied = replayPaused
-            if (mode == PlaybackMode.LOCAL) {
-                if (replayPaused) mediaPlayer?.pause() else if (!paused) mediaPlayer?.play()
+        if (replayPaused != replayPauseApplied) replayPauseApplied = replayPaused
+        if (mode == PlaybackMode.LOCAL) {
+            if (replayPaused) {
+                replayMediaHeld = true
+                mediaPlayer?.pause()
+            } else if (replayMediaHeld) {
+                replayMediaHeld = false
+                if (!paused) mediaPlayer?.play()
             }
         }
         replayLastTimelineMs = timelineMs
