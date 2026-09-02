@@ -32,8 +32,14 @@ data class ClientDisplaySettings(
     /** Language override for the video, or null if not overridden. */
     var langOverride: String? = null,
 
+    /** Viewer-picked audio track language (from the audio-track dropdown), re-applied after rejoining. */
+    var audioTrackLang: String? = null,
+
     /** Last known playback position in nanoseconds, resumed on Local displays after a restart. */
     var savedTimeNanos: Long = 0,
+
+    /** Viewer-chosen render distance in blocks, or `0` if never customized (falls back to the config default). */
+    var renderDistance: Int = 0,
 
     /** Whether the viewer pinned this display to a Picture-in-Picture overlay; re-opened on rejoin regardless of render distance. */
     var pipOpen: Boolean = false,

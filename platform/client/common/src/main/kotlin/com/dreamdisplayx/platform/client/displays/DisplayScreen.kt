@@ -803,6 +803,9 @@ class DisplayScreen(
     /** True while this display is shown in the fullscreen overlay. */
     val isFullscreenActive: Boolean get() = popoutManager.isFullscreenActive
 
+    /** Whether the active fullscreen presentation should loop when its video ends. */
+    internal fun shouldLoopFullscreen(): Boolean = fullscreenLoop
+
     /** Applies volume, brightness, and paused state to the media player, then seeks to the saved position. */
     fun startVideo() = media.start()
 

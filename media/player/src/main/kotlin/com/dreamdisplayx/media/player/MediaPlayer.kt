@@ -831,7 +831,11 @@ class MediaPlayer(
         }
 
         if (normalEos && !liveStream) {
-            restartFromBeginning()
+            if (host.shouldLoopOnEnd) {
+                restartFromBeginning()
+            } else {
+                host.onPlaybackEnded(durationHintNanos)
+            }
             return
         }
 

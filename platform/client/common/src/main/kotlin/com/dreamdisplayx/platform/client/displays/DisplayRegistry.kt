@@ -60,7 +60,8 @@ object DisplayRegistry {
         // Disk-persisted fallback (survives a full game restart); overridden below by the
         // same-session cache when present, which is fresher.
         displayScreen.savedTimeNanos = clientSettings.savedTimeNanos
-
+        // Render distance follows the client's own chunk render distance on this fork.
+        // The upstream persisted render-distance assignment is intentionally not applied.
         DisplayStorage.getDisplayData(displayScreen.uuid)?.let { saved ->
             displayScreen.savedTimeNanos = saved.currentTimeNanos
         }
@@ -77,6 +78,7 @@ object DisplayRegistry {
         } else {
             unloadedScreens[displayScreen.uuid] = displayScreen.toFullDisplayData()
             ClientSettingsStore.setSavedTimeNanos(displayScreen.uuid, displayScreen.currentTimeNanos)
+            ClientSettingsStore.setRenderDistance(displayScreen.uuid, displayScreen.renderDistance)
         }
         screens.remove(displayScreen.uuid)
         displayScreen.unregister()
@@ -138,6 +140,7 @@ object DisplayRegistry {
     fun saveScreenData(displayScreen: DisplayScreen) {
         DisplayStorage.saveDisplayData(displayScreen.uuid, displayScreen.toFullDisplayData())
         ClientSettingsStore.setSavedTimeNanos(displayScreen.uuid, displayScreen.currentTimeNanos)
+        ClientSettingsStore.setRenderDistance(displayScreen.uuid, displayScreen.renderDistance)
     }
 
     /** Restores the display snapshot cached for [serverId] (e.g. saved timecodes) from a prior session. */

@@ -82,6 +82,15 @@ Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays
   tolerates a repo with no preview tags yet (resolves to `preview.0` instead of failing under
   `set -euo pipefail`).
 
+## Upstream sync
+
+- Fullscreen videos now respect the loop setting and close correctly when dismissed with Esc.
+- Vanilla HUD elements are hidden while fullscreen video overlays are active.
+- Suggestion cards received layout, metadata, scrollbar, scaling, and readability improvements.
+- Selected audio tracks persist after reconnecting; Twitch, Vimeo, Kick, and Bilibili links resolve in
+  `/display video` commands.
+- Release workflow now reads per-version Minecraft metadata from `versions.json`.
+
 ## Sources
 
 - Bilibili quality selector shows canonical resolution labels (360P / 480P / 720P / 1080P / 4K).

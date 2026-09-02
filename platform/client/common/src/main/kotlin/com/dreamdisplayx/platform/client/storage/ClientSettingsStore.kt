@@ -85,10 +85,24 @@ object ClientSettingsStore : ClientSettingsStorage {
         save()
     }
 
+    /** Sets the viewer-picked audio track language for [displayUuid] and saves. */
+    override fun setAudioTrackLang(displayUuid: UUID, lang: String?) {
+        val s = getSettings(displayUuid)
+        s.audioTrackLang = lang
+        save()
+    }
+
     /** Sets the last known playback position for [displayUuid] and saves. */
     override fun setSavedTimeNanos(displayUuid: UUID, nanos: Long) {
         val s = getSettings(displayUuid)
         s.savedTimeNanos = nanos
+        save()
+    }
+
+    /** Sets the viewer-chosen render distance (in blocks) for [displayUuid] and saves. */
+    override fun setRenderDistance(displayUuid: UUID, blocks: Int) {
+        val s = getSettings(displayUuid)
+        s.renderDistance = blocks
         save()
     }
 
