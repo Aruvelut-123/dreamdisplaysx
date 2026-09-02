@@ -135,7 +135,7 @@ Grab the `.jar` for your loader and Minecraft version from the
 - `dreamdisplayx-velocity-<version>.jar` / `dreamdisplayx-bungeecord-<version>.jar` — proxy plugins
 
 On the **client**, install the mod into your mods folder. On the **server**, install the matching jar (plugin or mod).
-That's it — no extra dependencies required.
+That's it — no extra dependencies required. LambDynamicLights is an optional client integration for video-derived dynamic lighting.
 
 ## Supported versions
 
@@ -166,6 +166,7 @@ differences:
   reloaded, the old paused players are retained and fresh players are created instead of calling
   `set_media` on a player that already carried media. Each player also gets its own video callback
   and direct-buffer pool, so delayed frames from an old player cannot use the replacement's buffers.
+- **Video-derived dynamic lighting** samples the playing frame's RGB color and, when LambDynamicLights is installed, exposes a light source at the display anchor with brightness derived from that color. The sampled RGB value is retained for color-capable rendering integrations; without LambDynamicLights the normal lighting path is unchanged. Iris shader packs, including BSL and Complementary, retain their own color-lighting pipeline: Iris does not expose a stable public API for injecting arbitrary third-party RGB light sources, so the mod never writes private shader uniforms and cannot guarantee pack-specific world-light color injection.
 - **Hardware decode** uses MediaCodec ( ByteBuffer copy mode feeding the same frame
   callbacks); override with `-Ddreamdisplayx.hwDecode=<module>` or disable it with an empty
   value, same as desktop.

@@ -37,3 +37,10 @@ type = "optional"
 versionRange = "[5,)"
 ordering = "AFTER"
 side = "BOTH"
+
+[[dependencies.dreamdisplayx]]
+modId = "lambdynlights"
+type = "optional"
+versionRange = "[4,)"
+ordering = "AFTER"
+side = "CLIENT"

@@ -186,6 +186,12 @@ class DisplayScreen(
     /** True if the base lock may be toggled (impossible in Watch Party / Broadcast). */
     val canToggleLockHere: Boolean get() = PlaybackPermissions.canToggleLock(ctx())
 
+    /** Updates the video-derived lighting color and forwards it to optional light integrations. */
+    internal fun updateAmbientLightColor(color: Int) {
+        ambientLightColor = color
+        DynamicDisplayLights.update(uuid, pos, color, isVideoStarted && !paused)
+    }
+
     /** True if the base mode may be switched. */
     val canSetModeHere: Boolean get() = PlaybackPermissions.canSetMode(ctx())
 
@@ -356,6 +362,11 @@ class DisplayScreen(
 
     /** The active media player, or `null` between videos. */
     private val mediaPlayer: MediaPlayer? get() = media.player
+
+    /** Latest average RGB color sampled from the playing video for lighting integrations. */
+    @Volatile
+    var ambientLightColor: Int = 0
+        private set
 
     /** Warm-parked out of render distance: decoder + audio open, instant resume. */
     @Volatile
@@ -890,6 +901,7 @@ class DisplayScreen(
 
     /** Stops the media player, releases GPU texture, closes any popout, and closes the display menu if open. */
     fun unregister() {
+        DynamicDisplayLights.remove(uuid)
         captureReplayCache()
         val currentPlayer = media.shutdown()
         popoutManager.unregister(currentPlayer)
@@ -1079,6 +1091,7 @@ class DisplayScreen(
         val maxRadius = if (isPopoutActive) Double.MAX_VALUE else ClientStateManager.config.defaultDistance.toDouble()
         val distance = getDistanceToScreen(pos)
         mediaPlayer?.tick(distance, maxRadius)
+        if (!isVideoStarted || paused) DynamicDisplayLights.remove(uuid)
         reportPositionToServer()
         if (isPopoutActive) {
             if (distanceQualitySteps != 0) {

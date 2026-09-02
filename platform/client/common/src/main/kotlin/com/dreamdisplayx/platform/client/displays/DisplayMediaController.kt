@@ -79,6 +79,12 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         screen.prepareTextureDimensions()
 
         screen.attachPopout(newPlayer)
+        newPlayer.setAmbientLightSink { buf, w, h, format ->
+            val color = com.dreamdisplayx.platform.client.render.DynamicDisplayLights.sample(
+                buf, w, h, format.bytesPerPixel,
+            )
+            screen.updateAmbientLightColor(color)
+        }
 
         whenInitialized(expected) {
             start()

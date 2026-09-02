@@ -4,6 +4,7 @@ Based on Dream Displays [7e156542](https://github.com/arnodoelinger/dreamdisplay
 
 ## Highlights
 
+- **Video-derived dynamic lighting** — playing frames are sampled for RGB color; when LambDynamicLights is installed, each display exposes an optional dynamic light source whose brightness follows the sampled video. Without the optional integration, the normal lighting path is unchanged. Iris shader packs keep their own color-lighting pipeline without private uniform injection.
 - **Full libvlc rewrite (vlcj removed)** — the media pipeline is ported from JavaCPP/FFmpeg to a
   low-level JNA libvlc binding; no more `JNA: callback garbage collected` spam, switch flicker,
   or stutter.

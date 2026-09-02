@@ -36,7 +36,8 @@
   },
   "suggests": {
     "luckperms": "*",
-    "modmenu": "*"
+    "modmenu": "*",
+    "lambdynlights": "*"
   },
   "custom": {
     "modmenu": {

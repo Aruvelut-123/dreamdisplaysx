@@ -238,6 +238,11 @@ internal class LibVlcSessionManager(
     private var popoutSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
     private var previewSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
 
+    /** Latest sampled RGB color for optional world-light integrations. */
+    @Volatile
+    var ambientLightColor: Int = 0
+        private set
+
     var popoutFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
         get() = popoutSink
         set(value) { popoutSink = value }
@@ -245,6 +250,9 @@ internal class LibVlcSessionManager(
     var previewFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
         get() = previewSink
         set(value) { previewSink = value }
+
+    /** Samples a decoded frame for optional client-side lighting integrations. */
+    var ambientLightSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
 
     // ── Low-level callbacks (held strongly for life) ───────────────────────
 
@@ -1247,6 +1255,8 @@ internal class LibVlcSessionManager(
                     val sink = popoutSink ?: previewSink
                     if (sink != null) sink(spare, ew, eh, FramePixelFormat.BGRA32)
                 }
+                // Keep lighting independent from optional popout/preview diagnostics.
+                ambientLightSink?.invoke(spare, ew, eh, FramePixelFormat.BGRA32)
 
                 // Publish to the GPU surface for the render thread. Skippable via diagnostic switch.
                 if (!LibVlcDiagnostics.noVideoPublish) {

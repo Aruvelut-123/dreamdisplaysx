@@ -411,6 +411,11 @@ class MediaPlayer(
         sessionManager.previewFrameSink = sink
     }
 
+    /** Connects or disconnects the optional ambient-light sampler. Pass null to detach. */
+    fun setAmbientLightSink(sink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?) {
+        sessionManager.ambientLightSink = sink
+    }
+
     /** True once the first decoded frame is ready for GPU upload. */
     fun textureFilled(): Boolean = sessionManager.textureFilled()
 
