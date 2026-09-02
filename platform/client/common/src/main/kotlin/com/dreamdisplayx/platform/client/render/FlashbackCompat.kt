@@ -20,6 +20,28 @@ object FlashbackCompat {
     val isReplayActive: Boolean get() = (static("isInReplay") as? Boolean) == true
     val isExporting: Boolean get() = (static("isExporting") as? Boolean) == true
 
+    /** Flashback exposes a native visual timeline at 20 ticks per second. */
+    val supportsVisualTimeline: Boolean get() = isReplayActive || isExporting
+
+    /** Optional render switches for Flashback sessions; defaults preserve normal rendering. */
+    val renderDisplays: Boolean
+        get() = System.getProperty("dreamdisplayx.flashback.renderDisplays")?.toBooleanStrictOrNull() ?: true
+    val renderHud: Boolean
+        get() = System.getProperty("dreamdisplayx.flashback.renderHud")?.toBooleanStrictOrNull() ?: true
+
+    /** Returns the current Flashback replay tick, retaining fractional export ticks. */
+    fun currentReplayTick(): Double? {
+        if (!supportsVisualTimeline) return null
+        val server = static("getReplayServer")
+        if (server != null) return runCatching {
+            (server.javaClass.getMethod("getPartialReplayTick").invoke(server) as Number).toDouble()
+        }.getOrNull()
+        val export = type()?.getField("EXPORT_JOB")?.get(null)
+        return runCatching {
+            (export?.javaClass?.getMethod("getCurrentTickDouble")?.invoke(export) as? Number)?.toDouble()
+        }.getOrNull()
+    }
+
     fun currentTimelineMs(): Long? {
         if (static("getReplayServer") == null && !isExporting) return null
         return (static("getVisualMillis") as? Number)?.toLong()

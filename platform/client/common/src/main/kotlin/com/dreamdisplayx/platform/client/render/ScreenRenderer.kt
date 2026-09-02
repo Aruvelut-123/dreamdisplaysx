@@ -71,6 +71,7 @@ object ScreenRenderer : ClientRenderService {
 
     /** Iterates all registered screens and lets the caller submit quads through the active renderer. */
     fun render(stack: PoseStack, camera: Camera, replay: Boolean = false, drawQuad: QuadRenderer) {
+        if (replay && !FlashbackCompat.renderDisplays) return
         val cameraPos =
             //? if >=1.21.11 {
             camera.position()

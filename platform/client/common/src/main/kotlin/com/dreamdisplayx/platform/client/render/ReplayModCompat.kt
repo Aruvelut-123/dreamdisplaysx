@@ -63,6 +63,7 @@ object ReplayModCompat {
 
     /** Adds an action marker with a URL-safe textual payload. */
     fun recordActionPayload(action: String, displayId: UUID, payload: String) {
+        if (FlashbackCompat.isReplayActive || FlashbackCompat.isExporting) return
         if (FlashbackCompat.recordAction(action, displayId, payload)) return
         runCatching {
             val recording = Class.forName("com.replaymod.recording.ReplayModRecording")

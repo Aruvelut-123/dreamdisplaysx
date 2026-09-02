@@ -312,7 +312,7 @@ Every task MUST be tracked in the session's `todo` task list at all times:
 
 ## Optional Flashback integration
 
-Flashback support is experimental and reflection-only. Flashback is a Fabric client mod; NeoForge compatibility is provided by Sinytra Connector, so Dream DisplaysX must not add a hard NeoForge Flashback dependency. Do not assume Flashback's internal classes are stable APIs; all probes must fail closed when Flashback is absent or changes. Replay marker, audio, and export behavior may be incomplete.
+Flashback support is experimental and reflection-only. Flashback is a Fabric client mod; NeoForge compatibility is provided by Sinytra Connector, so Dream DisplaysX must not add a hard NeoForge Flashback dependency. Do not assume Flashback's internal classes are stable APIs; all probes must fail closed when Flashback is absent or changes. Replay marker, audio, and export behavior may be incomplete. Flashback's visual timeline can be consumed for synchronization, but its internal keyframe/editor classes are not stable third-party APIs; render switches remain system-property based unless a stable registration API appears.
 
 ## Known Issues
 1. Danmaku track spacing doesn't scale with font size (hardcoded trackCount=8, 26px)
