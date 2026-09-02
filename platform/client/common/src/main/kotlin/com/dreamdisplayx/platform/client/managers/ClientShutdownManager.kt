@@ -5,6 +5,7 @@ import com.dreamdisplayx.platform.client.Focuser
 import com.dreamdisplayx.platform.client.core.ClientApplication
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.util.DreamCoroutines
 
 /**
@@ -13,6 +14,7 @@ import com.dreamdisplayx.util.DreamCoroutines
 object ClientShutdownManager {
     /** Stops the application, saves and unloads screens, shuts down coroutines, and interrupts the focuser. */
     fun stop() {
+        MediaPlayer.shutdownBackgroundWork()
         DreamServices.registry.getOrNull<ClientApplication>()?.stop()
         DisplayRegistry.saveAllScreens()
         ClientStartupManager.stop()

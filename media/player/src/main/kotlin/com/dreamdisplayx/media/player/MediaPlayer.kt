@@ -51,6 +51,13 @@ class MediaPlayer(
     }
 
     companion object {
+        /** Prevents new background media work during process shutdown. */
+        fun shutdownBackgroundWork() {
+            BACKGROUND_SHUTDOWN.set(true)
+            RETRY_SCHEDULER.shutdownNow()
+            INIT_EXECUTOR.shutdownNow()
+        }
+
         /** Logger. */
         private val logger = LoggerFactory.getLogger("DreamDisplaysX/MediaPlayer")
 
@@ -99,6 +106,9 @@ class MediaPlayer(
 
         /** Thread counter. */
         private val INIT_THREAD_COUNTER = AtomicInteger()
+
+        /** Set during client shutdown so no new resolve or retry can be submitted. */
+        private val BACKGROUND_SHUTDOWN = AtomicBoolean(false)
 
         /**
          * Resolve executor. Sized above the core count on purpose: this work is almost entirely
@@ -643,19 +653,19 @@ class MediaPlayer(
      * Submits initialize to [INIT_EXECUTOR], guarded so only one resolve is in flight.
      */
     private fun dispatchInitialize(coalesce: Boolean = false) {
-        if (terminated.get()) return
+        if (terminated.get() || BACKGROUND_SHUTDOWN.get()) return
         if (!initializing.compareAndSet(false, true)) {
             if (coalesce) initQueued.set(true)
             return
         }
-        INIT_EXECUTOR.submit {
+        runCatching { INIT_EXECUTOR.submit {
             try {
-                if (!terminated.get()) initialize()
+                if (!terminated.get() && !BACKGROUND_SHUTDOWN.get()) initialize()
             } finally {
                 initializing.set(false)
                 if (initQueued.compareAndSet(true, false)) dispatchInitialize()
             }
-        }
+        } }
     }
 
     /**
