@@ -1,6 +1,6 @@
 # 1.9.5.1 Release
 
-Based on Dream Displays [8ccaf45](https://github.com/arnodoelinger/dreamdisplays/commit/8ccaf45).
+Based on Dream Displays [7e156542](https://github.com/arnodoelinger/dreamdisplays/commit/7e156542).
 
 ## Highlights
 
