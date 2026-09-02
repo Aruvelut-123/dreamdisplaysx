@@ -74,6 +74,17 @@ class CreateCommand : SubCommand {
             return
         }
 
+        val region = RegionUtil.calculateRegion(requireNotNull(sel.pos1), requireNotNull(sel.pos2))
+        val claimLocations = sequence {
+            for (x in region.minX..region.maxX) for (y in region.minY..region.maxY) for (z in region.minZ..region.maxZ) {
+                yield(org.bukkit.Location(sel.pos1!!.world, x.toDouble(), y.toDouble(), z.toDouble()))
+            }
+        }.asIterable()
+        if (!com.dreamdisplayx.platform.server.utils.ClaimProtection.canBuild(player, claimLocations)) {
+            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            return
+        }
+
         val maxDisplays = PaperServer.config.settings.maxDisplaysPerPlayer
         if (maxDisplays > 0 && !player.hasPermission(PaperServer.config.permissions.createBypass) &&
             DisplayManager.countOwnedBy(player.uniqueId) >= maxDisplays

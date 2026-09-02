@@ -74,6 +74,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Fullscreen mode** — great for events and presentations
 - **Simple config** — precise control over displays and playback
 - **Permissions** — fine-grained control with LuckPerms support
+- **Claim protection** — display creation respects WorldGuard and optional claim plugins (GriefPrevention, Residence, Lands, Towny)
 - **Ultra-low network impact** — minimal impact for your traffic
 - **Persistent displays** — settings survive server restarts and unloading
 
