@@ -1089,8 +1089,36 @@ class DisplayScreen(
     /** Ticks remaining before the next voxel-acoustics re-probe; jittered per-display to avoid synchronized spikes. */
     private var envProbeCountdown: Int = uuid.hashCode().mod(ENV_PROBE_INTERVAL_TICKS)
 
+    /** Last ReplayMod pause state applied to this display. */
+    private var replayPauseApplied = false
+
+    /** Keeps local display media paused/resumed with ReplayMod and aligns it to the replay timeline. */
+    private fun syncReplayPlayback() {
+        val timelineMs = com.dreamdisplayx.platform.client.render.ReplayModCompat.currentTimelineMs()
+        if (timelineMs == null) {
+            if (replayPauseApplied) {
+                replayPauseApplied = false
+                if (mode == PlaybackMode.LOCAL && !paused) mediaPlayer?.play()
+            }
+            return
+        }
+        val replayPaused = com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayPaused
+        if (replayPaused != replayPauseApplied) {
+            replayPauseApplied = replayPaused
+            if (mode == PlaybackMode.LOCAL) {
+                if (replayPaused) mediaPlayer?.pause() else if (!paused) mediaPlayer?.play()
+            }
+        }
+        if (!replayPaused && mode == PlaybackMode.LOCAL && mediaPlayer != null) {
+            val target = timelineMs * 1_000_000L
+            val drift = kotlin.math.abs(mediaPlayer!!.getCurrentTime() - target)
+            if (drift > 250_000_000L && mediaPlayer!!.canSeek()) mediaPlayer!!.seekTo(target, false)
+        }
+    }
+
     /** Called every game tick to update distance-based volume attenuation from [pos]. */
     fun tick(pos: BlockPos) {
+        syncReplayPlayback()
         val maxRadius = if (isPopoutActive) Double.MAX_VALUE else ClientStateManager.config.defaultDistance.toDouble()
         val distance = getDistanceToScreen(pos)
         mediaPlayer?.tick(distance, maxRadius)
