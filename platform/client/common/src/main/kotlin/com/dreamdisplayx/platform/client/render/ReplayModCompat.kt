@@ -21,41 +21,49 @@ object ReplayModCompat {
         "com.replaymod.replay.ReplayHandler",
     )
 
-    /** Current replay timeline in milliseconds, or null when ReplayMod is not playing a replay. */
-    fun currentTimelineMs(): Long? = runCatching {
-        val module = Class.forName(replayClassNames[0])
-        val instance = module.getField("instance").get(null) ?: return null
-        val handler = module.getMethod("getReplayHandler").invoke(instance) ?: return null
-        val sender = handler.javaClass.getMethod("getReplaySender").invoke(handler) ?: return null
-        sender.javaClass.getMethod("currentTimeStamp").invoke(sender).let { (it as Number).toLong() }
-    }.onFailure { error ->
-        if (error !is ClassNotFoundException) logger.debug("ReplayMod timeline probe unavailable: {}", error.message)
-    }.getOrNull()
+    /** True when ReplayMod or Flashback owns the current replay timeline. */
+    val isReplayActive: Boolean
+        get() = FlashbackCompat.isReplayActive || currentTimelineMs() != null
 
-    /** True when ReplayMod is present and a replay handler is currently active. */
-    val isReplayActive: Boolean get() = currentTimelineMs() != null
+    /** Current replay timeline in milliseconds, preferring Flashback when it is active. */
+    fun currentTimelineMs(): Long? {
+        FlashbackCompat.currentTimelineMs()?.let { return it }
+        return runCatching {
+            val module = Class.forName(replayClassNames[0])
+            val instance = module.getField("instance").get(null) ?: return null
+            val handler = module.getMethod("getReplayHandler").invoke(instance) ?: return null
+            val sender = handler.javaClass.getMethod("getReplaySender").invoke(handler) ?: return null
+            sender.javaClass.getMethod("currentTimeStamp").invoke(sender).let { (it as Number).toLong() }
+        }.onFailure { error ->
+            if (error !is ClassNotFoundException) logger.debug("ReplayMod timeline probe unavailable: {}", error.message)
+        }.getOrNull()
+    }
 
     /** True when the active replay timeline is paused. */
     val isReplayPaused: Boolean
-        get() = runCatching {
-            val module = Class.forName(replayClassNames[0])
-            val instance = module.getField("instance").get(null) ?: return false
-            val handler = module.getMethod("getReplayHandler").invoke(instance) ?: return false
-            val sender = handler.javaClass.getMethod("getReplaySender").invoke(handler) ?: return false
-            sender.javaClass.getMethod("paused").invoke(sender) as? Boolean ?: false
-        }.getOrDefault(false)
+        get() {
+            if (FlashbackCompat.isReplayActive) return FlashbackCompat.isReplayPaused
+            return runCatching {
+                val module = Class.forName(replayClassNames[0])
+                val instance = module.getField("instance").get(null) ?: return false
+                val handler = module.getMethod("getReplayHandler").invoke(instance) ?: return false
+                val sender = handler.javaClass.getMethod("getReplaySender").invoke(handler) ?: return false
+                sender.javaClass.getMethod("paused").invoke(sender) as? Boolean ?: false
+            }.getOrDefault(false)
+        }
 
     /** True when ReplayMod is installed, regardless of whether a replay is playing. */
     val isInstalled: Boolean
         get() = replayClassNames.any { name -> runCatching { Class.forName(name); true }.getOrDefault(false) }
 
-    /** Adds a persistent marker to the active ReplayMod recording, when its recording API is present. */
+    /** Adds a persistent marker to the active replay recorder, preferring Flashback. */
     fun recordAction(action: String, displayId: UUID, value: Long = 0L) {
         recordActionPayload(action, displayId, value.toString())
     }
 
     /** Adds an action marker with a URL-safe textual payload. */
     fun recordActionPayload(action: String, displayId: UUID, payload: String) {
+        if (FlashbackCompat.recordAction(action, displayId, payload)) return
         runCatching {
             val recording = Class.forName("com.replaymod.recording.ReplayModRecording")
             val instance = recording.getField("instance").get(null) ?: return
@@ -70,6 +78,10 @@ object ReplayModCompat {
 
     /** Replays custom action markers whose timestamps have just been crossed by the replay cursor. */
     fun consumeActions(lastTimeMs: Long, currentTimeMs: Long, callback: (String, UUID, String) -> Unit) {
+        if (FlashbackCompat.isReplayActive) {
+            FlashbackCompat.consumeActions(lastTimeMs, currentTimeMs, callback)
+            return
+        }
         if (currentTimeMs < lastTimeMs) return
         runCatching {
             val module = Class.forName(replayClassNames[0])

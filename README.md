@@ -75,7 +75,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Simple config** — precise control over displays and playback
 - **Permissions** — fine-grained control with LuckPerms support
 - **Claim protection** — display creation respects WorldGuard and optional claim plugins (GriefPrevention, Residence, Lands, Towny)
-- **Experimental ReplayMod compatibility** — replay rendering currently freezes local display media and follows the ReplayMod millisecond playhead; pause, seek, video-change, and display-GUI actions use `.mcpr` markers. Slow export FPS is guarded against video speed-up, but external display audio is not mixed into ReplayMod output and edge cases may remain.
+- **Experimental ReplayMod and Flashback compatibility** — replay rendering can freeze local display media and follow the replay timeline; pause, seek, video-change, and display-GUI actions use replay markers when supported. Slow export FPS is guarded against video speed-up, but external display audio is not mixed into replay output and edge cases may remain. Flashback support is optional and uses reflection, including when loaded through Sinytra Connector on NeoForge.
 - **Ultra-low network impact** — minimal impact for your traffic
 - **Persistent displays** — settings survive server restarts and unloading
 

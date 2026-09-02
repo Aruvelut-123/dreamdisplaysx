@@ -310,6 +310,10 @@ Every task MUST be tracked in the session's `todo` task list at all times:
 - Never merge upstream changelog into our version's section
 - The CI release pipeline extracts the matching section from CHANGELOG.md by the `pretty_version` title
 
+## Optional Flashback integration
+
+Flashback support is experimental and reflection-only. Flashback is a Fabric client mod; NeoForge compatibility is provided by Sinytra Connector, so Dream DisplaysX must not add a hard NeoForge Flashback dependency. Do not assume Flashback's internal classes are stable APIs; all probes must fail closed when Flashback is absent or changes. Replay marker, audio, and export behavior may be incomplete.
+
 ## Known Issues
 1. Danmaku track spacing doesn't scale with font size (hardcoded trackCount=8, 26px)
 2. SettingsSection scissor clipping works but controls are placed every frame
