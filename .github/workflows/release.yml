@@ -69,7 +69,7 @@ jobs:
       - name: Extract changelog for pre-release
         if: needs.build.outputs.is_dev == 'true' || needs.build.outputs.is_preview == 'true'
         run: |
-          python3 - <<'EOF'
+          python - <<'EOF'
           import re
           import sys
 
@@ -110,6 +110,16 @@ jobs:
           with open("changelog.md", "w") as f:
               f.write("\n".join(lines).strip() + "\n")
           EOF
+
+      - name: Generate incremental preview changelog
+        if: needs.build.outputs.is_preview == 'true'
+        env:
+          CHANGELOG_VERSION: ${{ needs.build.outputs.version }}
+          CHANGELOG_IS_PREVIEW: true
+          CHANGELOG_TAG: v${{ needs.build.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python .github/scripts/generate_changelog.py
 
       - name: Publish dev pre-release
         if: needs.build.outputs.is_dev == 'true'
@@ -163,7 +173,7 @@ jobs:
         if: needs.build.outputs.is_marketplace_publishable == 'true'
         id: versions
         run: |
-          python3 - <<'EOF'
+          python - <<'EOF'
           import os
 
           paper_1_21 = ["1.21"] + [f"1.21.{p}" for p in range(1, 12)]
@@ -180,7 +190,7 @@ jobs:
       - name: Extract changelog
         if: needs.build.outputs.is_marketplace_publishable == 'true' && (needs.build.outputs.is_release == 'true' || needs.build.outputs.is_preview == 'true')
         run: |
-          python3 - <<'EOF'
+          python - <<'EOF'
           import os
           import re
           import sys
@@ -228,6 +238,16 @@ jobs:
           with open("changelog.md", "w") as f:
               f.write("\n".join(lines).strip() + "\n")
           EOF
+
+      - name: Generate incremental preview changelog for platforms
+        if: needs.build.outputs.is_marketplace_publishable == 'true' && needs.build.outputs.is_preview == 'true'
+        env:
+          CHANGELOG_VERSION: ${{ needs.build.outputs.version }}
+          CHANGELOG_IS_PREVIEW: true
+          CHANGELOG_TAG: v${{ needs.build.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python .github/scripts/generate_changelog.py
 
       - name: Publish BungeeCord to Modrinth
         if: needs.build.outputs.is_marketplace_publishable == 'true'
@@ -318,7 +338,7 @@ jobs:
       - name: Filter tasks to NeoForge / Fabric only
         id: filter
         run: |
-          python3 - <<'EOF'
+          python - <<'EOF'
           import json
           import os
 
@@ -365,7 +385,7 @@ jobs:
         if: needs.build.outputs.is_marketplace_publishable == 'true'
         id: versions
         run: |
-          python3 - <<'EOF'
+          python - <<'EOF'
           import json
           import os
 
@@ -389,7 +409,7 @@ jobs:
       - name: Extract changelog
         if: needs.build.outputs.is_marketplace_publishable == 'true' && (needs.build.outputs.is_release == 'true' || needs.build.outputs.is_preview == 'true')
         run: |
-          python3 - <<'EOF'
+          python - <<'EOF'
           import os
           import re
           import sys
