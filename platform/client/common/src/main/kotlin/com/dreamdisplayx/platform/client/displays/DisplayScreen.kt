@@ -1143,21 +1143,19 @@ class DisplayScreen(
         replayActionsConsumedThroughMs = timelineMs
         val replayPaused = com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayPaused
         if (replayPaused != replayPauseApplied) replayPauseApplied = replayPaused
-        if (mode == PlaybackMode.LOCAL) {
-            if (replayPaused) {
-                replayMediaHeld = true
-                mediaPlayer?.pause()
-            } else if (replayMediaHeld) {
-                replayMediaHeld = false
-                if (!paused) mediaPlayer?.play()
+        if (mode == PlaybackMode.LOCAL && mediaPlayer != null) {
+            // ReplayMod's render loop can be slower than the media decoder and can stop client
+            // ticks while paused. Freeze the real-time media clock for the entire replay and drive
+            // the visible frame exclusively from the replay playhead below.
+            replayMediaHeld = true
+            mediaPlayer?.pause()
+            val target = timelineMs * 1_000_000L
+            if (mediaPlayer!!.canSeek()) {
+                val drift = kotlin.math.abs(mediaPlayer!!.getCurrentTime() - target)
+                if (replayPaused || drift > 1_000_000L) mediaPlayer!!.seekTo(target, false)
             }
         }
         replayLastTimelineMs = timelineMs
-        if (!replayPaused && mode == PlaybackMode.LOCAL && mediaPlayer != null) {
-            val target = timelineMs * 1_000_000L
-            val drift = kotlin.math.abs(mediaPlayer!!.getCurrentTime() - target)
-            if (drift > 250_000_000L && mediaPlayer!!.canSeek()) mediaPlayer!!.seekTo(target, false)
-        }
     }
 
     /** Called every game tick to update distance-based volume attenuation from [pos]. */
