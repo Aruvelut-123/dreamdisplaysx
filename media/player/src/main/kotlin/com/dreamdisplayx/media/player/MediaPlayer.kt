@@ -139,6 +139,8 @@ class MediaPlayer(
 
     /** Whether viewer requested pause (tracked separately from [state] to avoid race during initialize). */
     private val pauseRequested = AtomicBoolean(false)
+    private val replaySeekTargetNanos = AtomicLong(Long.MIN_VALUE)
+    private val replaySeekQueued = AtomicBoolean(false)
 
     /** Ended at the end of the stream? (used to avoid a stall recovery when the video side reaches EOS first). */
     private val endedAtEnd = AtomicBoolean(false)
@@ -329,6 +331,27 @@ class MediaPlayer(
 
     /** Seeks to an absolute position in nanos. [fire] triggers [DisplayScreen.afterSeek]. */
     fun seekTo(nanos: Long, fire: Boolean) = safeExecute { doSeek(nanos, fire) }
+
+    /** Queues only the newest replay render target so slow rendering cannot build a seek backlog. */
+    fun seekToLatest(nanos: Long) {
+        if (!isReady || !seekable || terminated.get()) return
+        replaySeekTargetNanos.set(nanos)
+        if (replaySeekQueued.compareAndSet(false, true)) safeExecute {
+            try {
+                while (!terminated.get()) {
+                    val target = replaySeekTargetNanos.getAndSet(Long.MIN_VALUE)
+                    if (target == Long.MIN_VALUE) break
+                    doSeek(target, false)
+                }
+            } finally {
+                replaySeekQueued.set(false)
+                if (replaySeekTargetNanos.get() != Long.MIN_VALUE) {
+                    replaySeekQueued.set(false)
+                    seekToLatest(replaySeekTargetNanos.get())
+                }
+            }
+        }
+    }
 
     /** Seeks [s] seconds relative to the current position. */
     fun seekRelative(s: Double) = safeExecute {

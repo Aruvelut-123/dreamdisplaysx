@@ -1119,6 +1119,7 @@ class DisplayScreen(
     private var replayPauseApplied = false
     private var replayMediaHeld = false
     private var replayLastTimelineMs = -1L
+    private var replayLastMediaTargetMs = -1L
     private var replayActionsConsumedThroughMs = -1L
 
     /** Keeps local display media paused/resumed with ReplayMod and aligns it to the replay timeline. */
@@ -1131,6 +1132,7 @@ class DisplayScreen(
                 if (mode == PlaybackMode.LOCAL && !paused) mediaPlayer?.play()
             }
             replayLastTimelineMs = -1L
+            replayLastMediaTargetMs = -1L
             replayActionsConsumedThroughMs = -1L
             return
         }
@@ -1152,7 +1154,12 @@ class DisplayScreen(
             val target = timelineMs * 1_000_000L
             if (mediaPlayer!!.canSeek()) {
                 val drift = kotlin.math.abs(mediaPlayer!!.getCurrentTime() - target)
-                if (replayPaused || drift > 1_000_000L) mediaPlayer!!.seekTo(target, false)
+                // Seek on every advancing replay timestamp. The player is paused immediately after
+                // the request, so no wall-clock A/V clock can advance between export frames.
+                if (replayPaused || timelineMs != replayLastMediaTargetMs || drift > 1_000_000L) {
+                    replayLastMediaTargetMs = timelineMs
+                    mediaPlayer!!.seekToLatest(target)
+                }
             }
         }
         replayLastTimelineMs = timelineMs
