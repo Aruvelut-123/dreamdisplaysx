@@ -32,18 +32,22 @@ object FlashbackCompat {
     /** Returns the current Flashback replay tick, retaining fractional export ticks. */
     fun currentReplayTick(): Double? {
         if (!supportsVisualTimeline) return null
-        val server = static("getReplayServer")
-        if (server != null) return runCatching {
-            (server.javaClass.getMethod("getPartialReplayTick").invoke(server) as Number).toDouble()
-        }.getOrNull()
         val export = type()?.getField("EXPORT_JOB")?.get(null)
-        return runCatching {
-            (export?.javaClass?.getMethod("getCurrentTickDouble")?.invoke(export) as? Number)?.toDouble()
+        if (export != null) return runCatching {
+            (export.javaClass.getMethod("getCurrentTickDouble").invoke(export) as Number).toDouble()
         }.getOrNull()
+        val server = static("getReplayServer")
+        return if (server != null) runCatching {
+            (server.javaClass.getMethod("getPartialReplayTick").invoke(server) as Number).toDouble()
+        }.getOrNull() else null
     }
 
     fun currentTimelineMs(): Long? {
-        if (static("getReplayServer") == null && !isExporting) return null
+        if (!isReplayActive && !isExporting) return null
+        // ExportJob owns the authoritative fractional tick during offline rendering. Flashback's
+        // getVisualMillis() falls back to wall-clock time when no replay server exists, which would
+        // reintroduce export-speed drift for displays.
+        currentReplayTick()?.let { return (it * 50.0).toLong().coerceAtLeast(0L) }
         return (static("getVisualMillis") as? Number)?.toLong()
     }
 
@@ -51,12 +55,12 @@ object FlashbackCompat {
     val isReplayPaused: Boolean
         get() {
             if (!isReplayActive) return false
-            val server = static("getReplayServer") ?: return false
+            val server = static("getReplayServer") ?: return true
             return runCatching {
                 val rate = server.javaClass.getMethod("getDesiredTickRate", Boolean::class.javaPrimitiveType)
                     .invoke(server, false) as Number
                 rate.toDouble() <= 0.0
-            }.getOrDefault(false)
+            }.getOrDefault(true)
         }
 
     fun recordAction(action: String, displayId: UUID, payload: String): Boolean {
@@ -67,8 +71,8 @@ object FlashbackCompat {
             if (!ready) return false
             val description = "$MARKER:$action:$displayId:${Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray(Charsets.UTF_8))}"
             val markerType = Class.forName("com.moulberry.flashback.record.ReplayMarker")
-            val marker = markerType.getConstructor(Int::class.javaPrimitiveType, Class.forName("com.moulberry.flashback.record.ReplayMarker\u0024MarkerPosition"), String::class.java)
-                .newInstance(0x55AAFF, null, description)
+            val marker = markerType.constructors.firstOrNull { it.parameterTypes.size == 3 }
+                ?.newInstance(0x55AAFF, null, description) ?: return false
             recorder.javaClass.getMethod("addMarker", markerType).invoke(recorder, marker)
             true
         }.onFailure { error -> logger.debug("Flashback marker recording unavailable: {}", error.message) }.getOrDefault(false)
