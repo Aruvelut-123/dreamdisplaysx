@@ -167,7 +167,7 @@ differences:
   `set_media` on a player that already carried media. Each player also gets its own video callback
   and direct-buffer pool, so delayed frames from an old player cannot use the replacement's buffers.
 - **Video-derived dynamic lighting** samples the playing frame's RGB color and, when LambDynamicLights is installed, exposes a light source at the display anchor with brightness derived from that color. The sampled RGB value is retained for color-capable rendering integrations; without LambDynamicLights the normal lighting path is unchanged. Iris shader packs retain their own color-lighting pipeline: Iris does not expose a stable public API for injecting arbitrary third-party RGB light sources, so the mod never writes private shader uniforms.
-- **Complementary-only shader patcher** recognizes Complementary Reimagined/Unbound r5.8.1, creates a disposable `DreamDisplaysX-*` copy with a versioned manifest, and leaves BSL, Bliss, Photon, unknown packs, and the original ZIP untouched. Any failed or unsupported patch falls back to the original pack automatically.
+- **Complementary-only shader patcher** scans every ZIP in `shaderpacks` during client startup and recognizes all Complementary Reimagined/Unbound r5.8.1 archives, creating disposable `DreamDisplaysX-*` copies with versioned manifests. It never edits `options.txt`, never forces a shader selection, and leaves BSL, Bliss, Photon, unknown packs, and original ZIPs untouched. Any failed or unsupported patch falls back to the original pack automatically.
 - **Hardware decode** uses MediaCodec ( ByteBuffer copy mode feeding the same frame
   callbacks); override with `-Ddreamdisplayx.hwDecode=<module>` or disable it with an empty
   value, same as desktop.

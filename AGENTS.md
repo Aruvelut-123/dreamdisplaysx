@@ -234,7 +234,7 @@
   catches `LinkageError` (no `java.desktop` module); Thumbnails/ScrubPreview decode paths were
   already `runCatching`-guarded and degrade gracefully
 - Initializer no longer blocks Android startup; AWT headless override skipped on Android
-- Complementary shader patching is opt-in by detected selection: only Complementary Reimagined/Unbound r5.8.1 is copied to a checksummed `DreamDisplaysX-*` archive before patching; BSL, Bliss, Photon, unknown packs, and original archives must remain untouched. Patching must fail closed and preserve the original shaderpack.
+- Complementary shader patching runs at client startup by scanning every ZIP in `shaderpacks`: only Complementary Reimagined/Unbound r5.8.1 is copied to a checksummed `DreamDisplaysX-*` archive before patching. It must not edit `options.txt` or force a selection; BSL, Bliss, Photon, unknown packs, and original archives must remain untouched. Patching must fail closed and preserve the original shaderpack.
 
 ### Android SQLite (`SqliteAndroidCompat`)
 - The stock `org.xerial:sqlite-jdbc` jar bundles natives for desktop OSes only — its Android

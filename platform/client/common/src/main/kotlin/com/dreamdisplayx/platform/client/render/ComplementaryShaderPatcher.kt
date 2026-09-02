@@ -22,45 +22,21 @@ object ComplementaryShaderPatcher {
     private const val MARKER = "dreamdisplayx/patch.properties"
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/ComplementaryShaderPatcher")
 
-    /** Runs once during client startup and patches only the shaderpack selected in options.txt. */
-    fun patchAtStartup(): Path? = runCatching {
-        val directory = shaderpacksDirectory() ?: return null
-        if (!Files.isDirectory(directory)) return null
-        val selected = selectedShaderpack(directory.parent ?: return null) ?: return null
-        val source = directory.resolve(selected)
-        if (!Files.isRegularFile(source) || !isComplementary(source)) return null
-        val output = patch(source, directory) ?: return null
-        selectPatchedShaderpack(directory.parent, selected, output.fileName.toString())
-        requestIrisReload()
-        output
-    }.onFailure { logger.warn("Complementary shader patch skipped: {}", it.message) }.getOrNull()
-
-    private fun requestIrisReload() {
-        runCatching {
-            val iris = Class.forName("net.irisshaders.iris.Iris")
-            iris.methods.firstOrNull { it.name == "reload" && it.parameterCount == 0 }?.invoke(null)
-        }.onFailure { logger.debug("Iris reload is unavailable during startup: {}", it.message) }
-    }
-
-    private fun selectedShaderpack(gameDirectory: Path): String? {
-        val options = gameDirectory.resolve("options.txt")
-        if (!Files.isRegularFile(options)) return null
-        return Files.readAllLines(options).firstOrNull { it.startsWith("shaderPack:") }
-            ?.substringAfter(':')?.trim()?.takeIf { it.isNotBlank() && !it.equals("OFF", true) }
-    }
-
-    /** Repoints Iris/Minecraft's selected shaderpack to the generated copy atomically. */
-    private fun selectPatchedShaderpack(gameDirectory: Path, original: String, patched: String) {
-        val options = gameDirectory.resolve("options.txt")
-        if (!Files.isRegularFile(options)) return
-        val lines = Files.readAllLines(options).map {
-            if (it.startsWith("shaderPack:")) "shaderPack:$patched" else it
+    /** Scans and patches every supported Complementary archive present at client startup. */
+    fun patchAtStartup(): List<Path> = runCatching {
+        val directory = shaderpacksDirectory() ?: return@runCatching emptyList()
+        if (!Files.isDirectory(directory)) return@runCatching emptyList()
+        val patched = ArrayList<Path>()
+        Files.list(directory).use { stream ->
+            stream.filter { Files.isRegularFile(it) }
+                .filter { it.fileName.toString().endsWith(".zip", ignoreCase = true) }
+                .filter(::isComplementary)
+                .forEach { source ->
+                    patch(source, directory)?.let(patched::add)
+                }
         }
-        val temp = Files.createTempFile(gameDirectory, ".dreamdisplayx-options-", ".tmp")
-        Files.write(temp, lines, StandardCharsets.UTF_8)
-        Files.move(temp, options, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
-        logger.info("Selected patched Complementary shaderpack {} (original {}).", patched, original)
-    }
+        patched
+    }.onFailure { logger.warn("Complementary shader patch scan skipped: {}", it.message) }.getOrDefault(emptyList())
 
     private fun shaderpacksDirectory(): Path? = runCatching {
         val mc = Minecraft.getInstance()
@@ -94,12 +70,13 @@ object ComplementaryShaderPatcher {
         ZipFile(source.toFile()).use { input ->
             ZipOutputStream(BufferedOutputStream(Files.newOutputStream(temp))).use { out ->
                 val names = input.entries().asSequence().map { it.name }.toHashSet()
+                val target = "shaders/lib/common.glsl"
                 input.entries().asSequence().forEach { entry ->
+                    if (entry.name == target) return@forEach
                     out.putNextEntry(ZipEntry(entry.name))
                     if (!entry.isDirectory) input.getInputStream(entry).use { it.copyTo(out) }
                     out.closeEntry()
                 }
-                val target = "shaders/lib/common.glsl"
                 if (target in names) {
                     out.putNextEntry(ZipEntry(target))
                     val original = input.getInputStream(input.getEntry(target)).use { it.readBytes().toString(StandardCharsets.UTF_8) }

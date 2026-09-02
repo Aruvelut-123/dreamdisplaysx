@@ -5,7 +5,7 @@ Based on Dream Displays [7e156542](https://github.com/arnodoelinger/dreamdisplay
 ## Highlights
 
 - **Video-derived dynamic lighting** — playing frames are sampled for RGB color; when LambDynamicLights is installed, each display exposes an optional dynamic light source whose brightness follows the sampled video. Without the optional integration, the normal lighting path is unchanged. Iris shader packs keep their own color-lighting pipeline without private uniform injection.
-- **Complementary-only shader patcher** — Complementary Reimagined/Unbound r5.8.1 is copied to a disposable, checksummed `DreamDisplaysX-*` archive before patching; BSL, Bliss, Photon, unknown packs, and original archives are never modified.
+- **Complementary-only shader patcher** — every ZIP in `shaderpacks` is scanned at client startup; all detected Complementary Reimagined/Unbound r5.8.1 packs are copied to disposable, checksummed `DreamDisplaysX-*` archives before patching. No shader selection is forced, and BSL, Bliss, Photon, unknown packs, and original archives are never modified.
 - **Full libvlc rewrite (vlcj removed)** — the media pipeline is ported from JavaCPP/FFmpeg to a
   low-level JNA libvlc binding; no more `JNA: callback garbage collected` spam, switch flicker,
   or stutter.
