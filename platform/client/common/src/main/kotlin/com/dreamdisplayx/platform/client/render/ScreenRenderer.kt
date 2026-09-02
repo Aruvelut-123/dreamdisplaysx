@@ -77,6 +77,7 @@ object ScreenRenderer : ClientRenderService {
         //?} else
         /*camera.getPosition()*/
         for (displayScreen in DisplayRegistry.getScreens()) {
+            displayScreen.syncReplayFrame()
             if (displayScreen.isDormant || !displayScreen.hasTexture) continue
 
             stack.pushPose()

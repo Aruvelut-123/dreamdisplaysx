@@ -75,7 +75,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Simple config** — precise control over displays and playback
 - **Permissions** — fine-grained control with LuckPerms support
 - **Claim protection** — display creation respects WorldGuard and optional claim plugins (GriefPrevention, Residence, Lands, Towny)
-- **ReplayMod compatibility** — local display video playback pauses and resumes with the ReplayMod timeline, follows its millisecond playhead during rendering, and does not write temporary media positions back to the live server display
+- **ReplayMod compatibility** — local display video playback pauses and resumes with the ReplayMod timeline, follows its millisecond playhead during rendering, and records pause/resume, seek, video-change, and display-GUI actions as persistent `.mcpr` markers; temporary media positions are not written back to the live server display
 - **Ultra-low network impact** — minimal impact for your traffic
 - **Persistent displays** — settings survive server restarts and unloading
 

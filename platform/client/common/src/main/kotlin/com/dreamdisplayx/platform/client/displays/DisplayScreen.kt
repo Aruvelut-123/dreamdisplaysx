@@ -521,6 +521,9 @@ class DisplayScreen(
         if (!canSetVideoHere) return false
         clientUrlOverride = false
         ClientSettingsStore.setUrlOverride(uuid, null, null)
+        if (!com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) {
+            com.dreamdisplayx.platform.client.render.ReplayModCompat.recordActionPayload("video", uuid, videoUrl)
+        }
         Initializer.sendPacket(SetVideo(uuid, videoUrl, lang))
         return true
     }
@@ -823,9 +826,23 @@ class DisplayScreen(
     /** Whether playback is currently paused. */
     val isPaused: Boolean get() = paused
 
-    /** User intent to pause / resume: applied locally for instant feedback and emitted upstream per mode. */
+    /** Applies a recorded ReplayMod action without permissions, network packets, or marker recursion. */
+    internal fun applyReplayAction(action: String, payload: String) {
+        when (action) {
+            "pause" -> applyPausedLocal(true)
+            "resume" -> applyPausedLocal(false)
+            "seek" -> payload.toLongOrNull()?.let { mediaPlayer?.seekTo(it * 1_000_000L, false) }
+            "video" -> if (payload.isNotBlank()) loadVideoInternal(payload, lang ?: "", true)
+            "open" -> DisplayMenu.open(this)
+        }
+    }
+
+    /** User intent to pause / resume: applied locally for instant feedback and emitted upstream. */
     fun setPaused(paused: Boolean) {
         if (!canControlPlayback) return
+        if (!com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) {
+            com.dreamdisplayx.platform.client.render.ReplayModCompat.recordAction(if (paused) "pause" else "resume", uuid)
+        }
         applyPausedLocal(paused)
         emitPlaybackIntent(if (paused) PlaybackAction.PAUSE else PlaybackAction.PLAY)
     }
@@ -895,6 +912,9 @@ class DisplayScreen(
     /** Seeks to [ms] and fires the seek event so [afterSeek] emits the intent upstream (Synced / WP host). */
     fun seekToMillis(ms: Long) {
         if (!canSeekHere) return
+        if (!com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) {
+            com.dreamdisplayx.platform.client.render.ReplayModCompat.recordAction("seek", uuid, ms)
+        }
         val mp = mediaPlayer ?: return
         if (mp.canSeek()) mp.seekTo(ms * 1_000_000L, true)
     }
@@ -1091,17 +1111,28 @@ class DisplayScreen(
 
     /** Last ReplayMod pause state applied to this display. */
     private var replayPauseApplied = false
+    private var replayLastTimelineMs = -1L
+    private var replayActionsConsumedThroughMs = -1L
 
     /** Keeps local display media paused/resumed with ReplayMod and aligns it to the replay timeline. */
-    private fun syncReplayPlayback() {
+    internal fun syncReplayFrame() {
         val timelineMs = com.dreamdisplayx.platform.client.render.ReplayModCompat.currentTimelineMs()
         if (timelineMs == null) {
             if (replayPauseApplied) {
                 replayPauseApplied = false
                 if (mode == PlaybackMode.LOCAL && !paused) mediaPlayer?.play()
             }
+            replayLastTimelineMs = -1L
+            replayActionsConsumedThroughMs = -1L
             return
         }
+        val previous = replayLastTimelineMs
+        if (previous >= 0L && timelineMs >= previous) {
+            com.dreamdisplayx.platform.client.render.ReplayModCompat.consumeActions(previous, timelineMs) { action, id, payload ->
+                if (id == uuid) applyReplayAction(action, payload)
+            }
+        }
+        replayActionsConsumedThroughMs = timelineMs
         val replayPaused = com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayPaused
         if (replayPaused != replayPauseApplied) {
             replayPauseApplied = replayPaused
@@ -1109,6 +1140,7 @@ class DisplayScreen(
                 if (replayPaused) mediaPlayer?.pause() else if (!paused) mediaPlayer?.play()
             }
         }
+        replayLastTimelineMs = timelineMs
         if (!replayPaused && mode == PlaybackMode.LOCAL && mediaPlayer != null) {
             val target = timelineMs * 1_000_000L
             val drift = kotlin.math.abs(mediaPlayer!!.getCurrentTime() - target)
@@ -1118,7 +1150,7 @@ class DisplayScreen(
 
     /** Called every game tick to update distance-based volume attenuation from [pos]. */
     fun tick(pos: BlockPos) {
-        syncReplayPlayback()
+        syncReplayFrame()
         val maxRadius = if (isPopoutActive) Double.MAX_VALUE else ClientStateManager.config.defaultDistance.toDouble()
         val distance = getDistanceToScreen(pos)
         mediaPlayer?.tick(distance, maxRadius)

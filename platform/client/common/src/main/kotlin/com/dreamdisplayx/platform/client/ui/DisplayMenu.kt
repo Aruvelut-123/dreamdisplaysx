@@ -682,6 +682,9 @@ class DisplayMenu private constructor(
 
         /** Opens the menu for [displayScreen]. */
         fun open(displayScreen: DisplayScreen) {
+            if (!com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) {
+                com.dreamdisplayx.platform.client.render.ReplayModCompat.recordAction("open", displayScreen.uuid)
+            }
             MinecraftScreenUtil.setScreen(Minecraft.getInstance(), DisplayMenu(displayScreen))
         }
     }
