@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.playback.policy.PlaybackPermissions
 import com.dreamdisplayx.api.playback.model.Timeline
 import com.dreamdisplayx.core.protocol.common.packets.PlaybackCommand
+import com.dreamdisplayx.core.protocol.common.packets.SameContentState
 import com.dreamdisplayx.core.protocol.common.toSync
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.managers.ActionThrottle
@@ -204,10 +205,31 @@ object TimelineManager {
         }
     }
 
-    /** Stamps and broadcasts [timeline] for [display] to every nearby v2 player. */
+    /** Stamps and broadcasts [timeline] for [display] to every nearby player. */
     private fun broadcast(display: DisplayData, timeline: Timeline) {
         val now = transport.nowMs()
         lastBroadcast[display.id] = now
-        transport.broadcast(display, timeline.toSync(display.id, display.mode, now))
+        val sameContent = DisplayManager.getDisplays()
+            .filter { it.mode == display.mode && it.url == display.url && it.lang == display.lang }
+        if (sameContent.size > 1) {
+            val state = SameContentState(
+                groupId = "${display.url}\u0000${display.lang}",
+                displayIds = sameContent.map { it.id },
+                url = display.url,
+                lang = display.lang,
+                positionMs = timeline.positionAt(now),
+                serverTimeMs = now,
+                durationMs = timeline.durationMs,
+                paused = timeline.paused,
+                loop = timeline.loop,
+                mode = display.mode.wire,
+            )
+            sameContent.forEach { target ->
+                lastBroadcast[target.id] = now
+                transport.broadcast(target, state)
+            }
+        } else {
+            transport.broadcast(display, timeline.toSync(display.id, display.mode, now))
+        }
     }
 }

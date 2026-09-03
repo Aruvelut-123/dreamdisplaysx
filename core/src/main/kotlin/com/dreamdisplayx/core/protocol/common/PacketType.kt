@@ -19,6 +19,7 @@ import com.dreamdisplayx.core.protocol.common.packets.ReportDuration
 import com.dreamdisplayx.core.protocol.common.packets.ReportPosition
 import com.dreamdisplayx.core.protocol.common.packets.RequestSync
 import com.dreamdisplayx.core.protocol.common.packets.ServerHello
+import com.dreamdisplayx.core.protocol.common.packets.SameContentState
 import com.dreamdisplayx.core.protocol.common.packets.SetDisplaysEnabled
 import com.dreamdisplayx.core.protocol.common.packets.SetLocked
 import com.dreamdisplayx.core.protocol.common.packets.SetMode
@@ -59,7 +60,8 @@ enum class PacketType(
     REPORT_DURATION(21, ReportDuration::class, PacketDirection.CLIENT_TO_SERVER),
     REMOTE_PLAYBACK_TOGGLE(22, RemotePlaybackToggle::class, PacketDirection.SERVER_TO_CLIENT),
     REPORT_POSITION(23, ReportPosition::class, PacketDirection.CLIENT_TO_SERVER),
-    PLATFORM_CREDENTIALS(27, PlatformCredentials::class, PacketDirection.SERVER_TO_CLIENT);
+    PLATFORM_CREDENTIALS(27, PlatformCredentials::class, PacketDirection.SERVER_TO_CLIENT),
+    SAME_CONTENT_STATE(28, SameContentState::class, PacketDirection.SERVER_TO_CLIENT);
 
     companion object {
         private val byId = entries.associateBy { it.id }

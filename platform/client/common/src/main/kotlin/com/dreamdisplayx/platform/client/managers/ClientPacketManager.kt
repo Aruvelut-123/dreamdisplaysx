@@ -51,6 +51,7 @@ object ClientPacketManager {
                 DisplayRegistry.recordScreen(it)
             }
 
+            is SameContentState -> applySameContent(packet)
             is WatchPartyState -> DisplayRegistry.screens[packet.id]?.let {
                 it.updateWatchParty(packet)
                 DisplayRegistry.recordScreen(it)
@@ -74,6 +75,18 @@ object ClientPacketManager {
             is DisplayDelete -> handleDelete(packet)
             is ClearCache -> handleClearCache(packet)
             else -> logger.debug("Ignoring non-client-bound packet {}.", packet::class.simpleName)
+        }
+    }
+
+    /** Applies one shared-content snapshot to every addressed display. */
+    private fun applySameContent(packet: SameContentState) {
+        packet.displayIds.forEach { id ->
+            DisplayRegistry.screens[id]?.let { screen ->
+                if (screen.videoUrl != packet.url) screen.loadVideo(packet.url, packet.lang)
+                screen.updateData(DisplaySync(id, isSync = true, isPaused = packet.paused,
+                    currentTimeMs = packet.positionMs, durationMs = packet.durationMs,
+                    serverTimeMs = packet.serverTimeMs, loop = packet.loop, mode = packet.mode))
+            }
         }
     }
 
