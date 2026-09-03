@@ -14,6 +14,7 @@ import com.dreamdisplayx.core.protocol.common.packets.PlaybackCommand
 import com.dreamdisplayx.core.protocol.common.packets.PlatformCredentials
 import com.dreamdisplayx.core.protocol.common.packets.RadiusPreview
 import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
+import com.dreamdisplayx.core.protocol.common.packets.RemoteControlOpen
 import com.dreamdisplayx.core.protocol.common.packets.ReportDisplay
 import com.dreamdisplayx.core.protocol.common.packets.ReportDuration
 import com.dreamdisplayx.core.protocol.common.packets.ReportPosition
@@ -61,7 +62,8 @@ enum class PacketType(
     REMOTE_PLAYBACK_TOGGLE(22, RemotePlaybackToggle::class, PacketDirection.SERVER_TO_CLIENT),
     REPORT_POSITION(23, ReportPosition::class, PacketDirection.CLIENT_TO_SERVER),
     PLATFORM_CREDENTIALS(27, PlatformCredentials::class, PacketDirection.SERVER_TO_CLIENT),
-    SAME_CONTENT_STATE(28, SameContentState::class, PacketDirection.SERVER_TO_CLIENT);
+    SAME_CONTENT_STATE(28, SameContentState::class, PacketDirection.SERVER_TO_CLIENT),
+    REMOTE_CONTROL_OPEN(29, RemoteControlOpen::class, PacketDirection.SERVER_TO_CLIENT);
 
     companion object {
         private val byId = entries.associateBy { it.id }

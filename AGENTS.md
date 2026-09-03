@@ -310,6 +310,10 @@ Every task MUST be tracked in the session's `todo` task list at all times:
 - Never merge upstream changelog into our version's section
 - The CI release pipeline extracts the matching section from CHANGELOG.md by the `pretty_version` title
 
+## Experimental Remote Control
+
+The Paper remote-control stick is experimental and uses a `PersistentDataContainer` entry named `remote_display_id`. A normal stick links to the nearest display under the player's look ray on right-click; the server adds a custom name and enchantment-glint override. Shift+right-click on a linked stick sends the experimental V3 `RemoteControlOpen` packet, and the client opens the linked `DisplayMenu` when that display is loaded. Keep the packet id append-only and validate the linked display server-side.
+
 ## Optional Flashback integration
 
 Flashback support is experimental and reflection-only. Flashback is a Fabric client mod; NeoForge compatibility is provided by Sinytra Connector, so Dream DisplaysX must not add a hard NeoForge Flashback dependency. Do not assume Flashback's internal classes are stable APIs; all probes must fail closed when Flashback is absent or changes. Replay marker, audio, and export behavior may be incomplete. Flashback's visual timeline can be consumed for synchronization, but its internal keyframe/editor classes are not stable third-party APIs; render switches are persisted in Dream DisplaysX config with system-property overrides. Flashback captures Minecraft OpenAL loopback audio only; Dream DisplaysX's independent Java Sound/OpenSL ES output is not captured without a future SoundEngine PCM bridge.

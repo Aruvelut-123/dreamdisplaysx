@@ -17,6 +17,7 @@ import com.dreamdisplayx.core.protocol.common.packets.PlaybackCommand
 import com.dreamdisplayx.core.protocol.common.packets.PlatformCredentials
 import com.dreamdisplayx.core.protocol.common.packets.RadiusPreview
 import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
+import com.dreamdisplayx.core.protocol.common.packets.RemoteControlOpen
 import com.dreamdisplayx.core.protocol.common.packets.ReportDisplay
 import com.dreamdisplayx.core.protocol.common.packets.ReportDuration
 import com.dreamdisplayx.core.protocol.common.packets.ReportPosition
@@ -90,6 +91,7 @@ object PacketRegistry {
         Entry(PacketType.PIP_PIN, PipPin::class, PipPin.serializer()),
         Entry(PacketType.REPORT_DURATION, ReportDuration::class, ReportDuration.serializer()),
         Entry(PacketType.REMOTE_PLAYBACK_TOGGLE, RemotePlaybackToggle::class, RemotePlaybackToggle.serializer()),
+        Entry(PacketType.REMOTE_CONTROL_OPEN, RemoteControlOpen::class, RemoteControlOpen.serializer()),
         Entry(PacketType.REPORT_POSITION, ReportPosition::class, ReportPosition.serializer()),
         Entry(PacketType.PLATFORM_CREDENTIALS, PlatformCredentials::class, PlatformCredentials.serializer()),
         Entry(PacketType.SAME_CONTENT_STATE, SameContentState::class, SameContentState.serializer()),

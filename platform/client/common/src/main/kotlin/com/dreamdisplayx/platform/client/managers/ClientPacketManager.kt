@@ -59,6 +59,9 @@ object ClientPacketManager {
 
             is FullscreenState -> FullscreenController.handle(packet)
             is RemotePlaybackToggle -> DisplayRegistry.screens[packet.id]?.setPaused(packet.paused)
+            is RemoteControlOpen -> DisplayRegistry.screens[packet.displayId]?.let { screen ->
+                com.dreamdisplayx.platform.client.ui.DisplayMenu.open(screen)
+            } ?: logger.warn("Remote control target {} is not loaded.", packet.displayId)
             is PlatformCredentials -> {
                 ClientStateManager.bilibiliSessdata = packet.bilibiliSessdata
                 BilibiliApi.cookie = packet.bilibiliSessdata
