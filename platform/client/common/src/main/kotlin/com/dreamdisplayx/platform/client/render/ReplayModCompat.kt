@@ -1,10 +1,12 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.Base64
 
-/** Optional ReplayMod bridge. Reflection keeps ReplayMod out of the hard dependency graph. */
+/** Optional, experimental ReplayMod bridge. Reflection keeps ReplayMod out of the hard dependency graph. */
+@DreamDisplaysXUnstableApi
 object ReplayModCompat {
     @Volatile
     private var renderingFrame = false

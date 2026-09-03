@@ -2,6 +2,7 @@
 
 package com.dreamdisplayx.core.protocol.common.packets
 
+import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.core.protocol.common.UuidSerializer
 import com.dreamdisplayx.core.protocol.common.ZERO_UUID
 import kotlinx.serialization.Serializable
@@ -9,9 +10,10 @@ import kotlinx.serialization.protobuf.ProtoNumber
 import java.util.UUID
 
 /**
- * Shared-content playback snapshot for V3 clients. A single timeline snapshot can address several
+ * Experimental shared-content playback snapshot for V3 clients. A single timeline snapshot can address several
  * displays carrying the same URL, avoiding independent drift between those displays.
  */
+@DreamDisplaysXUnstableApi
 @Serializable
 data class SameContentState(
     @ProtoNumber(1) val groupId: String = "",

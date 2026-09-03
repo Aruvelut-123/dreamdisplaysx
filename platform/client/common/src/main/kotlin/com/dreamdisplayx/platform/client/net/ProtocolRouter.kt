@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.net
 
+import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
@@ -7,7 +8,8 @@ import com.dreamdisplayx.core.protocol.common.packets.ServerHello
 import com.dreamdisplayx.platform.client.managers.ClientPacketManager
 import org.slf4j.LoggerFactory
 
-/** Protocol routing seam for the negotiated V2/V3 envelope transports. */
+/** Experimental protocol routing seam for the negotiated V2/V3 envelope transports. */
+@DreamDisplaysXUnstableApi
 object ProtocolRouter {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/ProtocolRouter")
 

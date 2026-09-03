@@ -1,10 +1,12 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import org.slf4j.LoggerFactory
 import java.util.Base64
 import java.util.UUID
 
-/** Optional Flashback bridge. Reflection keeps Flashback and Sinytra Connector optional. */
+/** Optional, experimental Flashback bridge. Reflection keeps Flashback and Sinytra Connector optional. */
+@DreamDisplaysXUnstableApi
 object FlashbackCompat {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/FlashbackCompat")
     private const val FLASHBACK = "com.moulberry.flashback.Flashback"

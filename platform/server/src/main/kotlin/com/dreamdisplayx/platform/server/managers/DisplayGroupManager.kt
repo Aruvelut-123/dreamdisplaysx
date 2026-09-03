@@ -1,12 +1,14 @@
 package com.dreamdisplayx.platform.server.managers
 
+import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-/** In-memory named display groups used by the V3 same-content playback commands. */
+/** Experimental in-memory named display groups used by V3 same-content playback commands. */
+@DreamDisplaysXUnstableApi
 @PaperOnly
 object DisplayGroupManager {
     private val groups = ConcurrentHashMap<String, MutableSet<UUID>>()

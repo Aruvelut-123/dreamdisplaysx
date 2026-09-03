@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.registrar
 
+import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.commands.subcommands.VideoCommand
@@ -16,7 +17,8 @@ import io.papermc.paper.command.brigadier.Commands
 import org.bukkit.entity.Player
 import java.util.UUID
 
-/** Paper `/display group` commands for V3 same-content playback. */
+/** Experimental Paper `/display group` commands for V3 same-content playback. */
+@DreamDisplaysXUnstableApi
 object GroupCommand {
     fun node(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("group")
         .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.video) }
