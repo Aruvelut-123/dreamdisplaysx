@@ -92,6 +92,11 @@ object Initializer {
         ProtocolRouter.onV2Received(bytes)
     }
 
+    /** Decodes and dispatches a v3 batch from the `dreamdisplayx:v3` channel. */
+    fun onV3Packet(bytes: ByteArray) {
+        ProtocolRouter.onV3Received(bytes)
+    }
+
     /**
      * Main client tick handler. Detects level changes, manages render-distance unloading / restoring,
      * handles the right-click shortcut, and applies focus-mode blindness.

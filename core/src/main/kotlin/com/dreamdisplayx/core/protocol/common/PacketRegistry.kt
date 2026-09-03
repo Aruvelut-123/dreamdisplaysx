@@ -2,6 +2,7 @@
 
 package com.dreamdisplayx.core.protocol.common
 
+import com.dreamdisplayx.api.protocol.ProtocolGeneration
 import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.packets.ClearCache
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
@@ -122,6 +123,44 @@ object PacketRegistry {
         val entry = byId[envelope.type] ?: return null
         return proto.decodeFromByteArray(entry.serializer, envelope.payload)
     }
+
+    /** Encodes one packet into a generation-3 envelope. */
+    fun encodeV3(packet: DreamPacket): ByteArray = encodeV3(listOf(packet))
+
+    /** Encodes several packets into one generation-3 batch envelope. */
+    fun encodeV3(packets: List<DreamPacket>): ByteArray {
+        val frames = packets.map { packet ->
+            val entry = entryOf(packet)
+            V3Envelope.Packet(entry.id, entry.encode(proto, packet))
+        }
+        return proto.encodeToByteArray(
+            V3Envelope.serializer(),
+            V3Envelope(ProtocolGeneration.V3, frames),
+        )
+    }
+
+    /** Decodes a generation-3 batch, skipping unknown packet ids for forward compatibility. */
+    fun decodeV3(bytes: ByteArray): List<DreamPacket> {
+        val envelope = proto.decodeFromByteArray(V3Envelope.serializer(), bytes)
+        require(envelope.generation == ProtocolGeneration.V3) {
+            "Unsupported protocol generation ${envelope.generation}; expected ${ProtocolGeneration.V3}."
+        }
+        return envelope.packets.mapNotNull { frame ->
+            val entry = byId[frame.type] ?: return@mapNotNull null
+            proto.decodeFromByteArray(entry.serializer, frame.payload)
+        }
+    }
+
+    /** Decodes a generation-3 batch and validates every packet direction. */
+    fun decodeV3(bytes: ByteArray, inbound: PacketDirection): List<DreamPacket> =
+        decodeV3(bytes).also { packets ->
+            packets.forEach { packet ->
+                val direction = directionOf(packet)
+                require(direction == inbound || direction == PacketDirection.BIDIRECTIONAL) {
+                    "Packet ${packet::class.simpleName} travels $direction; not acceptable inbound as $inbound."
+                }
+            }
+        }
 
     /** Decodes envelope bytes, validating packet direction matches [inbound]; rejects packets from invalid directions. */
     fun decode(bytes: ByteArray, inbound: PacketDirection): DreamPacket? {

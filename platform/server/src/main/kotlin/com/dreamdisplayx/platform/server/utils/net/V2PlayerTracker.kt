@@ -14,6 +14,11 @@ object V2PlayerTracker {
     /** Returns the capabilities advertised by [uuid]. */
     fun helloOf(uuid: UUID): ClientHello? = players[uuid]
 
+    /** Returns whether [uuid] negotiated the generation-3 transport. */
+    fun isV3(uuid: UUID): Boolean =
+        (players[uuid]?.generation ?: com.dreamdisplayx.api.protocol.ProtocolGeneration.V2) >=
+            com.dreamdisplayx.api.protocol.ProtocolGeneration.V3
+
     /** Returns a snapshot for diagnostics. */
     fun snapshot(): Map<UUID, ClientHello> = players.toMap()
 

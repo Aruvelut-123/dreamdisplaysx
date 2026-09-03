@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.client.capabilities
 
 import com.dreamdisplayx.api.media.stream.model.SupportedCodec
+import com.dreamdisplayx.api.protocol.ProtocolGeneration
 import com.dreamdisplayx.api.render.backend.model.RenderBackend
 import com.dreamdisplayx.api.render.backend.model.ShaderBackend
 import com.dreamdisplayx.api.render.texture.model.TextureUploadPath
@@ -60,6 +61,7 @@ object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
             dedicatedVramMb = memory.dedicatedVramMb,
             warmDisplayLimit = WarmParkPolicy.maxFullWarmDisplays,
             timeZoneOffsetMinutes = safeInt { ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60 },
+            generation = ProtocolGeneration.CURRENT,
         )
     }
 

@@ -40,6 +40,10 @@ broadcast playback depending on how you want your displays to behave.
 
 Dream DisplaysX keeps playback synchronized across the server while keeping network usage extremely low.
 
+## Protocol compatibility
+
+Current clients negotiate the improved V3 transport when available. V3 uses a versioned, batch-capable envelope on `dreamdisplayx:v3`; clients automatically fall back to the compatible V2 envelope on `dreamdisplayx:v2`. Legacy V1 traffic is detected and the affected player is notified in chat, but V1 packets are not processed.
+
 ![Cinema](https://i.imgur.com/PKxe0oG.png)
 
 # Made for you

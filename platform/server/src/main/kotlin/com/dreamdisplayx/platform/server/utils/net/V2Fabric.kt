@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.core.protocol.common.packets.*
 import com.dreamdisplayx.platform.client.net.V2Payload
+import com.dreamdisplayx.platform.client.net.V3Payload
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -33,11 +34,23 @@ object FabricV2Networking {
     /** Encodes [packet] once and sends it to every player in [players]. */
     fun send(players: List<ServerPlayer>, packet: DreamPacket) {
         if (players.isEmpty()) return
-        val bytes = runCatching { PacketRegistry.encode(packet) }
-            .onFailure { logger.warn("Failed to encode v2 packet", it) }
-            .getOrNull() ?: return
-        players.forEach { player ->
-            runCatching { ServerPlayNetworking.send(player, V2Payload(bytes)) }
+        val v3Players = players.filter { V2PlayerTracker.isV3(it.uuid) }
+        val v2Players = players.filterNot { V2PlayerTracker.isV3(it.uuid) }
+        if (v3Players.isNotEmpty()) {
+            val bytes = runCatching { PacketRegistry.encodeV3(packet) }
+                .onFailure { logger.warn("Failed to encode v3 packet", it) }
+                .getOrNull()
+            if (bytes != null) v3Players.forEach { player ->
+                runCatching { ServerPlayNetworking.send(player, V3Payload(bytes)) }
+            }
+        }
+        if (v2Players.isNotEmpty()) {
+            val bytes = runCatching { PacketRegistry.encode(packet) }
+                .onFailure { logger.warn("Failed to encode v2 packet", it) }
+                .getOrNull()
+            if (bytes != null) v2Players.forEach { player ->
+                runCatching { ServerPlayNetworking.send(player, V2Payload(bytes)) }
+            }
         }
     }
 
@@ -57,7 +70,7 @@ object FabricV2Networking {
     }
 
     /** Routes a decoded serverbound packet to the shared action handlers. */
-    private fun dispatch(player: ServerPlayer, server: MinecraftServer, packet: DreamPacket) {
+    internal fun dispatch(player: ServerPlayer, server: MinecraftServer, packet: DreamPacket) {
         when (packet) {
             is ClientHello -> handleHello(player, server, packet)
             is RequestSync -> VanillaDisplayActions.requestSync(player, packet.id)
@@ -108,6 +121,7 @@ object FabricV2Networking {
         send(
             listOf(player),
             ServerHello(
+                generation = hello.generation.coerceAtMost(com.dreamdisplayx.api.protocol.ProtocolGeneration.CURRENT),
                 isPremium = VanillaDisplayActions.isPremium(player),
                 isAdmin = VanillaDisplayActions.isAdmin(player),
                 isReportingEnabled = VanillaServerState.config.settings.webhookUrl.isNotEmpty(),

@@ -10,6 +10,8 @@ import com.dreamdisplayx.platform.server.registrar.NeoForgeCommandRegistrar
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeNetworkingAdapter
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeProxyNetworking
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeV2Networking
+import com.dreamdisplayx.platform.server.utils.net.NeoForgeV3Networking
+import com.dreamdisplayx.platform.server.utils.net.NeoForgeV1Detector
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
 import net.minecraft.core.registries.Registries
@@ -68,6 +70,8 @@ class NeoForgeServer(modEventBus: IEventBus) {
     private fun registerPayloads(event: RegisterPayloadHandlersEvent) {
         val registrar = event.registrar(Initializer.MOD_ID).optional().versioned("1")
         NeoForgeV2Networking.registerReceivers(registrar)
+        NeoForgeV3Networking.registerReceivers(registrar)
+        NeoForgeV1Detector.registerReceivers(registrar)
         NeoForgeProxyNetworking.registerReceivers(registrar)
     }
 

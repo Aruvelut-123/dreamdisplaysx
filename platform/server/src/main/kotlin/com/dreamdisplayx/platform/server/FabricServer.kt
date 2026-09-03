@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.client.net.ProxyPayload
 import com.dreamdisplayx.platform.client.net.V2Payload
+import com.dreamdisplayx.platform.client.net.V3Payload
 import com.dreamdisplayx.platform.server.listeners.FabricPlayerListener
 import com.dreamdisplayx.platform.server.listeners.FabricProtectionListener
 import com.dreamdisplayx.platform.server.listeners.FabricSelectionListener
@@ -12,6 +13,9 @@ import com.dreamdisplayx.platform.server.storage.StorageBackend
 import com.dreamdisplayx.platform.server.utils.net.FabricNetworkingAdapter
 import com.dreamdisplayx.platform.server.utils.net.FabricProxyNetworking
 import com.dreamdisplayx.platform.server.utils.net.FabricV2Networking
+import com.dreamdisplayx.platform.server.utils.net.FabricV3Networking
+import com.dreamdisplayx.platform.server.utils.net.FabricV1Detector
+import com.dreamdisplayx.platform.server.utils.net.LegacyV1Payload
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import net.fabricmc.api.ModInitializer
@@ -47,6 +51,8 @@ class Server : ModInitializer {
         FabricBareTokenArgumentType.register()
         registerPayloadTypes()
         FabricV2Networking.registerReceivers()
+        FabricV3Networking.registerReceivers()
+        FabricV1Detector.register()
         FabricProxyNetworking.registerReceivers()
         FabricCommandRegistrar.register()
         FabricPlayerListener.register()
@@ -77,11 +83,17 @@ class Server : ModInitializer {
         runCatching {
             payloadRegistry("clientboundPlay", "playS2C").let { clientbound ->
                 registerPayload(clientbound, V2Payload.TYPE, V2Payload.CODEC)
+                registerPayload(clientbound, V3Payload.TYPE, V3Payload.CODEC)
                 registerPayload(clientbound, ProxyPayload.TYPE, ProxyPayload.CODEC)
             }
 
             payloadRegistry("serverboundPlay", "playC2S").let { serverbound ->
                 registerPayload(serverbound, V2Payload.TYPE, V2Payload.CODEC)
+                registerPayload(serverbound, V3Payload.TYPE, V3Payload.CODEC)
+                LegacyV1Payload.CHANNELS.forEach { path ->
+                    val type = LegacyV1Payload.type(path)
+                    registerPayload(serverbound, type, LegacyV1Payload.codec(type))
+                }
                 registerPayload(serverbound, ProxyPayload.TYPE, ProxyPayload.CODEC)
             }
         }.onFailure { e ->

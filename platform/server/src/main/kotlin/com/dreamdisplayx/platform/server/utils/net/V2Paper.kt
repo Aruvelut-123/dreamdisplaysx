@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory
 
 /** The single protocol-v2 plugin-message channel. */
 const val V2_CHANNEL: String = "dreamdisplayx:v2"
+const val V3_CHANNEL: String = "dreamdisplayx:v3"
 
 /**
  * Protocol-v2 networking for the Paper flavor: receives envelope frames on [V2_CHANNEL], answers
@@ -37,10 +38,14 @@ object PaperV2Networking : PluginMessageListener {
 
     /** Encodes [packet] once and sends it to every non-null player in [players]. */
     fun send(players: List<Player?>, packet: DreamPacket) {
+        val v3Players = players.filterNotNull().filter { V2PlayerTracker.isV3(it.uniqueId) }
+        val v2Players = players.filterNotNull().filterNot { V2PlayerTracker.isV3(it.uniqueId) }
+        if (v3Players.isNotEmpty()) PaperV3Networking.send(v3Players, packet)
+        if (v2Players.isEmpty()) return
         val bytes = runCatching { PacketRegistry.encode(packet) }
             .onFailure { logger.warn("Failed to encode v2 packet", it) }
             .getOrNull() ?: return
-        players.filterNotNull().forEach { player ->
+        v2Players.forEach { player ->
             runCatching { player.sendPluginMessage(plugin, V2_CHANNEL, bytes) }
                 .onFailure { logger.warn("Failed to send v2 packet to ${player.name}", it) }
         }
@@ -61,6 +66,28 @@ object PaperV2Networking : PluginMessageListener {
     private fun maxDisplaysFor(hasBypass: Boolean): Int {
         val cap = PaperServer.config.settings.maxDisplaysPerPlayer
         return if (hasBypass || cap <= 0) -1 else cap
+    }
+
+    /** Dispatches a decoded serverbound packet. */
+    internal fun dispatch(player: Player, packet: DreamPacket) {
+        when (packet) {
+            is ClientHello -> handleHello(player, packet)
+            is RequestSync -> DisplayActions.requestSync(player, packet.id)
+            is ReportDuration -> DisplayActions.reportDuration(player, packet.id, packet.durationMs)
+            is ReportPosition -> DisplayActions.reportPosition(player, packet.id, packet.positionNanos)
+            is DisplayDelete -> DisplayActions.delete(player, packet.id)
+            is ReportDisplay -> DisplayManager.report(packet.id, player)
+            is SetVideo -> DisplayActions.setVideo(player, packet.id, packet.url, packet.lang)
+            is SetLocked -> DisplayActions.setLocked(player, packet.id, packet.locked)
+            is SetMode -> DisplayActions.setMode(player, packet.id, PlaybackMode.fromWire(packet.mode), packet.positionMs)
+            is PlaybackCommand -> PlaybackAction.fromWire(packet.action)?.let { DisplayActions.playbackCommand(player, packet.id, it, packet.positionMs) }
+            is WatchPartyStart -> DisplayActions.watchPartyStart(player, packet.id, packet.url, packet.lang)
+            is WatchPartyControl -> WatchPartyAction.fromWire(packet.action)?.let { DisplayActions.watchPartyControl(player, packet.id, it, packet.positionMs) }
+            is SetDisplaysEnabled -> PlayerManager.setDisplaysEnabled(player.uniqueId, packet.enabled)
+            is FullscreenAck -> FullscreenBroadcastManager.handleAck(packet.sessionId, player.uniqueId, FullscreenAckAction.fromWire(packet.action))
+            is PipPin -> if (packet.pinned) PipPinManager.pin(player.uniqueId, packet.id) else PipPinManager.unpin(player.uniqueId, packet.id)
+            else -> logger.debug("Ignoring non-serverbound protocol packet {}.", packet::class.simpleName)
+        }
     }
 
     /** Decodes an envelope frame and dispatches the packet; unknown type ids are skipped. */
@@ -116,7 +143,7 @@ object PaperV2Networking : PluginMessageListener {
      */
     private fun handleHello(player: Player, hello: ClientHello) {
         V2PlayerTracker.markV2(player.uniqueId, hello)
-        send(listOf(player), buildServerHello(player))
+        send(listOf(player), buildServerHello(player).copy(generation = hello.generation.coerceAtMost(com.dreamdisplayx.api.protocol.ProtocolGeneration.CURRENT)))
         send(listOf(player), CredentialActions.snapshotFor(player.uniqueId.toString()))
         DisplayActions.recordVersionAndCheckUpdates(player, hello.modVersion)
         DisplayActions.sendAllDisplays(player)

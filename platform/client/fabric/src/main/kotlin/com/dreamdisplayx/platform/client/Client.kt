@@ -33,6 +33,7 @@ import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.platform.client.net.V2Payload
+import com.dreamdisplayx.platform.client.net.V3Payload
 import com.dreamdisplayx.platform.client.platform.FabricPlatformIntegrationProvider
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
 import com.dreamdisplayx.platform.client.render.UnshadedDisplayPass
@@ -75,6 +76,9 @@ class Client : ClientModInitializer, Mod {
         // Protocol v2: every packet arrives as one opaque envelope payload
         ClientPlayNetworking.registerGlobalReceiver(V2Payload.TYPE) { payload, _ ->
             Initializer.onV2Packet(payload.bytes)
+        }
+        ClientPlayNetworking.registerGlobalReceiver(V3Payload.TYPE) { payload, _ ->
+            Initializer.onV3Packet(payload.bytes)
         }
 
         //? if >=26 {

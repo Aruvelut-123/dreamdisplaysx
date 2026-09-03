@@ -2,6 +2,7 @@
 
 package com.dreamdisplayx.core.protocol.common.packets
 
+import com.dreamdisplayx.api.protocol.ProtocolGeneration
 import com.dreamdisplayx.api.protocol.ProtocolVersion
 import com.dreamdisplayx.core.protocol.common.UuidSerializer
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -39,6 +40,7 @@ data class ClientHello(
     @ProtoNumber(25) val nativeUnavailableReason: String = "",
     @ProtoNumber(26) val lavUnavailableReason: String = "",
     @ProtoNumber(27) val timeZoneOffsetMinutes: Int = 0,
+    @ProtoNumber(28) val generation: Int = ProtocolGeneration.V2,
 ) : DreamPacket
 
 /** Server -> client capability snapshot (premium, admin, reporting); field 5 retired. */
@@ -52,6 +54,7 @@ data class ServerHello(
     @ProtoNumber(7) val allowedFeatures: List<String> = emptyList(),
     @ProtoNumber(8) val defaultVolume: Float = -1f,
     @ProtoNumber(9) val defaultStretchMode: String = "",
+    @ProtoNumber(10) val generation: Int = ProtocolGeneration.V2,
 ) : DreamPacket
 
 /** Server tells the client to evict the listed displays from local caches. */

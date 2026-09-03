@@ -31,7 +31,7 @@
 | Paper | — | `platform/server/.../PaperServer.kt` |
 
 ### Protocol
-- v2 protocol: `Envelope` (type id + protobuf bytes) over `dreamdisplayx:v2` channel; V1 payloads and plugin-message paths have been removed. `ProtocolRouter` remains the client routing seam for future V3 compatibility.
+- v2/v3 protocol: V2 keeps the single `Envelope` (type id + protobuf bytes) over `dreamdisplayx:v2`; V3 adds the explicit-generation, batch-capable `V3Envelope` over `dreamdisplayx:v3` and automatically falls back to V2. Legacy V1 traffic is detected and reported in chat, but never handled. `ProtocolRouter` is the client routing seam.
 - `PacketType.kt` — append-only enum, never reuse ids
 - `PacketRegistry.kt` — register all packet serializers
 - Client→Server packets: `ClientHello`, `PlaybackCommand`, `SetVideo`, etc.

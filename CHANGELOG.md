@@ -4,6 +4,8 @@ Based on Dream Displays [7e156542](https://github.com/arnodoelinger/dreamdisplay
 
 ## Highlights
 
+- **Protocol V3 foundation** — added a versioned, batch-capable envelope and negotiated `dreamdisplayx:v3` transport while retaining V2 fallback compatibility. Legacy V1 handshakes are detected and the player is notified that V1 is no longer supported.
+
 - **Protocol V1 removed** — all clients and servers now use the V2 envelope; `ProtocolRouter` remains the compatibility seam for future V3 work.
 
 - **Video-derived dynamic lighting** — playing frames are sampled for RGB color; when LambDynamicLights is installed, each display exposes an optional dynamic light source whose brightness follows the sampled video. Without the optional integration, the normal lighting path is unchanged. Iris shader packs keep their own color-lighting pipeline without private uniform injection.
