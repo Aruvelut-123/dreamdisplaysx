@@ -31,7 +31,7 @@
 | Paper | — | `platform/server/.../PaperServer.kt` |
 
 ### Protocol
-- v2 protocol: `Envelope` (type id + protobuf bytes) over `dreamdisplayx:v2` channel
+- v2 protocol: `Envelope` (type id + protobuf bytes) over `dreamdisplayx:v2` channel; V1 payloads and plugin-message paths have been removed. `ProtocolRouter` remains the client routing seam for future V3 compatibility.
 - `PacketType.kt` — append-only enum, never reuse ids
 - `PacketRegistry.kt` — register all packet serializers
 - Client→Server packets: `ClientHello`, `PlaybackCommand`, `SetVideo`, etc.

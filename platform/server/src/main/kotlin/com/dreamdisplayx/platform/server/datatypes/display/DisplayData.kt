@@ -59,7 +59,7 @@ interface DisplayData {
     /** The action ([PlaybackAction.PLAY] / [PlaybackAction.PAUSE]) [scheduledStart] will apply. */
     var scheduledAction: PlaybackAction?
 
-    /** Legacy mirror of [mode] for frozen-v1 peers; true only when the mode is [PlaybackMode.SYNCED]. */
+    /** Whether this display uses the synchronized playback mode. */
     val isSync: Boolean get() = mode == PlaybackMode.SYNCED
 
     /** Max video height clients must not exceed (0 = uncapped, 360 for [PlaybackMode.BROADCAST]). */

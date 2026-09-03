@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.server.managers
 
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.playback.policy.PlaybackPermissions
+import com.dreamdisplayx.core.protocol.common.packets.DisplaySync
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
@@ -14,7 +15,6 @@ import com.dreamdisplayx.platform.server.playback.PlaybackContexts
 import com.dreamdisplayx.platform.server.playback.WatchPartyManager
 import com.dreamdisplayx.platform.server.utils.PlatformUtil
 import com.dreamdisplayx.platform.server.utils.net.PacketUtil
-import com.dreamdisplayx.platform.server.utils.net.V2PlayerTracker
 import com.dreamdisplayx.platform.server.utils.net.VanillaPacketUtil
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.minecraft.server.MinecraftServer
@@ -111,14 +111,6 @@ object StateManager {
             )
         ) return
         val data = getDisplayData(packet.id) ?: return
-        if (PlatformUtil.isFolia) {
-            DisplayManager.sendLegacySyncToTrackedNearbyPlayers(
-                data as PaperDisplayData,
-                packet,
-                excludedPlayerId = player.uniqueId,
-            )
-            return
-        }
         val receivers = getReceivers(data as PaperDisplayData)
         PacketUtil.sendSync(receivers.filter { it.uniqueId != player.uniqueId }, packet)
     }
@@ -140,7 +132,6 @@ object StateManager {
     @JvmStatic
     fun sendSyncPacket(id: UUID?, player: Player?) {
         val displayId = id ?: return
-        if (player != null && V2PlayerTracker.isV2(player.uniqueId)) return
         val state = playStates[displayId] ?: return
 
         val packet = state.createPacket()
@@ -150,7 +141,6 @@ object StateManager {
     /** Sends the current sync packet for display [id] to a single [player], if state exists. */
     fun sendSyncPacket(id: UUID?, player: ServerPlayer) {
         val displayId = id ?: return
-        if (V2PlayerTracker.isV2(player.uuid)) return
         val state = playStates[displayId] ?: return
         val display = getDisplayData(displayId) as? VanillaDisplayData
         val packet = state.createPacket(display)
@@ -189,7 +179,8 @@ object StateManager {
     @PaperOnly
     fun resetAndBroadcastForTrackedPlayers(display: PaperDisplayData) {
         val state = resetState(display.id) ?: return
-        DisplayManager.sendLegacySyncToTrackedNearbyPlayers(display, state.createPacket())
+        val packet = syncPacketOf(state.createPacket()) ?: return
+        DisplayManager.sendV2ToTrackedNearbyPlayers(display, packet)
     }
 
     /** Resets the server-side clock for [displayId] to 0 (called when owner switches video). */
@@ -226,7 +217,6 @@ object StateManager {
     @JvmStatic
     fun tickBroadcast() = forEachBroadcastDue { state, display ->
         val receivers = getReceivers(display as PaperDisplayData)
-            .filterNot { V2PlayerTracker.isV2(it.uniqueId) }
         if (receivers.isNotEmpty()) PacketUtil.sendSync(receivers, state.createPacket())
     }
 
@@ -236,7 +226,20 @@ object StateManager {
      */
     @PaperOnly
     fun tickBroadcastForTrackedPlayers() = forEachBroadcastDue { state, display ->
-        DisplayManager.sendLegacySyncToTrackedNearbyPlayers(display as PaperDisplayData, state.createPacket())
+        val packet = syncPacketOf(state.createPacket()) ?: return@forEachBroadcastDue
+        DisplayManager.sendV2ToTrackedNearbyPlayers(display as PaperDisplayData, packet)
+    }
+
+    /** Converts the state model to the V2 packet used by the tracked-player transport. */
+    private fun syncPacketOf(syncData: SyncData): DisplaySync? {
+        val id = syncData.id ?: return null
+        return DisplaySync(
+            id = id,
+            isSync = syncData.isSync,
+            isPaused = !syncData.currentState,
+            currentTimeMs = syncData.currentTime,
+            durationMs = syncData.limitTime,
+        )
     }
 
     /**
@@ -246,7 +249,6 @@ object StateManager {
     fun tickBroadcast(server: MinecraftServer) = forEachBroadcastDue { state, display ->
         val vanillaDisplay = display as VanillaDisplayData
         val receivers = getReceivers(vanillaDisplay, server)
-            .filterNot { V2PlayerTracker.isV2(it.uuid) }
         if (receivers.isNotEmpty()) VanillaPacketUtil.sendSync(receivers, state.createPacket(vanillaDisplay))
     }
 }

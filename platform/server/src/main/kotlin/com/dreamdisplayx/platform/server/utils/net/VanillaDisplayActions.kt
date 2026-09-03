@@ -30,8 +30,7 @@ import net.minecraft.server.level.ServerPlayer
 import org.semver4j.Semver
 
 /**
- * Vanilla Minecraft API packet actions, shared between the frozen v1 receivers registered by
- * [VanillaServerPacketHandler] and the protocol-v2 dispatch in [V2Fabric] / [V2NeoForge]. All
+ * Vanilla Minecraft API packet actions, shared by the protocol-v2 dispatch in [V2Fabric] / [V2NeoForge]. All
  * business logic is shared by `Fabric` and `NeoForge`.
  */
 object VanillaDisplayActions {

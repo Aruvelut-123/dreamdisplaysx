@@ -41,7 +41,6 @@ import com.dreamdisplayx.platform.client.displays.DisplayScreen.Companion.ENV_PR
 import com.dreamdisplayx.platform.client.managers.ClientPacketManager
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.managers.DisplayPopoutManager
-import com.dreamdisplayx.platform.client.net.ProtocolRouter
 import com.dreamdisplayx.platform.client.render.*
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.platform.client.ui.DisplayMenu
@@ -658,17 +657,12 @@ class DisplayScreen(
     /** Applies the authoritative server timeline: matches pause state and corrects drift. */
     fun updateData(packet: DisplaySync) {
         if (watchParty != null) return
-        if (isLegacySync(packet) && usesV2Timeline()) return
         timelineFollower.apply(packet.currentTimeMs, packet.serverTimeMs, packet.isPaused, packet.loop)
     }
 
-    /** Legacy sync packets have no v2 timeline metadata; on modes-capable servers they are stale v1 keepalives. */
-    private fun isLegacySync(packet: DisplaySync): Boolean =
-        packet.mode == PlaybackMode.LOCAL.wire && packet.serverTimeMs == 0L && !packet.loop
-
-    /** True once sync should come from v2 server timelines rather than the frozen-v1 owner relay. */
+    /** True when the server advertises authoritative v2 timeline metadata. */
     private fun usesV2Timeline(): Boolean =
-        ProtocolRouter.v2Negotiated || ClientPacketManager.serverSnapshot.hasFeature(ServerFeature.MODES)
+        ClientPacketManager.serverSnapshot.hasFeature(ServerFeature.MODES)
 
     /** Applies watch-party snapshot: tracks session, loads host video, follows timeline. */
     fun updateWatchParty(packet: WatchPartyState) {

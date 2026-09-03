@@ -11,7 +11,6 @@ import com.dreamdisplayx.platform.server.utils.net.NeoForgeNetworkingAdapter
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeProxyNetworking
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeV2Networking
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
-import com.dreamdisplayx.platform.server.utils.net.VanillaServerPacketHandler
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
 import net.minecraft.core.registries.Registries
 import net.minecraft.server.MinecraftServer
@@ -70,7 +69,6 @@ class NeoForgeServer(modEventBus: IEventBus) {
         val registrar = event.registrar(Initializer.MOD_ID).optional().versioned("1")
         NeoForgeV2Networking.registerReceivers(registrar)
         NeoForgeProxyNetworking.registerReceivers(registrar)
-        VanillaServerPacketHandler.registerReceivers(registrar)
     }
 
     /** Storage bring-up, display registration, and repeating tasks; covers dedicated + integrated servers alike. */

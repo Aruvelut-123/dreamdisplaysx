@@ -30,8 +30,8 @@ import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
- * Protocol-agnostic server-side actions triggered by client packets. Both the frozen-v1
- * [PacketReceiver] and the v2 [PaperV2Networking] dispatch here, so permission checks and
+ * Protocol-agnostic server-side actions triggered by client packets. The v2
+ * [PaperV2Networking] dispatch keeps permission checks and
  * business logic exist exactly once.
  */
 @PaperOnly

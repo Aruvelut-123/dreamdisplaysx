@@ -27,7 +27,7 @@ const val V2_CHANNEL: String = "dreamdisplayx:v2"
 /**
  * Protocol-v2 networking for the Paper flavor: receives envelope frames on [V2_CHANNEL], answers
  * the [ClientHello] handshake, and sends v2 packets to negotiated players. Business logic is
- * shared with the frozen-v1 path through [DisplayActions].
+ * shared with [DisplayActions].
  */
 @PaperOnly
 @NullMarked
@@ -115,7 +115,6 @@ object PaperV2Networking : PluginMessageListener {
      * version-check flow.
      */
     private fun handleHello(player: Player, hello: ClientHello) {
-        if (V2PlayerTracker.isV2(player.uniqueId)) return
         V2PlayerTracker.markV2(player.uniqueId, hello)
         send(listOf(player), buildServerHello(player))
         send(listOf(player), CredentialActions.snapshotFor(player.uniqueId.toString()))

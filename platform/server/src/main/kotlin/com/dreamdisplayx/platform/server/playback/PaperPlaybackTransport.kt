@@ -8,7 +8,6 @@ import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.meta.Scheduler
 import com.dreamdisplayx.platform.server.utils.PlatformUtil
 import com.dreamdisplayx.platform.server.utils.net.PaperV2Networking
-import com.dreamdisplayx.platform.server.utils.net.V2PlayerTracker
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.jspecify.annotations.NullMarked
 import java.util.*
@@ -27,7 +26,7 @@ object PaperPlaybackTransport : PlaybackTransport {
             DisplayManager.sendV2ToTrackedNearbyPlayers(paper, packet)
             return
         }
-        val receivers = DisplayManager.getReceivers(paper).filter { V2PlayerTracker.isV2(it.uniqueId) }
+        val receivers = DisplayManager.getReceivers(paper)
         if (receivers.isNotEmpty()) PaperV2Networking.send(receivers, packet)
     }
 
@@ -35,12 +34,12 @@ object PaperPlaybackTransport : PlaybackTransport {
     override fun sendTo(playerId: UUID, packet: DreamPacket) {
         if (PlatformUtil.isFolia) {
             Scheduler.runTrackedPlayer(playerId) { player ->
-                if (V2PlayerTracker.isV2(playerId)) PaperV2Networking.send(listOf(player), packet)
+                PaperV2Networking.send(listOf(player), packet)
             }
             return
         }
         val player = PaperServer.getInstance().server.getPlayer(playerId) ?: return
-        if (V2PlayerTracker.isV2(playerId)) PaperV2Networking.send(listOf(player), packet)
+        PaperV2Networking.send(listOf(player), packet)
     }
 
     /** UUIDs of players currently in range of [display] (watch-party nearby / ready-check denominator). */

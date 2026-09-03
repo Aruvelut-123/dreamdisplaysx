@@ -7,7 +7,6 @@ import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.utils.RegionUtil
-import com.dreamdisplayx.platform.server.utils.net.V2PlayerTracker
 import com.dreamdisplayx.platform.server.utils.net.VanillaDisplayActions
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import com.dreamdisplayx.platform.server.utils.net.VanillaPacketUtil
@@ -37,7 +36,7 @@ object VanillaPlaybackTransport : PlaybackTransport {
     override fun broadcast(display: DisplayData, packet: DreamPacket) {
         val s = server ?: return
         val vanilla = display as? VanillaDisplayData ?: return
-        val receivers = DisplayManager.getReceivers(vanilla, s).filter { V2PlayerTracker.isV2(it.uuid) }
+        val receivers = DisplayManager.getReceivers(vanilla, s)
         if (receivers.isNotEmpty()) VanillaNetworking.adapter.sendV2(receivers, packet)
     }
 
@@ -45,7 +44,7 @@ object VanillaPlaybackTransport : PlaybackTransport {
     override fun sendTo(playerId: UUID, packet: DreamPacket) {
         val s = server ?: return
         val player = s.playerList.getPlayer(playerId) ?: return
-        if (V2PlayerTracker.isV2(playerId)) VanillaNetworking.adapter.sendV2(listOf(player), packet)
+        VanillaNetworking.adapter.sendV2(listOf(player), packet)
     }
 
     /** UUIDs of players currently in range of [display] (watch-party nearby / ready-check denominator). */

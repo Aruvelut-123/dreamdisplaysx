@@ -1,6 +1,5 @@
-﻿package com.dreamdisplayx.platform.server
+package com.dreamdisplayx.platform.server
 
-import com.dreamdisplayx.platform.client.net.Packets
 import com.dreamdisplayx.platform.client.net.ProxyPayload
 import com.dreamdisplayx.platform.client.net.V2Payload
 import com.dreamdisplayx.platform.server.listeners.FabricPlayerListener
@@ -14,7 +13,6 @@ import com.dreamdisplayx.platform.server.utils.net.FabricNetworkingAdapter
 import com.dreamdisplayx.platform.server.utils.net.FabricProxyNetworking
 import com.dreamdisplayx.platform.server.utils.net.FabricV2Networking
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
-import com.dreamdisplayx.platform.server.utils.net.VanillaServerPacketHandler
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -48,8 +46,6 @@ class Server : ModInitializer {
 
         FabricBareTokenArgumentType.register()
         registerPayloadTypes()
-
-        VanillaServerPacketHandler.registerReceivers()
         FabricV2Networking.registerReceivers()
         FabricProxyNetworking.registerReceivers()
         FabricCommandRegistrar.register()
@@ -82,27 +78,11 @@ class Server : ModInitializer {
             payloadRegistry("clientboundPlay", "playS2C").let { clientbound ->
                 registerPayload(clientbound, V2Payload.TYPE, V2Payload.CODEC)
                 registerPayload(clientbound, ProxyPayload.TYPE, ProxyPayload.CODEC)
-                registerPayload(clientbound, Packets.Info.PACKET_ID, Packets.Info.PACKET_CODEC)
-                registerPayload(clientbound, Packets.Sync.PACKET_ID, Packets.Sync.PACKET_CODEC)
-                registerPayload(clientbound, Packets.Premium.PACKET_ID, Packets.Premium.PACKET_CODEC)
-                registerPayload(clientbound, Packets.IsAdmin.PACKET_ID, Packets.IsAdmin.PACKET_CODEC)
-                registerPayload(clientbound, Packets.Delete.PACKET_ID, Packets.Delete.PACKET_CODEC)
-                registerPayload(clientbound, Packets.DisplayEnabled.PACKET_ID, Packets.DisplayEnabled.PACKET_CODEC)
-                registerPayload(clientbound, Packets.ReportEnabled.PACKET_ID, Packets.ReportEnabled.PACKET_CODEC)
-                registerPayload(clientbound, Packets.ClearCache.PACKET_ID, Packets.ClearCache.PACKET_CODEC)
             }
 
             payloadRegistry("serverboundPlay", "playC2S").let { serverbound ->
                 registerPayload(serverbound, V2Payload.TYPE, V2Payload.CODEC)
                 registerPayload(serverbound, ProxyPayload.TYPE, ProxyPayload.CODEC)
-                registerPayload(serverbound, Packets.Sync.PACKET_ID, Packets.Sync.PACKET_CODEC)
-                registerPayload(serverbound, Packets.RequestSync.PACKET_ID, Packets.RequestSync.PACKET_CODEC)
-                registerPayload(serverbound, Packets.Delete.PACKET_ID, Packets.Delete.PACKET_CODEC)
-                registerPayload(serverbound, Packets.Report.PACKET_ID, Packets.Report.PACKET_CODEC)
-                registerPayload(serverbound, Packets.Version.PACKET_ID, Packets.Version.PACKET_CODEC)
-                registerPayload(serverbound, Packets.SetVideo.PACKET_ID, Packets.SetVideo.PACKET_CODEC)
-                registerPayload(serverbound, Packets.SetLocked.PACKET_ID, Packets.SetLocked.PACKET_CODEC)
-                registerPayload(serverbound, Packets.DisplayEnabled.PACKET_ID, Packets.DisplayEnabled.PACKET_CODEC)
             }
         }.onFailure { e ->
             logger.error("Failed to register payload types.", e)

@@ -132,7 +132,7 @@ object VanillaProxyBridge {
         val bytes = runCatching { ProxyPacketRegistry.encode(packet) }
             .onFailure { logger.warn("Failed to encode proxy packet", it) }
             .getOrNull() ?: return
-        runCatching { VanillaNetworking.adapter.sendLegacy(player, ProxyPayload(bytes)) }
+        runCatching { VanillaNetworking.adapter.sendProxy(player, ProxyPayload(bytes)) }
             .onFailure { logger.debug("Failed to send proxy packet (no proxy listening?)", it) }
     }
 

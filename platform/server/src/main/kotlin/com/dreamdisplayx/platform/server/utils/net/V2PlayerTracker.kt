@@ -1,33 +1,22 @@
 package com.dreamdisplayx.platform.server.utils.net
 
 import com.dreamdisplayx.core.protocol.common.packets.ClientHello
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Tracks which connected players negotiated protocol v2 (by sending a [ClientHello]). Players
- * absent from the map stay on the frozen v1 protocol. Platform-neutral; both the Paper and the
- * Fabric flavor share it.
- */
+/** Tracks client capability hello data for diagnostics and scheduling. */
 object V2PlayerTracker {
     private val players = ConcurrentHashMap<UUID, ClientHello>()
 
-    /** Marks [uuid] as a v2 peer and remembers its advertised capabilities. */
-    fun markV2(uuid: UUID, hello: ClientHello) {
-        players[uuid] = hello
-    }
+    /** Records the latest capability hello for [uuid]. */
+    fun markV2(uuid: UUID, hello: ClientHello) { players[uuid] = hello }
 
-    /** True if [uuid] completed the v2 hello; such players receive v2 packets only. */
-    fun isV2(uuid: UUID): Boolean = players.containsKey(uuid)
-
-    /** The capabilities [uuid] advertised, or null for v1 peers. */
+    /** Returns the capabilities advertised by [uuid]. */
     fun helloOf(uuid: UUID): ClientHello? = players[uuid]
 
-    /** Snapshot of all currently remembered v2 peers and their advertised capabilities. */
+    /** Returns a snapshot for diagnostics. */
     fun snapshot(): Map<UUID, ClientHello> = players.toMap()
 
-    /** Drops the per-player state on disconnect. */
-    fun clear(uuid: UUID) {
-        players.remove(uuid)
-    }
+    /** Drops per-player state on disconnect. */
+    fun clear(uuid: UUID) { players.remove(uuid) }
 }

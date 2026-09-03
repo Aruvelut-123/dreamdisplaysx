@@ -27,7 +27,6 @@ import com.dreamdisplayx.platform.server.utils.RegionUtil
 import com.dreamdisplayx.platform.server.utils.ReporterUtil
 import com.dreamdisplayx.platform.server.utils.net.PacketUtil
 import com.dreamdisplayx.platform.server.utils.net.PaperV2Networking
-import com.dreamdisplayx.platform.server.utils.net.V2PlayerTracker
 import com.dreamdisplayx.platform.server.utils.net.VanillaPacketUtil
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import kotlinx.coroutines.launch
@@ -245,28 +244,11 @@ object DisplayManager {
         }
     }
 
-    /** Sends a legacy sync packet to tracked nearby v1 players, evaluating each location on that player's entity thread. */
-    @PaperOnly
-    fun sendLegacySyncToTrackedNearbyPlayers(
-        display: PaperDisplayData,
-        packet: SyncData,
-        excludedPlayerId: UUID? = null,
-    ) {
-        Scheduler.forEachTrackedPlayer { player ->
-            if (player.uniqueId != excludedPlayerId && !V2PlayerTracker.isV2(player.uniqueId) && player.isInRange(
-                    display
-                )
-            ) {
-                PacketUtil.sendSync(listOf(player), packet)
-            }
-        }
-    }
-
-    /** Sends a v2 packet to tracked nearby v2 players, evaluating each location on that player's entity thread. */
+    /** Sends a protocol-v2 packet to tracked nearby players, evaluating each location on that player's entity thread. */
     @PaperOnly
     fun sendV2ToTrackedNearbyPlayers(display: PaperDisplayData, packet: DreamPacket) {
         Scheduler.forEachTrackedPlayer { player ->
-            if (V2PlayerTracker.isV2(player.uniqueId) && player.isInRange(display)) {
+            if (player.isInRange(display)) {
                 PaperV2Networking.send(listOf(player), packet)
             }
         }

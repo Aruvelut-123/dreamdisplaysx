@@ -125,7 +125,6 @@ object NeoForgeV2Networking {
      * runs here for reconnecting viewers.
      */
     private fun handleHello(player: ServerPlayer, server: MinecraftServer, hello: ClientHello) {
-        if (V2PlayerTracker.isV2(player.uuid)) return
         V2PlayerTracker.markV2(player.uuid, hello)
         send(
             listOf(player),

@@ -7,7 +7,6 @@ import com.dreamdisplayx.platform.client.core.ClientLifecycleEvent
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.managers.*
-import com.dreamdisplayx.platform.client.net.LegacyAdapter
 import com.dreamdisplayx.platform.client.net.ProtocolRouter
 import com.dreamdisplayx.platform.client.overlay.OverlayManager
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
@@ -22,7 +21,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
 /*import net.minecraft.client.gui.GuiGraphics*/
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
 
 /** Main mod initializer. */
@@ -87,11 +85,6 @@ object Initializer {
             DreamServices.registry.getOrNull<ClientApplication>()
                 ?.emit(ClientLifecycleEvent.ServerLeft(serverId))
         }
-    }
-
-    /** Lifts an incoming frozen-v1 [payload] into its v2 packet and dispatches it. */
-    fun onLegacyPacket(payload: CustomPacketPayload) {
-        ProtocolRouter.onLegacyReceived(LegacyAdapter.fromLegacy(payload))
     }
 
     /** Decodes and dispatches v2 envelope [bytes] from the `dreamdisplayx:v2` channel. */

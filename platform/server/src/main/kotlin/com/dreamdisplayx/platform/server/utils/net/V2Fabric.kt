@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory
 
 /**
  * Protocol-v2 networking for the `Fabric` flavor: one envelope payload in both directions.
- * Business logic is shared with the frozen-v1 receivers through [VanillaDisplayActions].
+ * Business logic is shared with [VanillaDisplayActions].
  */
 @FabricOnly
 object FabricV2Networking {
@@ -104,7 +104,6 @@ object FabricV2Networking {
      * runs here for reconnecting viewers.
      */
     private fun handleHello(player: ServerPlayer, server: MinecraftServer, hello: ClientHello) {
-        if (V2PlayerTracker.isV2(player.uuid)) return
         V2PlayerTracker.markV2(player.uuid, hello)
         send(
             listOf(player),
