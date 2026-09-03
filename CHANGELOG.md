@@ -4,7 +4,7 @@ Based on Dream Displays [7e156542](https://github.com/arnodoelinger/dreamdisplay
 
 ## Highlights
 
-- **Protocol V3 foundation** — added a versioned, batch-capable envelope and negotiated `dreamdisplayx:v3` transport while retaining V2 fallback compatibility. Same-content snapshots can synchronize multiple displays to one URL and authoritative timeline. Legacy V1 handshakes are detected and the player is notified that V1 is no longer supported.
+- **Protocol V3 foundation** — added a versioned, batch-capable envelope and negotiated `dreamdisplayx:v3` transport while retaining V2 fallback compatibility. Same-content snapshots can synchronize multiple displays to one URL and authoritative timeline. Paper servers now expose `/display group` commands for named group creation, membership, shared video assignment, and playback control. Legacy V1 handshakes are detected and the player is notified that V1 is no longer supported.
 
 - **Protocol V1 removed** — all clients and servers now use the V2 envelope; `ProtocolRouter` remains the compatibility seam for future V3 work.
 

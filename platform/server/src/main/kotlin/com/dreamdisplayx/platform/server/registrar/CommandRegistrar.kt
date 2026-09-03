@@ -4,6 +4,9 @@ import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.commands.subcommands.*
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.managers.DisplayManager
+import com.dreamdisplayx.platform.server.managers.DisplayGroupManager
+import com.dreamdisplayx.api.playback.model.PlaybackAction
+import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.proxy.ProxyNetwork
 import com.dreamdisplayx.platform.server.registrar.CommandRegistrar.fullscreenFlagsNode
@@ -116,6 +119,7 @@ object CommandRegistrar {
         .then(simple("stats", StatsCommand()) { it.sender.hasPermission(PaperServer.config.permissions.stats) })
         .then(simple("reload", ReloadCommand()) { it.sender.hasPermission(PaperServer.config.permissions.reload) })
         .then(videoSubCommand())
+        .then(groupSubCommand())
         .then(scheduleSubCommand())
         .then(listSubCommand())
         .then(toggleSubCommand("on", OnCommand()))
@@ -176,6 +180,9 @@ object CommandRegistrar {
                     1
                 }
         )
+
+    /** Builds the `/display group` same-content playback command tree. */
+    private fun groupSubCommand() = GroupCommand.node()
 
     /** Builds a simple no-argument subcommand node optionally guarded by a permission check. */
     private fun simple(
