@@ -261,6 +261,11 @@ Every code change MUST be followed by ALL of the below before the task is consid
 3. **Documentation** — update `README.md` and `CHANGELOG.md` when the change is user-visible or affects behavior/features
 4. **AGENTS.md** — if the change affects architecture, build process, or workflow rules, update `AGENTS.md` accordingly
 5. **GitHub Actions verification** — after every push, use GitHub CLI (`gh run list` / `gh run watch`) to inspect the resulting workflow run and report failures before considering the change complete.
+6. **Tests** — every added feature or behavior fix MUST ship with an automated test in the owning module when its logic is pure JVM (no Minecraft, libvlc, or GPU dependency). When a change genuinely cannot be unit-tested (native/rendering code), say so in the commit message.
+
+### Testing
+- Unit-test pure logic: policies (`RetryPolicy`), helpers (`MediaUtil`), parsers, state machines. Do not assert on native/libvlc behavior — those paths are covered by manual smoke tests only.
+- When touching a module that has no tests yet, add at least one focused test for the new/changed behavior instead of leaving it uncovered.
 
 ### Task Tracking (MANDATORY)
 Every task MUST be tracked in the session's `todo` task list at all times:

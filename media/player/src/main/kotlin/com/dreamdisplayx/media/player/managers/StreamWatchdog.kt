@@ -36,6 +36,10 @@ internal class StreamWatchdog(
         // Reset the baseline to NOW, not the last frame timestamp, so a restart doesn't
         // immediately inherit the previous session's silence gap and fire a false stall.
         lastSeenStamp = System.nanoTime()
+        // The silence clock starts at the same baseline: until a frame lands, the session is
+        // silent since start, not since the epoch (an uninitialized 0 would make the very first
+        // check see an absurd silence and cut the session off before the startup budget elapses).
+        silentSinceNanos = lastSeenStamp
         job = scope.launch {
             delay(checkIntervalMs.milliseconds)
             // Stops at the first stall: recovery is the caller's job, and it restarts the watchdog
@@ -62,7 +66,11 @@ internal class StreamWatchdog(
                 return true
             }
             val stamp = getLastFrameNanos()
-            if (stamp != lastSeenStamp) {
+            // Only a strictly NEWER stamp counts as "a frame landed". start() resets the baseline to
+            // NOW, so a stale stamp from before the session (or an unchanged one) must NOT flip the
+            // watchdog into the long stall budget — otherwise a session that never delivers a first
+            // frame is never cut off on the startup budget.
+            if (stamp > lastSeenStamp) {
                 lastSeenStamp = stamp
                 deliveredAFrame = true
                 silentSinceNanos = stamp
