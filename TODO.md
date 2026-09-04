@@ -6,4 +6,4 @@
 
 - Playlists & Queue (V3 protocol)
 - Screen casting (V3 protocol)
-- Remote control (V3 protocol)
+- Add version-specific Vanilla item-component adapters for the experimental remote-control stick.
