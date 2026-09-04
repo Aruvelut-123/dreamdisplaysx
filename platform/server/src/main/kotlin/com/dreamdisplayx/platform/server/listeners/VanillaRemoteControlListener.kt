@@ -88,10 +88,22 @@ object FabricVanillaRemoteControlListener {
             if (hand != InteractionHand.MAIN_HAND || player !is ServerPlayer || world !is ServerLevel) InteractionResult.PASS
             else if (VanillaRemoteControlListener.handle(player, world)) InteractionResult.SUCCESS else InteractionResult.PASS
         }
+        // 1.21.1's Fabric API still returns `InteractionResultHolder<ItemStack>` here; 1.21.2+
+        // removed `TypedActionResult`, so those versions take the plain `InteractionResult`.
+        //? if <1.21.2 {
+        UseItemCallback.EVENT.register { player, world, hand ->
+            val stack = player.getItemInHand(hand)
+            if (hand != InteractionHand.MAIN_HAND || player !is ServerPlayer || world !is ServerLevel) net.minecraft.world.InteractionResultHolder.pass(stack)
+            else if (VanillaRemoteControlListener.handle(player, world)) net.minecraft.world.InteractionResultHolder.success(stack) else net.minecraft.world.InteractionResultHolder.pass(stack)
+        }
+        //?} else
+        /*
         UseItemCallback.EVENT.register { player, world, hand ->
             if (hand != InteractionHand.MAIN_HAND || player !is ServerPlayer || world !is ServerLevel) InteractionResult.PASS
             else if (VanillaRemoteControlListener.handle(player, world)) InteractionResult.SUCCESS else InteractionResult.PASS
         }
+        */
+        //?}
     }
 }
 
