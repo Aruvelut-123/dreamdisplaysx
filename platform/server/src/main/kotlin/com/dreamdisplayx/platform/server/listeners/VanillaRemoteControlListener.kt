@@ -40,7 +40,7 @@ object VanillaRemoteControlListener {
         }
         val display = target(player, level) ?: return false
         writeLinked(stack, display)
-        player.displayClientMessage(Component.literal("Remote linked to display ${display.name ?: display.id.toString().take(8)}."), true)
+        player.sendSystemMessage(Component.literal("Remote linked to display ${display.name ?: display.id.toString().take(8)}."))
         return true
     }
 
