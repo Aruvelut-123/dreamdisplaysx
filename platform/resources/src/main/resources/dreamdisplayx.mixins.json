@@ -9,7 +9,7 @@
     "DisplayLatePass",
     "HudSuppress",
     "ScreenOverlay",
-    "SoundOptionsScreen"
+    "SoundOptionsScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
