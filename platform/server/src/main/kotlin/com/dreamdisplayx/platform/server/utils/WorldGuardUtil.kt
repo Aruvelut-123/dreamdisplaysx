@@ -49,7 +49,7 @@ object WorldGuardRegions {
         }
     }
 
-    /** True if [player] is a member (or owner â€?`WorldGuard` treats owners as members too) of any region at [location]. */
+    /** True if [player] is a member (or owner â€” `WorldGuard` treats owners as members too) of any region at [location]. */
     fun isRegionMember(player: Player, location: Location): Boolean {
         return isPresent() && try {
             WorldGuardBridge.isRegionMember(player, location)

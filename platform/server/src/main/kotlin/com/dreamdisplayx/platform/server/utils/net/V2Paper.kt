@@ -15,6 +15,7 @@ import com.dreamdisplayx.platform.server.managers.PlayerManager
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.playback.PipPinManager
 import com.dreamdisplayx.platform.server.proxy.ProxyBridge
+import com.dreamdisplayx.platform.server.utils.WorldGuardRegions
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.bukkit.entity.Player
 import org.bukkit.plugin.messaging.PluginMessageListener

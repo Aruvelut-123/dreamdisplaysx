@@ -124,6 +124,12 @@ dependencies {
     compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
     compileOnly("net.neoforged:bus:8.0.5")
     compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
+    compileOnly(libs.worldguardApi) {
+        exclude(group = "com.google.guava", module = "guava")
+        exclude(group = "com.google.code.gson", module = "gson")
+        exclude(group = "com.google.code.findbugs", module = "jsr305")
+        exclude(module = "fastutil")
+    }
     implementation(libs.bstats)
     implementation(libs.tomlj)
     implementation(libs.semver4j)

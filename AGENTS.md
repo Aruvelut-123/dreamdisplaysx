@@ -260,6 +260,7 @@ Every code change MUST be followed by ALL of the below before the task is consid
 2. **Push** — push to the remote branch immediately after commit
 3. **Documentation** — update `README.md` and `CHANGELOG.md` when the change is user-visible or affects behavior/features
 4. **AGENTS.md** — if the change affects architecture, build process, or workflow rules, update `AGENTS.md` accordingly
+5. **GitHub Actions verification** — after every push, use GitHub CLI (`gh run list` / `gh run watch`) to inspect the resulting workflow run and report failures before considering the change complete.
 
 ### Task Tracking (MANDATORY)
 Every task MUST be tracked in the session's `todo` task list at all times:

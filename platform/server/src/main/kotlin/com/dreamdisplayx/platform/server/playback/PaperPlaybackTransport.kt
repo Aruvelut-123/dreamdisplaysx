@@ -7,6 +7,7 @@ import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.meta.Scheduler
 import com.dreamdisplayx.platform.server.utils.PlatformUtil
+import com.dreamdisplayx.platform.server.utils.WorldGuardRegions
 import com.dreamdisplayx.platform.server.utils.net.PaperV2Networking
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.jspecify.annotations.NullMarked

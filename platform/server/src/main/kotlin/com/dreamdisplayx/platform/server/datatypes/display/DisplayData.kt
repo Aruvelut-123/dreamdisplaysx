@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.server.datatypes.display
 
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.playback.policy.PlaybackPermissions
