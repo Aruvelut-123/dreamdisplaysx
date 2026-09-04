@@ -940,7 +940,9 @@ class MediaPlayer(
         }
 
         if (stderr.isNotEmpty()) {
-            logger.error("$debugLabel Unrecoverable: ${MediaUtil.truncate(stderr)}.")
+            // Cap generously so the full libvlc detail (errmsg + state + recent log lines) survives;
+            // 120 chars was cutting the informative tail off "Unrecoverable: libvlc error...".
+            logger.error("$debugLabel Unrecoverable: ${MediaUtil.truncate(stderr, 600)}.")
         }
         state.set(PlaybackState.ERROR)
         host.mediaError = DreamMediaException.Decode("Unrecoverable stream failure", isFatal = true)

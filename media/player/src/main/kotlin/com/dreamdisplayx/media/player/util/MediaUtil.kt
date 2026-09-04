@@ -40,10 +40,13 @@ object MediaUtil {
     fun isInterestingStderr(line: String): Boolean = BORING_STDERR.none { it in line }
 
     /** Truncates [s] to 120 chars for logging, appending the original length if it was truncated. */
-    fun truncate(s: String?): String = when {
+    fun truncate(s: String?): String = truncate(s, 120)
+
+    /** Truncates [s] to [maxChars] chars for logging, appending the original length if truncated. */
+    fun truncate(s: String?, maxChars: Int): String = when {
         s == null -> "null"
-        s.length <= 120 -> s
-        else -> s.substring(0, 120) + "...(${s.length})"
+        s.length <= maxChars -> s
+        else -> s.substring(0, maxChars) + "...(${s.length})"
     }
 
     /**

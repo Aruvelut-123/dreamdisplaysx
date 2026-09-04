@@ -1,13 +1,19 @@
 package com.dreamdisplayx.media.player.managers
 
 import com.sun.jna.Callback
+import com.sun.jna.Function
 import com.sun.jna.Library
 import com.sun.jna.Memory
 import com.sun.jna.Native
+import com.sun.jna.NativeLibrary
+import com.sun.jna.NativeLong
+import com.sun.jna.Platform
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
+import com.sun.jna.ptr.IntByReference
 import com.sun.jna.ptr.PointerByReference
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentLinkedDeque
 
 /**
  * Low-level JNA binding to the libvlc shared library, mirroring VideoPlayer's [VlcLibrary].
@@ -93,7 +99,7 @@ object LibVlc {
             // how VLC-Android's AndroidBridge learns the JavaVM. Without it libvlc_new fails
             // (or VLC worker threads crash with SIGSEGV in __pthread_start). Inject it now.
             com.dreamdisplayx.media.player.util.LibVlcNativesLoader.injectAndroidJniOnLoad()
-            val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--quiet",
+            val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--verbose=1",
                 "--no-keyboard-events", "--no-mouse-events",
                 "--network-caching=${networkCachingMs()}",
                 "--file-caching=${networkCachingMs()}", "--live-caching=600", "--audio-filter=scaletempo")
@@ -153,12 +159,15 @@ object LibVlc {
                 opts.add("--no-skip-frames")
             }
             // Verbose libvlc logging (diagnostic): lets us see which decoder/backend libvlc actually
-            // selects and why it might fall back to software. Off by default (noise).
+            // selects and why it might fall back to software. Off by default (noise). The default
+            // `--verbose=1` (errors + warnings) stays on so the log sink below can capture real
+            // failure reasons; `--verbose=2` additionally shows info/debug.
             if (System.getProperty("dreamdisplayx.verboseLibvlc", "false").equals("true", ignoreCase = true)) {
-                opts.remove("--quiet")
+                opts.remove("--verbose=1")
                 opts.add("--verbose=2")
             }
             instance = libcCreateInstance(opts)
+            installLogSink()
             loadError = null
             return true
         } catch (t: Throwable) {
@@ -174,6 +183,72 @@ object LibVlc {
         val msg = lib.libvlc_errmsg()
         if (msg == null) "" else msg.getString(0)
     } catch (_: RuntimeException) { "" }
+
+    /**
+     * Most recent libvlc log lines, most-recent last. Wired via [libvlc_log_set] so a bare
+     * `libvlc error:` (errmsg is thread-local and usually empty on the event thread) can be
+     * enriched with the real reason libvlc logged. Bounded to avoid unbounded growth.
+     */
+    private val logRing = java.util.Collections.synchronizedList(mutableListOf<String>())
+    private const val LOG_RING_CAP = 40
+
+    /** Installs the libvlc log sink once the instance exists; safe to call repeatedly. */
+    private fun installLogSink() {
+        val inst = instance ?: return
+        try {
+            // The field reference below keeps the JNA trampoline strongly reachable for GC.
+            lib.libvlc_log_set(inst, logCallback, null)
+            logSinkInstalled = true
+        } catch (t: Throwable) {
+            logger.warn("libvlc log callback unavailable: ${t.message}")
+        }
+    }
+
+    /** Strongly referenced libvlc log callback: forwards recent messages into [logRing]. */
+    private val logCallback: LogCallback = LogCallback { _, level, _, fmt, args ->
+        try {
+            val text = formatLogLine(fmt, args) ?: return@LogCallback
+            synchronized(logRing) {
+                logRing.add(if (level >= 3) "E: $text" else "W: $text")
+                while (logRing.size > LOG_RING_CAP) logRing.removeAt(0)
+            }
+        } catch (_: Throwable) { /* never throw from a native callback */ }
+    }
+
+    @Volatile
+    private var logSinkInstalled = false
+
+    /**
+     * Formats a libvlc (fmt, va_list) pair via the C runtime's vsnprintf. Falls back to the raw
+     * format string when vsnprintf is unavailable (e.g. Android where the CRT is private).
+     */
+    private fun formatLogLine(fmt: Pointer?, args: Pointer?): String? {
+        if (fmt == null) return null
+        val fn = vsnprintfFn ?: return runCatching { fmt.getString(0) }.getOrNull()
+        return try {
+            val buf = Memory(1024)
+            val n = fn.invokeInt(arrayOf(buf, 1024L, fmt, args))
+            if (n < 0) null else buf.getString(0, "UTF-8").trim().ifEmpty { null }
+        } catch (_: Throwable) { null }
+    }
+
+    /** Lazily bound C-runtime vsnprintf (ucrtbase/msvcrt/libc), used to expand libvlc's va_list log args. */
+    private val vsnprintfFn: Function? by lazy {
+        // Candidate (library, symbol) pairs so we survive Windows UCRT-vs-msvcrt and libc naming.
+        val candidates = if (com.sun.jna.Platform.isWindows()) {
+            arrayOf("ucrtbase" to "vsnprintf", "msvcrt" to "vsnprintf", "msvcrt" to "_vsnprintf")
+        } else {
+            arrayOf("c" to "vsnprintf", "libc" to "vsnprintf")
+        }
+        candidates.firstNotNullOfOrNull { (libName, symbol) ->
+            runCatching { NativeLibrary.getInstance(libName).getFunction(symbol) }.getOrNull()
+        }
+    }
+
+    /** Returns the most recent libvlc error/warning log lines (most recent last), capped. */
+    fun recentLogLines(limit: Int = 8): List<String> = synchronized(logRing) {
+        logRing.takeLast(limit.coerceAtMost(LOG_RING_CAP))
+    }
 
     /** Sentinel picture token returned by a lock callback when the frame must be dropped. */
     fun dropToken(): Pointer = Pointer.createConstant(0x7FFFFFFFL)
@@ -338,6 +413,15 @@ object LibVlc {
         fun invoke(event: Pointer?, userData: Pointer?)
     }
 
+    /**
+     * libvlc log callback (`libvlc_log_cb`). The last parameter is a `va_list`: on every supported
+     * 64-bit ABI it arrives as a pointer-sized value, which JNA surfaces as a [Pointer]. We feed it
+     * (together with `fmt`) straight back into the C runtime's `vsnprintf` to recover the message.
+     */
+    fun interface LogCallback : Callback {
+        fun invoke(data: Pointer?, level: Int, ctx: Pointer?, fmt: Pointer?, args: Pointer?)
+    }
+
     fun interface VideoLockCallback : Callback {
         fun invoke(opaque: Pointer?, planes: Pointer?): Pointer?
     }
@@ -456,5 +540,10 @@ object LibVlc {
         fun libvlc_media_player_event_manager(player: Pointer): Pointer?
         fun libvlc_event_attach(eventManager: Pointer, eventType: Int, callback: EventCallback, userData: Pointer?): Int
         fun libvlc_event_detach(eventManager: Pointer, eventType: Int, callback: EventCallback, userData: Pointer?)
+
+        // Logging (libvlc 3.x): routes libvlc's internal log messages to a callback so a
+        // thread-empty errmsg() can be enriched with the real reason for an error.
+        fun libvlc_log_set(instance: Pointer, cb: LogCallback?, data: Pointer?)
+        fun libvlc_log_unset(instance: Pointer)
     }
 }

@@ -364,8 +364,33 @@ internal class LibVlcSessionManager(
                 }
             }
             LibVlc.LIBVLC_MEDIA_PLAYER_ENCOUNTERED_ERROR -> {
-                logger.error("$debugLabel libvlc error: ${LibVlc.errmsg()}")
-                errorMessage = "libvlc error"
+                // errmsg() is thread-local and almost always empty here (the failure happened on a
+                // libvlc worker thread, not the event thread), so enrich the message with the real
+                // reason from the libvlc log sink plus the player state at error time.
+                val errmsg = LibVlc.errmsg()
+                val stateName = runCatching {
+                    val p = mediaPlayer
+                    if (p != null) {
+                        when (LibVlc.lib.libvlc_media_player_get_state(p)) {
+                            LibVlc.LIBVLC_STATE_PLAYING -> "Playing"
+                            LibVlc.LIBVLC_STATE_PAUSED -> "Paused"
+                            LibVlc.LIBVLC_STATE_STOPPED -> "Stopped"
+                            LibVlc.LIBVLC_STATE_ENDED -> "Ended"
+                            else -> "Unknown"
+                        }
+                    } else "no-player"
+                }.getOrDefault("Unknown")
+                val recentLog = LibVlc.recentLogLines(6)
+                val detail = buildString {
+                    append("libvlc error")
+                    if (errmsg.isNotBlank()) append(": ").append(errmsg)
+                    append(" [state=").append(stateName).append("]")
+                    if (recentLog.isNotEmpty()) {
+                        append(" | libvlc log: ").append(recentLog.joinToString("; "))
+                    }
+                }
+                logger.error("$debugLabel $detail")
+                errorMessage = detail
                 eosReached = true
                 fireStreamEnd()
             }
