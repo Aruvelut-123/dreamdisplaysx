@@ -278,6 +278,7 @@ Every task MUST be tracked in the session's `todo` task list at all times:
 
 ### Changelog Format
 - Follow the existing format in `CHANGELOG.md`
+- **Keep entries SHORT** — one terse line per change, matching the upstream style; never write multi-sentence paragraphs or long-winded `Highlights` bullets. If in doubt, cut it down.
 - Add entries under the current/next version heading
 - Never merge upstream changelog into our version's section
 - **Every fork version section MUST contain** a `Based on Dream Displays [<commit>](<url>)` line immediately after the version heading, linking to the upstream commit this fork version is based on. This line must never be removed or altered to point to a different commit.

@@ -1,126 +1,40 @@
 # 1.9.5.1 Release
 
-Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplays/commit/de61bdb78d3ddffc37078d7e2bc1f4eb7583f607) (13 upstream commits merged since 7e156542).
+Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplays/commit/de61bdb78d3ddffc37078d7e2bc1f4eb7583f607).
 
 ## Highlights
 
-- **Upstream sync: subtitles** — ported upstream subtitle support into the `dreamdisplayx` package structure: `SubtitleTrack` model, WebVTT parsing (`WebVttParser`), on-screen subtitle overlay rendering (`SubtitleOverlayTexture`), a subtitle picker in the display menu (`SubtitleDropdown`), and per-display saved subtitle language. **Region access levels** — the legacy locked/unlocked boolean now maps onto `DisplayAccess` (EVERYONE / REGION / LOCKED), resolved live against WorldGuard regions; the client lock toggle mirrors the server's reported level, and old clients still work via the `SetLocked.locked` fallback field.
+- Ported upstream subtitle support (WebVTT parsing, on-screen overlay, subtitle picker, saved language).
+- Region access levels (`DisplayAccess`: EVERYONE / REGION / LOCKED) replace the locked/unlocked boolean.
+- Experimental Protocol V3 envelope, display groups, and Paper remote-control stick.
+- Removed legacy Protocol V1.
+- Full libvlc rewrite (vlcj removed), two-player A/V split, restored 3D DSP audio.
+- Hardware decode defaults to d3d11va on Windows.
+- Claim protection (WorldGuard + optional GriefPrevention / Residence / Lands / Towny).
+- Video-derived dynamic lighting and Complementary-only shader patcher.
+- Experimental ReplayMod and Flashback compatibility.
+- Android support restored (PojavLauncher / FCL / Zalith).
+- Scrub preview on demand; stretch mode + GPU-scaled rendering.
 
-- **Protocol V3 foundation** — added a versioned, batch-capable envelope and negotiated `dreamdisplayx:v3` transport while retaining V2 fallback compatibility. Same-content snapshots can synchronize multiple displays to one URL and authoritative timeline. Paper servers now expose `/display group` commands for named group creation, membership, shared video assignment, and playback control. V3 protocol and display-group APIs are experimental and may change. Added an experimental Paper remote-control stick: right-click a display with a stick to link it, then Shift+right-click to open its control UI. Legacy V1 handshakes are detected and the player is notified that V1 is no longer supported.
+## Client
 
-- **Protocol V1 removed** — all clients and servers now use the V2 envelope; `ProtocolRouter` remains the compatibility seam for future V3 work.
+- F3 debug overlay shows video FPS, stream codec/resolution, frame timings, decoder, and commit id.
+- Bilibili quality labels, CDN mirror ranking, and fresh resolution per play; fixed 4K blur.
+- Removed `yt-dlp` and the NewPipe YouTube resolver; search is now `DirectSearchService`.
+- Tunable JVM diagnostics (network caching, audio buffer, hw decode, bisection switches).
 
-- **Video-derived dynamic lighting** — playing frames are sampled for RGB color; when LambDynamicLights is installed, each display exposes an optional dynamic light source whose brightness follows the sampled video. Without the optional integration, the normal lighting path is unchanged. Iris shader packs keep their own color-lighting pipeline without private uniform injection.
-- **Complementary-only shader patcher** — every ZIP in `shaderpacks` is scanned at client startup; all detected Complementary Reimagined/Unbound r5.8.1 packs are copied to disposable, checksummed `DreamDisplaysX-*` archives before patching. No shader selection is forced, and BSL, Bliss, Photon, unknown packs, and original archives are never modified.
-- **Claim protection** — display creation now checks WorldGuard and optional GriefPrevention, Residence, Lands, and Towny integrations before registering a display.
-- **Experimental ReplayMod and Flashback compatibility** — replay rendering can freeze local display media and follow the replay timeline; pause, seek, video-change, and display-GUI actions use replay markers when supported. External display audio is not mixed into replay output, and edge cases may remain. Flashback is optional and uses reflection, including when loaded through Sinytra Connector on NeoForge. Its visual timeline is used for display synchronization, with fractional export ticks preferred over wall-clock fallback. Replay display/HUD rendering can be configured persistently in the Dream DisplaysX client config (with JVM properties retained as overrides); Flashback does not expose a stable public third-party options/keyframe UI API. A global Dream DisplaysX volume multiplier is exposed in Minecraft's vanilla Sound Options screen. Flashback's OpenAL loopback captures Minecraft SoundEngine audio, but Dream DisplaysX's current desktop Java Sound and Android OpenSL ES outputs remain outside that loopback and are not included in replay exports.
-- **Full libvlc rewrite (vlcj removed)** — the media pipeline is ported from JavaCPP/FFmpeg to a
-  low-level JNA libvlc binding; no more `JNA: callback garbage collected` spam, switch flicker,
-  or stutter.
-- **Two-player A/V split** — video runs `:no-audio`, a separate audio player is snapped to the
-  video clock every ~10s on drift; no more audio-clock throttling of the vout.
-- **3D DSP audio restored** — decoded PCM flows through direction / occlusion / reverb into Java
-  Sound; volume as PCM gain.
-- **Hardware decode: d3d11va default on Windows** — per-OS backend (d3d11va / vaapi /
-  videotoolbox) with `-Ddreamdisplayx.hwDecode` override; F3 shows the real decoder.
-- **Scrub preview on demand** — per-hover extraction from the lowest-quality (≤360p) H.264
-  stream via a long-lived software-decoded player.
-- **Stretch mode + GPU-scaled rendering** — STRETCH / LETTERBOX / CROP UV modes; z-fighting
-  flicker fixed.
-- **Ported upstream 1.9.5 fixes** — water/glass display fix, PBO barrier fix on Windows,
-  NeoForge `sqlite-jdbc` clash fixed via jar-in-jar.
-- **Render-distance menu slider removed** — displays unload by the client's own chunk render
-  distance.
-- **Android support restored** — runs under PojavLauncher / FCL / Zalith on ARM64 and x86_64:
-  OpenSL ES audio, MediaCodec decode, SQLite persistence, LibVLC loaded by absolute path with
-  companion natives preloaded.
+## Server
 
-## Playback
+- `/display group` commands for named groups, membership, shared video, and playback control.
+- Fullscreen loop/Esc handling and HUD hiding synced from upstream.
+- Selected audio track persists; Twitch/Vimeo/Kick/Bilibili resolve in `/display video`.
 
-- **Pause/resume crash fixes** — render thread no longer touches the audio line; drop buffer
-  padded to a full frame; audio callback window clamped ~0.25s; no more
-  `SourceDataLine.stop()/start()`.
-- **Android: libvlc natives from the official `libvlc-all` AAR** — unique libc++ SONAME so the
-  Android linker can't bind libvlc to a stale launcher copy; old APK-format caches
-  re-downloaded automatically.
-- **Android playback crash fixes** — cache wiped before extraction + startup cleanup of stray
-  `.so`; live JavaVM injected via `JNI_OnLoad` so `libvlc_new` succeeds; `libvlcjni.so` never
-  loaded (its `JNI_OnLoad` would crash Pojav-style game JVMs).
-- **Android: `android.os.Environment` stub** — lets libvlc's JNI bridge complete so the http
-  system-proxy probe no longer crashes the game JVM.
-- **Android: stop passing `--plugin-path`** — the option is compiled out of the monolithic AAR;
-  corrected the forced aout module name to `opensles`.
-- **Android: fix thread-exit TLS crash after playback** — never stop, release, or reuse a player
-  after media playback; retired players are paused and retained while fresh players handle reloads.
-- **Android: restore separate DASH audio** — the audio-only player is created on Android too,
-  played through OpenSL ES, volume routed to both players.
-- **Android: safer libvlc player switching** — old players are paused instead of stopped or
-  released, and each player uses an isolated video callback/buffer pool to prevent delayed frames
-  from corrupting the replacement player.
-- **A/V auto-resync (bidirectional)** — flushes and re-anchors when the audio buffer drifts
-  >300ms in either direction, plus a 1.5s initial sync.
-- **Loop/replay fixes** — ENDED path does `stop()` + `play()`, re-arms `eosFired` (no more
-  freeze on second replay), and restarts the audio player so audio replays too.
-- **Native runtime bootstrap** — libvlc + SQLite runtimes are collected from official VideoLAN
-  distributions by CI and downloaded at runtime; libvlc upgraded 3.0.21 → 3.0.22.
+## Build / CI
 
-## Scrub preview
-
-- Per-hover single extraction (coalesced), prefers H.264 ≤360p, `:network-caching=300`,
-  seek-while-playing gated past the target so backward seeks never cache a stale frame.
-
-## Debug overlay
-
-- F3 shows `Video FPS`, `Stream` (codec/resolution/fps), `Frame int` (min/avg/max ms — vout
-  dropping vs decoder slow), the real decoder name, and commit id.
-  `-Ddreamdisplayx.debugFps=true` draws the live FPS on the menu preview.
-
-## Tunable diagnostics
-
-- JVM flags: `-Ddreamdisplayx.networkCachingMs=<ms>` (default 300),
-  `-Ddreamdisplayx.audioBufferMs=<ms>` (default 100), `-Ddreamdisplayx.hwDecode=<backend>`,
-  `-Ddreamdisplayx.verboseLibvlc=true`, `-Ddreamdisplayx.noDropLateFrames=true`, plus bisection
-  switches `silentAudio` / `noAudioCallback` / `noFrameSink` / `noVideoPublish` /
-  `noAutoResync` / `noHardwareAccel`. See README for details.
-
-## Code quality
-
-- Routine/diagnostic logs moved from WARN/INFO to DEBUG; dead code (`Processes.kt`) and unused
-  imports removed; per-call Regex/MD5 hoisted to cached fields; audio DSP hot path optimized;
-  `BilibiliAccountLabel` gets a 30s failure backoff.
-- **CI: fix `preview` publish crash on first preview build** — the `Get version` step now
-  tolerates a repo with no preview tags yet (resolves to `preview.0` instead of failing under
-  `set -euo pipefail`).
-
-## Upstream sync
-
-- Fullscreen videos now respect the loop setting and close correctly when dismissed with Esc.
-- Vanilla HUD elements are hidden while fullscreen video overlays are active.
-- Suggestion cards received layout, metadata, scrollbar, scaling, and readability improvements.
-- Selected audio tracks persist after reconnecting; Twitch, Vimeo, Kick, and Bilibili links resolve in
-  `/display video` commands.
-- Release workflow now reads per-version Minecraft metadata from `versions.json`.
-
-## Sources
-
-- Bilibili quality selector shows canonical resolution labels (360P / 480P / 720P / 1080P / 4K).
-- Bilibili CDN mirror selection with startup bandwidth ranking (based on
-  [PiliPlus](https://github.com/piliplus/piliplus)) and `bilibili-cdn-mirror` config; session
-  refresh removed (endpoint always errors).
-- Removed `yt-dlp` orchestrator and the YouTube resolver chain (`NewPipeExtractor`); search is
-  now `DirectSearchService` (URL paste → info card, `BV`/`av` → Bilibili video).
-- Bilibili unreleased content filtered from search; resolution resolved fresh on every play (no
-  stale 30-minute cache); fixed 4K blur by allocating the texture at the source height.
-- Login/logout i18n + full Chinese server translation.
-
-## CI / Build
-
-- SQLite native build split into a standalone workflow; CI skips builds on doc/workflow-only
-  changes.
-- Commit ID stamped into the build and shown in F3 (`Commit: <hash>`).
-- Natives workflow collects the official LibVLC runtime for 9 platforms: 7 desktop plus Android
-  ARM64/x86_64 (from the official `libvlc-all` Maven AAR, monolithic `libvlc.so`, libc++
-  renamed to a unique SONAME).
+- Native runtime bootstrap downloads libvlc + SQLite at runtime; libvlc 3.0.21 -> 3.0.22.
+- SQLite native build split into a standalone workflow; CI skips doc/workflow-only changes.
+- Natives workflow collects LibVLC for 9 platforms including Android ARM64/x86_64.
+- Fixed `preview` publish crash on first preview build.
 
 # 1.9.3.3 Release
 
@@ -128,14 +42,14 @@ Based on Dream Displays [`86ba1b61`](https://github.com/arnodoelinger/dreamdispl
 
 ## Highlights
 
-- **`/display create` and `/display rename` on Paper** — create a display by name, and rename an existing 
+- **`/display create` and `/display rename` on Paper** 鈥?create a display by name, and rename an existing 
   display by id / prefix from the console, matching the UI-driven workflow on other platforms.
-- **QR login poll fix** — Bilibili QR login now correctly recognizes `expired` / `scanned` states from the poll 
+- **QR login poll fix** 鈥?Bilibili QR login now correctly recognizes `expired` / `scanned` states from the poll 
   response's top-level `code`, so the login screen no longer lingers or mis-handles the QR lifecycle.
-- **SQLite storage fix** — the bundled SQLite JDBC driver is relocated for mod isolation and its native library 
+- **SQLite storage fix** 鈥?the bundled SQLite JDBC driver is relocated for mod isolation and its native library 
   is rebuilt with matching JNI symbols, so singleplayer / integrated servers that force SQLite start without 
   crashing.
-- **Flashback replay compat** — a Flashback replay server is detected (by world path) and skips opening its 
+- **Flashback replay compat** 鈥?a Flashback replay server is detected (by world path) and skips opening its 
   SQLite database, so replaying / exporting no longer leaves `dreamdisplayx.db` locked and Flashback can clean 
   up its temp folder without errors.
 
@@ -162,10 +76,10 @@ Bilibili playurl / metadata requests keep sending the login cookie, so VIP movie
 
 ## Highlights
 
-- **Bilibili bangumi / movie playback** — paste `https://www.bilibili.com/bangumi/play/ep<id>` (episode) or 
+- **Bilibili bangumi / movie playback** 鈥?paste `https://www.bilibili.com/bangumi/play/ep<id>` (episode) or 
   `.../ss<id>` (season) and it resolves the season's episode, pulls its DASH stream, and shows the episode title
   / cover.
-- **Cached displays are scoped to their creation dimension** — softly-unloaded displays only restore when you're
+- **Cached displays are scoped to their creation dimension** 鈥?softly-unloaded displays only restore when you're
   in the same dimension, so displays don't leak across nether / end / overworld.
 
 ## Client
@@ -182,7 +96,7 @@ Bilibili playurl / metadata requests keep sending the login cookie, so VIP movie
 
 - Metadata cache keys now cover bangumi episodes (`ep:<id>`) and seasons (`season:<id>`), so their titles / 
   thumbnails persist in the metadata cache.
-- Removed the automatic "load Bilibili home recommendations when the panel is empty" behavior — an empty 
+- Removed the automatic "load Bilibili home recommendations when the panel is empty" behavior 鈥?an empty 
   suggestions panel now stays blank until you search or play a video, since the recommendation feed did not work
   reliably.
 
@@ -192,12 +106,12 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 
 ## Highlights
 
-- **QR login auto-close** — the login screen now closes itself once the QR scan completes.
-- **QR logout reliability** — `/dlogoff` now reliably deletes the saved server-side credential, even when the 
+- **QR login auto-close** 鈥?the login screen now closes itself once the QR scan completes.
+- **QR logout reliability** 鈥?`/dlogoff` now reliably deletes the saved server-side credential, even when the 
   integrated server is on 1.21.1.
-- **Danmaku overlay cleanup** — disabling a display's danmaku toggle now clears the overlay immediately so stale
+- **Danmaku overlay cleanup** 鈥?disabling a display's danmaku toggle now clears the overlay immediately so stale
   lines don't stay stuck on screen.
-- **Danmaku UI tuning** — danmaku display area is now fixed to 25 / 50 / 75 / 100 %, and font size is now small 
+- **Danmaku UI tuning** 鈥?danmaku display area is now fixed to 25 / 50 / 75 / 100 %, and font size is now small 
   / medium / large (0.5x / 1x / 1.5x).
 
 ## Client
@@ -211,7 +125,7 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 - Bilibili search results are ranked: bangumi/movies first, then uploader-name matches, then title matches.
 - Bilibili media-type filter added to the suggestions panel: all / video / bangumi / movie.
 - Bilibili search loads in pages of 20 results on scroll.
-- Search result cards now show a pink **大会员** tag for VIP-only content and a yellow **付费** tag for pay-per-view;
+- Search result cards now show a pink **澶т細鍛?* tag for VIP-only content and a yellow **浠樿垂** tag for pay-per-view;
   free Bilibili results drop the redundant platform tag.
 - Removed the view-count popularity floor so bangumi/movie results (which carry no `play` count) always show up.
 - Scrolling right / down to the end of the loaded cards now correctly pages in the next 20 Bilibili results, 
@@ -232,12 +146,12 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 ## Highlights
 
 - **Merged upstream 1.9.3**: pull in all upstream changes (upstream commit `622e4278`).
-- **Per-display danmaku settings** — opacity, font size, speed, display area, type filters.
-- **Global Bilibili login** — single account per server/network, broadcast to all players, OP-only,
+- **Per-display danmaku settings** 鈥?opacity, font size, speed, display area, type filters.
+- **Global Bilibili login** 鈥?single account per server/network, broadcast to all players, OP-only,
   with LuckPerms support and cross-server credential sync (SQLite/MySQL).
-- **Bilibili account info** — avatar, nickname, and VIP badge at display config top-right.
+- **Bilibili account info** 鈥?avatar, nickname, and VIP badge at display config top-right.
 - **Bilibili bangumi / movie** URL support (`/bangumi/play/ep<id>` and `/ss<id>`).
-- **Pause reliability improved** — warm park works with external-process FFmpeg.
+- **Pause reliability improved** 鈥?warm park works with external-process FFmpeg.
 - **Fork**: renamed mod/plugin to **Dream DisplaysX**; built-in `zh_cn.json`.
 
 ## Client
@@ -254,15 +168,15 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 
 ### Fixes
 
-- Pause reliability: `canHoldWarm()` instead of `canPark()` — works with external FFmpeg.
+- Pause reliability: `canHoldWarm()` instead of `canPark()` 鈥?works with external FFmpeg.
 - Bilibili 60fps / CDN streams no longer 403 (expanded Referer allow-list).
-- Danmaku text HTML-unescaped (`&lt;` → `<`, etc.).
+- Danmaku text HTML-unescaped (`&lt;` 鈫?`<`, etc.).
 - Danmaku font size only affects new messages (like Bilibili).
 - Danmaku track spacing scales with font size.
 - SettingsSection scissor no longer clips preview buttons and suggestions.
 - DanmakuFilterBar and toggle tooltips now properly translate enabled/disabled.
 - VIP badge uses official Bilibili image (`img_label_uri_hans_static`).
-- Fixed VIP field names (`vipType` → `type`, `vipStatus` → `status`).
+- Fixed VIP field names (`vipType` 鈫?`type`, `vipStatus` 鈫?`status`).
 - Downgraded noisy "Seek can't go in place" log to debug.
 - Bilibili VOD danmaku now uses protobuf segment API (`/x/v2/dm/list/seg.so`) for full danmaku coverage (same as
   Bilibili's own clients, schema from [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus)).
@@ -470,7 +384,7 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 - New Borderless and Fullscreen display modes, with a new `/display fullscreen` command for events and 
   presentations
   ([#135](https://github.com/arnodoelinger/dreamdisplays/pull/135))
-- Added custom video support and file-host share link support (Google Drive, Dropbox, imgur, etc.) — paste a 
+- Added custom video support and file-host share link support (Google Drive, Dropbox, imgur, etc.) 鈥?paste a 
   direct link
   to any video and play it on a display (server must be 1.9.0 or higher)
 - Added Twitch, Kick, Vimeo, and Bilibili support (
@@ -648,7 +562,7 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 ## Highlights
 
 - Custom videos: paste a direct link to any video and play it on a display
-- File-host share link support — Google Drive, Dropbox, imgur, etc.
+- File-host share link support 鈥?Google Drive, Dropbox, imgur, etc.
 - Kick and Vimeo support
 - Filter button
 - Some fixes and improvements
@@ -660,7 +574,7 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 - Added custom video support, so you can paste a direct link to any video and play it on a display (server must 
   be 1.9.0
   or higher)
-- Added file-host share link support — Google Drive, Dropbox, imgur, etc. (server must be 1.9.0 or higher)
+- Added file-host share link support 鈥?Google Drive, Dropbox, imgur, etc. (server must be 1.9.0 or higher)
 - Added Kick support
 - Added Vimeo support
 - Added filter button
@@ -922,7 +836,7 @@ Based on Dream Displays 1.9.3 (https://github.com/arnodoelinger/dreamdisplays).
 - Pausing now keeps the decoder warm on every pipeline, so resume is instant instead of restarting the stream
 - Seeking no longer tears the whole session down before reconnecting: the picture holds its last frame while the
   target
-  position warms up in the background, then jumps — including the loop wrap-around in synced / broadcast modes
+  position warms up in the background, then jumps 鈥?including the loop wrap-around in synced / broadcast modes
 - The first decoded frame is now shown immediately on start and seek instead of waiting for the playback cushion
   to fill
 - Stream startup got faster: `FFmpeg` no longer probes the container with its default 5 MB / 5 s window
@@ -1220,8 +1134,8 @@ No changes.
 - Added stable `Vulkan` support for display rendering (`OpenGL` rendering is still supported)
 - Replaced the old synchronization mode with new local, synced, and broadcast playback modes
 - Added a new packet protocol v2
-- Reduced CPU usage by up to 50–70× on tested hardware scenarios (Java 25 required)
-- Improved video stream resolving speed by up to 10–12× in supported cases
+- Reduced CPU usage by up to 50鈥?0脳 on tested hardware scenarios (Java 25 required)
+- Improved video stream resolving speed by up to 10鈥?2脳 in supported cases
 
 ## Client
 
@@ -1247,9 +1161,9 @@ No changes.
 - Increased the default render distance to 96 blocks
 - Switched display visibility logic from block-based checks to chunk-based checks
 - Increased the effective display rendering range from 2 chunks to 12 chunks
-- Reduced CPU usage by up to 50× on tested mid-range hardware scenarios (Java 25 required)
-- Reduced CPU usage by up to 70× on tested low-end hardware scenarios (Java 25 required)
-- Improved video stream resolving speed by up to 10–12× in supported cases
+- Reduced CPU usage by up to 50脳 on tested mid-range hardware scenarios (Java 25 required)
+- Reduced CPU usage by up to 70脳 on tested low-end hardware scenarios (Java 25 required)
+- Improved video stream resolving speed by up to 10鈥?2脳 in supported cases
 - Added seamless and faster video quality changes
 - Improved shader compatibility
 - Added more anonymous telemetry data to improve development, compatibility, and stability
@@ -1507,7 +1421,7 @@ No changes.
 ## Mod
 
 - Correct suggestion translations
-- Fix video playback failing with a 403 Forbidden error when cached YouTube URLs expire – the player now 
+- Fix video playback failing with a 403 Forbidden error when cached YouTube URLs expire 鈥?the player now 
   automatically
   invalidates the stale cache entry and re-fetches fresh URLs from `yt-dlp` instead of permanently marking the 
   screen as
@@ -1524,7 +1438,7 @@ No changes.
 ## Highlights
 
 - Switch mod channel from Beta to Release
-- Support YouTube livestreams (live, première, and regular streams)
+- Support YouTube livestreams (live, premi猫re, and regular streams)
 - Direct searching and playback of YouTube videos without leaving the game
 - Switch to Paper plugin, drop Bukkit and Spigot support
 - Progress slider with seeking support
@@ -1535,7 +1449,7 @@ No changes.
 ## Mod
 
 - Switch mod channel from Beta to Release
-- Support YouTube livestreams (live, première, and regular streams)
+- Support YouTube livestreams (live, premi猫re, and regular streams)
 - Direct searching and playback of YouTube videos without leaving the game
 - Suggested videos based on current video
 - Progress slider with seeking support
@@ -1817,7 +1731,7 @@ No changes.
 - Huge reduction of CPU usage, more stable and optimized
 - Store all displays from the servers
 - Support more YouTube links
-- Don’t mute displays on alt-tab by default
+- Don鈥檛 mute displays on alt-tab by default
 - Better volume UI
 - Switched to Mojang mappings
 - Improved overall code quality
