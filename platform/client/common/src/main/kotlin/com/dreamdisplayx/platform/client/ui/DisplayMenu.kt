@@ -13,6 +13,7 @@ import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
 import com.dreamdisplayx.api.media.audio.service.keys.AudioAcousticsServices
 import com.dreamdisplayx.api.media.search.model.MediaSearchResult
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackMode
@@ -74,6 +75,14 @@ class DisplayMenu private constructor(
                 .setAudioTrack(DisplayId(displayScreen.uuid), it.url)
         },
     )
+    private val subtitleDropdown = SubtitleDropdown(
+        getTracks = { displayScreen.subtitleTrackList },
+        currentLang = { displayScreen.currentSubtitleLang.takeIf { displayScreen.subtitlesEnabled } },
+        onSelect = {
+            DreamServices.registry.get(PlaybackServices.PLAYBACK)
+                .setSubtitleTrack(DisplayId(displayScreen.uuid), it?.lang)
+        },
+    )
 
     private lateinit var volume: ValueSlider
     private lateinit var quality: ValueSlider
@@ -88,6 +97,7 @@ class DisplayMenu private constructor(
     private lateinit var errorPanel: ErrorPanel
     private lateinit var popoutButton: IconButton
     private lateinit var audioTrackButton: IconButton
+    private lateinit var subtitleButton: IconButton
 
     private var prevQualityListSize = 0
     private var suggestionsRect: UiRect? = null
@@ -233,6 +243,22 @@ class DisplayMenu private constructor(
         syncReset.enabledWhen = { ds.canSetModeHere && ds.effectiveMode != PlaybackMode.LOCAL }
         syncReset.visibleWhen = notErrored
 
+        val accessReset = addUi(IconButton("refresh") {
+            if (ds.canToggleLockHere) displays.setAccess(displayId, ds.defaultAccess)
+        })
+        accessReset.enabledWhen = { ds.canToggleLockHere && ds.access != ds.defaultAccess }
+        accessReset.visibleWhen = { ds.access != null && !ds.errored }
+
+        val lockButton = addUi(
+            IconButton(
+                icon = { IconButton.modIcon(if (ds.isLocked == true) "lock" else "unlock") },
+            ) {
+                val locked = ds.isLocked ?: return@IconButton
+                displays.setAccess(displayId, if (locked) DisplayAccess.EVERYONE else DisplayAccess.LOCKED)
+            })
+        lockButton.enabledWhen = { ds.canToggleLockHere }
+        lockButton.visibleWhen = { ds.isLocked != null && !ds.errored }
+
         val muteButton = addUi(
             IconButton(
                 icon = { IconButton.modIcon(if (ds.muted) "mute" else "sound") },
@@ -254,6 +280,10 @@ class DisplayMenu private constructor(
         audioTrackButton = addUi(IconButton("lang") { audioTrackDropdown.toggle() })
         audioTrackButton.enabledWhen = { videoReady() && ds.audioTrackList.size > 1 }
         audioTrackButton.visibleWhen = notErrored
+
+        subtitleButton = addUi(IconButton("cc") { subtitleDropdown.toggle() })
+        subtitleButton.enabledWhen = { videoReady() && ds.subtitleTrackList.isNotEmpty() }
+        subtitleButton.visibleWhen = notErrored
 
         val pauseButton = addUi(
             IconButton(
@@ -291,16 +321,6 @@ class DisplayMenu private constructor(
         progress.enabledWhen = { videoReady() && ds.canSeek() && !ds.isLive && ds.canSeekHere }
         progress.visibleWhen = notErrored
 
-        val lockButton = addUi(
-            IconButton(
-                icon = { IconButton.modIcon(if (ds.isLocked == true) "lock" else "unlock") },
-            ) {
-                val locked = ds.isLocked ?: return@IconButton
-                displays.setLocked(displayId, !locked)
-            })
-        lockButton.enabledWhen = { ds.canToggleLockHere }
-        lockButton.visibleWhen = { ds.isLocked != null && !ds.errored }
-
         val retryButton = addUi(IconButton("refresh") {
             playback.retry(displayId) // Local re-resolve; the error panel clears itself once it succeeds
         })
@@ -337,8 +357,8 @@ class DisplayMenu private constructor(
 
         preview =
             PreviewSection(
-                ds, muteButton, volume, popoutButton, audioTrackButton, pauseButton, progress,
-                dropdown, audioTrackDropdown,
+                ds, muteButton, volume, popoutButton, audioTrackButton, subtitleButton, pauseButton, progress,
+                dropdown, audioTrackDropdown, subtitleDropdown,
             )
         settings = SettingsSection(
             rows = settingsRows(qualityReset, brightnessReset, audio3dReset, syncReset, stretchReset),
@@ -574,6 +594,8 @@ class DisplayMenu private constructor(
                 my
             )
         ) return true
+        val onSubtitleButton = subtitleButton.isMouseOver(mx.toDouble(), my.toDouble())
+        if (subtitleDropdown.visible && event.button() == 0 && !onSubtitleButton && subtitleDropdown.handleClick(mx, my)) return true
         return modLabel.handleClick(mx, my)
     }
 
@@ -607,6 +629,8 @@ class DisplayMenu private constructor(
         if (dropdown.visible && button == 0 && !onPopoutButton && dropdown.handleClick(mx, my)) return true
         val onAudioTrackButton = audioTrackButton.isMouseOver(mouseX, mouseY)
         if (audioTrackDropdown.visible && button == 0 && !onAudioTrackButton && audioTrackDropdown.handleClick(mx, my)) return true
+        val onSubtitleButton = subtitleButton.isMouseOver(mouseX, mouseY)
+        if (subtitleDropdown.visible && button == 0 && !onSubtitleButton && subtitleDropdown.handleClick(mx, my)) return true
         return modLabel.handleClick(mx, my)
     }
 

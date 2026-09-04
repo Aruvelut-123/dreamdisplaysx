@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.display.event.DisplayEvent
 import com.dreamdisplayx.api.display.model.Display
 import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.model.settings.DisplaySettings
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 
 /**
  * Public display registry and command surface; forwards mutations to the authoritative side.
@@ -25,8 +26,8 @@ interface DisplayService {
     /** Requests a server-authoritative video change for [id], optionally with the audio-track [lang]. */
     fun setUrl(id: DisplayId, url: String?, lang: String? = null)
 
-    /** Locks or unlocks [id] (owner / admin); the server validates and echoes the new state. */
-    fun setLocked(id: DisplayId, locked: Boolean)
+    /** Sets who may use [id] (owner / admin); the server validates and echoes the new level. */
+    fun setAccess(id: DisplayId, access: DisplayAccess)
 
     /** Deletes [id] entirely: purges its persisted data and unregisters it (owner / admin). */
     fun delete(id: DisplayId)

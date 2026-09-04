@@ -134,6 +134,12 @@ message DisplayInfo {
   optional int32 scheduledAction = 19;
   // WARNING: a default value decoded when value is missing
   optional int64 positionNanos = 20;
+  // WARNING: a default value decoded when value is missing
+  optional int32 access = 21;
+  // WARNING: a default value decoded when value is missing
+  optional bool inRegion = 22;
+  // WARNING: a default value decoded when value is missing
+  optional bool viewerInRegion = 23;
 }
 
 // serial name 'com.dreamdisplayx.core.protocol.common.packets.DisplayDelete'
@@ -184,6 +190,8 @@ message SetLocked {
   optional Uuid id = 1;
   // WARNING: a default value decoded when value is missing
   optional bool locked = 2;
+  // WARNING: a default value decoded when value is missing
+  optional int32 access = 3;
 }
 
 // serial name 'com.dreamdisplayx.core.protocol.common.packets.ReportDisplay'

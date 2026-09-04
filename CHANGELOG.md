@@ -1,8 +1,10 @@
 # 1.9.5.1 Release
 
-Based on Dream Displays [7e156542](https://github.com/arnodoelinger/dreamdisplays/commit/7e156542).
+Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplays/commit/de61bdb78d3ddffc37078d7e2bc1f4eb7583f607) (13 upstream commits merged since 7e156542).
 
 ## Highlights
+
+- **Upstream sync: subtitles** — ported upstream subtitle support into the `dreamdisplayx` package structure: `SubtitleTrack` model, WebVTT parsing (`WebVttParser`), on-screen subtitle overlay rendering (`SubtitleOverlayTexture`), a subtitle picker in the display menu (`SubtitleDropdown`), and per-display saved subtitle language. **Region access levels** — the legacy locked/unlocked boolean now maps onto `DisplayAccess` (EVERYONE / REGION / LOCKED), resolved live against WorldGuard regions; the client lock toggle mirrors the server's reported level, and old clients still work via the `SetLocked.locked` fallback field.
 
 - **Protocol V3 foundation** — added a versioned, batch-capable envelope and negotiated `dreamdisplayx:v3` transport while retaining V2 fallback compatibility. Same-content snapshots can synchronize multiple displays to one URL and authoritative timeline. Paper servers now expose `/display group` commands for named group creation, membership, shared video assignment, and playback control. V3 protocol and display-group APIs are experimental and may change. Added an experimental Paper remote-control stick: right-click a display with a stick to link it, then Shift+right-click to open its control UI. Legacy V1 handshakes are detected and the player is notified that V1 is no longer supported.
 

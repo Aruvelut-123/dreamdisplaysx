@@ -22,6 +22,7 @@ repositories {
         name = "fabricLoomRemappedMods"
     }
     maven("https://thedarkcolour.github.io/KotlinForForge/")
+    maven("https://maven.enginehub.org/repo/")
 }
 
 sourceSets.main {
@@ -91,6 +92,11 @@ configurations.all {
 dependencies {
     compileOnly(libs.platformweaverAnnotations)
     compileOnly(libs.luckpermsApi)
+    compileOnly(libs.worldguardApi) {
+        exclude(group = "com.google.guava", module = "guava")
+        exclude(group = "com.google.code.gson", module = "gson")
+        exclude(group = "it.unimi.dsi", module = "fastutil")
+    }
     compileOnly(libs.bstats)
     compileOnly("io.papermc.paper:paper-api:${scVersion("paper.api.version")}")
     compileOnly("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")

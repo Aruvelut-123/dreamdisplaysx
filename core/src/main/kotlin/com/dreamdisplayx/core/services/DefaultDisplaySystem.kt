@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.display.model.settings.DisplaySettings
 import com.dreamdisplayx.api.display.service.DisplayExecutor
 import com.dreamdisplayx.api.display.service.DisplaySystem
 import com.dreamdisplayx.api.media.model.VideoQuality
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.watchparty.model.WatchPartySession
 import java.util.concurrent.ConcurrentHashMap
@@ -80,9 +81,9 @@ class DefaultDisplaySystem(
         apply(commands.setUrl(id, url, lang))
     }
 
-    /** Lock or unlock a display. */
-    override fun setLocked(id: DisplayId, locked: Boolean) {
-        apply(commands.setLocked(id, locked))
+    /** Sets who may use the display. */
+    override fun setAccess(id: DisplayId, access: DisplayAccess) {
+        apply(commands.setAccess(id, access))
     }
 
     /** Delete a display. */
@@ -138,6 +139,11 @@ class DefaultDisplaySystem(
     /** Set the brightness multiplier for a display. */
     override fun setBrightness(displayId: DisplayId, brightness: Float) {
         apply(commands.setBrightness(displayId, brightness))
+    }
+
+    /** Sets the subtitle track language, or null to turn subtitles off. */
+    override fun setSubtitleTrack(displayId: DisplayId, lang: String?) {
+        apply(commands.setSubtitleTrack(displayId, lang))
     }
 
     /** Mute or unmute the audio for a display. */

@@ -94,6 +94,13 @@ class CreateCommand : SubCommand {
         }
 
         val displayData = sel.generateDisplayData()
+        val pos1 = sel.pos1
+        val pos2 = sel.pos2
+        if (pos1 != null && pos2 != null &&
+            (WorldGuardRegions.isProtectedTerritory(pos1) || WorldGuardRegions.isProtectedTerritory(pos2))
+        ) {
+            displayData.access = DisplayAccess.REGION
+        }
         SelectionManager.selectionPoints.remove(player.uniqueId)
 
         // Optional /display create <name> - same shape / uniqueness rules as /display rename.

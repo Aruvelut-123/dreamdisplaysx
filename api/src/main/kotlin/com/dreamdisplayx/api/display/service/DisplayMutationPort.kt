@@ -3,6 +3,7 @@ package com.dreamdisplayx.api.display.service
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.model.settings.DisplaySettings
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 
 /**
  * Display mutation port.
@@ -17,8 +18,8 @@ interface DisplayMutationPort {
     /** Sets the URL for [id]. */
     fun setUrl(id: DisplayId, url: String?, lang: String? = null)
 
-    /** Locks or unlocks [id]. */
-    fun setLocked(id: DisplayId, locked: Boolean)
+    /** Sets who may use [id]. */
+    fun setAccess(id: DisplayId, access: DisplayAccess)
 
     /** Deletes [id]. */
     fun delete(id: DisplayId)

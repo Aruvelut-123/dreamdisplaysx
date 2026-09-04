@@ -35,11 +35,14 @@ data class ClientDisplaySettings(
     /** Viewer-picked audio track language (from the audio-track dropdown), re-applied after rejoining. */
     var audioTrackLang: String? = null,
 
+    /** Whether the viewer turned subtitles on for this display. */
+    var subtitlesEnabled: Boolean = false,
+
+    /** Viewer-picked subtitle track language, re-applied after rejoining or when the video changes. */
+    var subtitleTrackLang: String? = null,
+
     /** Last known playback position in nanoseconds, resumed on Local displays after a restart. */
     var savedTimeNanos: Long = 0,
-
-    /** Viewer-chosen render distance in blocks, or `0` if never customized (falls back to the config default). */
-    var renderDistance: Int = 0,
 
     /** Whether the viewer pinned this display to a Picture-in-Picture overlay; re-opened on rejoin regardless of render distance. */
     var pipOpen: Boolean = false,

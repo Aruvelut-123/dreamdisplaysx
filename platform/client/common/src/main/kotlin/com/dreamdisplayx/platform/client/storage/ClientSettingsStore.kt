@@ -92,17 +92,18 @@ object ClientSettingsStore : ClientSettingsStorage {
         save()
     }
 
+    /** Sets the viewer's subtitle track language for [displayUuid] (null disables subtitles) and saves. */
+    override fun setSubtitleTrackLang(displayUuid: UUID, lang: String?) {
+        val s = getSettings(displayUuid)
+        s.subtitleTrackLang = lang
+        s.subtitlesEnabled = lang != null
+        save()
+    }
+
     /** Sets the last known playback position for [displayUuid] and saves. */
     override fun setSavedTimeNanos(displayUuid: UUID, nanos: Long) {
         val s = getSettings(displayUuid)
         s.savedTimeNanos = nanos
-        save()
-    }
-
-    /** Sets the viewer-chosen render distance (in blocks) for [displayUuid] and saves. */
-    override fun setRenderDistance(displayUuid: UUID, blocks: Int) {
-        val s = getSettings(displayUuid)
-        s.renderDistance = blocks
         save()
     }
 

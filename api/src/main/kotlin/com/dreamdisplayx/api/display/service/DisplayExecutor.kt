@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.display.model.Display
 import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.model.settings.DisplaySettings
 import com.dreamdisplayx.api.media.model.VideoQuality
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import kotlin.time.Duration
 
@@ -21,8 +22,8 @@ interface DisplayExecutor {
     /** Sets the URL for [id]. */
     fun setUrl(id: DisplayId, url: String?, lang: String? = null): Display? = null
 
-    /** Locks or unlocks [id]. */
-    fun setLocked(id: DisplayId, locked: Boolean): Display? = null
+    /** Sets who may use [id]. */
+    fun setAccess(id: DisplayId, access: DisplayAccess): Display? = null
 
     /** Deletes [id]. */
     fun delete(id: DisplayId): Boolean = false
@@ -53,6 +54,9 @@ interface DisplayExecutor {
 
     /** Set the active audio track, identified by its resolved stream URL. */
     fun setAudioTrack(displayId: DisplayId, trackUrl: String): Display? = null
+
+    /** Sets the subtitle track language, or null to turn subtitles off. */
+    fun setSubtitleTrack(displayId: DisplayId, lang: String?): Display? = null
 
     /** Set the brightness multiplier. */
     fun setBrightness(displayId: DisplayId, brightness: Float): Display? = null

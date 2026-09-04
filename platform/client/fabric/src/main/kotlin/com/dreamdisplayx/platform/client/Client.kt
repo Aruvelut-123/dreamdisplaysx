@@ -51,6 +51,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
+import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
@@ -116,6 +117,18 @@ class Client : ClientModInitializer, Mod {
                 DisplayRegistry.getScreens().forEach { it.renderPopout() }
             }
         }*/
+
+        //? if >=26 {
+        LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register { _, state -> !isDisplayBlock(state.pos()) }
+        //?} else
+        /*
+        //? if ==1.21.11 {
+        WorldRenderEvents.BEFORE_BLOCK_OUTLINE.register { _, state -> !isDisplayBlock(state.pos()) }
+        //?}
+        //? if <1.21.11 {
+        WorldRenderEvents.BLOCK_OUTLINE.register { _, context -> !isDisplayBlock(context.blockPos()) }
+        //?}
+        */
 
         //? if >=1.21.11 {
         HudElementRegistry.addLast(
@@ -214,6 +227,9 @@ class Client : ClientModInitializer, Mod {
     override fun sendPacket(packet: CustomPacketPayload) {
         ClientPlayNetworking.send(packet)
     }
+
+    private fun isDisplayBlock(pos: BlockPos): Boolean =
+        DisplayRegistry.getScreens().any { it.isInScreen(pos) }
 
     //? if >=26 {
     /** Cached `SubmitNodeCollector$CustomGeometryRenderer` interface, resolved once. */

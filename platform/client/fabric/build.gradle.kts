@@ -36,6 +36,7 @@ repositories {
     maven("https://oss.sonatype.org/content/groups/public/")
     maven("https://jitpack.io")
     maven("https://maven.neoforged.net/releases")
+    maven("https://maven.enginehub.org/repo/")
 }
 
 val scVersions = gradle.extensions.getByType<StonecutterVersions>()

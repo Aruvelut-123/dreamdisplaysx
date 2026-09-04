@@ -4,6 +4,7 @@ package com.dreamdisplayx.core.protocol.common.packets
 
 import com.dreamdisplayx.core.protocol.common.UuidSerializer
 import com.dreamdisplayx.core.protocol.common.ZERO_UUID
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoIntegerType
@@ -34,6 +35,12 @@ data class DisplayInfo(
     @ProtoNumber(18) val scheduledStartEpochMillis: Long = 0,
     @ProtoNumber(19) val scheduledAction: Int = -1,
     @ProtoNumber(20) val positionNanos: Long = 0,
+    /** Wire ordinal of the display access level. */
+    @ProtoNumber(21) val access: Int = 2,
+    /** True when the display is inside a WorldGuard region. */
+    @ProtoNumber(22) val inRegion: Boolean = false,
+    /** Whether the addressed player belongs to that region. */
+    @ProtoNumber(23) val viewerInRegion: Boolean = false,
 ) : DreamPacket
 
 /** Removes a display (server broadcast) or requests its deletion (client action). */
@@ -69,12 +76,24 @@ data class SetVideo(
     @ProtoNumber(3) val lang: String = "",
 ) : DreamPacket
 
-/** Client toggles the locked flag of a display it owns. */
+/**
+ * Client changes who may use a display it owns. [locked] is what pre-1.10 clients send and all this
+ * packet could once express; [access] carries the full level and wins whenever it is present.
+ */
 @Serializable
 data class SetLocked(
     @ProtoNumber(1) val id: @Serializable(UuidSerializer::class) UUID = ZERO_UUID,
     @ProtoNumber(2) val locked: Boolean = true,
+    /** Wire ordinal of the requested `DisplayAccess`, or `-1` from a client that only knows [locked]. */
+    @ProtoNumber(3) val access: Int = -1,
 ) : DreamPacket
+
+/**
+ * The access level [SetLocked] asks for: its own [SetLocked.access] when the sending client knows
+ * about levels, otherwise the level its [SetLocked.locked] boolean maps onto.
+ */
+fun SetLocked.accessLevel(): DisplayAccess =
+    if (access >= 0) DisplayAccess.fromWire(access) else DisplayAccess.fromLegacyLocked(locked)
 
 /** Client reports a display to the server's configured webhook. */
 @Serializable

@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.display.service.DisplayLookup
 import com.dreamdisplayx.api.display.service.DisplayMutationPort
 import com.dreamdisplayx.api.display.service.DisplayService
 import com.dreamdisplayx.api.media.model.VideoQuality
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.playback.service.PlaybackPort
 import com.dreamdisplayx.api.playback.service.PlaybackService
@@ -28,7 +29,7 @@ class DefaultDisplayService(
     override fun listDisplays(): List<Display> = lookup.listDisplays()
     override fun updateSettings(id: DisplayId, settings: DisplaySettings) = mutations.updateSettings(id, settings)
     override fun setUrl(id: DisplayId, url: String?, lang: String?) = mutations.setUrl(id, url, lang)
-    override fun setLocked(id: DisplayId, locked: Boolean) = mutations.setLocked(id, locked)
+    override fun setAccess(id: DisplayId, access: DisplayAccess) = mutations.setAccess(id, access)
     override fun delete(id: DisplayId) = mutations.delete(id)
     override fun report(id: DisplayId) = mutations.report(id)
     override fun on(listener: (DisplayEvent) -> Unit): AutoCloseable = lookup.onDisplayEvent(listener)
@@ -46,6 +47,7 @@ class DefaultPlaybackService(
     override fun setVolume(displayId: DisplayId, volume: Float) = playback.setVolume(displayId, volume)
     override fun setQuality(displayId: DisplayId, quality: VideoQuality) = playback.setQuality(displayId, quality)
     override fun setAudioTrack(displayId: DisplayId, trackUrl: String) = playback.setAudioTrack(displayId, trackUrl)
+    override fun setSubtitleTrack(displayId: DisplayId, lang: String?) = playback.setSubtitleTrack(displayId, lang)
     override fun setBrightness(displayId: DisplayId, brightness: Float) = playback.setBrightness(displayId, brightness)
     override fun mute(displayId: DisplayId, muted: Boolean) = playback.mute(displayId, muted)
     override fun getState(displayId: DisplayId): DisplayState = playback.getState(displayId)

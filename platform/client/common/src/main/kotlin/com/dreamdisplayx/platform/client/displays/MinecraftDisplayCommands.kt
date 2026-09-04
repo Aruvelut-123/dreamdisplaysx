@@ -5,12 +5,14 @@ import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.model.settings.DisplaySettings
 import com.dreamdisplayx.api.display.service.DisplayExecutor
 import com.dreamdisplayx.api.media.model.VideoQuality
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.core.protocol.common.packets.DisplayDelete
 import com.dreamdisplayx.core.protocol.common.packets.ReportDisplay
 import com.dreamdisplayx.core.protocol.common.packets.SetLocked
 import com.dreamdisplayx.core.services.DisplayStorage
 import com.dreamdisplayx.platform.client.Initializer
+import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import kotlin.time.Duration
 
 /**
@@ -44,11 +46,15 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
-    /** Locks or unlocks the display and informs the server. */
-    override fun setLocked(id: DisplayId, locked: Boolean): Display? {
+    /** Sets who may use the display and informs the server. */
+    @Deprecated("Scheduled for removal in 2.0.0")
+    override fun setAccess(id: DisplayId, access: DisplayAccess): Display? {
         val screen = DisplayRegistry.screens[id.uuid] ?: return null
-        screen.isLocked = locked
-        Initializer.sendPacket(SetLocked(id.uuid, locked))
+        screen.access = access
+        screen.isLocked = access != DisplayAccess.EVERYONE
+        // TODO: remove this in 2.0.0
+        // locked is filled in as well so a pre-1.10 server still gets the closest thing it understands
+        Initializer.sendPacket(SetLocked(id.uuid, access != DisplayAccess.EVERYONE, access.wire))
         return screen.toDisplay()
     }
 
@@ -121,6 +127,17 @@ class MinecraftDisplayCommands : DisplayExecutor {
     override fun setAudioTrack(displayId: DisplayId, trackUrl: String): Display? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.audioTrack = trackUrl
+        return screen.toDisplay()
+    }
+
+    /**
+     * Sets the subtitle track by [lang] (null turns subtitles off) and persists the pick so
+     * [DisplayScreen] can re-apply it once the same display resolves subtitle tracks again.
+     */
+    override fun setSubtitleTrack(displayId: DisplayId, lang: String?): Display? {
+        val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
+        screen.subtitleTrack = lang
+        ClientSettingsStore.setSubtitleTrackLang(displayId.uuid, lang)
         return screen.toDisplay()
     }
 

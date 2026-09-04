@@ -20,6 +20,8 @@ import com.dreamdisplayx.api.media.audio.model.SourceAcousticState
 import com.dreamdisplayx.api.media.audio.model.SourcePlane
 import com.dreamdisplayx.api.media.audio.service.keys.AudioAcousticsServices
 import com.dreamdisplayx.api.media.stream.model.MediaStream
+import com.dreamdisplayx.api.media.stream.model.SubtitleTrack
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackContext
@@ -107,6 +109,19 @@ class DisplayScreen(
     /** Server-reported lock state, or `null` until the server reports it. */
     var isLocked: Boolean? = null
 
+    /** Server-reported access level, or `null` until the server reports it. */
+    var access: DisplayAccess? = null
+
+    /** True when the server says this display stands inside a WorldGuard region. */
+    var inRegion: Boolean = false
+
+    /** Whether the local player belongs to that region (server-answered; meaningful for REGION level). */
+    var viewerInRegion: Boolean = false
+
+    /** The level a display in this spot starts at: shared with the region when it stands in one. */
+    val defaultAccess: DisplayAccess
+        get() = if (inRegion) DisplayAccess.REGION else DisplayAccess.DEFAULT
+
     /** Epoch millis of a pending scheduled play / pause, or `0` when none is set (see [com.dreamdisplayx.core.protocol.common.packets.DisplayInfo]). */
     var scheduledStartEpochMillis: Long = 0
 
@@ -162,10 +177,22 @@ class DisplayScreen(
         mode = effectiveMode,
         isOwner = owner,
         isAdmin = isAdmin,
-        isLocked = PlaybackPermissions.isEffectivelyLocked(effectiveMode, isLocked == true),
+        isLocked = PlaybackPermissions.isEffectivelyLocked(effectiveMode, lockedForMe()),
         hasActiveParty = watchParty != null,
         isPartyHost = watchParty?.isHost == true,
     )
+
+    /**
+     * Whether the display's access level shuts *this* player out, mirroring the server's own rule
+     * (see `PlaybackContexts.of`). Region membership can only be answered server-side, so it arrives
+     * per-viewer in [viewerInRegion] rather than being derived here.
+     */
+    private fun lockedForMe(): Boolean = when (access) {
+        DisplayAccess.EVERYONE -> false
+        DisplayAccess.REGION -> !viewerInRegion
+        DisplayAccess.LOCKED -> true
+        null -> isLocked == true // Pre-hello, or a server too old to send a level
+    }
 
     /** True if the local player may play/pause here. Locked displays allow only owner / admin controls. */
     val canControlPlayback: Boolean get() = PlaybackPermissions.canPlayPause(ctx())
@@ -201,7 +228,7 @@ class DisplayScreen(
     val canCloseWatchPartyHere: Boolean get() = PlaybackPermissions.canCloseWatchParty(ctx())
 
     /** The lock the player actually sees: base lock, or forced on by Watch Party / Broadcast. */
-    val effectiveLocked: Boolean get() = PlaybackPermissions.isEffectivelyLocked(effectiveMode, isLocked == true)
+    val effectiveLocked: Boolean get() = PlaybackPermissions.isEffectivelyLocked(effectiveMode, lockedForMe())
 
     /** Backing store for this display's GPU texture(s) and render types. */
     private val textureResource = DisplayTextureResource(uuid)
@@ -423,6 +450,13 @@ class DisplayScreen(
     /** Audio track / language of the current video, or `null` when idle. */
     var lang: String? = null; private set
 
+    /** Requested subtitle track language, or null to turn subtitles off. */
+    var subtitleTrack: String? = null
+        set(value) {
+            field = value
+            mediaPlayer?.setSubtitleTrack(value)
+        }
+
     /** True once the video is effectively playing: not awaiting the initial timeline and a frame has filled. */
     val isVideoStarted: Boolean get() = !stillWaitingForInitialTimeline() && (hasEverRendered || mediaPlayer?.textureFilled() == true)
 
@@ -492,6 +526,22 @@ class DisplayScreen(
     /** True while an audio-track switch is in flight; the audio can lag the picked track by a few seconds. */
     val isSwitchingAudioTrack: Boolean
         get() = mediaPlayer?.isSwitchingAudioTrack() == true
+
+    /** Subtitle tracks available for the current video (empty unless the provider exposed captions). */
+    val subtitleTrackList: List<SubtitleTrack>
+        get() = mediaPlayer?.getAvailableSubtitleTracks() ?: emptyList()
+
+    /** Language of the currently selected subtitle track, or null when subtitles are off. */
+    val currentSubtitleLang: String?
+        get() = mediaPlayer?.getCurrentSubtitleLang()
+
+    /** True while this viewer has subtitles turned on for this display. */
+    val subtitlesEnabled: Boolean
+        get() = mediaPlayer?.isSubtitlesEnabled() == true
+
+    /** Subtitle line active at the current playback position, or null when off / between cues. */
+    val currentSubtitleText: String?
+        get() = mediaPlayer?.getCurrentSubtitleText()
 
     /** True while a quality change is still being applied; the new resolution lands a few seconds later. */
     val isApplyingQuality: Boolean
@@ -591,6 +641,12 @@ class DisplayScreen(
     internal fun previewFrameTexture(): PreviewFrameTexture =
         previewFrameCache ?: PreviewFrameTexture(uuid).also { previewFrameCache = it }
 
+    @Transient
+    private var subtitleOverlayCache: SubtitleOverlayTexture? = null
+
+    internal fun subtitleOverlayTexture(): SubtitleOverlayTexture =
+        subtitleOverlayCache ?: SubtitleOverlayTexture().also { subtitleOverlayCache = it }
+
     /** Updates position, dimensions, and video URL from an incoming [DisplayInfo] packet. */
     fun updateData(packet: DisplayInfo) {
         virtual = packet.virtual
@@ -612,6 +668,9 @@ class DisplayScreen(
 
         qualityCap = packet.qualityCap
         isLocked = packet.isLocked
+        access = DisplayAccess.fromWire(packet.access)
+        inRegion = packet.inRegion
+        viewerInRegion = packet.viewerInRegion
         scheduledStartEpochMillis = packet.scheduledStartEpochMillis
         scheduledAction = packet.scheduledAction
         owner = Minecraft.getInstance().player?.gameProfile?.id?.toString() == packet.ownerId.toString()
@@ -937,6 +996,8 @@ class DisplayScreen(
         textureResource.releaseAsync()
         previewFrameCache?.closeAsync()
         previewFrameCache = null
+        subtitleOverlayCache?.dispose()
+        subtitleOverlayCache = null
 
         val mc = Minecraft.getInstance()
         val screen = MinecraftScreenUtil.currentScreen(mc)

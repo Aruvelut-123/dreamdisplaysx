@@ -78,7 +78,6 @@ object DisplayRegistry {
         } else {
             unloadedScreens[displayScreen.uuid] = displayScreen.toFullDisplayData()
             ClientSettingsStore.setSavedTimeNanos(displayScreen.uuid, displayScreen.currentTimeNanos)
-            ClientSettingsStore.setRenderDistance(displayScreen.uuid, displayScreen.renderDistance)
         }
         screens.remove(displayScreen.uuid)
         displayScreen.unregister()
@@ -140,7 +139,6 @@ object DisplayRegistry {
     fun saveScreenData(displayScreen: DisplayScreen) {
         DisplayStorage.saveDisplayData(displayScreen.uuid, displayScreen.toFullDisplayData())
         ClientSettingsStore.setSavedTimeNanos(displayScreen.uuid, displayScreen.currentTimeNanos)
-        ClientSettingsStore.setRenderDistance(displayScreen.uuid, displayScreen.renderDistance)
     }
 
     /** Restores the display snapshot cached for [serverId] (e.g. saved timecodes) from a prior session. */
