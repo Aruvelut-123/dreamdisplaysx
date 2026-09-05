@@ -14,59 +14,30 @@ import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.InteractionResult
-import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.fabricmc.fabric.api.event.player.UseItemCallback
 import net.neoforged.bus.api.SubscribeEvent
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent
-import java.util.UUID
 
 /** Experimental cross-loader remote-control stick behavior. */
 @ModLoaderOnly
 @DreamDisplaysXUnstableApi
 object VanillaRemoteControlListener {
-    private const val LINK_KEY = "dreamdisplayx_remote_display"
-    private const val COMPONENTS = "net.minecraft.core.component.DataComponents"
-
     fun handle(player: ServerPlayer, level: ServerLevel): Boolean {
         val stack = player.mainHandItem
         if (stack.item != Items.STICK) return false
-        val linked = readLinked(stack)
+        val linked = RemoteControlItemAdapter.readLinked(stack)
         if (player.isShiftKeyDown) {
             val display = linked?.let { DisplayManager.getDisplayData(it) as? VanillaDisplayData } ?: return true
             VanillaNetworking.adapter.sendV2(listOf(player), RemoteControlOpen(display.id, display.name ?: display.id.toString().take(8)))
             return true
         }
         val display = target(player, level) ?: return false
-        writeLinked(stack, display)
+        RemoteControlItemAdapter.writeLinked(stack, display.id, "Display Remote — ${display.name ?: display.id.toString().take(8)}")
         player.sendSystemMessage(Component.literal("Remote linked to display ${display.name ?: display.id.toString().take(8)}."))
         return true
     }
-
-    private fun readLinked(stack: ItemStack): UUID? = runCatching {
-        val customData = component("CUSTOM_DATA") ?: return null
-        val value = stack.javaClass.methods.first { it.name == "get" && it.parameterCount == 1 }.invoke(stack, customData) ?: return null
-        val tag = value.javaClass.methods.firstOrNull { it.name == "copyTag" || it.name == "copy" }?.invoke(value) ?: return null
-        UUID.fromString(tag.javaClass.getMethod("getString", String::class.java).invoke(tag, LINK_KEY) as String)
-    }.getOrNull()
-
-    private fun writeLinked(stack: ItemStack, display: VanillaDisplayData) {
-        runCatching {
-            val customDataKey = component("CUSTOM_DATA") ?: return
-            val tagClass = Class.forName("net.minecraft.nbt.CompoundTag")
-            val tag = tagClass.getConstructor().newInstance()
-            tagClass.getMethod("putString", String::class.java, String::class.java).invoke(tag, LINK_KEY, display.id.toString())
-            val dataClass = Class.forName("net.minecraft.world.item.component.CustomData")
-            val customData = dataClass.getMethod("of", tagClass).invoke(null, tag)
-            val set = stack.javaClass.methods.first { it.name == "set" && it.parameterCount == 2 }
-            set.invoke(stack, customDataKey, customData)
-            component("CUSTOM_NAME")?.let { set.invoke(stack, it, Component.literal("Display Remote — ${display.name ?: display.id.toString().take(8)}")) }
-            component("ENCHANTMENT_GLINT_OVERRIDE")?.let { set.invoke(stack, it, true) }
-        }
-    }
-
-    private fun component(name: String): Any? = runCatching { Class.forName(COMPONENTS).getField(name).get(null) }.getOrNull()
 
     private fun target(player: ServerPlayer, level: ServerLevel): VanillaDisplayData? {
         val origin = player.getEyePosition(1.0f)
