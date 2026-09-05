@@ -19,8 +19,8 @@ class ServerConfigModelTest {
             Files.writeString(path, "[display]\ndefault_volume = 30\n")
             val parsed = parseServerConfig(Toml.parse(path))
             assertEquals(30, parsed.settings.display.default_volume)
-            // 30 percent maps to 30/200 = 0.15 on the 0..1 wire scale (UI slider is 0..200%).
-            assertEquals(0.15f, parsed.settings.defaultVolume)
+            // default_volume is a 0..100 percentage; 30 maps to 30/100 = 0.3 on the 0..1 wire scale.
+            assertEquals(0.3f, parsed.settings.defaultVolume)
         } finally {
             Files.deleteIfExists(path)
         }
@@ -30,6 +30,6 @@ class ServerConfigModelTest {
     fun defaultVolumeFallsBackToFiftyPercent() {
         val parsed = parseServerConfig(null)
         assertEquals(50, parsed.settings.display.default_volume)
-        assertEquals(0.25f, parsed.settings.defaultVolume)
+        assertEquals(0.5f, parsed.settings.defaultVolume)
     }
 }
