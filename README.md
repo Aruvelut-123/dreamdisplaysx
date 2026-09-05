@@ -42,7 +42,9 @@ Dream DisplaysX keeps playback synchronized across the server while keeping netw
 
 ## Protocol compatibility
 
-Current clients negotiate the improved V3 transport when available. V3 uses a versioned, batch-capable envelope on `dreamdisplayx:v3`; clients automatically fall back to the compatible V2 envelope on `dreamdisplayx:v2`. V3 same-content snapshots can bind multiple displays to one URL and authoritative playback timeline. V3 protocol and `/display group` controls are experimental and may change. The experimental Paper remote-control stick uses persistent item data: right-click a display with a normal stick to link it, then Shift+right-click with the glowing renamed stick to open that display's control UI. Flashback and ReplayMod compatibility bridges are also experimental and reflection-based. On Paper, use `/display group create <name>`, `/display group add <name> <display>`, `/display group play <name> <url> [lang]`, and `/display group control <name> <play|pause|restart>` to control a group. Legacy V1 traffic is detected and the affected player is notified in chat, but V1 packets are not processed.
+Clients negotiate the batch-capable **V3** envelope (`dreamdisplayx:v3`) when available and fall back to the compatible **V2** envelope (`dreamdisplayx:v2`) otherwise. V3 same-content snapshots bind multiple displays to one URL and playback timeline. Legacy **V1** traffic is detected and the affected player is notified in chat, but V1 packets are not processed.
+
+V3, `/display group`, the Paper remote-control stick, and the Flashback / ReplayMod bridges are experimental and may change.
 
 ![Cinema](https://i.imgur.com/PKxe0oG.png)
 
@@ -63,6 +65,8 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Immersive audio** — 3D sound, volume up to 200% & more
 - **Adjustable resolutions** — from 144p up to 4K
 - **Hardware-accelerated playback** — libvlc hardware decode (d3d11va / vaapi / videotoolbox)
+- **Video-derived dynamic lighting** — display frames light the world when LambDynamicLights is installed
+- **Complementary shader patcher** — patches Complementary r5.8.1 packs into disposable copies, leaving other packs untouched
 - **Customizable displays** — size, brightness, stretch mode & orientation
 
 </div>
@@ -79,7 +83,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Simple config** — precise control over displays and playback
 - **Permissions** — fine-grained control with LuckPerms support
 - **Claim protection** — display creation respects WorldGuard and optional claim plugins (GriefPrevention, Residence, Lands, Towny)
-- **Experimental ReplayMod and Flashback compatibility** — replay rendering can freeze local display media and follow the replay timeline; pause, seek, video-change, and display-GUI actions use replay markers when supported. Slow export FPS is guarded against video speed-up, but external display audio is not mixed into replay output and edge cases may remain. Flashback support is optional and uses reflection, including when loaded through Sinytra Connector on NeoForge. Its visual timeline is used for display synchronization; replay display/HUD rendering switches are persisted in the Dream DisplaysX client config, with `dreamdisplayx.flashback.renderDisplays` and `dreamdisplayx.flashback.renderHud` JVM properties retained as overrides. A global display-audio multiplier is available in Minecraft's vanilla Sound Options screen. Flashback captures Minecraft SoundEngine/OpenAL loopback audio, but the current Dream DisplaysX desktop Java Sound and Android OpenSL ES outputs remain outside that loopback and are not included in replay exports. Flashback does not currently expose a stable public third-party options/keyframe registration API, so its internal ImGui editor is not modified.
+- **Experimental ReplayMod & Flashback compatibility** — replay rendering can freeze display media and follow the replay timeline, with pause / seek / video-change / GUI actions using replay markers. Flashback support is optional and reflection-based (works through Sinytra Connector on NeoForge). A global display-audio multiplier lives in Minecraft's Sound Options; display audio is not yet captured into replay exports.
 - **Ultra-low network impact** — minimal impact for your traffic
 - **Persistent displays** — settings survive server restarts and unloading
 
@@ -154,71 +158,12 @@ That's it — no extra dependencies required. LambDynamicLights is an optional c
 
 ## Android (PojavLauncher / FCL / Zalith)
 
-The mod runs on Android launchers on **ARM64** and **x86_64** devices, with a few platform
-differences:
-
-- **Audio** plays through libvlc's own OpenSL ES output. The desktop 3D positional audio
-  (panning / occlusion / reverb) needs `javax.sound`, which Android JVMs don't ship. DASH
-  streams (e.g. Bilibili's video-only m4s + separate audio m4s) get their audio from the
-  separate audio-only libvlc player — created on Android without the desktop Java Sound
-  callbacks, so libvlc's own `--aout=opensles` plays the audio m4s directly; volume is routed
-  to both players and the existing A/V auto-resync keeps them in sync. Android libvlc players
-  are **never stopped or released** by the mod: this build's `libvlc_media_player_stop` itself
-  force-tears input/vout/aout so VLC worker threads detach while winding down, and their TLS
-  destructor (`jni_detach_thread`) then dereferences freed state — `SIGSEGV at
-  libvlc.so+0xef7418` on video switch / world exit even with players never released. Every
-  teardown path instead PAUSES the players (`libvlc_media_player_set_pause`), keeping every
-  VLC thread alive for the JVM lifetime; the OS reclaims them on process exit. When media is
-  reloaded, the old paused players are retained and fresh players are created instead of calling
-  `set_media` on a player that already carried media. Each player also gets its own video callback
-  and direct-buffer pool, so delayed frames from an old player cannot use the replacement's buffers.
-- **Video-derived dynamic lighting** samples the playing frame's RGB color and, when LambDynamicLights is installed, exposes a light source at the display anchor with brightness derived from that color. The sampled RGB value is retained for color-capable rendering integrations; without LambDynamicLights the normal lighting path is unchanged. Iris shader packs retain their own color-lighting pipeline: Iris does not expose a stable public API for injecting arbitrary third-party RGB light sources, so the mod never writes private shader uniforms.
-- **Complementary-only shader patcher** scans every ZIP in `shaderpacks` during client startup and recognizes all Complementary Reimagined/Unbound r5.8.1 archives, creating disposable `DreamDisplaysX-*` copies with versioned manifests. It never edits `options.txt`, never forces a shader selection, and leaves BSL, Bliss, Photon, unknown packs, and original ZIPs untouched. Any failed or unsupported patch falls back to the original pack automatically.
-- **Hardware decode** uses MediaCodec ( ByteBuffer copy mode feeding the same frame
-  callbacks); override with `-Ddreamdisplayx.hwDecode=<module>` or disable it with an empty
-  value, same as desktop.
-- **SQLite persistence** is bundled for Android: the stock `sqlite-jdbc` artifact ships no
-  Android native, so a Bionic build (16 KB page aligned, from xerial's `-sources` jar) is
-  bundled in the mod and loaded via `org.sqlite.lib.path` / `org.sqlite.lib.name` — display
-  and credential storage keep working on-device.
-- **LibVLC loads by absolute path, with only libc++ preloaded**: the Android JVM reports
-  `os.name=Linux-Android`, which makes JNA's generic-Linux name mapping turn `libvlc` into a
-  doubled `liblibvlc.so`; the mod dlopens the exact extracted `libvlc.so` path instead. The
-  Android runtime depends on `libc++` in the same directory — the Android linker does not
-  search it, so the renamed libc++ is loaded first with `RTLD_GLOBAL` (`System.load`) before
-  `libvlc.so` is opened. The bundled libc++ carries a **unique SONAME**
-  (`libc++_dreamdisplayx.so`, with `libvlc.so`'s `DT_NEEDED` rewritten at packaging time):
-  Pojav-style launchers load their own `libc++_shared.so` first, and the Android linker would
-  otherwise deduplicate by SONAME and bind `libvlc.so` to that stale copy, which lacks the
-  `_ZTTNSt6__ndk118basic_stringstream...` vtable symbol libvlc needs. **`libvlcjni.so` is never
-  loaded** — it is the org.videolan Java-layer JNI glue, not a dependency of `libvlc.so`, and
-  if it were `System.load`'ed its `JNI_OnLoad` would fail on a game JVM (it needs the Android
-  framework class `android.os.Build$VERSION`) and the JVM would unload it under threads it had
-  already spawned — a `SIGSEGV in __pthread_start`. Three Android safeguards: the natives
-  cache is **wiped before extraction**, any stray `.so` outside the AAR-era whitelist
-  (`libvlc.so` / `libc++_dreamdisplayx.so`) is **deleted at every startup** (this also
-  removes `libvlcjni.so`), and the whitelist excludes it permanently. And because plain
-  `dlopen` never invokes JNI entry points, the loader also calls `libvlc.so`'s exported
-  `JNI_OnLoad` with the live JavaVM (obtained via `JNI_GetCreatedJavaVMs` from `libjvm.so`)
-  so VLC-Android's AndroidBridge initialises and `libvlc_new` succeeds — mirroring the native
-  bridge squi2rel/VideoPlayer ships, done in pure JNA. **Never pass `--plugin-path` on
-  Android**: the monolithic libvlc-all AAR builds VLC with loadplugins disabled, so that option
-  is compiled out entirely and `libvlc_new` returns null on the unknown option (observed:
-  `vlc: unknown option or missing mandatory argument --plugin-path=...` → `libvlc_new returned
-  null`). Audio output is forced with `--aout=opensles` (the module's real name — `opensl`
-  does not exist), hardware decode with `--codec=mediacodec_ndk,mediacodec_jni,any`, and
-  `--http-proxy` is NOT passed (this AAR compiles that option out — "option --http-proxy no
-  longer exists" — and VLC-Android's http access module calls `vlc_getProxyUrl()` regardless).
-  The JNI system-proxy probe is made safe instead: libvlc.so's `JNI_OnLoad` only completes
-  (caching `java/lang/System.getProperty`) when the `android.os.Environment` class it resolves
-  first exists, so the mod ships its own `android.os.Environment` stub — the same trick
-  squi2rel/VideoPlayer uses — and pre-warms it before injecting `JNI_OnLoad`. Without this the
-  cached `getProperty` refs stay NULL and `vlc_getProxyUrl` crashes the game JVM from inside
-  (`SIGSEGV in libjvm.so` — observed on Pojav-style JVMs that lack the `android.*` classes).
-  Desktop loading by name is unchanged.
-
-The natives are extracted to app-internal storage automatically (the game directory on
-emulated storage is mounted noexec, so `.so` files there cannot be loaded).
+- Runs on **ARM64** and **x86_64** launchers (PojavLauncher / FCL / Zalith).
+- Audio uses libvlc's OpenSL ES output; desktop 3D positional audio (`javax.sound`) is unavailable. DASH streams (e.g. Bilibili) play through a separate audio-only libvlc player kept in sync by A/V auto-resync.
+- Video decode uses MediaCodec; override with `-Ddreamdisplayx.hwDecode=<module>` or disable with an empty value, same as desktop.
+- Android libvlc players are paused (never stopped or released) on teardown to avoid native `SIGSEGV` crashes; stale native files are cleaned at startup.
+- Bundles Android SQLite and a uniquely-named `libc++`; all `.so` files load from executable app-internal storage (emulated storage is `noexec`).
+- Ships a safe libvlc JNI bridge and an `android.os.Environment` stub; `libvlcjni.so` and Android-incompatible libvlc options are never used.
 
 ## JVM arguments (advanced tuning & diagnostics)
 
@@ -253,13 +198,10 @@ cd dreamdisplaysx
 ./gradlew :platform:client:fabric:build :platform:client:neoforge:build
 ```
 
-The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds; version properties
-live in `versions.json` and the active version is selected in `versions/active.txt`. The libvlc + SQLite native
-runtimes are collected from official pre-built VideoLAN distributions by the CI "Build Natives" workflow
-(`.github/workflows/natives.yml`) — Flathub flatpak for Linux, official VideoLAN dmg/zip for macOS and Windows
-x86/x64, the MSYS2 package for Windows aarch64, and the official `libvlc-all` Maven AAR for Android ARM64/x86_64 — and
-**downloaded at runtime** on first boot into `./dreamdisplayx/natives/<os>/<arch>/` (never bundled in the jar,
-keeping it small).
+The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds (version properties in
+`versions.json`, active version in `versions/active.txt`). The libvlc + SQLite natives are built by the CI
+"Build Natives" workflow from official VideoLAN distributions and **downloaded at runtime** on first boot into
+`./dreamdisplayx/natives/<os>/<arch>/` (never bundled, keeping the jar small).
 
 ## Disclaimer
 
