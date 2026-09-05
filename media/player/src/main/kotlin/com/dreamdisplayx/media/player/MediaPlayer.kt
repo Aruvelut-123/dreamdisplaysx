@@ -240,6 +240,14 @@ class MediaPlayer(
     @Volatile
     private var streams: ActiveStreams? = null
 
+    /**
+     * The video URL actually handed to the decoder in the last [startStreams] — i.e. AFTER the CDN
+     * mirror rewrite. Early-EOS penalization must target this host: [streams] still holds the
+     * resolver's original URLs, so penalizing those would punish a host that never played.
+     */
+    @Volatile
+    private var activeVideoUrl: String? = null
+
     @Volatile
     private var subtitleTracks: List<SubtitleTrack> = emptyList()
 
@@ -791,7 +799,9 @@ class MediaPlayer(
                 stats.start()
             }
 
-            val primed = primedStartPositionNanos.get().takeIf { it >= 0L } ?: 0L
+            // One-shot consumption: a primed resume position (early-EOS retry, pre-start seek)
+            // must not leak into later initializations.
+            val primed = primedStartPositionNanos.getAndSet(-1L).takeIf { it >= 0L } ?: 0L
             val initialOffset = replayBootstrapRef.get()?.positionNanos ?: primed
 
             safeExecute { if (!terminated.get()) startStreams(prepared.streamSet, initialOffset) }
@@ -818,6 +828,8 @@ class MediaPlayer(
             // Paused while this was being resolved: honor that rather than starting under the viewer
             logger.debug("$debugLabel Start skipped: playback was paused while the media was being prepared.")
             state.set(PlaybackState.PAUSED)
+            // Keep the offset for the upcoming resume so it doesn't restart at 0.
+            primedStartPositionNanos.set(offsetNanos)
             return
         }
         endedAtEnd.set(false)
@@ -852,6 +864,7 @@ class MediaPlayer(
                 currentAudio = probedAudio ?: streamSet.currentAudio,
             )
         } else streamSet
+        activeVideoUrl = probedStreamSet.currentVideo.url
 
         try {
             sessionManager.start(
@@ -872,6 +885,8 @@ class MediaPlayer(
         }
         if (sessionManager.isPlaying) {
             state.set(PlaybackState.PLAYING)
+            // Keep the retry budget across early-EOS restarts: a session that delivers one frame
+            // and then dies must not reset the consecutive-failure cap on every retry.
             refreshWarmAudioTracks()
             // Settles the live quality path, which applies by restarting the whole session.
             qualitySwitching.set(false)
@@ -930,8 +945,23 @@ class MediaPlayer(
      */
     private fun handleStreamEnd(stderr: String, normalEos: Boolean) {
         if (terminated.get()) return
+        val position = clock.currentTime()
         val decision = retryPolicy.evaluate(stderr, normalEos, liveStream)
         if (decision != null) {
+            // A mid-play transport failure (e.g. "Connection reset" from a throttling CDN edge)
+            // takes the same recovery path as an early EOS: rotate off the host that truncated
+            // the stream and resume where it died instead of replaying from the top.
+            val midPlay = !liveStream && position * 10L < durationHintNanos * 9L &&
+                durationHintNanos > EARLY_EOS_MIN_DURATION_NS && position > 0L
+            if (midPlay) {
+                logger.warn(
+                    "$debugLabel Mid-play failure at {}ms of {}ms ({}); rotating CDN host.",
+                    position / 1_000_000L, durationHintNanos / 1_000_000L,
+                    MediaUtil.truncate(stderr, 120),
+                )
+                CdnSpeedProbe.penalizeHost(activeVideoUrl)
+                primedStartPositionNanos.set(position)
+            }
             scheduleRetry(decision.invalidateCache)
             return
         }
@@ -940,7 +970,6 @@ class MediaPlayer(
             // A CDN/DASH leg can report END_REACHED after only a few seconds. Treating that as a
             // completed VOD makes loop-enabled displays replay the same opening forever, which looks
             // like a player storm. Re-resolve the stream instead when EOS is clearly far from the end.
-            val position = clock.currentTime()
             val duration = durationHintNanos
             val earlyEnd = duration > EARLY_EOS_MIN_DURATION_NS &&
                 position < duration - EARLY_EOS_TAIL_NS && position * 10L < duration * 9L
@@ -949,9 +978,33 @@ class MediaPlayer(
                     "$debugLabel Early EOS at {}ms of {}ms; re-resolving instead of looping.",
                     position / 1_000_000L, duration / 1_000_000L,
                 )
+                if (retryPolicy.exhausted) {
+                    logger.error(
+                        "$debugLabel Early EOS retries exhausted after {} attempts; stopping.",
+                        retryPolicy.retries,
+                    )
+                    state.set(PlaybackState.ERROR)
+                    host.mediaError = DreamMediaException.Decode(
+                        "Stream ended prematurely at ${position / 1_000_000L}ms of ${duration / 1_000_000L}ms " +
+                            "(all CDN mirrors exhausted)",
+                        isFatal = true,
+                    )
+                    clock.reset(clock.currentTime())
+                    return
+                }
+                // The CDN host that just truncated the stream is excluded from the next ranking, so
+                // the re-resolve rotates to a different mirror instead of re-selecting the same
+                // broken edge (whose burst-probe score stays cached and would win every time).
+                CdnSpeedProbe.penalizeHost(activeVideoUrl)
+                // Resume from the stall point instead of replaying from 0: the retry re-resolves
+                // into a fresh session, but the viewer keeps watching where playback stopped.
+                primedStartPositionNanos.set(position)
                 scheduleRetry(invalidateCache = true)
                 return
             }
+            // A genuine full-length completion resets the retry budget: whatever failures happened
+            // before were blips, and the next playback gets a fresh set of early-EOS attempts.
+            retryPolicy.reset()
             if (host.shouldLoopOnEnd) {
                 restartFromBeginning()
             } else {

@@ -151,6 +151,7 @@ object CdnSpeedProbe {
         val scores = LinkedHashMap<String, Long>()
         var probed = false
         for (host in candidateHosts) {
+            if (isPenalized(host)) continue
             val cached = hostScoreCache[host]
             if (cached != null) {
                 if (cached >= 0) scores[host] = cached
@@ -422,6 +423,7 @@ object CdnSpeedProbe {
         val total = visible.size
         for (mirror in visible) {
             val host = mirror.host!!
+            if (isPenalized(host)) continue
             val cached = hostScoreCache[host]
             if (cached != null) {
                 if (cached >= 0) ranked[host] = cached
@@ -474,5 +476,44 @@ object CdnSpeedProbe {
     fun clearScores() {
         hostScoreCache.clear()
         startupProbeStarted.set(false)
+    }
+
+    // ── Early-failure penalty ───────────────────────────────────────────────
+
+    /**
+     * Hosts that dropped a live stream mid-play (early EOS / repeated stalls) with the timestamp of
+     * the failure. Short-burst bandwidth probes can badly overestimate a throttling edge, so a
+     * host that starves during actual playback is excluded from ranking for a cooldown window.
+     */
+    private val penalizedHosts = ConcurrentHashMap<String, Long>()
+
+    /** How long a penalized host stays out of the ranking. */
+    private const val HOST_PENALTY_MS = 10 * 60_000L
+
+    /**
+     * Records that [url]'s host failed during playback, so the next resolution prefers a
+     * different mirror. Score cache entry is dropped so a fresh probe may re-rank it later.
+     */
+    fun penalizeHost(url: String?) {
+        val host = url?.let { MediaHosts.hostOf(it) } ?: return
+        penalizedHosts[host] = System.currentTimeMillis()
+        hostScoreCache.remove(host)
+        logger.warn("CDN host '{}' penalized for {} s after a mid-play failure.", host, HOST_PENALTY_MS / 1000)
+    }
+
+    /** True while [host] is inside its post-failure cooldown. */
+    private fun isPenalized(host: String): Boolean {
+        val at = penalizedHosts[host] ?: return false
+        if (System.currentTimeMillis() - at >= HOST_PENALTY_MS) {
+            penalizedHosts.remove(host)
+            return false
+        }
+        return true
+    }
+
+    /** True if the host of [url] is currently serving (not penalized). */
+    fun isHostUsable(url: String?): Boolean {
+        val host = url?.let { MediaHosts.hostOf(it) } ?: return true
+        return !isPenalized(host)
     }
 }
