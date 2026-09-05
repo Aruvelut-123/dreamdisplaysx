@@ -48,10 +48,12 @@ data class DanmakuEntry(
     /** Opaque ARGB with the message color. */
     fun argb(): Int = 0xFF000000.toInt() or (color and 0x00FFFFFF)
 
-    /** Render scale derived from the Bilibili font size (25 = 1.0, clamped like VideoPlayer). */
+    /** Render scale derived from the Bilibili font size (25 = 1.0). Most comments report 25, and the few
+     *  larger sizes are clamped to a narrow band so adjacent lines don't jump between very different
+     *  heights (VideoPlayer's wider 0.75-1.8 band reads as erratic sizes on the wall). */
     fun scale(): Float {
         val base = (if (fontSize <= 0) 25 else fontSize) / 25.0f
-        return (base * 1.5f).coerceIn(0.75f * 1.5f, 1.8f * 1.5f)
+        return base.coerceIn(0.9f, 1.15f) * 1.5f
     }
 
     /** Dedup key: the string id when present, else the numeric id, else a content-based fallback. */

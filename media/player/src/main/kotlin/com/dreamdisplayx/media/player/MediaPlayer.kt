@@ -95,6 +95,12 @@ class MediaPlayer(
         /** How long the "applying quality" hint may stay up before it expires on its own. */
         private const val QUALITY_STATUS_MAX_NS = 30_000_000_000L
 
+        /** Ignore a normal-EOS signal as a completed VOD when it happens well before this duration. */
+        private const val EARLY_EOS_MIN_DURATION_NS = 15_000_000_000L
+
+        /** Allow the final tail to be shorter than the duration without treating EOS as early. */
+        private const val EARLY_EOS_TAIL_NS = 5_000_000_000L
+
         /**
          * When the user drags the seek bar past the very end of the video, clamp the target to this
          * many nanoseconds before the end; otherwise av_seek_frame may fail (or the first grab returns
@@ -931,6 +937,21 @@ class MediaPlayer(
         }
 
         if (normalEos && !liveStream) {
+            // A CDN/DASH leg can report END_REACHED after only a few seconds. Treating that as a
+            // completed VOD makes loop-enabled displays replay the same opening forever, which looks
+            // like a player storm. Re-resolve the stream instead when EOS is clearly far from the end.
+            val position = clock.currentTime()
+            val duration = durationHintNanos
+            val earlyEnd = duration > EARLY_EOS_MIN_DURATION_NS &&
+                position < duration - EARLY_EOS_TAIL_NS && position * 10L < duration * 9L
+            if (earlyEnd) {
+                logger.warn(
+                    "$debugLabel Early EOS at {}ms of {}ms; re-resolving instead of looping.",
+                    position / 1_000_000L, duration / 1_000_000L,
+                )
+                scheduleRetry(invalidateCache = true)
+                return
+            }
             if (host.shouldLoopOnEnd) {
                 restartFromBeginning()
             } else {

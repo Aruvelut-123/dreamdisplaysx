@@ -39,6 +39,10 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
      */
     fun load(videoUrl: String, lang: String, preservePausedState: Boolean) {
         if (videoUrl == "") return
+        // DisplayInfo can be rebroadcast while the server is syncing. Do not tear down and recreate
+        // a healthy player for an identical URL/track: doing so resets playback to the first frame,
+        // and repeated packets can otherwise create a player storm and exhaust decoder buffers.
+        if (player != null && screen.videoUrl == videoUrl && screen.lang == lang && !screen.errored) return
 
         DreamServices.registry.getOrNull(MediaServices.RESOLVER_REGISTRY)?.prefetch(MediaSource.from(videoUrl))
 

@@ -48,7 +48,7 @@ object DanmakuTextLayoutCache {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/DanmakuTextLayoutCache")
 
     private const val MAX_ENTRIES = 2048
-    private const val BASE_FONT_PX = 16
+    private const val BASE_FONT_PX = 12
 
     private data class Key(val text: String, val argb: Int, val scale: Float)
 

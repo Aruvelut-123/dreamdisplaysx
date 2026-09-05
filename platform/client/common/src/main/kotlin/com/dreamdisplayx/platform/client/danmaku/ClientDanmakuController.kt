@@ -32,7 +32,7 @@ class ClientDanmakuController(private val screen: DisplayScreen) {
         private const val SEGMENT_MS = 360_000L
         private const val MAX_ACTIVE = 512
         private const val FIXED_LANES = 4
-        private const val LANE_HEIGHT = 18f
+        private const val LANE_HEIGHT = 26f
         private const val FIXED_DURATION_MS = 4_000L
         private const val BASE_MIN_ROLLING_DURATION_MS = 6_500L
         private const val BASE_MAX_ROLLING_DURATION_MS = 9_000L

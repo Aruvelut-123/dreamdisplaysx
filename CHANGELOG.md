@@ -19,6 +19,9 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 
 - F3 debug overlay shows video FPS, stream codec/resolution, frame timings, and decoder.
 - Bilibili danmaku overlay with per-display toggle and configurable speed, density, opacity, and filters.
+- Danmaku area, speed, density, size, and opacity sliders in the display menu; fixed top-anchored rendering, edge clipping, and erratic per-line font sizes.
+- Global audio multiplier now applies to already-playing displays immediately and its slider caption shows the real value.
+- Fixed short-loop playback storms: early stream end on looped displays re-resolves instead of replaying, and repeated identical video packets no longer recreate the player.
 - Bilibili quality labels, CDN mirror ranking, and fresh resolution per play; fixed 4K blur.
 - Search is now direct (URL paste, `BV`/`av` ids) without the external resolver.
 - Unrecoverable playback errors now log the detailed libvlc reason (player state + recent libvlc log lines).

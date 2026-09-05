@@ -156,7 +156,7 @@ class BiliDmSegParserTest {
         assertEquals(0xFFFFFFFF.toInt(), normal.argb())
 
         val large = DanmakuEntry(1, "", 0, 1, 45, 0x0000FF, "x", 0)
-        assertEquals((45f / 25f * 1.5f).coerceIn(0.75f * 1.5f, 1.8f * 1.5f), large.scale())
+        assertEquals(1.15f * 1.5f, large.scale())
 
         val keyless = DanmakuEntry(0, "", 1500, 1, 25, 0xFFFFFF, "hi", 0)
         assertEquals("1500:1:16777215:hi", keyless.key())

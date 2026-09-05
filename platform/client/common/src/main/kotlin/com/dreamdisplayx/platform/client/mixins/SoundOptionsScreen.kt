@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.mixins
 
+import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import net.minecraft.client.OptionInstance
 import net.minecraft.client.gui.screens.options.SoundOptionsScreen
@@ -47,17 +48,22 @@ open class SoundOptionsScreenMixin {
             ToDoubleFunction<Double> { it / 2.0 },
         )
         val captionType = Class.forName("net.minecraft.client.OptionInstance\u0024CaptionBasedToString")
-        val caption = Proxy.newProxyInstance(captionType.classLoader, arrayOf(captionType)) { _, _, args ->
-            val value = (args?.getOrNull(1) as? Number)?.toDouble() ?: 1.0
+        val caption = Proxy.newProxyInstance(captionType.classLoader, arrayOf(captionType)) { _, method, args ->
+            // CaptionBasedToString extends Function<T, Component>, so its single argument is args[0].
+            if (method.name != "apply") return@newProxyInstance null
+            val value = (args?.getOrNull(0) as? Number)?.toDouble() ?: return@newProxyInstance null
             Component.translatable("options.dreamdisplayx.global_volume", "%.2fx".format(value))
         }
         val tooltip = optionClass.getMethod("noTooltip").invoke(null)
         val listenerType = optionClass.constructors.first { it.parameterTypes.size == 6 }.parameterTypes[5]
         val listener = Proxy.newProxyInstance(listenerType.classLoader, arrayOf(listenerType)) { _, _, args ->
-            val value = (args?.lastOrNull() as? Number)?.toDouble() ?: return@newProxyInstance null
+            val value = (args?.getOrNull(0) as? Number)?.toDouble() ?: return@newProxyInstance null
             val config = ClientStateManager.config
             config.globalAudioMultiplier = value.coerceIn(0.0, 2.0)
             config.save()
+            // Re-apply the multiplier to every live display right away; config.save() alone leaves
+            // already-playing volume untouched.
+            DisplayRegistry.getScreens().forEach { it.applyEffectiveVolume() }
             null
         }
         val ctor = optionClass.constructors.first { it.parameterTypes.size == 6 }
