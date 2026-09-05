@@ -157,16 +157,26 @@ object ScreenRenderer : ClientRenderService {
         val canvasWidth = (360f * w.toFloat() / h.coerceAtLeast(1)).coerceIn(240f, 1280f)
         items.forEachIndexed { index, item ->
             val glyph = DanmakuTextLayoutCache.glyph(item.text, item.color, item.scale) ?: return@forEachIndexed
-            val x0 = (item.x / canvasWidth).coerceIn(-1f, 1f)
-            val y0 = (item.y / 360f).coerceIn(-1f, 1f)
-            val x1 = ((item.x + item.width) / canvasWidth).coerceIn(-1f, 2f)
-            val y1 = ((item.y + item.height) / 360f).coerceIn(-1f, 2f)
+            val rawX0 = item.x / canvasWidth
+            val rawX1 = (item.x + item.width) / canvasWidth
+            // Controller coordinates grow downward from the video top; display-face coordinates grow upward.
+            val rawY0 = 1f - (item.y + item.height) / 360f
+            val rawY1 = 1f - item.y / 360f
+            val x0 = maxOf(0f, rawX0)
+            val x1 = minOf(1f, rawX1)
+            val y0 = maxOf(0f, rawY0)
+            val y1 = minOf(1f, rawY1)
+            if (x1 <= x0 || y1 <= y0 || rawX1 <= rawX0 || rawY1 <= rawY0) return@forEachIndexed
+            val u0 = ((x0 - rawX0) / (rawX1 - rawX0)).coerceIn(0f, 1f)
+            val u1 = ((x1 - rawX0) / (rawX1 - rawX0)).coerceIn(0f, 1f)
+            val vTop = (1f - (y0 - rawY0) / (rawY1 - rawY0)).coerceIn(0f, 1f)
+            val vBottom = (1f - (y1 - rawY0) / (rawY1 - rawY0)).coerceIn(0f, 1f)
             drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT * 2f + index * 0.00001f) {
                 drawQuad(glyph.renderType) { pose, vb ->
-                    addTexturedVertex(pose, vb, x0, y0, 0f, 255, 255, 255, 0f, 1f, item.opacity)
-                    addTexturedVertex(pose, vb, x1, y0, 0f, 255, 255, 255, 1f, 1f, item.opacity)
-                    addTexturedVertex(pose, vb, x1, y1, 0f, 255, 255, 255, 1f, 0f, item.opacity)
-                    addTexturedVertex(pose, vb, x0, y1, 0f, 255, 255, 255, 0f, 0f, item.opacity)
+                    addTexturedVertex(pose, vb, x0, y0, 0f, 255, 255, 255, u0, vTop, item.opacity)
+                    addTexturedVertex(pose, vb, x1, y0, 0f, 255, 255, 255, u1, vTop, item.opacity)
+                    addTexturedVertex(pose, vb, x1, y1, 0f, 255, 255, 255, u1, vBottom, item.opacity)
+                    addTexturedVertex(pose, vb, x0, y1, 0f, 255, 255, 255, u0, vBottom, item.opacity)
                 }
             }
         }

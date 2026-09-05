@@ -91,6 +91,12 @@ class DisplayMenu private constructor(
     private lateinit var audio3d: ModeSlider<AcousticQuality>
     private lateinit var sync: ModeSlider<PlaybackMode>
     private lateinit var stretch: ModeSlider<StretchMode>
+    private lateinit var danmakuArea: ModeSlider<Int>
+    private lateinit var danmakuSpeed: ModeSlider<Int>
+    private lateinit var danmakuDensity: ModeSlider<Int>
+    private lateinit var danmakuScale: ValueSlider
+    private lateinit var danmakuOpacity: ValueSlider
+    private lateinit var subtitleToggle: ToggleSwitch
     private lateinit var progress: SeekBar
     private lateinit var suggestions: SuggestionsPanel
     private lateinit var preview: PreviewSection
@@ -215,6 +221,83 @@ class DisplayMenu private constructor(
         })
         stretchReset.enabledWhen = { ds.stretchMode != StretchMode.LETTERBOX }
         stretchReset.visibleWhen = notErrored
+
+        val cfg = ClientStateManager.config
+        subtitleToggle = addUi(ToggleSwitch(
+            initial = ds.subtitlesEnabled,
+            label = { if (it) Component.translatable("dreamdisplayx.mode.enabled") else Component.translatable("dreamdisplayx.mode.disabled") },
+        ) { enabled ->
+            val lang = if (enabled) {
+                ds.currentSubtitleLang ?: ds.subtitleTrackList.firstOrNull()?.lang
+            } else null
+            playback.setSubtitleTrack(displayId, lang)
+        })
+        subtitleToggle.visibleWhen = notErrored
+
+        val subtitleToggleReset = addUi(IconButton("refresh") { playback.setSubtitleTrack(displayId, null) })
+        subtitleToggleReset.enabledWhen = { ds.subtitlesEnabled }
+        subtitleToggleReset.visibleWhen = notErrored
+
+        danmakuArea = addUi(ModeSlider(
+            modes = DANMAKU_AREA_MODES,
+            initial = cfg.danmakuRollingRangePercent,
+            current = { cfg.danmakuRollingRangePercent },
+            enabledFor = { true },
+            label = { Component.literal("${it}%") },
+        ) { value -> cfg.danmakuRollingRangePercent = value; cfg.save() })
+        danmakuArea.visibleWhen = notErrored
+
+        val danmakuAreaReset = addUi(IconButton("refresh") { cfg.danmakuRollingRangePercent = 50; cfg.save() })
+        danmakuAreaReset.enabledWhen = { cfg.danmakuRollingRangePercent != 50 }
+        danmakuAreaReset.visibleWhen = notErrored
+
+        danmakuSpeed = addUi(ModeSlider(
+            modes = DANMAKU_SPEED_MODES,
+            initial = cfg.danmakuSpeedPreset,
+            current = { cfg.danmakuSpeedPreset },
+            enabledFor = { true },
+            label = { Component.translatable(danmakuSpeedLabel(it)) },
+        ) { value -> cfg.danmakuSpeedPreset = value; cfg.save() })
+        danmakuSpeed.visibleWhen = notErrored
+
+        val danmakuSpeedReset = addUi(IconButton("refresh") { cfg.danmakuSpeedPreset = 2; cfg.save() })
+        danmakuSpeedReset.enabledWhen = { cfg.danmakuSpeedPreset != 2 }
+        danmakuSpeedReset.visibleWhen = notErrored
+
+        danmakuDensity = addUi(ModeSlider(
+            modes = DANMAKU_DENSITY_MODES,
+            initial = cfg.danmakuDensityPreset,
+            current = { cfg.danmakuDensityPreset },
+            enabledFor = { true },
+            label = { Component.translatable(danmakuDensityLabel(it)) },
+        ) { value -> cfg.danmakuDensityPreset = value; cfg.save() })
+        danmakuDensity.visibleWhen = notErrored
+
+        val danmakuDensityReset = addUi(IconButton("refresh") { cfg.danmakuDensityPreset = 0; cfg.save() })
+        danmakuDensityReset.enabledWhen = { cfg.danmakuDensityPreset != 0 }
+        danmakuDensityReset.visibleWhen = notErrored
+
+        danmakuScale = addUi(ValueSlider(
+            initial = (cfg.danmakuScalePercent - 50) / 120.0,
+            label = { Component.literal("${(50 + it * 120).roundToInt()}%") },
+            step = 1.0 / 120.0,
+        ) { value -> cfg.danmakuScalePercent = (50 + value * 120).roundToInt(); cfg.save() })
+        danmakuScale.visibleWhen = notErrored
+
+        val danmakuScaleReset = addUi(IconButton("refresh") { cfg.danmakuScalePercent = 100; cfg.save() })
+        danmakuScaleReset.enabledWhen = { cfg.danmakuScalePercent != 100 }
+        danmakuScaleReset.visibleWhen = notErrored
+
+        danmakuOpacity = addUi(ValueSlider(
+            initial = (cfg.danmakuOpacity - 20) / 80.0,
+            label = { Component.literal("${(20 + it * 80).roundToInt()}%") },
+            step = 1.0 / 80.0,
+        ) { value -> cfg.danmakuOpacity = (20 + value * 80).roundToInt(); cfg.save() })
+        danmakuOpacity.visibleWhen = notErrored
+
+        val danmakuOpacityReset = addUi(IconButton("refresh") { cfg.danmakuOpacity = 100; cfg.save() })
+        danmakuOpacityReset.enabledWhen = { cfg.danmakuOpacity != 100 }
+        danmakuOpacityReset.visibleWhen = notErrored
 
         val qualityReset = addUi(IconButton("refresh") {
             playback.setQuality(displayId, VideoQuality.DEFAULT)
@@ -373,7 +456,10 @@ class DisplayMenu private constructor(
                 dropdown, audioTrackDropdown, subtitleDropdown,
             )
         settings = SettingsSection(
-            rows = settingsRows(qualityReset, brightnessReset, audio3dReset, syncReset, stretchReset),
+            rows = settingsRows(
+                qualityReset, brightnessReset, audio3dReset, syncReset, stretchReset,
+                subtitleToggleReset, danmakuAreaReset, danmakuSpeedReset, danmakuDensityReset, danmakuScaleReset, danmakuOpacityReset,
+            ),
             ownerActions = listOf(reportButton, deleteButton, lockButton),
             buttonTooltips = listOf(
                 lockButton to {
@@ -398,6 +484,8 @@ class DisplayMenu private constructor(
     private fun settingsRows(
         qualityReset: IconButton,
         brightnessReset: IconButton, audio3dReset: IconButton, syncReset: IconButton, stretchReset: IconButton,
+        subtitleToggleReset: IconButton, danmakuAreaReset: IconButton, danmakuSpeedReset: IconButton,
+        danmakuDensityReset: IconButton, danmakuScaleReset: IconButton, danmakuOpacityReset: IconButton,
     ): List<SettingsSection.Row> {
         val ds = displayScreen
         return listOf(
@@ -467,6 +555,42 @@ class DisplayMenu private constructor(
                         "dreamdisplayx.button.stretch.tooltip.6",
                         Component.translatable(stretchModeLabel(stretch.mode)),
                     ),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.subtitles", subtitleToggle, subtitleToggleReset) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.subtitles.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.subtitles.tooltip.2"),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku_area", danmakuArea, danmakuAreaReset, extraGapBefore = 6) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku_area.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku_area.tooltip.2"),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku_speed", danmakuSpeed, danmakuSpeedReset) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku_speed.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku_speed.tooltip.2"),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku_density", danmakuDensity, danmakuDensityReset) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku_density.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku_density.tooltip.2"),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku_scale", danmakuScale, danmakuScaleReset) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku_scale.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku_scale.tooltip.2"),
+                )
+            },
+            SettingsSection.Row("dreamdisplayx.button.danmaku_opacity", danmakuOpacity, danmakuOpacityReset) {
+                listOf(
+                    tooltipTitle("dreamdisplayx.button.danmaku_opacity.tooltip.1"),
+                    tooltipBody("dreamdisplayx.button.danmaku_opacity.tooltip.2"),
                 )
             },
         )
@@ -761,6 +885,31 @@ class DisplayMenu private constructor(
 
         /** The three stretch-mode notches exposed by the fit slider. */
         private val STRETCH_MODES = listOf(StretchMode.LETTERBOX, StretchMode.STRETCH, StretchMode.CROP)
+
+        /** Rolling danmaku area presets (percent of the display height). */
+        private val DANMAKU_AREA_MODES = listOf(25, 50, 75, 100)
+
+        /** Danmaku scroll-speed presets (index into SPEED_MULTIPLIERS). */
+        private val DANMAKU_SPEED_MODES = listOf(0, 1, 2, 3, 4)
+
+        /** Danmaku density presets: normal / more / overlap. */
+        private val DANMAKU_DENSITY_MODES = listOf(0, 1, 2)
+
+        /** Translation key for the compact label inside the danmaku speed slider. */
+        private fun danmakuSpeedLabel(preset: Int): String = when (preset) {
+            0 -> "dreamdisplayx.mode.danmaku_speed_0"
+            1 -> "dreamdisplayx.mode.danmaku_speed_1"
+            3 -> "dreamdisplayx.mode.danmaku_speed_3"
+            4 -> "dreamdisplayx.mode.danmaku_speed_4"
+            else -> "dreamdisplayx.mode.danmaku_speed_2"
+        }
+
+        /** Translation key for the compact label inside the danmaku density slider. */
+        private fun danmakuDensityLabel(preset: Int): String = when (preset) {
+            1 -> "dreamdisplayx.mode.danmaku_density_1"
+            2 -> "dreamdisplayx.mode.danmaku_density_2"
+            else -> "dreamdisplayx.mode.danmaku_density_0"
+        }
 
         /** Translation key for the compact label shown inside the stretch-mode slider. */
         private fun stretchModeLabel(mode: StretchMode): String = when (mode) {
