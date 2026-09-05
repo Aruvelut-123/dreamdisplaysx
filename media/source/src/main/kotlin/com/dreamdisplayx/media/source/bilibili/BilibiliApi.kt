@@ -4,6 +4,8 @@ import com.dreamdisplayx.api.media.source.url.BilibiliUrls
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.api.media.stream.model.MediaStreamType
+import com.dreamdisplayx.media.source.bilibili.danmaku.BiliDmSegParser
+import com.dreamdisplayx.media.source.bilibili.danmaku.DanmakuEntry
 import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
 import com.dreamdisplayx.util.*
 import com.dreamdisplayx.util.json.DreamJson
@@ -43,6 +45,14 @@ data class BilibiliSearchItem(
     val mediaMode: Int? = null,
     /** Display label for the access mode (e.g. "VIP", "付费", "独家"), or null. */
     val accessLabel: String? = null,
+)
+
+/** Minimal VOD identity needed to fetch Bilibili danmaku segments: bvid / aid / cid / part. */
+data class BiliDanmakuVideo(
+    val bvid: String,
+    val aid: Long,
+    val cid: Long,
+    val part: Int,
 )
 
 /**
@@ -100,6 +110,67 @@ object BilibiliApi {
 
     /** Metadata-only lookup for the cache. */
     fun metadata(source: MediaSource.Bilibili): PlatformVideoMetadata? = resolve(source)?.metadata
+
+    /**
+     * Resolves the VOD identity (bvid / aid / cid / part) needed to fetch danmaku for [source]
+     * via a lightweight `/x/web-interface/view` call, or null when [source] is not a resolvable VOD.
+     */
+    fun danmakuVideo(source: MediaSource.Bilibili): BiliDanmakuVideo? {
+        if (source.roomId != null || source.epId != null || source.seasonId != null) return null
+        val viewParams = buildMap {
+            source.bvid?.let { put("bvid", it) }
+            source.avid?.let { put("aid", it.toString()) }
+        }
+        if (viewParams.isEmpty()) return null
+        val data = getJson("https://api.bilibili.com/x/web-interface/view?${plainQuery(viewParams)}")?.obj("data")
+            ?: return null
+        val pages = data.array("pages")?.mapNotNull { it.asJsonObjectOrNull() }
+        val part = source.part ?: 1
+        val page = pages?.firstOrNull { it.optInt("page") == part } ?: pages?.firstOrNull()
+        val cid = page?.optLong("cid") ?: data.optLong("cid") ?: return null
+        val aid = data.optLong("aid") ?: source.avid ?: return null
+        return BiliDanmakuVideo(
+            bvid = data.optString("bvid") ?: source.bvid ?: return null,
+            aid = aid,
+            cid = cid,
+            part = page?.optInt("page") ?: part,
+        )
+    }
+
+    /**
+     * Fetches one 6-minute VOD danmaku segment (1-based) for [video]. Tries the WBI-signed protobuf
+     * `seg.so` endpoint first, then the plain protobuf endpoint, then the legacy XML `list.so`.
+     * Returns an empty list when nothing could be fetched or parsed.
+     */
+    fun fetchDanmakuSegment(video: BiliDanmakuVideo, segmentIndex: Int): List<DanmakuEntry> {
+        val segment = maxOf(1, segmentIndex)
+        val referer = "https://www.bilibili.com/video/${video.bvid}"
+        val params = mapOf(
+            "type" to "1",
+            "oid" to video.cid.toString(),
+            "pid" to video.aid.toString(),
+            "segment_index" to segment.toString(),
+        )
+
+        val wbi = getBytes("https://api.bilibili.com/x/v2/dm/wbi/web/seg.so?${signedQuery(params)}", referer)
+        if (wbi != null) {
+            val entries = BiliDmSegParser.parseProtobuf(wbi)
+            if (entries.isNotEmpty()) return entries
+        }
+
+        val plain = getBytes("https://api.bilibili.com/x/v2/dm/web/seg.so?${plainQuery(params)}", referer)
+        if (plain != null) {
+            val entries = BiliDmSegParser.parseProtobuf(plain)
+            if (entries.isNotEmpty()) return entries
+        }
+
+        val xml = getBytes("https://api.bilibili.com/x/v1/dm/list.so?oid=${video.cid}", referer)
+        if (xml != null) {
+            val entries = BiliDmSegParser.parseXml(xml)
+            if (entries.isNotEmpty()) return entries
+        }
+        return emptyList()
+    }
 
     /** Keyword video search, WBI-signed like `playurl` — used to mix BIlibili results into the free-text suggestions list. */
     fun searchVideos(keyword: String, page: Int = 1): List<BilibiliSearchItem> {
@@ -586,4 +657,16 @@ object BilibiliApi {
         )
         DreamJson.compact.parseToJsonElement(body).asJsonObjectOrNull()
     }.onFailure { logger.debug("Bilibili API fetch failed for {}: {}.", url, it.message) }.getOrNull()
+
+    /** GETs the raw binary body at [url] with a Bilibili-shaped [referer], or null on any failure. */
+    private fun getBytes(url: String, referer: String): ByteArray? = runCatching {
+        DreamHttpClient.readBytes(
+            url,
+            DreamHttpClient.RequestOptions(
+                headers = headers() + ("Referer" to listOf(referer)),
+                connectTimeoutMs = 8_000,
+                readTimeoutMs = 8_000,
+            ),
+        )
+    }.onFailure { logger.debug("Bilibili binary fetch failed for {}: {}.", url, it.message) }.getOrNull()
 }

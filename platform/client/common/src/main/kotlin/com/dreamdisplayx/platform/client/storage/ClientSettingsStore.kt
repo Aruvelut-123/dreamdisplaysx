@@ -128,6 +128,13 @@ object ClientSettingsStore : ClientSettingsStorage {
         save()
     }
 
+    /** Sets whether the Bilibili danmaku overlay is enabled for [displayUuid] and saves. */
+    override fun setDanmakuEnabled(displayUuid: UUID, enabled: Boolean) {
+        val s = getSettings(displayUuid)
+        s.danmakuEnabled = enabled
+        save()
+    }
+
     /** Removes the settings for [displayUuid], persisting only if an entry existed. Returns whether anything was removed. */
     override fun remove(displayUuid: UUID): Boolean {
         val removed = settings.remove(displayUuid) != null

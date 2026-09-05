@@ -58,6 +58,9 @@ data class ClientDisplaySettings(
 
     /** How the video frame is scaled to fit the display's render resolution. "LETTERBOX", "STRETCH", or "CROP". */
     var stretchMode: String = "LETTERBOX",
+
+    /** Whether the Bilibili danmaku overlay is shown for this display (viewer-local). */
+    var danmakuEnabled: Boolean = true,
 ) {
 
     companion object {

@@ -18,6 +18,8 @@ import com.dreamdisplayx.api.render.backend.service.RenderContext
 import com.dreamdisplayx.api.render.texture.model.TextureHandle
 import com.dreamdisplayx.api.runtime.registry.service.getOrNull
 import com.dreamdisplayx.platform.client.core.DreamServices
+import com.dreamdisplayx.platform.client.danmaku.ClientDanmakuController
+import com.dreamdisplayx.platform.client.danmaku.DanmakuTextLayoutCache
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.render.ScreenRenderer.drawLayer
@@ -141,8 +143,34 @@ object ScreenRenderer : ClientRenderService {
         }
 
         renderSubtitleOverlay(displayScreen, stack, facing, w, h, lift, drawQuad)
+        renderDanmakuOverlay(displayScreen, stack, facing, w, h, lift, drawQuad)
     }
 
+    /** Renders each Bilibili danmaku as an independent transparent text glyph; no subtitle-style background. */
+    private fun renderDanmakuOverlay(
+        displayScreen: DisplayScreen, stack: PoseStack, facing: DisplayFacing, w: Int, h: Int, lift: Float, drawQuad: QuadRenderer,
+    ) {
+        val controller = displayScreen.danmakuController()
+        controller.update()
+        val items = controller.renderables()
+        if (items.isEmpty()) return
+        val canvasWidth = (360f * w.toFloat() / h.coerceAtLeast(1)).coerceIn(240f, 1280f)
+        items.forEachIndexed { index, item ->
+            val glyph = DanmakuTextLayoutCache.glyph(item.text, item.color, item.scale) ?: return@forEachIndexed
+            val x0 = (item.x / canvasWidth).coerceIn(-1f, 1f)
+            val y0 = (item.y / 360f).coerceIn(-1f, 1f)
+            val x1 = ((item.x + item.width) / canvasWidth).coerceIn(-1f, 2f)
+            val y1 = ((item.y + item.height) / 360f).coerceIn(-1f, 2f)
+            drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT * 2f + index * 0.00001f) {
+                drawQuad(glyph.renderType) { pose, vb ->
+                    addTexturedVertex(pose, vb, x0, y0, 0f, 255, 255, 255, 0f, 1f, item.opacity)
+                    addTexturedVertex(pose, vb, x1, y0, 0f, 255, 255, 255, 1f, 1f, item.opacity)
+                    addTexturedVertex(pose, vb, x1, y1, 0f, 255, 255, 255, 1f, 0f, item.opacity)
+                    addTexturedVertex(pose, vb, x0, y1, 0f, 255, 255, 255, 0f, 0f, item.opacity)
+                }
+            }
+        }
+    }
     private const val SUBTITLE_MAX_HEIGHT_FRAC = 0.16f
     private const val SUBTITLE_MAX_WIDTH_FRAC = 0.86f
     private const val SUBTITLE_BOTTOM_MARGIN_FRAC = 0.05f
@@ -399,6 +427,23 @@ object ScreenRenderer : ClientRenderService {
         v: Float,
     ) {
         builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, 255)
+    }
+
+    /** Adds a textured vertex with an explicit alpha for transparent danmaku glyphs. */
+    private fun addTexturedVertex(
+        pose: PoseStack.Pose,
+        builder: VertexConsumer,
+        x: Float,
+        y: Float,
+        z: Float,
+        r: Int,
+        g: Int,
+        b: Int,
+        u: Float,
+        v: Float,
+        opacity: Float,
+    ) {
+        builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, (opacity.coerceIn(0f, 1f) * 255f).toInt())
     }
 
     /** Draws a quad using the given [type] and [appendVertices] function. A bit of a hack. */

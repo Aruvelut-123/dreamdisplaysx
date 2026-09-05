@@ -57,6 +57,7 @@ object DisplayRegistry {
         displayScreen.quality = VideoQuality.parse(clientSettings.quality)
         displayScreen.muted = clientSettings.muted
         displayScreen.acousticsEnabled = clientSettings.acousticsEnabled
+        displayScreen.danmakuEnabled = clientSettings.danmakuEnabled
         // Disk-persisted fallback (survives a full game restart); overridden below by the
         // same-session cache when present, which is fresher.
         displayScreen.savedTimeNanos = clientSettings.savedTimeNanos

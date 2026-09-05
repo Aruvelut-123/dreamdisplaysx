@@ -56,6 +56,9 @@ interface ClientSettingsStorage {
     /** Sets the video stretch mode (LETTERBOX / STRETCH / CROP) for [displayUuid] and saves. */
     fun setStretchMode(displayUuid: UUID, mode: StretchMode)
 
+    /** Sets whether the Bilibili danmaku overlay is enabled for [displayUuid] and saves. */
+    fun setDanmakuEnabled(displayUuid: UUID, enabled: Boolean)
+
     /** Removes the settings for [displayUuid], persisting only if an entry existed. Returns whether anything was removed. */
     fun remove(displayUuid: UUID): Boolean
 }

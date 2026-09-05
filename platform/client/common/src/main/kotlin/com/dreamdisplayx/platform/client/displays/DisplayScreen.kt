@@ -38,6 +38,7 @@ import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.audio.ListenerPoseTracker
 import com.dreamdisplayx.platform.client.audio.VoxelAcousticsProbe
 import com.dreamdisplayx.platform.client.core.DreamServices
+import com.dreamdisplayx.platform.client.danmaku.ClientDanmakuController
 import com.dreamdisplayx.platform.client.displays.DisplayScreen.Companion.DEFAULT_QUALITY
 import com.dreamdisplayx.platform.client.displays.DisplayScreen.Companion.ENV_PROBE_INTERVAL_TICKS
 import com.dreamdisplayx.platform.client.managers.ClientPacketManager
@@ -154,6 +155,9 @@ class DisplayScreen(
 
     /** 3D acoustics engine (directivity, occlusion, reverb); false = legacy distance-gain only. */
     var acousticsEnabled: Boolean = savedSettings.acousticsEnabled
+
+    /** Whether the Bilibili danmaku overlay is shown for this display (viewer-local). */
+    var danmakuEnabled: Boolean = savedSettings.danmakuEnabled
 
     /** Legacy mirror of [mode]; true only for [PlaybackMode.SYNCED]. */
     val isSync: Boolean get() = mode == PlaybackMode.SYNCED
@@ -647,6 +651,13 @@ class DisplayScreen(
     internal fun subtitleOverlayTexture(): SubtitleOverlayTexture =
         subtitleOverlayCache ?: SubtitleOverlayTexture().also { subtitleOverlayCache = it }
 
+    @Transient
+    private var danmakuControllerCache: ClientDanmakuController? = null
+
+    /** The per-display Bilibili danmaku controller, created on first use and released in [unregister]. */
+    internal fun danmakuController(): ClientDanmakuController =
+        danmakuControllerCache ?: ClientDanmakuController(this).also { danmakuControllerCache = it }
+
     /** Updates position, dimensions, and video URL from an incoming [DisplayInfo] packet. */
     fun updateData(packet: DisplayInfo) {
         virtual = packet.virtual
@@ -998,6 +1009,8 @@ class DisplayScreen(
         previewFrameCache = null
         subtitleOverlayCache?.dispose()
         subtitleOverlayCache = null
+        danmakuControllerCache?.dispose()
+        danmakuControllerCache = null
 
         val mc = Minecraft.getInstance()
         val screen = MinecraftScreenUtil.currentScreen(mc)

@@ -104,6 +104,9 @@
 - Ported upstream water/glass render fix (d72d6e0a) + PBO client-mapped-buffer barrier (9cc61b27)
 - Module READMEs (api/core/media*) removed (upstream 6b4eac4f); root README rebuilt on upstream layout
 
+### 2026-02-DD — Bilibili danmaku overlay
+- Viewer-local Bilibili VOD danmaku uses six-minute protobuf segments with XML fallback, lane-based timing, transparent text glyph rendering, and per-display/global settings.
+
 ### 2026-02-DD — Android support restored
 - Platforms: `android-aarch64` / `android-x64` (PojavLauncher / FCL / Zalith; ARM64 + x86_64)
 - Detection: `OsInfo.isAndroid` (heuristic, was already present) — every Android branch keys off it
@@ -327,7 +330,7 @@ The Paper remote-control stick is experimental and uses a `PersistentDataContain
 Flashback support is experimental and reflection-only. Flashback is a Fabric client mod; NeoForge compatibility is provided by Sinytra Connector, so Dream DisplaysX must not add a hard NeoForge Flashback dependency. Do not assume Flashback's internal classes are stable APIs; all probes must fail closed when Flashback is absent or changes. Replay marker, audio, and export behavior may be incomplete. Flashback's visual timeline can be consumed for synchronization, but its internal keyframe/editor classes are not stable third-party APIs; render switches are persisted in Dream DisplaysX config with system-property overrides. Flashback captures Minecraft OpenAL loopback audio only; Dream DisplaysX's independent Java Sound/OpenSL ES output is not captured without a future SoundEngine PCM bridge.
 
 ## Known Issues
-1. Danmaku track spacing doesn't scale with font size (hardcoded trackCount=8, 26px)
+1. Danmaku track spacing doesn't scale with font size (hardcoded trackCount=8, 26px) — legacy note from upstream; the current danmaku implementation uses dynamic lane layout.
 2. SettingsSection scissor clipping works but controls are placed every frame
 
 ## AI Language Policy

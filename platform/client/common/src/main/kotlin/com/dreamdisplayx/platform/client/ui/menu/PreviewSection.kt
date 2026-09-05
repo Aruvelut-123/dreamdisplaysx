@@ -46,6 +46,7 @@ class PreviewSection(
     private val popoutButton: IconButton,
     private val audioTrackButton: IconButton,
     private val subtitleButton: IconButton,
+    private val danmakuButton: IconButton,
     private val pauseButton: IconButton,
     private val progress: SeekBar,
     private val dropdown: PopoutDropdown,
@@ -130,8 +131,12 @@ class PreviewSection(
         subtitleButton.place(UiRect(subtitleBtnLeft, controlsRowY, subtitleBtnW, btn))
         subtitleButton.setAlpha(subtitlePresence)
 
+        // Danmaku toggle sits beside the subtitle button; always present (Bilibili overlay control).
+        val danmakuBtnLeft = subtitleBtnLeft - subtitleGap - btn
+        danmakuButton.place(UiRect(danmakuBtnLeft, controlsRowY, btn, btn))
+
         val progX = volumeX + VOLUME_W + 4
-        val progW = max(40, (subtitleBtnLeft - subtitleGap) - progX)
+        val progW = max(40, (danmakuBtnLeft - 4) - progX)
         progress.place(UiRect(progX, controlsRowY, progW, btn))
 
         dropdown.draw(g, popoutButton.x + btn / 2, popoutButton.y, mouseX, mouseY)

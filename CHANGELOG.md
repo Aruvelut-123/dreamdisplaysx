@@ -18,6 +18,7 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 ## Client
 
 - F3 debug overlay shows video FPS, stream codec/resolution, frame timings, and decoder.
+- Bilibili danmaku overlay with per-display toggle and configurable speed, density, opacity, and filters.
 - Bilibili quality labels, CDN mirror ranking, and fresh resolution per play; fixed 4K blur.
 - Search is now direct (URL paste, `BV`/`av` ids) without the external resolver.
 - Unrecoverable playback errors now log the detailed libvlc reason (player state + recent libvlc log lines).

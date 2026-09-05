@@ -70,6 +70,41 @@ class Config(private val baseDir: File) {
      */
     var bilibiliCdnMirror: String = "auto"
 
+    /** Whether Bilibili danmaku overlays are rendered at all. */
+    var danmakuEnabled: Boolean = true
+
+    /** Danmaku scroll-speed preset, 0 (slowest) .. 4 (fastest); 2 is the reference default. */
+    var danmakuSpeedPreset: Int = 2
+        set(value) { field = value.coerceIn(0, 4) }
+
+    /** Danmaku density preset: 0 = normal, 1 = more, 2 = overlap. */
+    var danmakuDensityPreset: Int = 0
+        set(value) { field = value.coerceIn(0, 2) }
+
+    /** Vertical area (percent of the display height) the scrolling danmaku may use: 25 / 50 / 75 / 100. */
+    var danmakuRollingRangePercent: Int = 50
+        set(value) { field = if (value in setOf(25, 50, 75, 100)) value else 50 }
+
+    /** Danmaku text scale in percent, 50 .. 170. */
+    var danmakuScalePercent: Int = 100
+        set(value) { field = value.coerceIn(50, 170) }
+
+    /** Danmaku text opacity in percent, 20 .. 100. */
+    var danmakuOpacity: Int = 100
+        set(value) { field = value.coerceIn(20, 100) }
+
+    /** Whether scrolling danmaku (modes 1-3, 6) are hidden. */
+    var danmakuBlockRolling: Boolean = false
+
+    /** Whether fixed top/bottom danmaku (modes 4-5) are hidden. */
+    var danmakuBlockFixed: Boolean = false
+
+    /** Whether colored danmaku are hidden (only white kept). */
+    var danmakuBlockColored: Boolean = false
+
+    /** Keeps fixed-bottom danmaku clear of the subtitle area by capping the rolling range at 85%. */
+    var danmakuBottomGuard: Boolean = true
+
     init {
         load()
     }
@@ -159,6 +194,16 @@ class Config(private val baseDir: File) {
             AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }?.let { audioAcoustics = it }
         }
         t?.getString("bilibili-cdn-mirror")?.let { bilibiliCdnMirror = it }
+        danmakuEnabled = t?.getBoolean("danmaku-enabled") ?: danmakuEnabled
+        t?.getLong("danmaku-speed-preset")?.let { danmakuSpeedPreset = it.toInt() }
+        t?.getLong("danmaku-density-preset")?.let { danmakuDensityPreset = it.toInt() }
+        t?.getLong("danmaku-rolling-range-percent")?.let { danmakuRollingRangePercent = it.toInt() }
+        t?.getLong("danmaku-scale-percent")?.let { danmakuScalePercent = it.toInt() }
+        t?.getLong("danmaku-opacity")?.let { danmakuOpacity = it.toInt() }
+        danmakuBlockRolling = t?.getBoolean("danmaku-block-rolling") ?: danmakuBlockRolling
+        danmakuBlockFixed = t?.getBoolean("danmaku-block-fixed") ?: danmakuBlockFixed
+        danmakuBlockColored = t?.getBoolean("danmaku-block-colored") ?: danmakuBlockColored
+        danmakuBottomGuard = t?.getBoolean("danmaku-bottom-guard") ?: danmakuBottomGuard
         when (t?.getString("audio-output-profile")?.lowercase()) {
             "speakers" -> audioBinauralOutput = false
             "headphones", "auto" -> audioBinauralOutput = true
@@ -253,6 +298,76 @@ class Config(private val baseDir: File) {
             get = { bilibiliCdnMirror },
             apply = { bilibiliCdnMirror = it; save() },
         ),
+        ConfigEntry(
+            "danmaku-enabled", "Danmaku enabled",
+            "Whether Bilibili danmaku overlays are rendered on displays.",
+            ConfigEntryType.BOOLEAN,
+            get = { danmakuEnabled },
+            apply = { danmakuEnabled = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-speed-preset", "Danmaku speed",
+            "Danmaku scroll-speed preset, 0 (slowest) to 4 (fastest).",
+            ConfigEntryType.INT,
+            get = { danmakuSpeedPreset },
+            apply = { danmakuSpeedPreset = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-density-preset", "Danmaku density",
+            "Danmaku density preset: 0 = normal, 1 = more, 2 = overlap.",
+            ConfigEntryType.INT,
+            get = { danmakuDensityPreset },
+            apply = { danmakuDensityPreset = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-rolling-range-percent", "Danmaku display area",
+            "Vertical area (percent of the display height) the scrolling danmaku may use: 25 / 50 / 75 / 100.",
+            ConfigEntryType.INT,
+            get = { danmakuRollingRangePercent },
+            apply = { danmakuRollingRangePercent = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-scale-percent", "Danmaku scale",
+            "Danmaku text scale in percent, 50 to 170.",
+            ConfigEntryType.INT,
+            get = { danmakuScalePercent },
+            apply = { danmakuScalePercent = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-opacity", "Danmaku opacity",
+            "Danmaku text opacity in percent, 20 to 100.",
+            ConfigEntryType.INT,
+            get = { danmakuOpacity },
+            apply = { danmakuOpacity = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-block-rolling", "Block scrolling danmaku",
+            "Hide scrolling danmaku (modes 1-3 and 6).",
+            ConfigEntryType.BOOLEAN,
+            get = { danmakuBlockRolling },
+            apply = { danmakuBlockRolling = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-block-fixed", "Block fixed danmaku",
+            "Hide fixed top/bottom danmaku (modes 4-5).",
+            ConfigEntryType.BOOLEAN,
+            get = { danmakuBlockFixed },
+            apply = { danmakuBlockFixed = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-block-colored", "Block colored danmaku",
+            "Hide colored danmaku, keeping only white text.",
+            ConfigEntryType.BOOLEAN,
+            get = { danmakuBlockColored },
+            apply = { danmakuBlockColored = it; save() },
+        ),
+        ConfigEntry(
+            "danmaku-bottom-guard", "Danmaku bottom guard",
+            "Keep fixed-bottom danmaku clear of the subtitle area by capping the rolling range at 85%.",
+            ConfigEntryType.BOOLEAN,
+            get = { danmakuBottomGuard },
+            apply = { danmakuBottomGuard = it; save() },
+        ),
     )
 
     /** Persists the current configuration values to disk as standard TOML. */
@@ -275,6 +390,16 @@ class Config(private val baseDir: File) {
             appendLine("audio-acoustics = \"${audioAcoustics.name.lowercase()}\"")
             appendLine("audio-output-profile = \"${if (audioBinauralOutput) "headphones" else "speakers"}\"")
             appendLine("bilibili-cdn-mirror = \"${tomlQuote(bilibiliCdnMirror)}\"")
+            appendLine("danmaku-enabled = $danmakuEnabled")
+            appendLine("danmaku-speed-preset = $danmakuSpeedPreset")
+            appendLine("danmaku-density-preset = $danmakuDensityPreset")
+            appendLine("danmaku-rolling-range-percent = $danmakuRollingRangePercent")
+            appendLine("danmaku-scale-percent = $danmakuScalePercent")
+            appendLine("danmaku-opacity = $danmakuOpacity")
+            appendLine("danmaku-block-rolling = $danmakuBlockRolling")
+            appendLine("danmaku-block-fixed = $danmakuBlockFixed")
+            appendLine("danmaku-block-colored = $danmakuBlockColored")
+            appendLine("danmaku-bottom-guard = $danmakuBottomGuard")
         })
     }
 

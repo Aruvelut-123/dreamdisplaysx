@@ -103,6 +103,7 @@ Compared to the original Dream Displays, this fork adds:
   OP-only with LuckPerms support and cross-server credential sync (SQLite/MySQL).
 - **Bilibili VIP badge** — official VIP badge image, differentiating normal and annual VIP.
 - **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions, unreleased-content filter.
+- **Bilibili danmaku** — viewer-local scrolling comments over displays, with per-display toggle and global speed/density/filter settings.
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
 - **Built-in Simplified Chinese** (`zh_cn`) language file.
 - **libvlc playback engine** — low-level JNA libvlc binding (no vlcj, no FFmpeg binary, no Rust, no Python).

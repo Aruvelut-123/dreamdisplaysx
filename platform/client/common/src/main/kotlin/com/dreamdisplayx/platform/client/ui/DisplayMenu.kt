@@ -26,6 +26,7 @@ import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.popout.PopoutManager
 import com.dreamdisplayx.platform.client.render.ScrubPreview
+import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.platform.client.storage.CustomVideoStore
 import com.dreamdisplayx.platform.client.ui.kit.UiRect
 import com.dreamdisplayx.platform.client.ui.kit.UiScreenBase
@@ -285,6 +286,17 @@ class DisplayMenu private constructor(
         subtitleButton.enabledWhen = { videoReady() && ds.subtitleTrackList.isNotEmpty() }
         subtitleButton.visibleWhen = notErrored
 
+        val danmakuButton = addUi(
+            IconButton(
+                icon = { IconButton.modIcon(if (ds.danmakuEnabled) "cc" else "mute") },
+            ) {
+                val next = !ds.danmakuEnabled
+                ds.danmakuEnabled = next
+                ClientSettingsStore.setDanmakuEnabled(ds.uuid, next)
+            })
+        danmakuButton.enabledWhen = notErrored
+        danmakuButton.visibleWhen = notErrored
+
         val pauseButton = addUi(
             IconButton(
                 icon = { IconButton.modIcon(if (ds.isPaused) "play" else "pause") },
@@ -357,7 +369,7 @@ class DisplayMenu private constructor(
 
         preview =
             PreviewSection(
-                ds, muteButton, volume, popoutButton, audioTrackButton, subtitleButton, pauseButton, progress,
+                ds, muteButton, volume, popoutButton, audioTrackButton, subtitleButton, danmakuButton, pauseButton, progress,
                 dropdown, audioTrackDropdown, subtitleDropdown,
             )
         settings = SettingsSection(
@@ -376,6 +388,7 @@ class DisplayMenu private constructor(
                 },
                 deleteButton to { buttonTooltip("dreamdisplayx.button.delete") },
                 reportButton to { buttonTooltip("dreamdisplayx.button.report") },
+                danmakuButton to { buttonTooltip("dreamdisplayx.button.danmaku") },
             ),
         )
         errorPanel = ErrorPanel(retryButton, deleteButton, reportButton) { ds.mediaError }
