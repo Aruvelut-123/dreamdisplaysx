@@ -1,46 +1,37 @@
 package com.dreamdisplayx.platform.server.managers
 
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
-import com.dreamdisplayx.platform.server.PaperServer
-import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
-import io.github.arnodoelinger.platformweaver.PaperOnly
+import com.dreamdisplayx.api.playback.model.PlaybackMode
+import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
+import com.dreamdisplayx.platform.server.playback.TimelineManager
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
-/** Experimental in-memory named display groups used by V3 same-content playback commands. */
+/** Experimental named display groups shared by Paper, Fabric, and NeoForge. */
 @DreamDisplaysXUnstableApi
-@PaperOnly
 object DisplayGroupManager {
-    private val groups = ConcurrentHashMap<String, MutableSet<UUID>>()
+    fun create(name: String): Boolean = GroupRegistry.create(name)
+    fun delete(name: String): Boolean = GroupRegistry.delete(name)
+    fun names(): List<String> = GroupRegistry.names()
+    fun contains(name: String): Boolean = GroupRegistry.contains(name)
 
-    fun create(name: String): Boolean = groups.putIfAbsent(name, ConcurrentHashMap.newKeySet()) == null
+    fun add(name: String, display: DisplayData): Boolean = GroupRegistry.add(name, display.id)
+    fun remove(name: String, displayId: UUID): Boolean = GroupRegistry.remove(name, displayId)
 
-    fun delete(name: String): Boolean = groups.remove(name) != null
+    fun members(name: String): List<DisplayData> = GroupRegistry.memberIds(name).mapNotNull(DisplayManager::getDisplayData)
 
-    fun names(): List<String> = groups.keys().toList().sorted()
-
-    fun add(name: String, display: PaperDisplayData): Boolean {
-        val members = groups[name] ?: return false
-        return members.add(display.id)
-    }
-
-    fun remove(name: String, displayId: UUID): Boolean = groups[name]?.remove(displayId) == true
-
-    fun members(name: String): List<PaperDisplayData> = groups[name].orEmpty().mapNotNull {
-        DisplayManager.getDisplayData(it) as? PaperDisplayData
-    }
-
-    fun contains(name: String): Boolean = groups.containsKey(name)
-
-    /** Updates every member to the same URL/language and re-announces its display state. */
-    fun setVideo(name: String, url: String, lang: String) {
+    /** Updates every member, then delegates persistence and transport to the active platform. */
+    fun setVideo(
+        name: String,
+        url: String,
+        lang: String,
+        persistAndBroadcast: (DisplayData) -> Unit,
+    ) {
         members(name).forEach { display ->
             display.url = url
             display.lang = lang
-            display.mode = com.dreamdisplayx.api.playback.model.PlaybackMode.SYNCED
-            PaperServer.getInstance().storage.saveDisplay(display)
-            DisplayManager.broadcastUpdate(display)
-            com.dreamdisplayx.platform.server.playback.TimelineManager.onVideoChanged(display)
+            display.mode = PlaybackMode.SYNCED
+            persistAndBroadcast(display)
+            TimelineManager.onVideoChanged(display)
         }
     }
 }

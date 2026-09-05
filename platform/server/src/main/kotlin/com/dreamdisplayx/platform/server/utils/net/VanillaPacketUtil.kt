@@ -15,18 +15,26 @@ import java.util.UUID
 /** Sends protocol-v2 packets for Fabric and NeoForge servers. */
 object VanillaPacketUtil {
     fun sendDisplayInfo(players: List<ServerPlayer>, display: VanillaDisplayData, forced: Boolean = false) {
-        val recipients = players
-        VanillaNetworking.adapter.sendV2(recipients, DisplayInfo(
-            id = display.id, ownerId = display.ownerId, x = display.minX, y = display.minY, z = display.minZ,
-            width = display.width, height = display.height, url = display.url,
-            facing = directionToFacingUtil(display.facing).toPacket().toInt(), isSync = display.isSync,
-            lang = display.lang, isLocked = display.isLocked, mode = display.mode.wire,
-            qualityCap = display.qualityCap, rotation = display.rotation.quarterTurns,
-            virtual = display.virtual, forced = forced,
-            scheduledStartEpochMillis = display.scheduledStart?.toEpochMilliseconds() ?: 0,
-            scheduledAction = display.scheduledAction?.wire ?: -1, positionNanos = display.seekPositionNanos,
-        ))
+        VanillaNetworking.adapter.sendV2(players, toDisplayInfo(display, forced))
     }
+
+    /** Sends a chunk of display infos as one v3 batch envelope (v2 fallback per player inside the adapter). */
+    fun sendDisplayInfos(players: List<ServerPlayer>, displays: List<VanillaDisplayData>) {
+        if (displays.isEmpty()) return
+        VanillaNetworking.adapter.sendV3Batch(players, displays.map { toDisplayInfo(it, forced = false) })
+    }
+
+    /** Builds the wire [DisplayInfo] for [display]; shared by the single and batch send paths. */
+    private fun toDisplayInfo(display: VanillaDisplayData, forced: Boolean) = DisplayInfo(
+        id = display.id, ownerId = display.ownerId, x = display.minX, y = display.minY, z = display.minZ,
+        width = display.width, height = display.height, url = display.url,
+        facing = directionToFacingUtil(display.facing).toPacket().toInt(), isSync = display.isSync,
+        lang = display.lang, isLocked = display.isLocked, mode = display.mode.wire,
+        qualityCap = display.qualityCap, rotation = display.rotation.quarterTurns,
+        virtual = display.virtual, forced = forced,
+        scheduledStartEpochMillis = display.scheduledStart?.toEpochMilliseconds() ?: 0,
+        scheduledAction = display.scheduledAction?.wire ?: -1, positionNanos = display.seekPositionNanos,
+    )
 
     fun sendSync(players: List<ServerPlayer>, syncData: SyncData) {
         val id = syncData.id ?: return

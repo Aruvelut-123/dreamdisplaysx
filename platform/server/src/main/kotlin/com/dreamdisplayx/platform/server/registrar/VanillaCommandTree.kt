@@ -3,6 +3,12 @@ package com.dreamdisplayx.platform.server.registrar
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.PermissionsSection
 import com.dreamdisplayx.platform.server.VanillaServerState
+import com.dreamdisplayx.api.playback.model.PlaybackAction
+import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
+import com.dreamdisplayx.platform.server.managers.DisplayGroupManager
+import com.dreamdisplayx.platform.server.managers.DisplayManager
+import com.dreamdisplayx.platform.server.meta.ServerCoroutines
+import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.commands.subcommands.*
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
@@ -23,6 +29,7 @@ import com.mojang.brigadier.suggestion.Suggestions
 import com.mojang.brigadier.suggestion.SuggestionsBuilder
 import com.mojang.brigadier.tree.CommandNode
 import com.mojang.brigadier.tree.LiteralCommandNode
+import kotlinx.coroutines.launch
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands
 import net.minecraft.network.chat.Component
@@ -58,6 +65,7 @@ object VanillaCommandTree {
             .then(statsNode())
             .then(reloadNode())
             .then(videoNode())
+            .then(groupNode())
             .then(renameNode())
             .then(scheduleNode())
             .then(toggleNode("on"))
@@ -248,6 +256,123 @@ object VanillaCommandTree {
                 VanillaVideoCommand.execute(ctx, token(ctx), urlAndLang)
                 Command.SINGLE_SUCCESS
             }
+
+    /**
+     * Builds the `/display group` same-content playback tree, mirroring the Paper `GroupCommand`.
+     * Membership is held in the shared [DisplayGroupManager]; the `play` branch persists and
+     * broadcasts through the vanilla storage / transport, so groups work on Fabric and NeoForge too.
+     */
+    private fun groupNode(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("group")
+        .requires { requiresNode(it, { p -> p.video }, VanillaPermissions.Fallback.EVERYONE) }
+        .then(
+            Commands.literal("create").then(
+                Commands.argument("name", StringArgumentType.word()).executes { ctx ->
+                    val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                    val name = StringArgumentType.getString(ctx, "name")
+                    MessageUtil.sendColoredMessage(
+                        player,
+                        if (DisplayGroupManager.create(name)) "Created display group $name." else "Group already exists: $name.",
+                    )
+                    Command.SINGLE_SUCCESS
+                }
+            )
+        )
+        .then(
+            Commands.literal("delete").then(
+                Commands.argument("name", StringArgumentType.word()).executes { ctx ->
+                    val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                    val name = StringArgumentType.getString(ctx, "name")
+                    MessageUtil.sendColoredMessage(
+                        player,
+                        if (DisplayGroupManager.delete(name)) "Deleted display group $name." else "Unknown display group: $name.",
+                    )
+                    Command.SINGLE_SUCCESS
+                }
+            )
+        )
+        .then(
+            Commands.literal("add").then(
+                Commands.argument("name", StringArgumentType.word()).then(
+                    Commands.argument("display", BareTokenArgumentType)
+                        .suggests { _, b ->
+                            FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
+                            b.buildFuture()
+                        }
+                        .executes { ctx ->
+                            val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                            val display = DisplayManager.resolveByIdOrPrefix(StringArgumentType.getString(ctx, "display"))
+                            val ok = display != null && DisplayGroupManager.add(StringArgumentType.getString(ctx, "name"), display)
+                            MessageUtil.sendColoredMessage(
+                                player,
+                                if (ok) "Display added to group." else "Unable to add display to group.",
+                            )
+                            Command.SINGLE_SUCCESS
+                        }
+                )
+            )
+        )
+        .then(
+            Commands.literal("remove").then(
+                Commands.argument("name", StringArgumentType.word()).then(
+                    Commands.argument("display", BareTokenArgumentType)
+                        .suggests { _, b ->
+                            FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
+                            b.buildFuture()
+                        }
+                        .executes { ctx ->
+                            val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                            val display = DisplayManager.resolveByIdOrPrefix(StringArgumentType.getString(ctx, "display"))
+                            val ok = display != null && DisplayGroupManager.remove(StringArgumentType.getString(ctx, "name"), display.id)
+                            MessageUtil.sendColoredMessage(
+                                player,
+                                if (ok) "Display removed from group." else "Display is not in that group.",
+                            )
+                            Command.SINGLE_SUCCESS
+                        }
+                )
+            )
+        )
+        .then(
+            Commands.literal("play").then(
+                Commands.argument("name", StringArgumentType.word()).then(
+                    Commands.argument("url", StringArgumentType.greedyString()).executes { ctx ->
+                        val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                        val server = ctx.source.server
+                        val parts = StringArgumentType.getString(ctx, "url").trim().split(" ")
+                        DisplayGroupManager.setVideo(
+                            StringArgumentType.getString(ctx, "name"),
+                            parts.first(),
+                            parts.getOrNull(1) ?: "",
+                        ) { display ->
+                            val vanilla = display as? VanillaDisplayData ?: return@setVideo
+                            ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(vanilla) }
+                            DisplayManager.sendUpdate(vanilla, DisplayManager.getReceivers(vanilla, server))
+                        }
+                        MessageUtil.sendColoredMessage(player, "Group content updated and synchronized.")
+                        Command.SINGLE_SUCCESS
+                    }
+                )
+            )
+        )
+        .then(
+            Commands.literal("control").then(
+                Commands.argument("name", StringArgumentType.word()).then(
+                    Commands.argument("action", StringArgumentType.word()).executes { ctx ->
+                        val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                        val action = when (StringArgumentType.getString(ctx, "action").lowercase()) {
+                            "play" -> PlaybackAction.PLAY
+                            "pause" -> PlaybackAction.PAUSE
+                            "restart" -> PlaybackAction.RESTART
+                            else -> null
+                        } ?: return@executes 0
+                        DisplayGroupManager.members(StringArgumentType.getString(ctx, "name"))
+                            .forEach { TimelineManager.applyScheduled(it, action) }
+                        MessageUtil.sendColoredMessage(player, "Group playback command applied.")
+                        Command.SINGLE_SUCCESS
+                    }
+                )
+            )
+        )
 
     /**
      * Builds the `/display schedule this|<id> [play|pause|cancel] [<HH:mm[:ss]>]` subcommand.

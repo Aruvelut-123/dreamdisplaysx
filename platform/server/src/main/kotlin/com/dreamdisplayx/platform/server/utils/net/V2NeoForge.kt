@@ -50,6 +50,24 @@ object NeoForgeV2Networking {
         }
     }
 
+    /**
+     * Encodes [packets] once into a generation-3 batch envelope and sends it to every negotiated-v3
+     * player; the remaining players get the packets one-by-one over v2. Used by the join-time display
+     * stream so a chunk of displays travels in a single frame instead of one per display.
+     */
+    fun sendBatch(players: List<ServerPlayer>, packets: List<DreamPacket>) {
+        if (players.isEmpty() || packets.isEmpty()) return
+        val v3Players = players.filter { V2PlayerTracker.isV3(it.uuid) }
+        val v2Players = players.filterNot { V2PlayerTracker.isV3(it.uuid) }
+        if (v3Players.isNotEmpty()) {
+            val bytes = runCatching { PacketRegistry.encodeV3(packets) }
+                .onFailure { logger.warn("Failed to encode v3 batch", it) }
+                .getOrNull()
+            if (bytes != null) v3Players.forEach { player -> runCatching { PacketDistributor.sendToPlayer(player, V3Payload(bytes)) } }
+        }
+        if (v2Players.isNotEmpty()) packets.forEach { packet -> send(v2Players, packet) }
+    }
+
     /** Registers the single v2 envelope receiver against [registrar]. Must be called exactly once total for the whole mod. */
     fun registerReceivers(registrar: PayloadRegistrar) {
         //? if >=1.21.11 {
@@ -136,6 +154,7 @@ object NeoForgeV2Networking {
         send(
             listOf(player),
             ServerHello(
+                generation = hello.generation.coerceAtMost(com.dreamdisplayx.api.protocol.ProtocolGeneration.CURRENT),
                 isPremium = VanillaDisplayActions.isPremium(player),
                 isAdmin = VanillaDisplayActions.isAdmin(player),
                 isReportingEnabled = VanillaServerState.config.settings.webhookUrl.isNotEmpty(),
