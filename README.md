@@ -186,8 +186,6 @@ optional — defaults work fine.
 | `-Ddreamdisplayx.noVideoPublish=true` | off | Skip the GPU surface publish — video frozen, audio only (bisection). |
 | `-Ddreamdisplayx.noHardwareAccel=true` | off | Don't pass `--avcodec-hw` to libvlc at all (bisection). |
 
-[Read more in our wiki](https://github.com/Aruvelut-123/dreamdisplaysx/wiki).
-
 ![Display](https://i.imgur.com/yyIKdp8.png)
 
 ## Building from source
