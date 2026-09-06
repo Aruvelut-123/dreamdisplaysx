@@ -1,4 +1,4 @@
-﻿{
+{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "本地",
   "dreamdisplayx.mode.synced": "同步",
@@ -144,10 +144,12 @@
   "dreamdisplayx.ui.playlist_by": "由 ",
   "dreamdisplayx.ui.playlist_policy_everyone": "所有人可添加",
   "dreamdisplayx.ui.playlist_policy_approval": "需房主审批",
-  "dreamdisplayx.ui.playlist_policy_owner": "仅房主",  "dreamdisplayx.sort.my_links": "我的链接",
+  "dreamdisplayx.ui.playlist_policy_owner": "仅房主",
+  "dreamdisplayx.sort.my_links": "我的链接",
   "dreamdisplayx.ui.playlist_end_pause": "播完暂停",
   "dreamdisplayx.ui.playlist_end_continue": "播完继续下一曲",
-  "dreamdisplayx.ui.playlist_end_loop": "循环播放",  "dreamdisplayx.suggestions.no_links": "还没有保存的链接。粘贴上方视频链接即可播放。",
+  "dreamdisplayx.ui.playlist_end_loop": "循环播放",
+  "dreamdisplayx.suggestions.no_links": "还没有保存的链接。粘贴上方视频链接即可播放。",
   "dreamdisplayx.mode.letterbox": "适配",
   "dreamdisplayx.mode.stretch": "拉伸",
   "dreamdisplayx.mode.crop": "裁剪",

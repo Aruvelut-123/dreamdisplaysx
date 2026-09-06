@@ -1,4 +1,4 @@
-﻿{
+{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "Lokalny",
   "dreamdisplayx.mode.synced": "Zsynchronizowany",
@@ -107,9 +107,11 @@
   "dreamdisplayx.ui.playlist_by": "by ",
   "dreamdisplayx.ui.playlist_policy_everyone": "Everyone can add",
   "dreamdisplayx.ui.playlist_policy_approval": "Owner approval needed",
-  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",  "dreamdisplayx.sort.my_links": "Moje linki",
+  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",
+  "dreamdisplayx.sort.my_links": "Moje linki",
   "dreamdisplayx.ui.playlist_end_pause": "Pause at end",
   "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
-  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",  "dreamdisplayx.suggestions.no_links": "Brak zapisanych linków. Wklej powyżej link do filmu, aby go odtworzyć.",
+  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
+  "dreamdisplayx.suggestions.no_links": "Brak zapisanych linków. Wklej powyżej link do filmu, aby go odtworzyć.",
   "dreamdisplayx.debug.commit": "unknown"
 }

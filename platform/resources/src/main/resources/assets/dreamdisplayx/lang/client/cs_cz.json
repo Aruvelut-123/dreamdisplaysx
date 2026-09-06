@@ -1,4 +1,4 @@
-﻿{
+{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "Místní",
   "dreamdisplayx.mode.synced": "Synchronizovaný",
@@ -107,9 +107,11 @@
   "dreamdisplayx.ui.playlist_by": "by ",
   "dreamdisplayx.ui.playlist_policy_everyone": "Everyone can add",
   "dreamdisplayx.ui.playlist_policy_approval": "Owner approval needed",
-  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",  "dreamdisplayx.sort.my_links": "Moje odkazy",
+  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",
+  "dreamdisplayx.sort.my_links": "Moje odkazy",
   "dreamdisplayx.ui.playlist_end_pause": "Pause at end",
   "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
-  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",  "dreamdisplayx.suggestions.no_links": "Zatím žádné uložené odkazy. Vlož výše odkaz na video a přehraj ho.",
+  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
+  "dreamdisplayx.suggestions.no_links": "Zatím žádné uložené odkazy. Vlož výše odkaz na video a přehraj ho.",
   "dreamdisplayx.debug.commit": "unknown"
 }

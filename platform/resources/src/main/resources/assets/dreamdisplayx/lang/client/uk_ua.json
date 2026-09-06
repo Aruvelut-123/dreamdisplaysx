@@ -1,4 +1,4 @@
-﻿{
+{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "Локальний",
   "dreamdisplayx.mode.synced": "Синхронізований",
@@ -107,9 +107,11 @@
   "dreamdisplayx.ui.playlist_by": "by ",
   "dreamdisplayx.ui.playlist_policy_everyone": "Everyone can add",
   "dreamdisplayx.ui.playlist_policy_approval": "Owner approval needed",
-  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",  "dreamdisplayx.sort.my_links": "Мої посилання",
+  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",
+  "dreamdisplayx.sort.my_links": "Мої посилання",
   "dreamdisplayx.ui.playlist_end_pause": "Pause at end",
   "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
-  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",  "dreamdisplayx.suggestions.no_links": "Збережених посилань ще немає. Вставте посилання на відео вище, щоб увімкнути його.",
+  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
+  "dreamdisplayx.suggestions.no_links": "Збережених посилань ще немає. Вставте посилання на відео вище, щоб увімкнути його.",
   "dreamdisplayx.debug.commit": "unknown"
 }

@@ -1,4 +1,4 @@
-﻿{
+{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "מקומי",
   "dreamdisplayx.mode.synced": "מסונכרן",
@@ -107,9 +107,11 @@
   "dreamdisplayx.ui.playlist_by": "by ",
   "dreamdisplayx.ui.playlist_policy_everyone": "Everyone can add",
   "dreamdisplayx.ui.playlist_policy_approval": "Owner approval needed",
-  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",  "dreamdisplayx.sort.my_links": "הקישורים שלי",
+  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",
+  "dreamdisplayx.sort.my_links": "הקישורים שלי",
   "dreamdisplayx.ui.playlist_end_pause": "Pause at end",
   "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
-  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",  "dreamdisplayx.suggestions.no_links": "אין עדיין קישורים שמורים. הדביקו קישור לסרטון למעלה כדי להפעיל אותו.",
+  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
+  "dreamdisplayx.suggestions.no_links": "אין עדיין קישורים שמורים. הדביקו קישור לסרטון למעלה כדי להפעיל אותו.",
   "dreamdisplayx.debug.commit": "unknown"
 }

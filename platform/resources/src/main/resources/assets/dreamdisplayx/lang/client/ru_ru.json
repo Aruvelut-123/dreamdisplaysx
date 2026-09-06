@@ -1,4 +1,4 @@
-﻿{
+{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "Локальный",
   "dreamdisplayx.mode.synced": "Синхронизированный",
@@ -107,9 +107,11 @@
   "dreamdisplayx.ui.playlist_by": "by ",
   "dreamdisplayx.ui.playlist_policy_everyone": "Everyone can add",
   "dreamdisplayx.ui.playlist_policy_approval": "Owner approval needed",
-  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",  "dreamdisplayx.sort.my_links": "Мои ссылки",
+  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",
+  "dreamdisplayx.sort.my_links": "Мои ссылки",
   "dreamdisplayx.ui.playlist_end_pause": "Pause at end",
   "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
-  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",  "dreamdisplayx.suggestions.no_links": "Сохранённых ссылок пока нет. Вставьте ссылку на видео выше, чтобы включить его.",
+  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
+  "dreamdisplayx.suggestions.no_links": "Сохранённых ссылок пока нет. Вставьте ссылку на видео выше, чтобы включить его.",
   "dreamdisplayx.debug.commit": "unknown"
 }
