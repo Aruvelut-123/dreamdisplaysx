@@ -169,6 +169,9 @@ class PlaylistItemsTable(prefix: String = "") : Table("${prefix}playlist_items")
     /** The player who added the item. */
     val requesterId = binary("requesterId", 16)
 
+    /** The player name who added the item, resolved at add time for display. */
+    val requesterName = varchar("requesterName", 32).default("")
+
     /** Primary key for the playlist items table, which is the stable item id. */
     override val primaryKey = PrimaryKey(itemId)
 }
@@ -355,6 +358,7 @@ class StorageManager(
                         title = row[playlistItemsTable.title],
                         pending = row[playlistItemsTable.pending],
                         requesterId = row[playlistItemsTable.requesterId].toUUID(),
+                        requesterName = row[playlistItemsTable.requesterName],
                     ),
                 )
             }
@@ -395,6 +399,7 @@ class StorageManager(
                     it[title] = item.title
                     it[pending] = item.pending
                     it[requesterId] = item.requesterId.toBytes()
+                    it[requesterName] = item.requesterName
                 }
             }
         }

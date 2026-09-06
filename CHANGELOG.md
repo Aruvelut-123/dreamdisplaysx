@@ -31,6 +31,8 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 - Search is now direct (URL paste, `BV`/`av` ids) without the external resolver.
 - Unrecoverable playback errors now log the detailed libvlc reason (player state + recent libvlc log lines).
 - Fixed multiple native player stacking during video switches by extending the old player stop timeout with bounded retry loop.
+- Playlist rows now show the adding player's name instead of a UUID fragment; legacy entries fall back to the UUID.
+- Fixed switch-time player stacking at the root: `MediaPlayer.stop()` now tears the native players down on the calling thread first, so a control queue blocked by a slow CDN attach can no longer delay the stop past the replacement's creation.
 
 ## Server
 

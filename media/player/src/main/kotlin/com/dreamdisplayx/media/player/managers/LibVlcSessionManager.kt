@@ -895,6 +895,40 @@ internal class LibVlcSessionManager(
     }
 
     /**
+     * Stops playback from the CALLER's thread, bypassing the control-executor queue.
+     *
+     * `stop()` serialises through the single control executor, but that queue can be blocked by a
+     * long-running task (a slow media attach whose native input thread is stuck reading a
+     * throttled CDN edge). The stop then sits behind it for tens of seconds, `awaitStopped()`
+     * times out, and the caller creates a replacement player while the old one is still alive —
+     * two native players and two vouts on one display (observed 2026-09-06: two "libvlc video
+     * setup" lines a second apart for two different URLs after a video switch). libvlc's player
+     * API is thread-safe, so calling stop/pause directly here tears the media down immediately;
+     * the queued [stop]/[cleanup] tasks that follow become near-instant no-ops.
+     */
+    fun stopNow() {
+        isPlaying = false
+        parkFlag.set(false)
+        eosReached = true
+        stopped.set(true)
+        val mp = mediaPlayer
+        if (mp != null) {
+            runCatching {
+                if (systemAudio) LibVlc.lib.libvlc_media_player_set_pause(mp, 1)
+                else LibVlc.lib.libvlc_media_player_stop(mp)
+            }
+        }
+        val ap = audioPlayer
+        if (ap != null) {
+            runCatching {
+                if (systemAudio) LibVlc.lib.libvlc_media_player_set_pause(ap, 1)
+                else LibVlc.lib.libvlc_media_player_stop(ap)
+            }
+        }
+        surface.clear()
+    }
+
+    /**
      * Android: pause instead of stop (see [stop] KDoc) — worker threads stay alive, the TLS
      * destructor never observes freed state. Desktop: plain stop.
      */

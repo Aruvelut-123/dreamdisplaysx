@@ -328,6 +328,13 @@ class MediaPlayer(
     fun stop() {
         if (terminated.getAndSet(true)) return
         state.set(PlaybackState.STOPPED)
+        // Stop the native players from THIS thread first: the control executor may be blocked
+        // behind a slow media-attach task (a native input thread stuck on a throttled CDN edge),
+        // which used to leave the old player's vout alive past awaitStopped()'s budget and let a
+        // replacement player stack on top (two live players / two video setups on one display).
+        // libvlc's player API is thread-safe; the queued doStop() below then finishes the
+        // full teardown (buffers, stats, GPU surface) on the executor as usual.
+        runCatching { sessionManager.stopNow() }
         val submitted = runCatching {
             controlExecutor.submit {
                 try {

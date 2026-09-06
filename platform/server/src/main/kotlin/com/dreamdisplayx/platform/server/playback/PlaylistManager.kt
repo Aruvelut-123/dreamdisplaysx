@@ -106,6 +106,7 @@ object PlaylistManager {
                     title = packet.title.trim().take(255),
                     pending = pending,
                     requesterId = senderId,
+                    requesterName = senderName.trim().take(32),
                 )
                 val items = playlist.items.toMutableList()
                 val at = if (packet.position in 0..items.size) packet.position else items.size
@@ -300,6 +301,7 @@ object PlaylistManager {
                     title = item.title,
                     pending = item.pending,
                     requesterId = item.requesterId,
+                    requesterName = item.requesterName,
                 )
             },
         )

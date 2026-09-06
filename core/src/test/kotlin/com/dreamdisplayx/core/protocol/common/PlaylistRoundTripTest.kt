@@ -23,6 +23,7 @@ class PlaylistRoundTripTest {
             title = "Test video",
             pending = true,
             requesterId = UUID.fromString("31234567-89ab-cdef-0123-456789abcdef"),
+            requesterName = "Steve",
         )
         val packet = PlaylistState(
             displayId = UUID.fromString("11234567-89ab-cdef-0123-456789abcdef"),

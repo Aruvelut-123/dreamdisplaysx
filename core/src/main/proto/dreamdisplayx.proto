@@ -465,4 +465,6 @@ message PlaylistItem {
   optional bool pending = 5;
   // WARNING: a default value decoded when value is missing
   optional Uuid requesterId = 6;
+  // WARNING: a default value decoded when value is missing
+  optional string requesterName = 7;
 }

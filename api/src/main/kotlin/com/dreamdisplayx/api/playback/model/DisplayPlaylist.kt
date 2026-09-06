@@ -65,4 +65,7 @@ data class PlaylistItemRecord(
     /** The player who added the item. */
     @Serializable(with = UuidStringSerializer::class)
     val requesterId: UUID = UUID(0L, 0L),
+
+    /** The player name who added the item, resolved server-side for display. */
+    val requesterName: String = "",
 )

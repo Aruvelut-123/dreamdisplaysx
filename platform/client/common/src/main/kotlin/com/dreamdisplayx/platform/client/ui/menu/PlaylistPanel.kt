@@ -227,11 +227,13 @@ class PlaylistPanel(
             } + (item.title.ifBlank { item.url }).take(60)
             g.drawText(font, label, rowRect.x + 2, rowRect.y + 4, if (item.pending) UiTheme.TEXT_DIM else UiTheme.TEXT_PRIMARY, false)
 
-            // Requester tag.
+            // Requester tag: show the player name resolved by the server; older servers may not
+            // send one, in which case fall back to the short UUID.
             val byText = Component.translatable("dreamdisplayx.ui.playlist_by").string
-            val tagW = font.width(byText + "…")
+            val requester = item.requesterName.ifBlank { item.requesterId.toString().take(8) }
+            val tagW = font.width(byText + requester)
             g.drawText(
-                font, byText + item.requesterId.toString().take(8),
+                font, byText + requester,
                 rowRect.right - tagW - 46, rowRect.y + 4, UiTheme.TEXT_DIM, false,
             )
 

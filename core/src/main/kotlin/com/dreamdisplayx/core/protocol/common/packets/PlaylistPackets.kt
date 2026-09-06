@@ -37,6 +37,7 @@ data class PlaylistItem(
     @ProtoNumber(4) val title: String = "",
     @ProtoNumber(5) val pending: Boolean = false,
     @ProtoNumber(6) @Serializable(UuidSerializer::class) val requesterId: UUID = UUID(0, 0),
+    @ProtoNumber(7) val requesterName: String = "",
 )
 
 /** Client playlist mutation/control request. */
