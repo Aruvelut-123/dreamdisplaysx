@@ -4,6 +4,9 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 
 ## Highlights
 
+- Per-display playlists stored in SQLite/MySQL: add, remove, reorder, skip, approve, and clear.
+- Configurable end-of-queue behavior (pause / continue / loop) and add-permission policy (everyone / owner approval / owner only), both persisted in the database.
+- Two-tab display menu (playlist / display settings).
 - Ported upstream subtitle support (WebVTT parsing, on-screen overlay, subtitle picker, saved language).
 - Region access levels (`DisplayAccess`: EVERYONE / REGION / LOCKED) replace the locked/unlocked boolean.
 - Experimental Protocol V3 envelope, display groups, and Paper remote-control stick.
@@ -17,6 +20,8 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 
 ## Client
 
+- Playlist tab in the display menu with queue rows, pending approvals, skip/remove/reorder actions, and a URL add box.
+- End-behavior and enqueue-policy cycle buttons; both persist to the database through the server.
 - F3 debug overlay shows video FPS, stream codec/resolution, frame timings, and decoder.
 - Bilibili danmaku overlay with per-display toggle and configurable speed, density, opacity, and filters.
 - Danmaku area, speed, density, size, and opacity sliders in the display menu; fixed top-anchored rendering, edge clipping, and erratic per-line font sizes.
@@ -28,6 +33,8 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 
 ## Server
 
+- PlaylistManager: per-display queue with end-behavior auto-advance (pause / continue / loop current) and enqueue policies (everyone / owner approval / owner only).
+- Playlists persisted in SQLite/MySQL tables (`playlists`, `playlist_items`); cleaned up when a display is deleted.
 - `/display group` commands for named groups, membership, shared video, and playback control.
 - Fullscreen loop/Esc handling and HUD hiding synced from upstream.
 - Selected audio track persists; Twitch/Vimeo/Kick/Bilibili resolve in `/display video`.

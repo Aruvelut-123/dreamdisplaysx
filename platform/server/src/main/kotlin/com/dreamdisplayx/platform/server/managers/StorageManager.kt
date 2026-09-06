@@ -3,6 +3,10 @@ package com.dreamdisplayx.platform.server.managers
 import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackMode
+import com.dreamdisplayx.api.playback.model.PlaylistEndBehavior
+import com.dreamdisplayx.api.playback.model.PlaylistEnqueuePolicy
+import com.dreamdisplayx.api.playback.model.PlaylistItemRecord
+import com.dreamdisplayx.api.playback.model.DisplayPlaylist
 import com.dreamdisplayx.api.security.policy.MediaUrlPolicy
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
@@ -33,6 +37,7 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.replace
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -115,6 +120,57 @@ class DisplaysTable(prefix: String = "") : Table("${prefix}displays") {
 }
 
 /**
+ * One row per display playlist: the playing index and the two wire policies. The items themselves
+ * live in [PlaylistItemsTable]; a playlist row is created lazily on first item / settings write.
+ */
+class PlaylistsTable(prefix: String = "") : Table("${prefix}playlists") {
+    /** Owning display id (16-byte binary, matching the displays table). */
+    val displayId = binary("displayId", 16)
+
+    /** Index into the item list currently playing, or -1 when nothing is playing. */
+    val currentIndex = integer("currentIndex").default(-1)
+
+    /** Wire ordinal of the [PlaylistEndBehavior]. */
+    val endBehavior = integer("endBehavior").default(PlaylistEndBehavior.CONTINUE.wire)
+
+    /** Wire ordinal of the [PlaylistEnqueuePolicy]. */
+    val enqueuePolicy = integer("enqueuePolicy").default(PlaylistEnqueuePolicy.OWNER_ONLY.wire)
+
+    /** Primary key for the playlists table, which is the owning display id. */
+    override val primaryKey = PrimaryKey(displayId)
+}
+
+/** One queued media item; [queueIndex] is the 0-based queue slot and is rewritten on reorder. */
+class PlaylistItemsTable(prefix: String = "") : Table("${prefix}playlist_items") {
+    /** Stable item identity used by client remove / move / skip commands. */
+    val itemId = binary("itemId", 16)
+
+    /** Owning display id. */
+    val displayId = binary("displayId", 16)
+
+    /** 0-based queue slot; contiguous and compacted on every reorder. */
+    val queueIndex = integer("queueIndex")
+
+    /** Media URL to play. */
+    val url = varchar("url", MediaUrlPolicy.MAX_URL_LENGTH).default("")
+
+    /** Optional audio language for the media. */
+    val lang = varchar("lang", 255).default("")
+
+    /** Optional display title resolved by the requester's client. */
+    val title = varchar("title", 255).default("")
+
+    /** True while waiting for the display owner's approval. */
+    val pending = bool("pending").default(false)
+
+    /** The player who added the item. */
+    val requesterId = binary("requesterId", 16)
+
+    /** Primary key for the playlist items table, which is the stable item id. */
+    override val primaryKey = PrimaryKey(itemId)
+}
+
+/**
  * `SQL`-backed display storage adapter. Loads persisted rows into platform-specific [DisplayData]
  * objects and writes updates from managers back to `SQLite` or `MySQL` through `Exposed` / `Hikari`.
  */
@@ -133,6 +189,8 @@ class StorageManager(
 ) {
     private val logger: Logger = LoggerFactory.getLogger(javaClass)
     private val table = DisplaysTable(tablePrefix)
+    private val playlistTable = PlaylistsTable(tablePrefix)
+    private val playlistItemsTable = PlaylistItemsTable(tablePrefix)
 
     private val dataSource = HikariDataSource(HikariConfig().apply {
         this.jdbcUrl = when {
@@ -160,7 +218,7 @@ class StorageManager(
      */
     fun createSchema() {
         transaction(db) {
-            MigrationUtils.statementsRequiredForDatabaseMigration(table)
+            MigrationUtils.statementsRequiredForDatabaseMigration(table, playlistTable, playlistItemsTable)
                 .filterNot { it.contains("DROP COLUMN", ignoreCase = true) }
                 .forEach { stmt -> exec(stmt) }
         }
@@ -278,6 +336,72 @@ class StorageManager(
     /** Deletes the display with the given [displayId] from the display table. */
     private fun delete(displayId: UUID) {
         transaction(db) { table.deleteWhere { id eq displayId.toBytes() } }
+    }
+
+    /** Loads every persisted playlist (display playlists only; items ordered by queue index). */
+    fun loadAllPlaylists(): List<DisplayPlaylist> = transaction(db) {
+        val itemsByDisplay = playlistItemsTable.selectAll()
+            .map { row ->
+                Triple(
+                    row[playlistItemsTable.displayId].toUUID(),
+                    row[playlistItemsTable.queueIndex],
+                    PlaylistItemRecord(
+                        itemId = row[playlistItemsTable.itemId].toUUID(),
+                        url = row[playlistItemsTable.url],
+                        lang = row[playlistItemsTable.lang],
+                        title = row[playlistItemsTable.title],
+                        pending = row[playlistItemsTable.pending],
+                        requesterId = row[playlistItemsTable.requesterId].toUUID(),
+                    ),
+                )
+            }
+            .groupBy({ it.first }, { it.second to it.third })
+        playlistTable.selectAll().map { row ->
+            val displayId = row[playlistTable.displayId].toUUID()
+            DisplayPlaylist(
+                displayId = displayId,
+                items = itemsByDisplay[displayId].orEmpty()
+                    .sortedBy { it.first }
+                    .map { it.second },
+                currentIndex = row[playlistTable.currentIndex],
+                endBehavior = PlaylistEndBehavior.fromWire(row[playlistTable.endBehavior]),
+                enqueuePolicy = PlaylistEnqueuePolicy.fromWire(row[playlistTable.enqueuePolicy]),
+            )
+        }
+    }
+
+    /** Upserts [playlist] and rewrites its item rows in one transaction. */
+    fun savePlaylist(playlist: DisplayPlaylist) {
+        transaction(db) {
+            playlistTable.replace {
+                it[displayId] = playlist.displayId.toBytes()
+                it[currentIndex] = playlist.currentIndex
+                it[endBehavior] = playlist.endBehavior.wire
+                it[enqueuePolicy] = playlist.enqueuePolicy.wire
+            }
+            playlistItemsTable.deleteWhere { displayId eq playlist.displayId.toBytes() }
+            playlist.items.forEachIndexed { index, item ->
+                playlistItemsTable.insert {
+                    it[itemId] = item.itemId.toBytes()
+                    it[displayId] = playlist.displayId.toBytes()
+                    it[queueIndex] = index
+                    it[url] = item.url
+                    it[lang] = item.lang
+                    it[title] = item.title
+                    it[pending] = item.pending
+                    it[requesterId] = item.requesterId.toBytes()
+                }
+            }
+        }
+    }
+
+    /** Removes a display's playlist rows (called when the display itself is deleted). */
+    fun deletePlaylist(displayId: UUID) {
+        val displayBytes = displayId.toBytes()
+        transaction(db) {
+            playlistItemsTable.deleteWhere { playlistItemsTable.displayId eq displayBytes }
+            playlistTable.deleteWhere { playlistTable.displayId eq displayBytes }
+        }
     }
 
     /** Applies common properties from a row to a display data object, such as URL and playback mode. */

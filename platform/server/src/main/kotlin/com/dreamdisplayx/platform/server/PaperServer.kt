@@ -1,4 +1,4 @@
-﻿package com.dreamdisplayx.platform.server
+package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
@@ -76,6 +76,7 @@ class PaperServer : JavaPlugin() {
 
         WatchPartyManager.init(PaperPlaybackTransport)
         TimelineManager.init(PaperPlaybackTransport)
+        PlaylistManager.init(PaperPlaybackTransport, storage.loadAllPlaylists())
         FullscreenBroadcastManager.init(PaperPlaybackTransport)
         FullscreenBroadcastManager.restore()
         PipPinManager.init(PaperPlaybackTransport)

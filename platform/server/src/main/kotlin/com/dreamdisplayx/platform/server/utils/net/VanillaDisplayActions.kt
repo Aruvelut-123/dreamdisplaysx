@@ -19,6 +19,7 @@ import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.meta.VersionState
 import com.dreamdisplayx.platform.server.playback.PlaybackContexts
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
+import com.dreamdisplayx.platform.server.playback.PlaylistManager
 import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.playback.WatchPartyManager
 import com.dreamdisplayx.platform.server.utils.MessageUtil
@@ -250,6 +251,7 @@ object VanillaDisplayActions {
         val displayData = DisplayManager.getDisplayData(displayId) ?: return
         TimelineManager.sendCurrent(displayData, player.uuid)
         WatchPartyManager.sendCurrent(displayData, player.uuid)
+        PlaylistManager.sendTo(displayId, player.uuid)
     }
 
     /** Applies a client-reported media duration to the display's server timeline (SYNCED/BROADCAST only). */

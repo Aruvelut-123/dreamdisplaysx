@@ -19,6 +19,7 @@ import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.playback.PipPinManager
 import com.dreamdisplayx.platform.server.playback.ScheduledPlaybackManager
+import com.dreamdisplayx.platform.server.playback.PlaylistManager
 import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.playback.WatchPartyManager
 import com.dreamdisplayx.platform.server.utils.MessageUtil
@@ -120,6 +121,7 @@ object DisplayManager {
             displays.remove(display.id)
             proximityIndex.forgetDisplay(display.id)
             TimelineManager.remove(display.id)
+            PlaylistManager.onDisplayRemoved(display.id)
             WatchPartyManager.remove(display.id)
             FullscreenBroadcastManager.onDisplayRemoved(display.id)
             PipPinManager.onDisplayRemoved(display.id)
@@ -278,6 +280,7 @@ object DisplayManager {
         runAsync { getInstance().storage.deleteDisplay(displayData) }
         broadcastDelete(displayData)
         TimelineManager.remove(displayData.id)
+        PlaylistManager.onDisplayRemoved(displayData.id)
         WatchPartyManager.remove(displayData.id)
         FullscreenBroadcastManager.onDisplayRemoved(displayData.id)
         PipPinManager.onDisplayRemoved(displayData.id)
@@ -429,6 +432,7 @@ object DisplayManager {
         val receivers = VanillaServerState.server?.let { getReceivers(data, it) }.orEmpty()
         displays.remove(data.id)
         TimelineManager.remove(data.id)
+        PlaylistManager.onDisplayRemoved(data.id)
         WatchPartyManager.remove(data.id)
         FullscreenBroadcastManager.onDisplayRemoved(data.id)
         PipPinManager.onDisplayRemoved(data.id)

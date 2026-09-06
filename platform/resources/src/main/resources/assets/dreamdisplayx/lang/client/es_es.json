@@ -1,4 +1,4 @@
-{
+﻿{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "Local",
   "dreamdisplayx.mode.synced": "Sincronizado",
@@ -100,7 +100,16 @@
   "dreamdisplayx.sort.unwatched": "Sin ver",
   "dreamdisplayx.sort.watched": "Vistos",
   "dreamdisplayx.ui.custom": "Enlace",
-  "dreamdisplayx.sort.my_links": "Mis enlaces",
-  "dreamdisplayx.suggestions.no_links": "Aún no hay enlaces guardados. Pega arriba un enlace de vídeo para reproducirlo.",
+  "dreamdisplayx.ui.playlist": "Playlist",
+  "dreamdisplayx.ui.playlist_empty": "Queue is empty. Add a video link below.",
+  "dreamdisplayx.ui.playlist_add_hint": "Video URL...",
+  "dreamdisplayx.ui.playlist_title_hint": "Title (optional)",
+  "dreamdisplayx.ui.playlist_by": "by ",
+  "dreamdisplayx.ui.playlist_policy_everyone": "Everyone can add",
+  "dreamdisplayx.ui.playlist_policy_approval": "Owner approval needed",
+  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",  "dreamdisplayx.sort.my_links": "Mis enlaces",
+  "dreamdisplayx.ui.playlist_end_pause": "Pause at end",
+  "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
+  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",  "dreamdisplayx.suggestions.no_links": "Aún no hay enlaces guardados. Pega arriba un enlace de vídeo para reproducirlo.",
   "dreamdisplayx.debug.commit": "unknown"
 }

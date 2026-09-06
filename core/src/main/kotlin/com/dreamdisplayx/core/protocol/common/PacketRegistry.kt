@@ -15,6 +15,8 @@ import com.dreamdisplayx.core.protocol.common.packets.FullscreenState
 import com.dreamdisplayx.core.protocol.common.packets.PipPin
 import com.dreamdisplayx.core.protocol.common.packets.PlaybackCommand
 import com.dreamdisplayx.core.protocol.common.packets.PlatformCredentials
+import com.dreamdisplayx.core.protocol.common.packets.PlaylistCommand
+import com.dreamdisplayx.core.protocol.common.packets.PlaylistState
 import com.dreamdisplayx.core.protocol.common.packets.RadiusPreview
 import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
 import com.dreamdisplayx.core.protocol.common.packets.RemoteControlOpen
@@ -95,6 +97,8 @@ object PacketRegistry {
         Entry(PacketType.REPORT_POSITION, ReportPosition::class, ReportPosition.serializer()),
         Entry(PacketType.PLATFORM_CREDENTIALS, PlatformCredentials::class, PlatformCredentials.serializer()),
         Entry(PacketType.SAME_CONTENT_STATE, SameContentState::class, SameContentState.serializer()),
+        Entry(PacketType.PLAYLIST_STATE, PlaylistState::class, PlaylistState.serializer()),
+        Entry(PacketType.PLAYLIST_COMMAND, PlaylistCommand::class, PlaylistCommand.serializer()),
     )
 
     private val byId = entries.associateBy { it.id }

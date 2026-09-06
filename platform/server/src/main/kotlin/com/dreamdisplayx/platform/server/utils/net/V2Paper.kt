@@ -14,6 +14,7 @@ import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.PlayerManager
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.playback.PipPinManager
+import com.dreamdisplayx.platform.server.playback.PlaylistManager
 import com.dreamdisplayx.platform.server.proxy.ProxyBridge
 import com.dreamdisplayx.platform.server.utils.WorldGuardRegions
 import io.github.arnodoelinger.platformweaver.PaperOnly
@@ -144,6 +145,13 @@ object PaperV2Networking : PluginMessageListener {
             } else {
                 PipPinManager.unpin(player.uniqueId, packet.id)
             }
+
+            is PlaylistCommand -> PlaylistManager.onCommand(
+                senderId = player.uniqueId,
+                senderName = player.name,
+                isSenderAdmin = player.hasPermission(PaperServer.config.permissions.deleteOthers),
+                packet = packet,
+            )
 
             else -> logger.debug("Ignoring non-serverbound v2 packet {}.", packet::class.simpleName)
         }

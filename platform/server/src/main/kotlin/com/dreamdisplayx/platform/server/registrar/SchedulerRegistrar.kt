@@ -5,6 +5,7 @@ import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StateManager
 import com.dreamdisplayx.platform.server.meta.Updater
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
+import com.dreamdisplayx.platform.server.playback.PlaylistManager
 import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.playback.WatchPartyManager
 import com.dreamdisplayx.platform.server.proxy.ProxyBridge
@@ -44,6 +45,7 @@ object SchedulerRegistrar {
                 StateManager.tickBroadcast()
             }
             TimelineManager.tick()
+            PlaylistManager.tick()
             WatchPartyManager.tick()
             FullscreenBroadcastManager.tick()
             ProxyBridge.tick()

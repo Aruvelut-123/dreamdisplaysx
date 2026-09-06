@@ -58,6 +58,10 @@ object ClientPacketManager {
             }
 
             is FullscreenState -> FullscreenController.handle(packet)
+            is PlaylistState -> {
+                PlaylistStateStore.apply(packet)
+                if (packet.currentIndex < 0) PlaylistStateStore.remove(packet.displayId)
+            }
             is RemotePlaybackToggle -> DisplayRegistry.screens[packet.id]?.setPaused(packet.paused)
             is RemoteControlOpen -> DisplayRegistry.screens[packet.displayId]?.let { screen ->
                 com.dreamdisplayx.platform.client.ui.DisplayMenu.open(screen)
@@ -116,10 +120,10 @@ object ClientPacketManager {
         DisplayRegistry.unloadedScreens.remove(packet.id)
         DisplayStorage.removeDisplay(packet.id)
         ClientSettingsStore.remove(packet.id)
+        PlaylistStateStore.remove(packet.id)
         logger.info("Display deleted and removed from saved data: ${packet.id}.")
     }
 
-    /** Drops the listed displays from the registry (active or unloaded), display system, and saved data. */
     private fun handleClearCache(packet: ClearCache) {
         packet.ids.forEach { uuid ->
             DisplayRegistry.screens[uuid]?.let { DisplayRegistry.unregisterScreen(it) }
@@ -127,6 +131,7 @@ object ClientPacketManager {
             DreamServices.registry.getOrNull<DisplaySystem>()?.removeDisplay(DisplayId(uuid))
             DisplayStorage.removeDisplay(uuid)
             ClientSettingsStore.remove(uuid)
+            PlaylistStateStore.remove(uuid)
         }
     }
 

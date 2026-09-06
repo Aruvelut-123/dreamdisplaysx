@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.playback
 
+import com.dreamdisplayx.api.playback.model.DisplayPlaylist
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import java.util.*
@@ -51,4 +52,16 @@ interface PlaybackTransport {
      * dispatching to the platform-typed `saveDisplay` overload.
      */
     fun saveDisplay(display: DisplayData)
+
+    /** Applies [display]'s current URL / lang to clients as a fresh video change (DisplayInfo + clock reset). */
+    fun notifyVideoChanged(display: DisplayData)
+
+    /** Loads every persisted playlist from the platform storage backend. */
+    fun loadAllPlaylists(): List<DisplayPlaylist>
+
+    /** Upserts [playlist] into the platform storage backend. */
+    fun savePlaylist(playlist: DisplayPlaylist)
+
+    /** Removes [displayId]'s playlist rows from the platform storage backend. */
+    fun deletePlaylist(displayId: UUID)
 }

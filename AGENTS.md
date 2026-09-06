@@ -72,6 +72,12 @@
 
 ## Changes & Commits
 
+### 2026-02-DD — Database-backed per-display playlists
+- Playlist packets (V3 `PlaylistState` / `PlaylistCommand`, ids 30/31) and wire enums (`PlaylistEndBehavior`, `PlaylistEnqueuePolicy`, `PlaylistCommandAction`)
+- Server `PlaylistManager` with end-behavior auto-advance and enqueue-policy permission model; `PlaybackTransport` gains `loadAllPlaylists`/`savePlaylist`/`deletePlaylist`/`notifyVideoChanged`
+- `playlists` + `playlist_items` tables in SQLite/MySQL; cleanup on display delete; playlist snapshot sent on `RequestSync`
+- Client `PlaylistStateStore` mirror + two-tab display menu (playlist / settings) with `PlaylistPanel`
+
 ### 2025-01-DD — Global Bilibili login + cross-server sync
 - Global credential (single account per server/network)
 - Broadcast to all v2 clients on login/logout/refresh

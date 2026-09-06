@@ -86,6 +86,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Experimental ReplayMod & Flashback compatibility** — replay rendering can freeze display media and follow the replay timeline, with pause / seek / video-change / GUI actions using replay markers. Flashback support is optional and reflection-based (works through Sinytra Connector on NeoForge). A global display-audio multiplier lives in Minecraft's Sound Options; display audio is not yet captured into replay exports.
 - **Ultra-low network impact** — minimal impact for your traffic
 - **Persistent displays** — settings survive server restarts and unloading
+- **Per-display playlists** — database-backed queue (SQLite/MySQL) with add/approve/remove/skip, configurable end-of-queue behavior (pause / continue / loop), and add-permission policies (everyone / owner approval / owner only), all persisted in the database
 
 </div>
 

@@ -84,9 +84,105 @@ enum class DisplayAccess {
     }
 }
 
+/** Playlist completion policies; travels on the wire as its [ordinal] int. */
+@DreamDisplaysXUnstableApi
+@Serializable
+enum class PlaylistEndBehavior {
+    /** Stop on completion: hold the last frame paused. */
+    PAUSE,
+
+    /** Advance to the next item; hold the last frame paused after the final one. */
+    CONTINUE,
+
+    /** Advance to the next item; wrap around to the first after the final one. */
+    LOOP_CURRENT,
+    ;
+
+    /** The append-only wire value for this behavior. */
+    val wire: Int get() = ordinal
+
+    companion object {
+        private val byWire = entries.associateBy { it.ordinal }
+
+        /** The behavior for [wire], or [PAUSE] for unknown values (forward-compat with newer peers). */
+        fun fromWire(wire: Int): PlaylistEndBehavior = byWire[wire] ?: PAUSE
+    }
+}
+
+/** Who may enqueue media on a display's playlist. */
+@DreamDisplaysXUnstableApi
+@Serializable
+enum class PlaylistEnqueuePolicy {
+    /** Any nearby player may add items; they take effect immediately. */
+    EVERYONE,
+
+    /** Any nearby player may add items, but they wait for the display owner's approval. */
+    OWNER_APPROVAL,
+
+    /** Only the display's owner and server admins may add items. */
+    OWNER_ONLY,
+    ;
+
+    /** The append-only wire value for this policy. */
+    val wire: Int get() = ordinal
+
+    companion object {
+        private val byWire = entries.associateBy { it.ordinal }
+
+        /** The policy for [wire], or [OWNER_ONLY] for unknown values (fail closed). */
+        fun fromWire(wire: Int): PlaylistEnqueuePolicy = byWire[wire] ?: OWNER_ONLY
+    }
+}
+
+/** Playlist control intents a client can send in a `PlaylistCommand` packet. */
+@DreamDisplaysXUnstableApi
+enum class PlaylistCommandAction {
+    /** Add the command's url to the queue at its position (append when -1). */
+    ADD,
+
+    /** Remove the referenced item from the queue. */
+    REMOVE,
+
+    /** Move the referenced item to the command's position. */
+    MOVE,
+
+    /** Clear every item from the queue. */
+    CLEAR,
+
+    /** Jump playback to the referenced item (owner / admins only). */
+    SKIP_TO,
+
+    /** Skip to the next item (owner / admins only). */
+    NEXT,
+
+    /** Update the end-of-playlist behavior carried in the command. */
+    SET_END_BEHAVIOR,
+
+    /** Update who may enqueue, carried in the command. */
+    SET_ENQUEUE_POLICY,
+
+    /** Approve a pending item. */
+    APPROVE,
+
+    /** Reject a pending item. */
+    REJECT,
+    ;
+
+    /** The append-only wire value for this action. */
+    val wire: Int get() = ordinal
+
+    companion object {
+        private val byWire = entries.associateBy { it.ordinal }
+
+        /** The action for [wire], or null for unknown values (ignore unknown intents). */
+        fun fromWire(wire: Int): PlaylistCommandAction? = byWire[wire]
+    }
+}
+
 /** Lifecycle state of a watch-party session (see `WatchPartyStart` / `WatchPartyState`). */
 @DreamDisplaysXUnstableApi
 enum class WatchPartySessionState {
+
     /** Host started the party and the display is session-locked; URL is being applied. */
     CREATED,
 

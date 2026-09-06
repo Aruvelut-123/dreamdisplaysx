@@ -12,6 +12,8 @@ import com.dreamdisplayx.core.protocol.common.packets.FullscreenState
 import com.dreamdisplayx.core.protocol.common.packets.PipPin
 import com.dreamdisplayx.core.protocol.common.packets.PlaybackCommand
 import com.dreamdisplayx.core.protocol.common.packets.PlatformCredentials
+import com.dreamdisplayx.core.protocol.common.packets.PlaylistCommand
+import com.dreamdisplayx.core.protocol.common.packets.PlaylistState
 import com.dreamdisplayx.core.protocol.common.packets.RadiusPreview
 import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
 import com.dreamdisplayx.core.protocol.common.packets.RemoteControlOpen
@@ -63,7 +65,9 @@ enum class PacketType(
     REPORT_POSITION(23, ReportPosition::class, PacketDirection.CLIENT_TO_SERVER),
     PLATFORM_CREDENTIALS(27, PlatformCredentials::class, PacketDirection.SERVER_TO_CLIENT),
     SAME_CONTENT_STATE(28, SameContentState::class, PacketDirection.SERVER_TO_CLIENT),
-    REMOTE_CONTROL_OPEN(29, RemoteControlOpen::class, PacketDirection.SERVER_TO_CLIENT);
+    REMOTE_CONTROL_OPEN(29, RemoteControlOpen::class, PacketDirection.SERVER_TO_CLIENT),
+    PLAYLIST_STATE(30, PlaylistState::class, PacketDirection.SERVER_TO_CLIENT),
+    PLAYLIST_COMMAND(31, PlaylistCommand::class, PacketDirection.CLIENT_TO_SERVER);
 
     companion object {
         private val byId = entries.associateBy { it.id }

@@ -404,9 +404,61 @@ message SameContentState {
   optional int32 mode = 10;
 }
 
+// serial name 'com.dreamdisplayx.core.protocol.common.packets.PlaylistState'
+message PlaylistState {
+  // WARNING: a default value decoded when value is missing
+  optional Uuid displayId = 1;
+  // WARNING: a default value decoded when value is missing
+  repeated PlaylistItem items = 2;
+  // WARNING: a default value decoded when value is missing
+  optional int32 currentIndex = 3;
+  // WARNING: a default value decoded when value is missing
+  optional int32 endBehavior = 4;
+  // WARNING: a default value decoded when value is missing
+  optional int32 enqueuePolicy = 5;
+}
+
+// serial name 'com.dreamdisplayx.core.protocol.common.packets.PlaylistCommand'
+message PlaylistCommand {
+  // WARNING: a default value decoded when value is missing
+  optional Uuid displayId = 1;
+  // WARNING: a default value decoded when value is missing
+  optional int32 action = 2;
+  // WARNING: a default value decoded when value is missing
+  optional Uuid itemId = 3;
+  // WARNING: a default value decoded when value is missing
+  optional string url = 4;
+  // WARNING: a default value decoded when value is missing
+  optional string lang = 5;
+  // WARNING: a default value decoded when value is missing
+  optional string title = 6;
+  // WARNING: a default value decoded when value is missing
+  optional int32 position = 7;
+  // WARNING: a default value decoded when value is missing
+  optional int32 endBehavior = 8;
+  // WARNING: a default value decoded when value is missing
+  optional int32 enqueuePolicy = 9;
+}
+
 message Uuid {
   // WARNING: a default value decoded when value is missing
   optional fixed64 msb = 1;
   // WARNING: a default value decoded when value is missing
   optional fixed64 lsb = 2;
+}
+
+// serial name 'com.dreamdisplayx.core.protocol.common.packets.PlaylistItem'
+message PlaylistItem {
+  // WARNING: a default value decoded when value is missing
+  optional Uuid itemId = 1;
+  // WARNING: a default value decoded when value is missing
+  optional string url = 2;
+  // WARNING: a default value decoded when value is missing
+  optional string lang = 3;
+  // WARNING: a default value decoded when value is missing
+  optional string title = 4;
+  // WARNING: a default value decoded when value is missing
+  optional bool pending = 5;
+  // WARNING: a default value decoded when value is missing
+  optional Uuid requesterId = 6;
 }

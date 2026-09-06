@@ -1,10 +1,13 @@
 package com.dreamdisplayx.platform.server.playback
 
+import com.dreamdisplayx.api.playback.model.DisplayPlaylist
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
+import com.dreamdisplayx.platform.server.managers.StateManager
+import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.meta.Scheduler
 import com.dreamdisplayx.platform.server.utils.PlatformUtil
 import com.dreamdisplayx.platform.server.utils.WorldGuardRegions
@@ -99,6 +102,28 @@ object PaperPlaybackTransport : PlaybackTransport {
     override fun saveDisplay(display: DisplayData) {
         val paper = display as? PaperDisplayData ?: return
         Scheduler.runAsync { PaperServer.getInstance().storage.saveDisplay(paper) }
+    }
+
+    /** Applies [display]'s current URL / lang as a fresh video change (DisplayInfo + clock reset). */
+    override fun notifyVideoChanged(display: DisplayData) {
+        val paper = display as? PaperDisplayData ?: return
+        val receivers = DisplayManager.getReceivers(paper)
+        DisplayManager.sendUpdate(paper, receivers)
+        StateManager.resetAndBroadcast(paper)
+        TimelineManager.onVideoChanged(paper)
+    }
+
+    /** Loads every persisted playlist via the `Paper` storage backend. */
+    override fun loadAllPlaylists(): List<DisplayPlaylist> = PaperServer.getInstance().storage.loadAllPlaylists()
+
+    /** Upserts [playlist] via the `Paper` storage backend. */
+    override fun savePlaylist(playlist: DisplayPlaylist) {
+        PaperServer.getInstance().storage.savePlaylist(playlist)
+    }
+
+    /** Removes [displayId]'s playlist rows via the `Paper` storage backend. */
+    override fun deletePlaylist(displayId: UUID) {
+        PaperServer.getInstance().storage.deletePlaylist(displayId)
     }
 
     /** Builds a synthetic 1x1 [PaperDisplayData] at the origin of the first loaded world. */

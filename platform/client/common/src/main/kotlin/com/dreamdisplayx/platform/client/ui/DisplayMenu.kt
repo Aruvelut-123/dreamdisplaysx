@@ -101,10 +101,14 @@ class DisplayMenu private constructor(
     private lateinit var suggestions: SuggestionsPanel
     private lateinit var preview: PreviewSection
     private lateinit var settings: SettingsSection
+    private lateinit var playlist: PlaylistPanel
     private lateinit var errorPanel: ErrorPanel
     private lateinit var popoutButton: IconButton
     private lateinit var audioTrackButton: IconButton
     private lateinit var subtitleButton: IconButton
+
+    /** Which sub-panel the settings column shows: `false` = display settings, `true` = playlist. */
+    private var showPlaylistTab = false
 
     private var prevQualityListSize = 0
     private var suggestionsRect: UiRect? = null
@@ -450,6 +454,21 @@ class DisplayMenu private constructor(
         suggestions.available = { ds.canSetVideoHere }
 
 
+        playlist = addUi(
+            PlaylistPanel(
+                displayId = ds.uuid,
+                isOwnerOrAdmin = { ds.owner || ds.isAdmin },
+            ),
+        )
+        // Register the panel's vanilla children (URL box, buttons) with the screen so they receive
+        // clicks / typing; the panel itself lays them out inside its own render pass.
+        playlist.children.forEach { addRenderableWidget(it) }
+        // Request the authoritative queue snapshot on open; the server answers via the sync path.
+        com.dreamdisplayx.platform.client.net.ProtocolRouter.send(
+            com.dreamdisplayx.core.protocol.common.packets.RequestSync(ds.uuid),
+        )
+
+
         preview =
             PreviewSection(
                 ds, muteButton, volume, popoutButton, audioTrackButton, subtitleButton, danmakuButton, pauseButton, progress,
@@ -669,9 +688,15 @@ class DisplayMenu private constructor(
         suggestionsRect = layout.suggestions
 
         g.drawPanel(font, layout.preview, Component.translatable("dreamdisplayx.ui.preview").string)
-        g.drawPanel(font, layout.settings, Component.translatable("dreamdisplayx.ui.settings").string)
+        // The settings column carries a two-tab header: display settings / playlist.
+        drawPanelTabs(g, layout.settings)
         preview.render(g, layout.preview, mouseX, mouseY)
-        settings.render(g, layout.settings, mouseX, mouseY)
+        if (showPlaylistTab) {
+            playlist.place(layout.settings)
+            playlist.render(g, mouseX, mouseY, partialTick)
+        } else {
+            settings.render(g, layout.settings, mouseX, mouseY)
+        }
 
         val suggestionsArea = layout.suggestions
         if (suggestionsArea != null) {
@@ -713,8 +738,53 @@ class DisplayMenu private constructor(
 
     override fun onMouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
         if (replayReadOnly) return true
-        return settings.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY) ||
-            audioTrackDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
+        return if (showPlaylistTab) {
+            playlist.handleScroll(mouseY.toInt(), scrollY)
+        } else {
+            settings.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
+        } || audioTrackDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
+    }
+
+    /** Draws the two-tab header (playlist / display settings) atop the settings column. */
+    private fun drawPanelTabs(g: GuiGraphicsCompat, panel: UiRect) {
+        val f = font
+        val tabH = f.lineHeight + 6
+        val tabW = max(110, panel.w / 2)
+        val playlistTab = UiRect(panel.x, panel.y, tabW, tabH)
+        val settingsTab = UiRect(panel.x + tabW, panel.y, panel.w - tabW, tabH)
+        tabPlaylistRect = playlistTab
+        tabSettingsRect = settingsTab
+
+        fun drawTab(rect: UiRect, label: Component, selected: Boolean) {
+            g.fill(rect.x, rect.y, rect.right, rect.bottom,
+                if (selected) UiTheme.PANEL_BORDER else 0x50000000)
+            g.drawText(f, label.string,
+                rect.x + rect.w / 2 - f.width(label) / 2,
+                rect.y + (rect.h - f.lineHeight) / 2,
+                if (selected) UiTheme.TEXT_PRIMARY else UiTheme.TEXT_DIM, false)
+        }
+        drawTab(playlistTab, Component.translatable("dreamdisplayx.ui.playlist"), showPlaylistTab)
+        drawTab(settingsTab, Component.translatable("dreamdisplayx.ui.settings"), !showPlaylistTab)
+
+        // Playlist panel's vanilla children exist only while its tab is visible.
+        playlist.children.forEach { it.visible = showPlaylistTab }
+    }
+
+    private var tabPlaylistRect: UiRect? = null
+    private var tabSettingsRect: UiRect? = null
+
+    /** Handles a click on the two-tab header; returns true when consumed. */
+    private fun handleTabClick(mx: Int, my: Int): Boolean {
+        if (tabPlaylistRect?.contains(mx, my) == true) {
+            showPlaylistTab = true
+            playlist.focusInput()
+            return true
+        }
+        if (tabSettingsRect?.contains(mx, my) == true) {
+            showPlaylistTab = false
+            return true
+        }
+        return false
     }
 
     //? if >=1.21.11 {
@@ -722,7 +792,9 @@ class DisplayMenu private constructor(
         if (replayReadOnly) return true
         val mx = event.x().toInt()
         val my = event.y().toInt()
-        if (event.button() == 0 && settings.handleScrollbarPress(mx, my)) return true
+        if (event.button() == 0 && handleTabClick(mx, my)) return true
+        if (event.button() == 0 && !showPlaylistTab && settings.handleScrollbarPress(mx, my)) return true
+        if (event.button() == 0 && showPlaylistTab && playlist.handleClick(mx, my)) return true
         val onPopoutButton = popoutButton.isMouseOver(mx.toDouble(), my.toDouble())
         if (dropdown.visible && event.button() == 0 && !onPopoutButton && dropdown.handleClick(mx, my)) return true
         val onAudioTrackButton = audioTrackButton.isMouseOver(mx.toDouble(), my.toDouble())
@@ -741,7 +813,6 @@ class DisplayMenu private constructor(
         return settings.handleScrollbarDrag(event.y().toInt()) ||
             audioTrackDropdown.handleDrag(event.y().toInt())
     }
-
     override fun onMouseReleased(event: MouseButtonEvent): Boolean {
         if (replayReadOnly) return true
         return settings.handleScrollbarRelease() ||
@@ -761,7 +832,9 @@ class DisplayMenu private constructor(
         if (replayReadOnly) return true
         val mx = mouseX.toInt()
         val my = mouseY.toInt()
-        if (button == 0 && settings.handleScrollbarPress(mx, my)) return true
+        if (button == 0 && handleTabClick(mx, my)) return true
+        if (button == 0 && !showPlaylistTab && settings.handleScrollbarPress(mx, my)) return true
+        if (button == 0 && showPlaylistTab && playlist.handleClick(mx, my)) return true
         val onPopoutButton = popoutButton.isMouseOver(mouseX, mouseY)
         if (dropdown.visible && button == 0 && !onPopoutButton && dropdown.handleClick(mx, my)) return true
         val onAudioTrackButton = audioTrackButton.isMouseOver(mouseX, mouseY)

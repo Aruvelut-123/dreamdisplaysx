@@ -17,6 +17,7 @@ import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.PlayerManager
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.playback.PipPinManager
+import com.dreamdisplayx.platform.server.playback.PlaylistManager
 import com.dreamdisplayx.platform.server.proxy.VanillaProxyBridge
 import com.dreamdisplayx.platform.server.utils.RegionUtil
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
@@ -140,6 +141,13 @@ object NeoForgeV2Networking {
             } else {
                 PipPinManager.unpin(player.uuid, packet.id)
             }
+
+            is PlaylistCommand -> PlaylistManager.onCommand(
+                senderId = player.uuid,
+                senderName = player.gameProfile.name,
+                isSenderAdmin = VanillaDisplayActions.isAdmin(player),
+                packet = packet,
+            )
 
             else -> logger.debug("Ignoring non-serverbound v2 packet {}.", packet::class.simpleName)
         }

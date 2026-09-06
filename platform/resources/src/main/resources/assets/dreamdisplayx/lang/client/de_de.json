@@ -1,4 +1,4 @@
-{
+﻿{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "Lokal",
   "dreamdisplayx.mode.synced": "Synchronisiert",
@@ -100,7 +100,16 @@
   "dreamdisplayx.sort.unwatched": "Ungesehen",
   "dreamdisplayx.sort.watched": "Gesehen",
   "dreamdisplayx.ui.custom": "Link",
-  "dreamdisplayx.sort.my_links": "Meine Links",
-  "dreamdisplayx.suggestions.no_links": "Noch keine gespeicherten Links. Füge oben einen Videolink ein, um ihn abzuspielen.",
+  "dreamdisplayx.ui.playlist": "Playlist",
+  "dreamdisplayx.ui.playlist_empty": "Queue is empty. Add a video link below.",
+  "dreamdisplayx.ui.playlist_add_hint": "Video URL...",
+  "dreamdisplayx.ui.playlist_title_hint": "Title (optional)",
+  "dreamdisplayx.ui.playlist_by": "by ",
+  "dreamdisplayx.ui.playlist_policy_everyone": "Everyone can add",
+  "dreamdisplayx.ui.playlist_policy_approval": "Owner approval needed",
+  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",  "dreamdisplayx.sort.my_links": "Meine Links",
+  "dreamdisplayx.ui.playlist_end_pause": "Pause at end",
+  "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
+  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",  "dreamdisplayx.suggestions.no_links": "Noch keine gespeicherten Links. Füge oben einen Videolink ein, um ihn abzuspielen.",
   "dreamdisplayx.debug.commit": "unknown"
 }

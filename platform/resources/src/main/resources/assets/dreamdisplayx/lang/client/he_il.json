@@ -1,4 +1,4 @@
-{
+﻿{
   "dreamdisplayx.ui.title": "Dream DisplaysX",
   "dreamdisplayx.mode.local": "מקומי",
   "dreamdisplayx.mode.synced": "מסונכרן",
@@ -100,7 +100,16 @@
   "dreamdisplayx.sort.unwatched": "לא נצפו",
   "dreamdisplayx.sort.watched": "נצפו",
   "dreamdisplayx.ui.custom": "קישור",
-  "dreamdisplayx.sort.my_links": "הקישורים שלי",
-  "dreamdisplayx.suggestions.no_links": "אין עדיין קישורים שמורים. הדביקו קישור לסרטון למעלה כדי להפעיל אותו.",
+  "dreamdisplayx.ui.playlist": "Playlist",
+  "dreamdisplayx.ui.playlist_empty": "Queue is empty. Add a video link below.",
+  "dreamdisplayx.ui.playlist_add_hint": "Video URL...",
+  "dreamdisplayx.ui.playlist_title_hint": "Title (optional)",
+  "dreamdisplayx.ui.playlist_by": "by ",
+  "dreamdisplayx.ui.playlist_policy_everyone": "Everyone can add",
+  "dreamdisplayx.ui.playlist_policy_approval": "Owner approval needed",
+  "dreamdisplayx.ui.playlist_policy_owner": "Owner only",  "dreamdisplayx.sort.my_links": "הקישורים שלי",
+  "dreamdisplayx.ui.playlist_end_pause": "Pause at end",
+  "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
+  "dreamdisplayx.ui.playlist_end_loop": "Loop queue",  "dreamdisplayx.suggestions.no_links": "אין עדיין קישורים שמורים. הדביקו קישור לסרטון למעלה כדי להפעיל אותו.",
   "dreamdisplayx.debug.commit": "unknown"
 }

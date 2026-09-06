@@ -1,10 +1,13 @@
 package com.dreamdisplayx.platform.server.playback
 
+import com.dreamdisplayx.api.playback.model.DisplayPlaylist
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.managers.DisplayManager
+import com.dreamdisplayx.platform.server.managers.StateManager
+import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.utils.RegionUtil
 import com.dreamdisplayx.platform.server.utils.net.VanillaDisplayActions
@@ -96,6 +99,29 @@ object VanillaPlaybackTransport : PlaybackTransport {
     override fun saveDisplay(display: DisplayData) {
         val vanilla = display as? VanillaDisplayData ?: return
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(vanilla) }
+    }
+
+    /** Applies [display]'s current URL / lang as a fresh video change (DisplayInfo + clock reset). */
+    override fun notifyVideoChanged(display: DisplayData) {
+        val vanilla = display as? VanillaDisplayData ?: return
+        val s = server ?: return
+        val receivers = DisplayManager.getReceivers(vanilla, s)
+        DisplayManager.sendUpdate(vanilla, receivers)
+        StateManager.resetAndBroadcast(vanilla.id, receivers)
+        TimelineManager.onVideoChanged(vanilla)
+    }
+
+    /** Loads every persisted playlist via the vanilla storage backend. */
+    override fun loadAllPlaylists(): List<DisplayPlaylist> = VanillaServerState.storage?.loadAllPlaylists().orEmpty()
+
+    /** Upserts [playlist] via the vanilla storage backend. */
+    override fun savePlaylist(playlist: DisplayPlaylist) {
+        ServerCoroutines.io.launch { VanillaServerState.storage?.savePlaylist(playlist) }
+    }
+
+    /** Removes [displayId]'s playlist rows via the vanilla storage backend. */
+    override fun deletePlaylist(displayId: UUID) {
+        ServerCoroutines.io.launch { VanillaServerState.storage?.deletePlaylist(displayId) }
     }
 
     /** Builds a synthetic 1x1 [VanillaDisplayData] at the origin of the first loaded level. */
