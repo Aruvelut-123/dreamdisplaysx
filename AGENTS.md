@@ -72,6 +72,14 @@
 
 ## Changes & Commits
 
+### 2026-02-DD — Playlist UX fixes: playlist mode toggle, tab visibility, auto-queue, danmaku gating, player stacking
+- `DisplayPlaylist.enabled` persisted in DB (`enabled` column, default true); `PlaylistCommandAction.SET_ENABLED` (owner/admin only) plus wire fields `PlaylistState.enabled` (proto field 6) / `PlaylistCommand.enabled` (proto field 10)
+- Server auto-plays the first non-pending item when the queue gains items while disabled; `PlaylistManager` skips auto-advance when `enabled=false`
+- Two-tab menu now paints a proper panel background per tab and per-frame toggles child visibility (`playlist.children.visible` / `settings.setControlsVisible`) so no controls bleed across tabs
+- Clicking a suggested video enqueues it when playlist mode is on (`PlaylistCommandAction.ADD`), otherwise plays directly
+- Danmaku overlay is gated on `isVideoStarted && hasTexture` so comments never appear before the first frame
+- `DisplayMediaController.load()` now retries `awaitStopped()` with a bounded loop (15s total) instead of creating a replacement immediately, preventing multiple native players stacking during rapid video switches
+
 ### 2026-02-DD — Database-backed per-display playlists
 - Playlist packets (V3 `PlaylistState` / `PlaylistCommand`, ids 30/31) and wire enums (`PlaylistEndBehavior`, `PlaylistEnqueuePolicy`, `PlaylistCommandAction`)
 - Server `PlaylistManager` with end-behavior auto-advance and enqueue-policy permission model; `PlaybackTransport` gains `loadAllPlaylists`/`savePlaylist`/`deletePlaylist`/`notifyVideoChanged`
