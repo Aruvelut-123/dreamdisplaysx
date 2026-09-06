@@ -72,6 +72,10 @@
 
 ## Changes & Commits
 
+### 2026-02-DD — Synchronous native stop on video switch; playlist requester names
+- `MediaPlayer.stop()` calls `LibVlcSessionManager.stopNow()` on the caller's thread BEFORE queueing the executor teardown: the single vlc-ctrl executor can sit blocked behind a slow media-attach task, which left the old player's vout alive past `awaitStopped()` and stacked a second native player on the display (two "libvlc video setup" lines ~1s apart for different URLs in the 2026-09-06 22:28 log). The previous load()-side bounded-retry fix remains as a second layer.
+- Playlist "by" tag resolves the adding player's NAME end-to-end: `PlaylistItemRecord.requesterName` (+ wire `PlaylistItem.requesterName`, proto field 7, + `requester_name` column auto-migrated by `MigrationUtils`), filled by `PlaylistManager` from the command sender, shown by `PlaylistPanel` with a UUID-prefix fallback for legacy rows. Permission checks still compare UUIDs — only the display changed.
+
 ### 2026-02-DD — Playlist UX fixes: playlist mode toggle, tab visibility, auto-queue, danmaku gating, player stacking
 - `DisplayPlaylist.enabled` persisted in DB (`enabled` column, default true); `PlaylistCommandAction.SET_ENABLED` (owner/admin only) plus wire fields `PlaylistState.enabled` (proto field 6) / `PlaylistCommand.enabled` (proto field 10)
 - Server auto-plays the first non-pending item when the queue gains items while disabled; `PlaylistManager` skips auto-advance when `enabled=false`
