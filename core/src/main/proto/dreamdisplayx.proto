@@ -416,6 +416,8 @@ message PlaylistState {
   optional int32 endBehavior = 4;
   // WARNING: a default value decoded when value is missing
   optional int32 enqueuePolicy = 5;
+  // WARNING: a default value decoded when value is missing
+  optional bool enabled = 6;
 }
 
 // serial name 'com.dreamdisplayx.core.protocol.common.packets.PlaylistCommand'
@@ -438,6 +440,8 @@ message PlaylistCommand {
   optional int32 endBehavior = 8;
   // WARNING: a default value decoded when value is missing
   optional int32 enqueuePolicy = 9;
+  // WARNING: a default value decoded when value is missing
+  optional bool enabled = 10;
 }
 
 message Uuid {

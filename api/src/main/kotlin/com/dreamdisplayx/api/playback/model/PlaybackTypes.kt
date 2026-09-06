@@ -166,6 +166,9 @@ enum class PlaylistCommandAction {
 
     /** Reject a pending item. */
     REJECT,
+
+    /** Toggle playlist mode for the display, carried in the command's `enabled` flag. */
+    SET_ENABLED,
     ;
 
     /** The append-only wire value for this action. */

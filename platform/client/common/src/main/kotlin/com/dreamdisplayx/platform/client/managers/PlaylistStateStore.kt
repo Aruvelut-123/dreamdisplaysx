@@ -27,7 +27,18 @@ object PlaylistStateStore {
     }
 
     /** Sends one queue command for [displayId]; the authoritative echo refreshes the panel. */
-    fun send(displayId: java.util.UUID, action: Int, itemId: java.util.UUID? = null, position: Int = -1, url: String = "", lang: String = "", title: String = "", endBehavior: Int = 0, enqueuePolicy: Int = 0) {
+    fun send(
+        displayId: java.util.UUID,
+        action: Int,
+        itemId: java.util.UUID? = null,
+        position: Int = -1,
+        url: String = "",
+        lang: String = "",
+        title: String = "",
+        endBehavior: Int = 0,
+        enqueuePolicy: Int = 0,
+        enabled: Boolean = true,
+    ) {
         Initializer.sendPacket(
             PlaylistCommand(
                 displayId = displayId,
@@ -39,6 +50,7 @@ object PlaylistStateStore {
                 title = title,
                 endBehavior = endBehavior,
                 enqueuePolicy = enqueuePolicy,
+                enabled = enabled,
             ),
         )
     }

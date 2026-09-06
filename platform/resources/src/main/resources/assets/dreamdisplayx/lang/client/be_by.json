@@ -102,6 +102,8 @@
   "dreamdisplayx.ui.custom": "Спасылка",
   "dreamdisplayx.ui.playlist": "Playlist",
   "dreamdisplayx.ui.playlist_empty": "Queue is empty. Add a video link below.",
+  "dreamdisplayx.ui.playlist_mode_on": "Рэжым плэйліста: УКЛ",
+  "dreamdisplayx.ui.playlist_mode_off": "Рэжым плэйліста: ВЫКЛ",
   "dreamdisplayx.ui.playlist_add_hint": "Video URL...",
   "dreamdisplayx.ui.playlist_title_hint": "Title (optional)",
   "dreamdisplayx.ui.playlist_by": "by ",

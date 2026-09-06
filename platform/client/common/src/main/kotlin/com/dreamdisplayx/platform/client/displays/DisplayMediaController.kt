@@ -61,7 +61,16 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         // Wait for the old player's stop() to finish before constructing the new one.
         if (oldPlayer != null && !oldPlayer.awaitStopped()) {
             org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/DisplayMediaController")
-                .warn("Old player did not stop within timeout; creating replacement anyway.")
+                .warn("Old player did not stop within timeout; waiting more before creating replacement.")
+            // Try to wait longer in a loop with a total cap to avoid stacking multiple native players.
+            var waited = 0L
+            val maxWaitMs = 15_000L // Total max wait time: 15 seconds
+            while (!oldPlayer.awaitStopped(5_000L)) { // Check every 5 seconds
+                waited += 5_000L
+                if (waited >= maxWaitMs) break // Stop waiting after total cap
+                org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/DisplayMediaController")
+                    .warn("Still waiting for old player to stop (total: ${waited / 1000}s/${maxWaitMs / 1000}s)...")
+            }
         }
 
         screen.onVideoSwapped(videoUrl, lang)

@@ -64,6 +64,7 @@ object PlaylistManager {
         when (action) {
             PlaylistCommandAction.SET_END_BEHAVIOR,
             PlaylistCommandAction.SET_ENQUEUE_POLICY,
+            PlaylistCommandAction.SET_ENABLED,
             -> if (!isOwner && !isSenderAdmin) return false
 
             PlaylistCommandAction.SKIP_TO,
@@ -180,6 +181,9 @@ object PlaylistManager {
             PlaylistCommandAction.SET_ENQUEUE_POLICY ->
                 playlist.copy(enqueuePolicy = PlaylistEnqueuePolicy.fromWire(packet.enqueuePolicy))
 
+            PlaylistCommandAction.SET_ENABLED ->
+                playlist.copy(enabled = packet.enabled)
+
             PlaylistCommandAction.APPROVE -> {
                 val index = playlist.items.indexOfFirst { it.itemId == packet.itemId && it.pending }
                 if (index < 0) return false
@@ -200,6 +204,15 @@ object PlaylistManager {
         }
 
         playlists[display.id] = updated
+        // Playlist mode with an idle queue: the first enqueued (non-pending) item starts playing
+        // right away, mirroring the direct-pick behaviour users expect from a queue start.
+        if (updated.enabled && updated.currentIndex < 0) {
+            val firstPlayable = updated.items.indexOfFirst { !it.pending }
+            if (firstPlayable >= 0) {
+                playIndex(display, updated, firstPlayable)
+                return true // playIndex persisted + broadcast already
+            }
+        }
         persist(display.id)
         broadcast(display.id)
         return true
@@ -231,6 +244,7 @@ object PlaylistManager {
     fun tick() {
         if (playlists.isEmpty()) return
         for ((displayId, playlist) in playlists) {
+            if (!playlist.enabled) continue
             val index = playlist.currentIndex
             if (index < 0 || index >= playlist.items.size) continue
             val item = playlist.items[index]
@@ -277,6 +291,7 @@ object PlaylistManager {
             currentIndex = playlist.currentIndex,
             endBehavior = playlist.endBehavior.wire,
             enqueuePolicy = playlist.enqueuePolicy.wire,
+            enabled = playlist.enabled,
             items = playlist.items.map { item ->
                 PlaylistItem(
                     itemId = item.itemId,

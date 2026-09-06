@@ -137,6 +137,17 @@ class SettingsSection(
         row.labelHover = UiRect(x + 6, textY, font.width(label), font.lineHeight)
     }
 
+    /** Hides or shows every control owned by the settings panel (rows + owner actions). */
+    fun setControlsVisible(visible: Boolean) {
+        for (row in rows) {
+            row.control.visible = visible
+            row.reset.visible = visible
+        }
+        for (button in ownerActions) {
+            button?.visible = visible
+        }
+    }
+
     /** Draws the vertical scrollbar along the right edge of the panel when rows overflow. */
     private fun drawScrollbar(
         g: GuiGraphicsCompat,

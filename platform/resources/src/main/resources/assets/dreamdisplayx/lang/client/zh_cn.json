@@ -139,6 +139,8 @@
   "dreamdisplayx.ui.custom": "链接",
   "dreamdisplayx.ui.playlist": "播放列表",
   "dreamdisplayx.ui.playlist_empty": "队列为空，请在下方添加视频链接。",
+  "dreamdisplayx.ui.playlist_mode_on": "播放列表模式：开",
+  "dreamdisplayx.ui.playlist_mode_off": "播放列表模式：关",
   "dreamdisplayx.ui.playlist_add_hint": "视频链接...",
   "dreamdisplayx.ui.playlist_title_hint": "标题（可选）",
   "dreamdisplayx.ui.playlist_by": "由 ",

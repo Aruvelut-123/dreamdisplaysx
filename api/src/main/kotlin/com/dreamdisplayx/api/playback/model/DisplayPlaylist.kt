@@ -29,6 +29,13 @@ data class DisplayPlaylist(
 
     /** Who may add items to this playlist. */
     val enqueuePolicy: PlaylistEnqueuePolicy = PlaylistEnqueuePolicy.OWNER_ONLY,
+
+    /**
+     * Whether playlist mode is active for this display. When true, picking a video adds it to the
+     * queue (and starts playback when the queue was idle); when false the display plays directly
+     * like a single video and the queue does not auto-advance.
+     */
+    val enabled: Boolean = true,
 )
 
 /**

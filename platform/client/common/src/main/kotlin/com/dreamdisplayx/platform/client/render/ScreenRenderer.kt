@@ -150,6 +150,11 @@ object ScreenRenderer : ClientRenderService {
     private fun renderDanmakuOverlay(
         displayScreen: DisplayScreen, stack: PoseStack, facing: DisplayFacing, w: Int, h: Int, lift: Float, drawQuad: QuadRenderer,
     ) {
+        // Danmaku only exists on top of a rendered video: before the first frame arrives the screen
+        // shows the loading placeholder, and queueing danmaku onto it looks like the text appears
+        // out of nowhere. Gate on the same condition that selects the video quad (isVideoStarted +
+        // texture filled) so danmaku never races ahead of the first frame.
+        if (!displayScreen.isVideoStarted || !displayScreen.hasTexture) return
         val controller = displayScreen.danmakuController()
         controller.update()
         val items = controller.renderables()

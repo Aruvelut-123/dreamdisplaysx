@@ -136,6 +136,9 @@ class PlaylistsTable(prefix: String = "") : Table("${prefix}playlists") {
     /** Wire ordinal of the [PlaylistEnqueuePolicy]. */
     val enqueuePolicy = integer("enqueuePolicy").default(PlaylistEnqueuePolicy.OWNER_ONLY.wire)
 
+    /** Whether playlist mode is active for this display (auto-advance + pick-to-enqueue). */
+    val enabled = bool("enabled").default(true)
+
     /** Primary key for the playlists table, which is the owning display id. */
     override val primaryKey = PrimaryKey(displayId)
 }
@@ -366,6 +369,7 @@ class StorageManager(
                 currentIndex = row[playlistTable.currentIndex],
                 endBehavior = PlaylistEndBehavior.fromWire(row[playlistTable.endBehavior]),
                 enqueuePolicy = PlaylistEnqueuePolicy.fromWire(row[playlistTable.enqueuePolicy]),
+                enabled = row[playlistTable.enabled],
             )
         }
     }
@@ -378,6 +382,7 @@ class StorageManager(
                 it[currentIndex] = playlist.currentIndex
                 it[endBehavior] = playlist.endBehavior.wire
                 it[enqueuePolicy] = playlist.enqueuePolicy.wire
+                it[enabled] = playlist.enabled
             }
             playlistItemsTable.deleteWhere { displayId eq playlist.displayId.toBytes() }
             playlist.items.forEachIndexed { index, item ->

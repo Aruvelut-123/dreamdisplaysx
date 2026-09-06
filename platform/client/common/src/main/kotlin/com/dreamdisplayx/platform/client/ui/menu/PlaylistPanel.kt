@@ -40,6 +40,9 @@ class PlaylistPanel(
     }
     private val policyButton = IconButton("lock") { togglePolicy() }
     private val endBehaviorButton = IconButton("pause") { toggleEndBehavior() }
+    private val modeButton = IconButton(
+        icon = { IconButton.modIcon(if (modeEnabled()) "play" else "pause") },
+    ) { toggleMode() }
 
     /** Scroll offset in pixels over the queue rows. */
     private var scroll = 0
@@ -51,9 +54,16 @@ class PlaylistPanel(
 
     /** Children that must receive vanilla input / render passes (URL box, buttons). */
     val children: List<net.minecraft.client.gui.components.AbstractWidget>
-        get() = listOf(urlBox, titleBox, addButton, nextButton, clearButton, policyButton, endBehaviorButton)
+        get() = listOf(urlBox, titleBox, addButton, nextButton, clearButton, policyButton, endBehaviorButton, modeButton)
 
     private fun state() = PlaylistStateStore.stateOf(displayId)
+
+    /** Whether playlist mode is on (defaults to on while no snapshot has arrived yet). */
+    private fun modeEnabled(): Boolean = state()?.enabled != false
+
+    private fun toggleMode() {
+        PlaylistStateStore.send(displayId, PlaylistCommandAction.SET_ENABLED.wire, enabled = !modeEnabled())
+    }
 
     private fun togglePolicy() {
         val s = state() ?: return
@@ -119,18 +129,12 @@ class PlaylistPanel(
     override fun draw(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, partialTick: Float) {
         // Vanilla child widgets are drawn through the screen's child list (DisplayMenu adds them);
         // this method paints the panel's own chrome: rows, labels, scrollbar.
-        val s = state() ?: run {
-            g.drawText(
-                font, Component.translatable("dreamdisplayx.ui.playlist_empty").string,
-                x + 8, y + 8, UiTheme.TEXT_DIM, false,
-            )
-            return
-        }
+        val s = state()
 
         val innerX = x + UiTheme.PANEL_PADDING_X
         val innerW = width - UiTheme.PANEL_PADDING_X * 2
 
-        // Top bar: next / clear / policy / end-behavior buttons on the right, labels on the left.
+        // Top bar: mode / next / clear / policy / end-behavior buttons on the right, labels on the left.
         val topY = y + 4
         val btnH = 16
         val btnGap = 2
@@ -138,6 +142,39 @@ class PlaylistPanel(
         policyButton.place(UiRect(x + width - UiTheme.PANEL_PADDING_X - (btnH + btnGap) * 2, topY, btnH, btnH))
         clearButton.place(UiRect(x + width - UiTheme.PANEL_PADDING_X - (btnH + btnGap) * 3, topY, btnH, btnH))
         nextButton.place(UiRect(x + width - UiTheme.PANEL_PADDING_X - (btnH + btnGap) * 4, topY, btnH, btnH))
+        modeButton.place(UiRect(x + width - UiTheme.PANEL_PADDING_X - (btnH + btnGap) * 5, topY, btnH, btnH))
+
+        // Playlist mode state always shows (even before the first snapshot arrives), so the owner can
+        // flip it without waiting for a queue echo.
+        val modeOn = modeEnabled()
+        g.drawText(
+            font,
+            Component.translatable(
+                if (modeOn) "dreamdisplayx.ui.playlist_mode_on" else "dreamdisplayx.ui.playlist_mode_off",
+            ).string,
+            innerX, topY - 2, if (modeOn) 0xFF7BD389.toInt() else UiTheme.TEXT_DIM, false,
+        )
+
+        // Add row: URL box + optional title box + add button, right under the top bar. Placed before
+        // the state check so the input row stays put even while the first snapshot is still in flight.
+        val addY = topY + btnH + font.lineHeight * 2 + 6
+        val boxH = 16
+        urlBox.x = innerX
+        urlBox.y = addY
+        urlBox.width = innerW - (boxH + 2) - 90
+        titleBox.x = urlBox.x + urlBox.width + 2
+        titleBox.y = addY
+        titleBox.width = 88
+        addButton.place(UiRect(titleBox.x + titleBox.width + 2, addY, boxH, boxH))
+
+        if (s == null) {
+            g.drawText(
+                font, Component.translatable("dreamdisplayx.ui.playlist_empty").string,
+                innerX, addY + boxH + 8, UiTheme.TEXT_DIM, false,
+            )
+            return
+        }
+
         val policy = PlaylistEnqueuePolicy.fromWire(s.enqueuePolicy)
         val policyText = Component.translatable(
             when (policy) {
@@ -154,20 +191,9 @@ class PlaylistPanel(
                 else -> "dreamdisplayx.ui.playlist_end_loop"
             },
         )
-        // Two stacked mini-labels on the left: policy (top) and end behavior (bottom).
-        g.drawText(font, policyText.string, innerX, topY - 2, UiTheme.TEXT_DIM, false)
-        g.drawText(font, endText.string, innerX, topY + font.lineHeight - 2, UiTheme.TEXT_DIM, false)
-
-        // Add row: URL box + optional title box + add button, right under the top bar.
-        val addY = topY + btnH + font.lineHeight + 6
-        val boxH = 16
-        urlBox.x = innerX
-        urlBox.y = addY
-        urlBox.width = innerW - (boxH + 2) - 90
-        titleBox.x = urlBox.x + urlBox.width + 2
-        titleBox.y = addY
-        titleBox.width = 88
-        addButton.place(UiRect(titleBox.x + titleBox.width + 2, addY, boxH, boxH))
+        // Two stacked mini-labels on the left under the mode line: policy (top) and end behavior (bottom).
+        g.drawText(font, policyText.string, innerX, topY + font.lineHeight - 2, UiTheme.TEXT_DIM, false)
+        g.drawText(font, endText.string, innerX, topY + font.lineHeight * 2 - 2, UiTheme.TEXT_DIM, false)
 
         // Queue rows.
         val rowsTop = rowsTopY()
@@ -309,7 +335,7 @@ class PlaylistPanel(
     private fun rowsTopY(): Int {
         val topY = y + 4
         val btnH = 16
-        val addY = topY + btnH + font.lineHeight + 6
+        val addY = topY + btnH + font.lineHeight * 2 + 6
         return addY + 16 + 6
     }
 

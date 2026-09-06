@@ -24,6 +24,7 @@ data class PlaylistState(
     @ProtoNumber(3) val currentIndex: Int = -1,
     @ProtoNumber(4) val endBehavior: Int = 0,
     @ProtoNumber(5) val enqueuePolicy: Int = 2,
+    @ProtoNumber(6) val enabled: Boolean = true,
 ) : DreamPacket
 
 /** One playlist entry as it travels on the wire. */
@@ -51,4 +52,5 @@ data class PlaylistCommand(
     @ProtoNumber(7) val position: Int = -1,
     @ProtoNumber(8) val endBehavior: Int = 0,
     @ProtoNumber(9) val enqueuePolicy: Int = 2,
+    @ProtoNumber(10) val enabled: Boolean = true,
 ) : DreamPacket

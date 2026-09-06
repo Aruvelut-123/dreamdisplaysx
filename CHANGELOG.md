@@ -30,6 +30,7 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 - Bilibili quality labels, CDN mirror ranking, and fresh resolution per play; fixed 4K blur.
 - Search is now direct (URL paste, `BV`/`av` ids) without the external resolver.
 - Unrecoverable playback errors now log the detailed libvlc reason (player state + recent libvlc log lines).
+- Fixed multiple native player stacking during video switches by extending the old player stop timeout with bounded retry loop.
 
 ## Server
 

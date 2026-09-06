@@ -17,6 +17,7 @@ import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackMode
+import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
 import com.dreamdisplayx.api.playback.service.keys.PlaybackServices
 import com.dreamdisplayx.api.runtime.registry.service.get
 import com.dreamdisplayx.api.watchparty.service.keys.WatchPartyServices
@@ -24,6 +25,7 @@ import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
+import com.dreamdisplayx.platform.client.managers.PlaylistStateStore
 import com.dreamdisplayx.platform.client.popout.PopoutManager
 import com.dreamdisplayx.platform.client.render.ScrubPreview
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
@@ -33,6 +35,7 @@ import com.dreamdisplayx.platform.client.ui.kit.UiScreenBase
 import com.dreamdisplayx.platform.client.ui.kit.UiText
 import com.dreamdisplayx.platform.client.ui.kit.UiTheme
 import com.dreamdisplayx.platform.client.ui.kit.drawPanel
+import com.dreamdisplayx.platform.client.ui.kit.drawPanelSprite
 import com.dreamdisplayx.platform.client.ui.menu.*
 import com.dreamdisplayx.platform.client.ui.widgets.*
 import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
@@ -454,14 +457,14 @@ class DisplayMenu private constructor(
         suggestions.available = { ds.canSetVideoHere }
 
 
-        playlist = addUi(
-            PlaylistPanel(
-                displayId = ds.uuid,
-                isOwnerOrAdmin = { ds.owner || ds.isAdmin },
-            ),
+        // The playlist panel is drawn manually inside drawScreen (like SettingsSection), so it is
+        // NOT registered as a vanilla child here — registering it would double-paint its content
+        // through both the manual render pass and the drawChildren pass. Only its inner controls
+        // (URL box, buttons) are registered as vanilla children so they receive clicks / typing.
+        playlist = PlaylistPanel(
+            displayId = ds.uuid,
+            isOwnerOrAdmin = { ds.owner || ds.isAdmin },
         )
-        // Register the panel's vanilla children (URL box, buttons) with the screen so they receive
-        // clicks / typing; the panel itself lays them out inside its own render pass.
         playlist.children.forEach { addRenderableWidget(it) }
         // Request the authoritative queue snapshot on open; the server answers via the sync path.
         com.dreamdisplayx.platform.client.net.ProtocolRouter.send(
@@ -658,11 +661,24 @@ class DisplayMenu private constructor(
     private fun onPickSuggested(info: MediaSearchResult) {
         val ds = displayScreen
         if (!ds.canSetVideoHere) return
-        DreamServices.registry.get(DisplayServices.DISPLAY).setUrl(DisplayId(ds.uuid), info.getWatchUrl(), ds.lang)
+        val url = info.getWatchUrl()
+
+        // Playlist mode: enqueue instead of directly playing. The server echoes the queue snapshot,
+        // and an idle queue auto-starts the first non-pending item, so picking a video behaves like
+        // a normal play while still building the queue.
+        if (PlaylistStateStore.stateOf(ds.uuid)?.enabled != false) {
+            PlaylistStateStore.send(ds.uuid, PlaylistCommandAction.ADD.wire, url = url, title = info.title)
+            if (info.isCustom) {
+                CustomVideoStore.remember(url, info.title)
+            }
+            return
+        }
+
+        DreamServices.registry.get(DisplayServices.DISPLAY).setUrl(DisplayId(ds.uuid), url, ds.lang)
 
         // A pasted link exists nowhere else, so remember it locally the moment it is used
         if (info.isCustom) {
-            CustomVideoStore.remember(info.getWatchUrl(), info.title)
+            CustomVideoStore.remember(url, info.title)
         }
     }
 
@@ -688,13 +704,21 @@ class DisplayMenu private constructor(
         suggestionsRect = layout.suggestions
 
         g.drawPanel(font, layout.preview, Component.translatable("dreamdisplayx.ui.preview").string)
-        // The settings column carries a two-tab header: display settings / playlist.
+        // The settings column carries a two-tab header: display settings / playlist. Content is laid
+        // out below the header so neither panel overlaps the tab strip.
         drawPanelTabs(g, layout.settings)
+        val tabH = font.lineHeight + 6
+        val settingsContent = UiRect(
+            layout.settings.x,
+            layout.settings.y + tabH,
+            layout.settings.w,
+            layout.settings.h - tabH,
+        )
         preview.render(g, layout.preview, mouseX, mouseY)
         if (showPlaylistTab) {
-            playlist.render(g, layout.settings, mouseX, mouseY)
+            playlist.render(g, settingsContent, mouseX, mouseY)
         } else {
-            settings.render(g, layout.settings, mouseX, mouseY)
+            settings.render(g, settingsContent, mouseX, mouseY)
         }
 
         val suggestionsArea = layout.suggestions
@@ -711,7 +735,11 @@ class DisplayMenu private constructor(
         //? if <1.21.11 {
         suggestions.redrawSortDropdownOnTop(g, mouseX, mouseY)
         //?}
-        settings.renderTooltips(g, mouseX, mouseY, toRealX(mouseX), toRealY(mouseY))
+        // Hidden panels keep stale hover state (their render pass populates rowRect / labelHover),
+        // so only render tooltips for the panel the user is actually looking at.
+        if (!showPlaylistTab) {
+            settings.renderTooltips(g, mouseX, mouseY, toRealX(mouseX), toRealY(mouseY))
+        }
     }
 
     /** Re-syncs the quality slider position when the available quality list (re)appears. */
@@ -744,8 +772,11 @@ class DisplayMenu private constructor(
         } || audioTrackDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
     }
 
-    /** Draws the two-tab header (playlist / display settings) atop the settings column. */
+    /** Draws the two-tab header (playlist / display settings) atop a full settings panel background. */
     private fun drawPanelTabs(g: GuiGraphicsCompat, panel: UiRect) {
+        // The full nine-slice panel background (the old single-tab drawPanel did this); the tab
+        // header sits on top of it, and the active panel's content is laid out below the header.
+        g.drawPanelSprite(panel)
         val f = font
         val tabH = f.lineHeight + 6
         val tabW = max(110, panel.w / 2)
@@ -765,8 +796,11 @@ class DisplayMenu private constructor(
         drawTab(playlistTab, Component.translatable("dreamdisplayx.ui.playlist"), showPlaylistTab)
         drawTab(settingsTab, Component.translatable("dreamdisplayx.ui.settings"), !showPlaylistTab)
 
-        // Playlist panel's vanilla children exist only while its tab is visible.
+        // Vanilla children are re-synced to their own visibleWhen every frame (UiScreenBase.syncState)
+        // before drawScreen runs, so re-assert the tab-driven visibility here, right before
+        // drawChildren paints them: only the active panel's controls are visible / clickable.
         playlist.children.forEach { it.visible = showPlaylistTab }
+        settings.setControlsVisible(!showPlaylistTab)
     }
 
     private var tabPlaylistRect: UiRect? = null
