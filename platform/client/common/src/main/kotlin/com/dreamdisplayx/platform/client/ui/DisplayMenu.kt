@@ -692,8 +692,7 @@ class DisplayMenu private constructor(
         drawPanelTabs(g, layout.settings)
         preview.render(g, layout.preview, mouseX, mouseY)
         if (showPlaylistTab) {
-            playlist.place(layout.settings)
-            playlist.render(g, mouseX, mouseY, partialTick)
+            playlist.render(g, layout.settings, mouseX, mouseY)
         } else {
             settings.render(g, layout.settings, mouseX, mouseY)
         }

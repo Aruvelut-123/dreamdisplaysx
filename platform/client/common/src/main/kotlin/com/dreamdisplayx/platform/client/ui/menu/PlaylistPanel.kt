@@ -110,6 +110,12 @@ class PlaylistPanel(
         PlaylistStateStore.send(displayId, PlaylistCommandAction.MOVE.wire, itemId = item.itemId, position = to)
     }
 
+    /** Places this panel into [panel] and draws it. Version-neutral, mirroring [SettingsSection.render]. */
+    fun render(g: GuiGraphicsCompat, panel: UiRect, mouseX: Int, mouseY: Int) {
+        place(panel)
+        draw(g, mouseX, mouseY, 0f)
+    }
+
     override fun draw(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, partialTick: Float) {
         // Vanilla child widgets are drawn through the screen's child list (DisplayMenu adds them);
         // this method paints the panel's own chrome: rows, labels, scrollbar.
