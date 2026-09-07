@@ -560,6 +560,10 @@ internal class LibVlcSessionManager(
         }
 
         submit {
+            // A stop() / stopNow() that landed between this task's submission and its run must win:
+            // running the attach would resurrect a player the stop already tore down (and stack it
+            // under the replacement player the caller went on to create).
+            if (stopped.get()) return@submit
             // Android never reuses a player that has already carried media: even set_media() may
             // tear down its old input/vout/aout and trigger VLC-Android's unsafe TLS destructor.
             if (systemAudio) retireAndroidPlayers()
@@ -582,6 +586,9 @@ internal class LibVlcSessionManager(
                 if (!systemAudio) {
                     runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
                 }
+                // Re-check after the (potentially long) old-media stop: a stop() that arrived while
+                // this task was draining the previous input must still win over the new attach.
+                if (stopped.get()) return@submit
                 val activeMp = mp
                 val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
                 LibVlc.lib.libvlc_media_player_set_media(activeMp, media)
