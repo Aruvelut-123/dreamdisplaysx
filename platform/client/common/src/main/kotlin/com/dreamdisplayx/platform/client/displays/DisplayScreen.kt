@@ -687,7 +687,12 @@ class DisplayScreen(
         owner = Minecraft.getInstance().player?.gameProfile?.id?.toString() == packet.ownerId.toString()
 
         // Server-persisted seek position: apply it when the URL is unchanged so playback resumes there.
-        if (packet.positionNanos > 0 && packet.url == videoUrl) savedTimeNanos = packet.positionNanos
+        // A VOD-tail position must never be re-applied: the server persists the last reported position
+        // and re-broadcasts it, and re-stamping the tail here re-arms the cold-start guard on every
+        // broadcast (the replay loop).
+        if (packet.positionNanos > 0 && packet.url == videoUrl && !isTailResumePosition(packet.positionNanos)) {
+            savedTimeNanos = packet.positionNanos
+        }
 
         if (videoUrl != packet.url || lang != packet.lang) {
             val previousUrl = videoUrl
@@ -941,7 +946,11 @@ class DisplayScreen(
         if (isFullscreenActive && !fullscreenLoop) deactivateFullscreen()
 
         if (effectiveMode != PlaybackMode.LOCAL) return
-        savedTimeNanos = positionNanos.coerceAtLeast(0L)
+        // Never persist the tail as a resume point: the next start would immediately reach EOS and
+        // re-enter the replay loop. Reset to the beginning instead.
+        val duration = mediaPlayerDurationNanos
+        savedTimeNanos = if (duration > 0L && isTailResumePosition(positionNanos, duration)) 0L
+        else positionNanos.coerceAtLeast(0L)
         if (paused) return
         paused = true
         ClientSettingsStore.updateSettings(uuid, volume, quality, brightness, muted, paused)
@@ -1099,6 +1108,13 @@ class DisplayScreen(
     /** Closes the watch party, handing the display back to its base mode (host / owner / admin). */
     fun closeWatchParty() = watchPartyController.close()
 
+    /**
+     * True when [positionNanos] sits within the VOD tail guard of [durationNanos] (unknown / zero
+     * duration reports false, so a position is never wrongly discarded before the duration is known).
+     */
+    private fun isTailResumePosition(positionNanos: Long, durationNanos: Long = mediaPlayerDurationNanos): Boolean =
+        durationNanos > 0L && positionNanos >= (durationNanos - RESTORE_TAIL_GUARD_NS).coerceAtLeast(0L)
+
     /** Seeks to the saved playback position after reconnection; only meaningful for Local displays. */
     fun restoreSavedTime() {
         if (mode != PlaybackMode.LOCAL) return
@@ -1126,8 +1142,11 @@ class DisplayScreen(
         if (mode != PlaybackMode.LOCAL || watchParty != null || paused) return
         if (++positionReportTicks % POSITION_REPORT_INTERVAL_TICKS != 0) return
         val nanos = currentTimeNanos
-        savedTimeNanos = nanos
-        Initializer.sendPacket(ReportPosition(uuid, nanos))
+        // Do not report a completed VOD tail as a resume point; the server would persist it and
+        // feed it back on the next display update, re-triggering the cold-start guard.
+        val reportNanos = if (isTailResumePosition(nanos)) 0L else nanos
+        savedTimeNanos = reportNanos
+        Initializer.sendPacket(ReportPosition(uuid, reportNanos))
     }
 
     /** Primes player volume before prelude audio to avoid blast on return. */

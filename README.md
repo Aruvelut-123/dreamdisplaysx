@@ -42,7 +42,7 @@ Dream DisplaysX keeps playback synchronized across the server while keeping netw
 
 ## Playback troubleshooting
 
-Local VOD resume positions are stored in nanoseconds. Positions within the final 500 ms are treated as completed rather than restored, preventing an immediate end-of-stream followed by a cold-start replay loop. Early stream termination is re-resolved with a bounded retry instead of looping the opening segment.
+Local VOD resume positions are stored in nanoseconds. Positions within the final 500 ms are treated as completed rather than restored, preventing an immediate end-of-stream followed by a cold-start replay loop. The guard is enforced on every resume source — cold start, saved-time restore, server-broadcast display updates, end-of-stream recording, and periodic position reports — so a tail position is never re-applied, re-persisted, or re-reported as a resume point. Early stream termination is re-resolved with a bounded retry instead of looping the opening segment.
 
 ## Protocol compatibility
 
