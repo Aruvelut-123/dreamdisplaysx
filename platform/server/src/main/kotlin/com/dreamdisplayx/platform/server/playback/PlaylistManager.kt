@@ -127,16 +127,27 @@ object PlaylistManager {
                 if (index < 0) return false
                 val items = playlist.items.toMutableList()
                 items.removeAt(index)
-                val nextIndex = when {
-                    playlist.currentIndex < 0 -> -1
-                    index < playlist.currentIndex -> playlist.currentIndex - 1
-                    index == playlist.currentIndex -> {
-                        // The playing item left the queue: keep playing the item that took its slot.
-                        if (index < items.size) index else if (items.isNotEmpty() && playlist.endBehavior == PlaylistEndBehavior.LOOP_CURRENT) 0 else items.size - 1
+                val nextIndex = indexAfterRemoval(
+                    items, index, playlist.currentIndex,
+                    playlist.endBehavior == PlaylistEndBehavior.LOOP_CURRENT,
+                )
+                if (playlist.currentIndex >= 0 && index == playlist.currentIndex) {
+                    // The playing item left the queue: actually SWITCH playback to the item that
+                    // took its slot instead of only remapping the index (which used to leave the
+                    // removed video on screen and desync it from the queue bookkeeping).
+                    val updated = playlist.copy(items = items, currentIndex = nextIndex)
+                    playlists[display.id] = updated
+                    if (nextIndex >= 0) {
+                        playIndex(display, updated, nextIndex) // persists + broadcasts
+                    } else {
+                        // Queue exhausted: keep the display on the removed video; nothing in the
+                        // queue is playing now, and a later ADD restarts through the idle rule.
+                        persist(display.id)
+                        broadcast(display.id)
                     }
-                    else -> playlist.currentIndex
+                    return true
                 }
-                playlist.copy(items = items, currentIndex = nextIndex.coerceAtMost(items.size - 1))
+                playlist.copy(items = items, currentIndex = nextIndex)
             }
 
             PlaylistCommandAction.MOVE -> {
@@ -200,7 +211,11 @@ object PlaylistManager {
                 if (index < 0) return false
                 val items = playlist.items.toMutableList()
                 items.removeAt(index)
-                playlist.copy(items = items)
+                // Removing an item BEFORE the playing index shifts the playing item one slot left
+                // (same bookkeeping as REMOVE); without this the index pointed past the real item.
+                playlist.copy(items = items).let {
+                    if (index < it.currentIndex) it.copy(currentIndex = it.currentIndex - 1) else it
+                }
             }
         }
 
@@ -217,6 +232,31 @@ object PlaylistManager {
         persist(display.id)
         broadcast(display.id)
         return true
+    }
+
+    /**
+     * Computes the playing index after removing the item at [removedIndex] from [remaining].
+     * Pure function so the bookkeeping rules are unit-testable:
+     * - nothing playing → stay -1
+     * - removal before the playing index shifts it one slot left
+     * - removal OF the playing item falls to the item that took its slot; an empty or
+     *   exhausted non-loop queue yields -1, and LOOP_CURRENT wraps to 0
+     * - otherwise the playing index is unchanged
+     */
+    fun indexAfterRemoval(
+        remaining: List<PlaylistItemRecord>,
+        removedIndex: Int,
+        currentIndex: Int,
+        loopCurrent: Boolean,
+    ): Int = when {
+        currentIndex < 0 -> -1
+        removedIndex < currentIndex -> currentIndex - 1
+        removedIndex == currentIndex -> when {
+            removedIndex < remaining.size -> removedIndex // the item that took the slot
+            loopCurrent && remaining.isNotEmpty() -> 0    // wrap under LOOP_CURRENT
+            else -> -1                                    // nothing left to play: queue exhausted
+        }
+        else -> currentIndex
     }
 
     /**

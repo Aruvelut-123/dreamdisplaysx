@@ -38,6 +38,7 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 ## Server
 
 - PlaylistManager: per-display queue with end-behavior auto-advance (pause / continue / loop current) and enqueue policies (everyone / owner approval / owner only).
+- Removing the currently playing playlist item now actually switches playback to the item that took its slot (wrapping under loop); exhausting the queue keeps the display idle instead of desyncing the index.
 - Playlists persisted in SQLite/MySQL tables (`playlists`, `playlist_items`); cleaned up when a display is deleted.
 - `/display group` commands for named groups, membership, shared video, and playback control.
 - Fullscreen loop/Esc handling and HUD hiding synced from upstream.
