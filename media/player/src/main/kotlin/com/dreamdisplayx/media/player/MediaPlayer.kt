@@ -129,6 +129,17 @@ class MediaPlayer(
             return if (offsetNanos >= tailFloor) 0L else offsetNanos
         }
 
+        /**
+         * True when [positionNanos] sits at or beyond [durationNanos - SEEK_END_GUARD_NANOS]: a VOD
+         * tail position is a stale end-of-stream marker (persisted final position), not a live
+         * playback position. Live/unknown durations are never stale. Used by timeline followers to
+         * refuse chasing server targets parked in the tail.
+         */
+        fun isStaleTailPosition(positionNanos: Long, durationNanos: Long): Boolean {
+            if (durationNanos <= 0L) return false
+            return positionNanos >= (durationNanos - SEEK_END_GUARD_NANOS).coerceAtLeast(0L)
+        }
+
         /** Set during client shutdown so no new resolve or retry can be submitted. */
         private val BACKGROUND_SHUTDOWN = AtomicBoolean(false)
 

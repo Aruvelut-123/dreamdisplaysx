@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.client.displays
 
 import com.dreamdisplayx.core.protocol.common.packets.DisplaySync
+import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.platform.client.displays.TimelineFollower.Companion.SEEK_COOLDOWN_MS
 import com.dreamdisplayx.platform.client.displays.TimelineFollower.Companion.SEEK_LEAD_MS
 
@@ -98,6 +99,17 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
 
             val needsSeek = driftMs > CATCH_UP_TOLERANCE_MS || -driftMs > AHEAD_TOLERANCE_MS
             if (!needsSeek) {
+                screen.markInitialTimelineReady()
+                pending = null
+                return@waitForMFInit
+            }
+
+            // A server target parked in the VOD tail (the server persisted an end-of-stream position)
+            // is a stale completion marker, not a live position: chasing it would seek to the tail,
+            // hit EOS, and restart — repeating every cooldown window so the opening seconds replay
+            // over and over. Treat it as completed playback and let the local player run free until
+            // the server reports a real position again.
+            if (!packet.loop && MediaPlayer.isStaleTailPosition(target * 1_000_000L, durationMs * 1_000_000L)) {
                 screen.markInitialTimelineReady()
                 pending = null
                 return@waitForMFInit
