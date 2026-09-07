@@ -677,6 +677,7 @@ class MediaPlayer(
     /** Reopens the current stream without changing URL/quality; used when render backend requirements change. */
     fun restartVideoPipeline() = safeExecute {
         val ss = streams ?: return@safeExecute
+        logger.info("$debugLabel restartVideoPipeline() called (t={}ms, live={}).", getCurrentTime() / 1_000_000L, liveStream)
         if (isPausedWarm()) freezePausedWarmSession()
         val pos = if (liveStream) 0L else getCurrentTime()
         env.renderExecutor.execute {
@@ -831,6 +832,7 @@ class MediaPlayer(
      */
     private fun startStreams(streamSet: ActiveStreams, offsetNanos: Long) {
         if (terminated.get()) return
+        logger.info("$debugLabel startStreams() cold start (t={}ms, live={}).", offsetNanos / 1_000_000L, liveStream)
         if (pauseRequested.get()) {
             // Paused while this was being resolved: honor that rather than starting under the viewer
             logger.debug("$debugLabel Start skipped: playback was paused while the media was being prepared.")

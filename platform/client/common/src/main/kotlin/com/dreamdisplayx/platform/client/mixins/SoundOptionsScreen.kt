@@ -48,11 +48,29 @@ open class SoundOptionsScreenMixin {
             ToDoubleFunction<Double> { it / 2.0 },
         )
         val captionType = Class.forName("net.minecraft.client.OptionInstance\u0024CaptionBasedToString")
-        val caption = Proxy.newProxyInstance(captionType.classLoader, arrayOf(captionType)) { _, method, args ->
-            // CaptionBasedToString extends Function<T, Component>, so its single argument is args[0].
-            if (method.name != "apply") return@newProxyInstance null
-            val value = (args?.getOrNull(0) as? Number)?.toDouble() ?: return@newProxyInstance null
-            Component.translatable("options.dreamdisplayx.global_volume", "%.2fx".format(value))
+        // 26.2 regression: the slider button's updateMessage() feeds our caption result straight
+        // into WithInactiveMessage.setMessage(), which dereferences it (defaultInactiveMessage) —
+        // a null caption result now NPEs the whole SoundOptionsScreen. The old handler only
+        // answered the "apply" method and returned null for everything else, so any extra or
+        // renamed interface call produced null. Answer EVERY component-producing method instead
+        // and never return null.
+        val caption = Proxy.newProxyInstance(captionType.classLoader, arrayOf(captionType)) { proxy, method, args ->
+            when {
+                method.declaringClass == Any::class.java -> when (method.name) {
+                    "toString" -> "OptionInstance.CaptionBasedToString(options.dreamdisplayx.global_volume)"
+                    "hashCode" -> System.identityHashCode(proxy)
+                    "equals" -> args?.getOrNull(0) === proxy
+                    else -> null
+                }
+                method.returnType == Void.TYPE -> null
+                // CaptionBasedToString extends Function<T, Component>, but accept any
+                // component-returning call so a future signature change can't reintroduce the NPE.
+                else -> {
+                    val value = (args?.getOrNull(0) as? Number)?.toDouble()
+                        ?: ClientStateManager.config.globalAudioMultiplier.coerceIn(0.0, 2.0)
+                    Component.translatable("options.dreamdisplayx.global_volume", "%.2fx".format(value))
+                }
+            }
         }
         val tooltip = optionClass.getMethod("noTooltip").invoke(null)
         val listenerType = optionClass.constructors.first { it.parameterTypes.size == 6 }.parameterTypes[5]
