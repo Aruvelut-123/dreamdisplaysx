@@ -117,6 +117,18 @@ class MediaPlayer(
         /** Thread counter. */
         private val INIT_THREAD_COUNTER = AtomicInteger()
 
+        /**
+         * Decides the cold-start offset for a VOD resume. A requested position parked at or beyond
+         * [durationNanos - SEEK_END_GUARD_NANOS] (e.g. Flashback paused on the final frame) would
+         * restart straight into EOS and look like an endless replay loop, so it is treated as
+         * completed playback and restarted from 0. Live/unknown durations pass through unchanged.
+         */
+        internal fun resumeOffsetFor(offsetNanos: Long, durationNanos: Long): Long {
+            if (durationNanos <= 0L) return offsetNanos
+            val tailFloor = (durationNanos - SEEK_END_GUARD_NANOS).coerceAtLeast(0L)
+            return if (offsetNanos >= tailFloor) 0L else offsetNanos
+        }
+
         /** Set during client shutdown so no new resolve or retry can be submitted. */
         private val BACKGROUND_SHUTDOWN = AtomicBoolean(false)
 
@@ -1104,7 +1116,17 @@ class MediaPlayer(
             dispatchInitialize(coalesce = true)
             return
         }
-        val offset = if (endedAtEnd.getAndSet(false)) 0L else clock.originNanos
+        // A paused clock can retain the last frame at the exact VOD tail. Starting a fresh
+        // session from that frozen offset immediately reaches EOS, which looks like a few
+        // seconds of playback followed by an endless replay loop. Treat a tail position as
+        // completed playback and restart from the beginning instead.
+        val requestedOffset = if (endedAtEnd.getAndSet(false)) 0L else clock.originNanos
+        val offset = resumeOffsetFor(requestedOffset, durationHintNanos)
+        if (offset != requestedOffset) {
+            logger.info("$debugLabel Ignoring stale tail resume at {}ms of {}ms; restarting from 0ms.",
+                requestedOffset / 1_000_000L, durationHintNanos / 1_000_000L)
+            clock.reset(0L)
+        }
         startStreams(ss, offset)
     }
 

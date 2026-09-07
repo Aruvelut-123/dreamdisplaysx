@@ -33,6 +33,7 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 - Fixed multiple native player stacking during video switches by extending the old player stop timeout with bounded retry loop.
 - Playlist rows now show the adding player's name instead of a UUID fragment; legacy entries fall back to the UUID.
 - Fixed switch-time player stacking at the root: `MediaPlayer.stop()` now tears the native players down on the calling thread first, so a control queue blocked by a slow CDN attach can no longer delay the stop past the replacement's creation.
+- Fixed playback loop when resuming near VOD end (Flashback/saved time) by treating tail positions as completed and restarting from start
 - Queued start tasks now yield to a stop that arrived meanwhile, so a blocked attach can no longer resurrect a stopped player under its replacement.
 
 ## Server

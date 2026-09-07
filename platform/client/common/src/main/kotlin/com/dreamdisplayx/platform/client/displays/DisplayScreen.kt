@@ -1104,6 +1104,10 @@ class DisplayScreen(
         if (mode != PlaybackMode.LOCAL) return
         val mp = mediaPlayer ?: return
         if (abs(mp.getCurrentTime() - savedTimeNanos) <= RESTORE_SEEK_TOLERANCE_NS) return
+        val duration = mp.getDuration()
+        // Do not restore a position parked at the VOD tail: seeking there after a fresh
+        // player start immediately reaches EOS and can trigger a replay loop.
+        if (duration > 0L && savedTimeNanos >= (duration - RESTORE_TAIL_GUARD_NS).coerceAtLeast(0L)) return
         if (savedTimeNanos > 0) mp.seekTo(savedTimeNanos, false)
     }
 
@@ -1337,6 +1341,9 @@ class DisplayScreen(
 
         /** Skip the restore seek when already within this tolerance of the saved position. */
         private const val RESTORE_SEEK_TOLERANCE_NS = 250_000_000L
+
+        /** A saved resume position at or beyond [duration - this] is treated as "already at the end" and not seeked to. */
+        private const val RESTORE_TAIL_GUARD_NS = 500_000_000L
 
         /** Every N ticks a LOCAL display reports its position to the server (~1s at 20 TPS). */
         private const val POSITION_REPORT_INTERVAL_TICKS = 20

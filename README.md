@@ -40,6 +40,10 @@ broadcast playback depending on how you want your displays to behave.
 
 Dream DisplaysX keeps playback synchronized across the server while keeping network usage extremely low.
 
+## Playback troubleshooting
+
+Local VOD resume positions are stored in nanoseconds. Positions within the final 500 ms are treated as completed rather than restored, preventing an immediate end-of-stream followed by a cold-start replay loop. Early stream termination is re-resolved with a bounded retry instead of looping the opening segment.
+
 ## Protocol compatibility
 
 Clients negotiate the batch-capable **V3** envelope (`dreamdisplayx:v3`) when available and fall back to the compatible **V2** envelope (`dreamdisplayx:v2`) otherwise. V3 same-content snapshots bind multiple displays to one URL and playback timeline. Legacy **V1** traffic is detected and the affected player is notified in chat, but V1 packets are not processed.
