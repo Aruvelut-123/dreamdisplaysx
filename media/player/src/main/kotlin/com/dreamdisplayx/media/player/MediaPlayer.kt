@@ -822,7 +822,14 @@ class MediaPlayer(
             // One-shot consumption: a primed resume position (early-EOS retry, pre-start seek)
             // must not leak into later initializations.
             val primed = primedStartPositionNanos.getAndSet(-1L).takeIf { it >= 0L } ?: 0L
-            val initialOffset = replayBootstrapRef.get()?.positionNanos ?: primed
+            val requestedOffset = replayBootstrapRef.get()?.positionNanos ?: primed
+            // Apply the same VOD tail guard to every cold-start source, including replay and
+            // early-EOS recovery bootstrap offsets, rather than only the doPlay() path.
+            val initialOffset = resumeOffsetFor(requestedOffset, durationHintNanos)
+            if (initialOffset != requestedOffset) {
+                logger.info("$debugLabel Ignoring stale initial tail resume at {}ms of {}ms; starting from 0ms.",
+                    requestedOffset / 1_000_000L, durationHintNanos / 1_000_000L)
+            }
 
             safeExecute { if (!terminated.get()) startStreams(prepared.streamSet, initialOffset) }
         }.onSuccess {

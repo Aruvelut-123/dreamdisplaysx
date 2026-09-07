@@ -35,6 +35,11 @@ class MediaPlayerResumeOffsetTest {
     }
 
     @Test
+    fun `negative duration is treated as unknown`() {
+        assertEquals(123L, MediaPlayer.resumeOffsetFor(123L, -1L))
+    }
+
+    @Test
     fun `unknown duration never rewinds`() {
         assertEquals(123L, MediaPlayer.resumeOffsetFor(123L, 0L))
         assertEquals(123L, MediaPlayer.resumeOffsetFor(123L, -1L))

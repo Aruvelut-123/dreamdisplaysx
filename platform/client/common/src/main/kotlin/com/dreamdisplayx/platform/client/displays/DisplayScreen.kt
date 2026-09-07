@@ -1107,7 +1107,14 @@ class DisplayScreen(
         val duration = mp.getDuration()
         // Do not restore a position parked at the VOD tail: seeking there after a fresh
         // player start immediately reaches EOS and can trigger a replay loop.
-        if (duration > 0L && savedTimeNanos >= (duration - RESTORE_TAIL_GUARD_NS).coerceAtLeast(0L)) return
+        if (duration > 0L && savedTimeNanos >= (duration - RESTORE_TAIL_GUARD_NS).coerceAtLeast(0L)) {
+            // Consume the stale tail position so every subsequent reconnect does not cold-start
+            // and hit the same guard again.
+            savedTimeNanos = 0L
+            ClientSettingsStore.updateSettings(uuid, volume, quality, brightness, muted, paused)
+            DisplayRegistry.recordScreen(this)
+            return
+        }
         if (savedTimeNanos > 0) mp.seekTo(savedTimeNanos, false)
     }
 
