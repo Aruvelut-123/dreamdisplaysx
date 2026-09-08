@@ -45,13 +45,11 @@ class PreviewSection(
     private val volume: ValueSlider,
     private val popoutButton: IconButton,
     private val audioTrackButton: IconButton,
-    private val subtitleButton: IconButton,
     private val danmakuButton: IconButton,
     private val pauseButton: IconButton,
     private val progress: SeekBar,
     private val dropdown: PopoutDropdown,
     private val audioTrackDropdown: AudioTrackDropdown,
-    private val subtitleDropdown: SubtitleDropdown,
 ) {
     // Owned by DisplayScreen (not this section) so the last decoded frame — and its GPU texture —
     // survive closing and reopening the menu instead of needing a fresh push before showing anything.
@@ -64,7 +62,6 @@ class PreviewSection(
     // grow-in animation even when the track count was already known and settled from a previous
     // session, which reads as the menu "always refreshing" something that hasn't actually changed.
     private var audioPresence = if (ds.audioTrackList.size > 1) 1f else 0f
-    private var subtitlePresence = if (ds.subtitleTrackList.isNotEmpty()) 1f else 0f
     private var lastPresenceFrameNanos = 0L
 
     companion object {
@@ -105,12 +102,7 @@ class PreviewSection(
         audioPresence += diff * minOf(1f, dt * 10f)
         if (diff in -0.002f..0.002f) audioPresence = target
 
-        val subtitleTarget = if (ds.subtitleTrackList.isNotEmpty()) 1f else 0f
-        val subtitleDiff = subtitleTarget - subtitlePresence
-        subtitlePresence += subtitleDiff * minOf(1f, dt * 10f)
-        if (subtitleDiff in -0.002f..0.002f) subtitlePresence = subtitleTarget
-
-        // Controls row: [mute][volume] [progress........] [subtitles][audio][popout][pause]
+        // Controls row: [mute][volume] [progress........] [danmaku][audio][popout][pause]
         muteButton.place(UiRect(innerX, controlsRowY, btn, btn))
         val volumeX = innerX + btn + 4
         volume.place(UiRect(volumeX, controlsRowY, VOLUME_W, btn))
@@ -124,15 +116,8 @@ class PreviewSection(
         audioTrackButton.place(UiRect(audioBtnLeft, controlsRowY, audioBtnW, btn))
         audioTrackButton.setAlpha(audioPresence)
 
-        val subtitleSlotRight = audioBtnLeft - audioGap
-        val subtitleBtnW = (btn * subtitlePresence).roundToInt()
-        val subtitleGap = (4 * subtitlePresence).roundToInt()
-        val subtitleBtnLeft = subtitleSlotRight - subtitleBtnW
-        subtitleButton.place(UiRect(subtitleBtnLeft, controlsRowY, subtitleBtnW, btn))
-        subtitleButton.setAlpha(subtitlePresence)
-
-        // Danmaku toggle sits beside the subtitle button; always present (Bilibili overlay control).
-        val danmakuBtnLeft = subtitleBtnLeft - subtitleGap - btn
+        // Danmaku toggle sits beside the audio-track button; always present (Bilibili overlay control).
+        val danmakuBtnLeft = audioBtnLeft - audioGap - btn
         danmakuButton.place(UiRect(danmakuBtnLeft, controlsRowY, btn, btn))
 
         val progX = volumeX + VOLUME_W + 4
@@ -144,8 +129,6 @@ class PreviewSection(
         // drifts or jitters while the button is still easing in.
         val audioBtnFinalCenterX = audioSlotRight - btn / 2
         if (audioPresence > 0.01f) audioTrackDropdown.draw(g, audioBtnFinalCenterX, controlsRowY, mouseX, mouseY)
-        val subtitleBtnFinalCenterX = subtitleSlotRight - btn / 2
-        if (subtitlePresence > 0.01f) subtitleDropdown.draw(g, subtitleBtnFinalCenterX, controlsRowY, mouseX, mouseY)
     }
 
     /** Draws the letterboxed video frame, or the dimmed thumbnail while loading. */

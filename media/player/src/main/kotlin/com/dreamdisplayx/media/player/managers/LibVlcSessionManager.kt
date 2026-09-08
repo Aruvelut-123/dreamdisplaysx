@@ -850,30 +850,58 @@ internal class LibVlcSessionManager(
     }
 
     /**
-     * Schedules a one-shot A/V correction ~1.5s after playback starts. The video and audio players
-     * start independently, so their clocks drift apart immediately; the 10s auto-resync in
+     * Schedules a short A/V correction chain right after playback starts. The video and audio
+     * players start independently, so their clocks drift apart immediately; the 10s auto-resync in
      * [currentPacingNanos] would leave the audio audibly off-sync for the first ~10s. This snaps the
-     * audio player to the video `get_time` early, once both have settled into playback. Best-effort:
-     * if either player isn't ready yet, the next 10s auto-resync still corrects the drift.
+     * audio player to the video `get_time` as soon as both have settled, then re-checks a few times:
+     * right after a video switch the audio player may still be opening its stream, so the first
+     * check often fires before its clock exists. Best-effort: the 10s auto-resync still corrects
+     * any residual drift.
      */
     private fun scheduleInitialAvSync() {
         if (LibVlcDiagnostics.noAutoResync) return
         Thread {
-            try {
-                Thread.sleep(1500)
-            } catch (_: InterruptedException) {
-                return@Thread
-            }
-            submit {
-                val mp = mediaPlayer
-                val ap = audioPlayer
-                if (mp != null && ap != null && !stopped.get() && !parkFlag.get()) {
-                    val videoMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-                    if (videoMs >= 0) {
-                        runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, videoMs) }
-                        logger.debug("$debugLabel initial A/V sync: audio player snapped to {} ms.", videoMs)
+            // First check well before the old 1.5s mark, then a few spaced re-checks so a slow
+            // audio start converges quickly instead of waiting for the 10s auto-resync.
+            var delayMs = 400L
+            var attempts = 0
+            while (attempts < 6 && !stopped.get()) {
+                try {
+                    Thread.sleep(delayMs)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+                delayMs = 700L
+                attempts++
+                val aligned = CountDownLatch(1)
+                var inSync = false
+                submit {
+                    try {
+                        val mp = mediaPlayer
+                        val ap = audioPlayer
+                        if (mp == null || ap == null || stopped.get() || parkFlag.get()) {
+                            inSync = true // nothing to sync any more; end the chain
+                            return@submit
+                        }
+                        val videoMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                        val audioMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(ap) }.getOrDefault(-1L)
+                        when {
+                            // Video clock not up yet: keep waiting for a later attempt.
+                            videoMs < 0 -> Unit
+                            // Audio clock not up yet, or audibly drifted: snap it to the video.
+                            audioMs < 0 || kotlin.math.abs(videoMs - audioMs) > 250L -> {
+                                runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, videoMs) }
+                                logger.debug("$debugLabel initial A/V sync: audio player snapped to {} ms.", videoMs)
+                            }
+                            // Within a quarter second: good enough, stop the chain.
+                            else -> inSync = true
+                        }
+                    } finally {
+                        aligned.countDown()
                     }
                 }
+                aligned.await(2, TimeUnit.SECONDS)
+                if (inSync) return@Thread
             }
         }.also { it.isDaemon = true }.start()
     }

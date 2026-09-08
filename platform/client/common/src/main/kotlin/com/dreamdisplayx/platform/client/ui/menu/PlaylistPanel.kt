@@ -16,6 +16,7 @@ import net.minecraft.client.gui.components.EditBox
 import net.minecraft.network.chat.Component
 import java.util.UUID
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
  * The playlist panel shown in the menu's "Playlist" tab. Renders the server-authoritative queue
@@ -225,37 +226,43 @@ class PlaylistPanel(
                 item.pending -> "⏳ "
                 else -> ""
             } + (item.title.ifBlank { item.url }).take(60)
-            g.drawText(font, label, rowRect.x + 2, rowRect.y + 4, if (item.pending) UiTheme.TEXT_DIM else UiTheme.TEXT_PRIMARY, false)
 
             // Requester tag: show the player name resolved by the server; older servers may not
-            // send one, in which case fall back to the short UUID.
+            // send one, in which case fall back to the short UUID. It reserves room for the three
+            // row action glyphs (▲ ▼ ✕) so neither the title nor the tag can overlap the other.
             val byText = Component.translatable("dreamdisplayx.ui.playlist_by").string
             val requester = item.requesterName.ifBlank { item.requesterId.toString().take(8) }
             val tagW = font.width(byText + requester)
+            val tagX = rowRect.right - tagW - 74
             g.drawText(
                 font, byText + requester,
-                rowRect.right - tagW - 46, rowRect.y + 4, UiTheme.TEXT_DIM, false,
+                tagX, rowRect.y + 4, UiTheme.TEXT_DIM, false,
             )
 
-            // Per-row actions: approve / reject for pending rows (owner), remove for the rest.
-            val actionIcon = when {
-                item.pending -> "check"
-                else -> "cross"
-            }
-            val canAct = if (item.pending) isOwnerOrAdmin() || item.requesterId == clientPlayerId()
-            else isOwnerOrAdmin() || item.requesterId == clientPlayerId()
-            if (canAct && rowRect.contains(mouseX, mouseY)) {
+            // Title: clipped to the space left of the requester tag; a hovered overflowing title
+            // scrolls instead of spilling over the tag.
+            val titleX = rowRect.x + 2
+            val availW = tagX - 4 - titleX
+            val hovered = rowRect.contains(mouseX, mouseY)
+            drawRowTitle(
+                g, label, titleX, rowRect.y + 4,
+                if (item.pending) UiTheme.TEXT_DIM else UiTheme.TEXT_PRIMARY,
+                availW, hovered, item.itemId,
+            )
+
+            // Per-row actions: approve / reject for pending rows (owner), move up / down + remove
+            // for the rest. Left-to-right order: ▲ ▼ ✕ (remove stays rightmost as before).
+            val canAct = isOwnerOrAdmin() || item.requesterId == clientPlayerId()
+            if (canAct && hovered) {
                 val ax = rowRect.right - 16
                 if (item.pending) {
                     // Approve on the left of reject.
                     g.drawText(font, "✓", ax - 14, rowRect.y + 4, 0xFF55FF55.toInt(), false)
                     g.drawText(font, "✕", ax, rowRect.y + 4, 0xFFFF5555.toInt(), false)
-                    hoveredPending = item
-                    hoveredRemoveItem = null
                 } else {
+                    if (index > 0) g.drawText(font, "▲", ax - 28, rowRect.y + 4, UiTheme.TEXT_DIM, false)
+                    if (index < s.items.size - 1) g.drawText(font, "▼", ax - 14, rowRect.y + 4, UiTheme.TEXT_DIM, false)
                     g.drawText(font, "✕", ax, rowRect.y + 4, 0xFFFF5555.toInt(), false)
-                    hoveredRemoveItem = item
-                    hoveredPending = null
                 }
             }
         }
@@ -274,8 +281,66 @@ class PlaylistPanel(
         endBehaviorButton.visible = visible
     }
 
-    private var hoveredRemoveItem: PlaylistItem? = null
-    private var hoveredPending: PlaylistItem? = null
+    /**
+     * Title-marquee state: the item being hovered and how long it has been hovered. After a short
+     * dwell the title starts scrolling right-to-left so long entries become readable without ever
+     * overlapping the requester tag (the clip below guarantees that).
+     */
+    private var marqueeItem: UUID? = null
+    private var marqueeSinceMs = 0L
+
+    private companion object {
+        /** Dwell time before a hovered overflowing title starts scrolling. */
+        private val MARQUEE_DWELL_MS = 600L
+
+        /** Total rightward traversal duration of the marquee, derived from the text width. */
+        private const val MARQUEE_SPEED_PX_PER_S = 30f
+    }
+
+    /**
+     * Draws a queue-row title clipped to [maxW]. Static while it fits; once hovered longer than
+     * the dwell it scrolls right-to-left and back so the full text is readable in place.
+     */
+    private fun drawRowTitle(
+        g: GuiGraphicsCompat,
+        label: String,
+        x: Int,
+        y: Int,
+        color: Int,
+        maxW: Int,
+        hovered: Boolean,
+        itemId: UUID,
+    ) {
+        val textW = font.width(label)
+        if (textW <= maxW) {
+            g.drawText(font, label, x, y, color, false)
+            return
+        }
+        // Overflowing: clip, then marquee on hover after the dwell.
+        g.enableScissor(x, y - 2, x + maxW, y + font.lineHeight + 2)
+        val now = System.currentTimeMillis()
+        if (hovered) {
+            if (marqueeItem != itemId) {
+                marqueeItem = itemId
+                marqueeSinceMs = now
+            }
+            val hoverMs = now - marqueeSinceMs
+            if (hoverMs >= MARQUEE_DWELL_MS) {
+                val travel = textW - maxW
+                val cycleMs = (travel / MARQUEE_SPEED_PX_PER_S * 1000f).toLong().coerceAtLeast(400L) * 2
+                val phase = ((hoverMs - MARQUEE_DWELL_MS) % cycleMs).toFloat() / cycleMs
+                // 0..1..0 triangle wave: scroll left then glide back.
+                val offset = (if (phase < 0.5f) phase * 2f else 2f - phase * 2f) * travel
+                g.drawText(font, label, x - offset.roundToInt(), y, color, false)
+            } else {
+                g.drawText(font, label, x, y, color, false)
+            }
+        } else {
+            if (marqueeItem == itemId) marqueeItem = null
+            g.drawText(font, label, x, y, color, false)
+        }
+        g.disableScissor()
+    }
 
     private fun clientPlayerId(): UUID =
         Minecraft.getInstance().player?.uuid ?: UUID(0L, 0L)
@@ -311,9 +376,20 @@ class PlaylistPanel(
                     if (isOwnerOrAdmin() || item.requesterId == clientPlayerId()) reject(item)
                     return true
                 }
-                if (!item.pending && mx >= ax && mx <= ax + 10) {
-                    if (isOwnerOrAdmin() || item.requesterId == clientPlayerId()) remove(item)
-                    return true
+                if (!item.pending) {
+                    // ▲ (ax-28..ax-18) and ▼ (ax-14..ax-4) sit left of the ✕ glyph (ax..ax+10).
+                    if (isOwnerOrAdmin() && mx >= ax - 28 && mx <= ax - 18 && idx > 0) {
+                        move(item, idx - 1)
+                        return true
+                    }
+                    if (isOwnerOrAdmin() && mx >= ax - 14 && mx <= ax - 4 && idx < s.items.size - 1) {
+                        move(item, idx + 1)
+                        return true
+                    }
+                    if (mx >= ax && mx <= ax + 10) {
+                        if (isOwnerOrAdmin() || item.requesterId == clientPlayerId()) remove(item)
+                        return true
+                    }
                 }
                 // Plain click elsewhere on the row: owner / admin skips to it.
                 if (isOwnerOrAdmin()) {

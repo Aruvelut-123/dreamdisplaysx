@@ -54,7 +54,6 @@ internal object MediaPreparationService {
             isLive = resolved.isLive,
             isSeekable = resolved.isSeekable,
             durationNanos = durationNanos,
-            availableSubtitles = resolved.subtitles,
         )
     }
 }

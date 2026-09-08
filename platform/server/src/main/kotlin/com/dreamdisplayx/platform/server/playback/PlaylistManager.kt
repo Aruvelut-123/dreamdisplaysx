@@ -298,7 +298,11 @@ object PlaylistManager {
             if (durationMs <= 0) continue
             val timeline = TimelineManager.timelineOf(displayId) ?: continue
             if (timeline.paused) continue
-            val positionMs = timeline.positionAt(transport.nowMs())
+            // Raw (un-wrapped) position: a looping SYNCED / BROADCAST timeline wraps its public
+            // position at the duration, so positionAt never crosses the completion threshold and
+            // the queue would sit on the last item forever. rawPositionAt keeps growing past the
+            // duration so the end-of-item check below fires exactly once per item.
+            val positionMs = timeline.rawPositionAt(transport.nowMs())
             // Small grace so we don't cut the tail early on duration rounding.
             if (positionMs < durationMs + 1_500L) continue
 

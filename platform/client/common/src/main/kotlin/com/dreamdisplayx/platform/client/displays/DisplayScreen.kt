@@ -20,12 +20,13 @@ import com.dreamdisplayx.api.media.audio.model.SourceAcousticState
 import com.dreamdisplayx.api.media.audio.model.SourcePlane
 import com.dreamdisplayx.api.media.audio.service.keys.AudioAcousticsServices
 import com.dreamdisplayx.api.media.stream.model.MediaStream
-import com.dreamdisplayx.api.media.stream.model.SubtitleTrack
 import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackContext
 import com.dreamdisplayx.api.playback.model.PlaybackMode
+import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
+import com.dreamdisplayx.api.playback.model.PlaylistEndBehavior
 import com.dreamdisplayx.api.playback.model.WatchPartyAction
 import com.dreamdisplayx.api.playback.model.WatchPartySessionState
 import com.dreamdisplayx.api.playback.policy.PlaybackPermissions
@@ -44,6 +45,7 @@ import com.dreamdisplayx.platform.client.displays.DisplayScreen.Companion.ENV_PR
 import com.dreamdisplayx.platform.client.managers.ClientPacketManager
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.managers.DisplayPopoutManager
+import com.dreamdisplayx.platform.client.managers.PlaylistStateStore
 import com.dreamdisplayx.platform.client.render.*
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.platform.client.ui.DisplayMenu
@@ -363,8 +365,17 @@ class DisplayScreen(
     /** True once the controller has applied the screen's initial state to the current player. */
     internal val videoStarted: Boolean get() = media.videoStarted
 
+    /** True while the pause left by a finished video is still unhandled (cleared on the next load). */
+    private var pausedByEnded = false
+
     /** Local paused state (user intent / server-followed). */
     internal var paused: Boolean = savedSettings.paused
+        set(value) {
+            // Any fresh play state invalidates the "paused because the previous video ended" marker;
+            // only an explicit pause can re-arm it (set by onPlaybackEnded).
+            if (!value) pausedByEnded = false
+            field = value
+        }
 
     /** Temporary mute applied while the game window is unfocused; does not change [muted]. */
     private var focusMuted: Boolean = false
@@ -454,13 +465,6 @@ class DisplayScreen(
     /** Audio track / language of the current video, or `null` when idle. */
     var lang: String? = null; private set
 
-    /** Requested subtitle track language, or null to turn subtitles off. */
-    var subtitleTrack: String? = null
-        set(value) {
-            field = value
-            mediaPlayer?.setSubtitleTrack(value)
-        }
-
     /** True once the video is effectively playing: not awaiting the initial timeline and a frame has filled. */
     val isVideoStarted: Boolean get() = !stillWaitingForInitialTimeline() && (hasEverRendered || mediaPlayer?.textureFilled() == true)
 
@@ -531,22 +535,6 @@ class DisplayScreen(
     val isSwitchingAudioTrack: Boolean
         get() = mediaPlayer?.isSwitchingAudioTrack() == true
 
-    /** Subtitle tracks available for the current video (empty unless the provider exposed captions). */
-    val subtitleTrackList: List<SubtitleTrack>
-        get() = mediaPlayer?.getAvailableSubtitleTracks() ?: emptyList()
-
-    /** Language of the currently selected subtitle track, or null when subtitles are off. */
-    val currentSubtitleLang: String?
-        get() = mediaPlayer?.getCurrentSubtitleLang()
-
-    /** True while this viewer has subtitles turned on for this display. */
-    val subtitlesEnabled: Boolean
-        get() = mediaPlayer?.isSubtitlesEnabled() == true
-
-    /** Subtitle line active at the current playback position, or null when off / between cues. */
-    val currentSubtitleText: String?
-        get() = mediaPlayer?.getCurrentSubtitleText()
-
     /** True while a quality change is still being applied; the new resolution lands a few seconds later. */
     val isApplyingQuality: Boolean
         get() = mediaPlayer?.isApplyingQuality() == true
@@ -559,6 +547,10 @@ class DisplayScreen(
     /** Loads a new video from [videoUrl], preserving the current paused state. */
     fun loadVideo(videoUrl: String, lang: String) {
         if (!clientUrlOverride) ClientSettingsStore.setUrlOverride(uuid, null, null)
+        // A pause left over from the previous video reaching its natural end is not user intent:
+        // the new video must autoplay instead of inheriting the ended-pause and sitting frozen
+        // on its first frame. (An explicit user pause is preserved, as before.)
+        if (pausedByEnded) paused = false
         loadVideoInternal(videoUrl, lang, true)
     }
 
@@ -644,12 +636,6 @@ class DisplayScreen(
     /** The display's persistent preview texture, created on first use and released in [unregister]. */
     internal fun previewFrameTexture(): PreviewFrameTexture =
         previewFrameCache ?: PreviewFrameTexture(uuid).also { previewFrameCache = it }
-
-    @Transient
-    private var subtitleOverlayCache: SubtitleOverlayTexture? = null
-
-    internal fun subtitleOverlayTexture(): SubtitleOverlayTexture =
-        subtitleOverlayCache ?: SubtitleOverlayTexture().also { subtitleOverlayCache = it }
 
     @Transient
     private var danmakuControllerCache: ClientDanmakuController? = null
@@ -951,10 +937,38 @@ class DisplayScreen(
         val duration = mediaPlayerDurationNanos
         savedTimeNanos = if (duration > 0L && isTailResumePosition(positionNanos, duration)) 0L
         else positionNanos.coerceAtLeast(0L)
+        // LOCAL playlist auto-advance: an enabled queue moves on at EOS (the server's NEXT handler
+        // wraps under LOOP_CURRENT and rejects a CONTINUE overrun). Only the owner's / an admin's
+        // NEXT passes the server gate, so several viewers hitting EOS together cannot double-advance.
+        if (advanceLocalPlaylistOnEnd()) return
         if (paused) return
+        // Mark WHY we are pausing: a natural end is not user intent, so the next video load
+        // (playlist advance, suggestion, ...) clears it via the paused setter and autoplays.
+        pausedByEnded = true
         paused = true
         ClientSettingsStore.updateSettings(uuid, volume, quality, brightness, muted, paused)
         DisplayRegistry.recordScreen(this)
+    }
+
+    /**
+     * Sends [com.dreamdisplayx.api.playback.model.PlaylistCommandAction.NEXT] for an enabled LOCAL
+     * queue whose end behavior advances on completion. Returns true when the advance was handed to
+     * the server (which broadcasts the new video through the normal set-video path); false lets the
+     * caller fall through to the ended-pause.
+     */
+    private fun advanceLocalPlaylistOnEnd(): Boolean {
+        // A looping fullscreen overlay replays one video on purpose; the queue must not hijack it.
+        if (isFullscreenActive && fullscreenLoop) return false
+        val state = PlaylistStateStore.stateOf(uuid) ?: return false
+        if (!state.enabled) return false
+        val behavior = PlaylistEndBehavior.fromWire(state.endBehavior)
+        if (behavior == PlaylistEndBehavior.PAUSE) return false
+        val index = state.currentIndex
+        if (index < 0) return false
+        // CONTINUE past the final item is a server-side reject: stay on the ended-pause instead.
+        if (behavior == PlaylistEndBehavior.CONTINUE && index + 1 >= state.items.size) return false
+        PlaylistStateStore.send(uuid, PlaylistCommandAction.NEXT.wire)
+        return true
     }
 
     /** Emits the upstream intent for the current mode (no-op for Local / Broadcast / non-host). */
@@ -1016,8 +1030,6 @@ class DisplayScreen(
         textureResource.releaseAsync()
         previewFrameCache?.closeAsync()
         previewFrameCache = null
-        subtitleOverlayCache?.dispose()
-        subtitleOverlayCache = null
         danmakuControllerCache?.dispose()
         danmakuControllerCache = null
 
@@ -1291,11 +1303,17 @@ class DisplayScreen(
         }
         if (ClientStateManager.config.audioAcoustics == AcousticQuality.OFF) return
         val plane = toSourcePlane()
+        // The acoustics engine computes its own output gain from SourceAcousticState.userVolume, so the
+        // global audio multiplier must be folded in here (not just in applyEffectiveVolume, which only
+        // drives the raw VLC volume) or the sound-settings multiplier has no effect on acoustics output.
+        val globalMultiplier = runCatching {
+            ClientStateManager.config.globalAudioMultiplier
+        }.getOrDefault(1.0).coerceIn(0.0, 2.0)
         DreamServices.registry.getOrNull(AudioAcousticsServices.ACOUSTICS)?.updateSource(
             uuid,
             SourceAcousticState(
                 plane = plane,
-                userVolume = volume,
+                userVolume = (volume * globalMultiplier).toFloat(),
                 muted = muted || focusMuted,
                 bypassSpatial = isPopoutActive,
                 acousticsEnabled = acousticsEnabled,

@@ -79,14 +79,6 @@ class DisplayMenu private constructor(
                 .setAudioTrack(DisplayId(displayScreen.uuid), it.url)
         },
     )
-    private val subtitleDropdown = SubtitleDropdown(
-        getTracks = { displayScreen.subtitleTrackList },
-        currentLang = { displayScreen.currentSubtitleLang.takeIf { displayScreen.subtitlesEnabled } },
-        onSelect = {
-            DreamServices.registry.get(PlaybackServices.PLAYBACK)
-                .setSubtitleTrack(DisplayId(displayScreen.uuid), it?.lang)
-        },
-    )
 
     private lateinit var volume: ValueSlider
     private lateinit var quality: ValueSlider
@@ -99,7 +91,6 @@ class DisplayMenu private constructor(
     private lateinit var danmakuDensity: ModeSlider<Int>
     private lateinit var danmakuScale: ValueSlider
     private lateinit var danmakuOpacity: ValueSlider
-    private lateinit var subtitleToggle: ToggleSwitch
     private lateinit var progress: SeekBar
     private lateinit var suggestions: SuggestionsPanel
     private lateinit var preview: PreviewSection
@@ -108,7 +99,7 @@ class DisplayMenu private constructor(
     private lateinit var errorPanel: ErrorPanel
     private lateinit var popoutButton: IconButton
     private lateinit var audioTrackButton: IconButton
-    private lateinit var subtitleButton: IconButton
+
 
     /** Which sub-panel the settings column shows: `false` = display settings, `true` = playlist. */
     private var showPlaylistTab = false
@@ -230,21 +221,6 @@ class DisplayMenu private constructor(
         stretchReset.visibleWhen = notErrored
 
         val cfg = ClientStateManager.config
-        subtitleToggle = addUi(ToggleSwitch(
-            initial = ds.subtitlesEnabled,
-            label = { if (it) Component.translatable("dreamdisplayx.mode.enabled") else Component.translatable("dreamdisplayx.mode.disabled") },
-        ) { enabled ->
-            val lang = if (enabled) {
-                ds.currentSubtitleLang ?: ds.subtitleTrackList.firstOrNull()?.lang
-            } else null
-            playback.setSubtitleTrack(displayId, lang)
-        })
-        subtitleToggle.visibleWhen = notErrored
-
-        val subtitleToggleReset = addUi(IconButton("refresh") { playback.setSubtitleTrack(displayId, null) })
-        subtitleToggleReset.enabledWhen = { ds.subtitlesEnabled }
-        subtitleToggleReset.visibleWhen = notErrored
-
         danmakuArea = addUi(ModeSlider(
             modes = DANMAKU_AREA_MODES,
             initial = cfg.danmakuRollingRangePercent,
@@ -372,10 +348,6 @@ class DisplayMenu private constructor(
         audioTrackButton.enabledWhen = { videoReady() && ds.audioTrackList.size > 1 }
         audioTrackButton.visibleWhen = notErrored
 
-        subtitleButton = addUi(IconButton("cc") { subtitleDropdown.toggle() })
-        subtitleButton.enabledWhen = { videoReady() && ds.subtitleTrackList.isNotEmpty() }
-        subtitleButton.visibleWhen = notErrored
-
         val danmakuButton = addUi(
             IconButton(
                 icon = { IconButton.modIcon(if (ds.danmakuEnabled) "cc" else "mute") },
@@ -474,13 +446,13 @@ class DisplayMenu private constructor(
 
         preview =
             PreviewSection(
-                ds, muteButton, volume, popoutButton, audioTrackButton, subtitleButton, danmakuButton, pauseButton, progress,
-                dropdown, audioTrackDropdown, subtitleDropdown,
+                ds, muteButton, volume, popoutButton, audioTrackButton, danmakuButton, pauseButton, progress,
+                dropdown, audioTrackDropdown,
             )
         settings = SettingsSection(
             rows = settingsRows(
                 qualityReset, brightnessReset, audio3dReset, syncReset, stretchReset,
-                subtitleToggleReset, danmakuAreaReset, danmakuSpeedReset, danmakuDensityReset, danmakuScaleReset, danmakuOpacityReset,
+                danmakuAreaReset, danmakuSpeedReset, danmakuDensityReset, danmakuScaleReset, danmakuOpacityReset,
             ),
             ownerActions = listOf(reportButton, deleteButton, lockButton),
             buttonTooltips = listOf(
@@ -506,7 +478,7 @@ class DisplayMenu private constructor(
     private fun settingsRows(
         qualityReset: IconButton,
         brightnessReset: IconButton, audio3dReset: IconButton, syncReset: IconButton, stretchReset: IconButton,
-        subtitleToggleReset: IconButton, danmakuAreaReset: IconButton, danmakuSpeedReset: IconButton,
+        danmakuAreaReset: IconButton, danmakuSpeedReset: IconButton,
         danmakuDensityReset: IconButton, danmakuScaleReset: IconButton, danmakuOpacityReset: IconButton,
     ): List<SettingsSection.Row> {
         val ds = displayScreen
@@ -577,12 +549,6 @@ class DisplayMenu private constructor(
                         "dreamdisplayx.button.stretch.tooltip.6",
                         Component.translatable(stretchModeLabel(stretch.mode)),
                     ),
-                )
-            },
-            SettingsSection.Row("dreamdisplayx.button.subtitles", subtitleToggle, subtitleToggleReset) {
-                listOf(
-                    tooltipTitle("dreamdisplayx.button.subtitles.tooltip.1"),
-                    tooltipBody("dreamdisplayx.button.subtitles.tooltip.2"),
                 )
             },
             SettingsSection.Row("dreamdisplayx.button.danmaku_area", danmakuArea, danmakuAreaReset, extraGapBefore = 6) {
@@ -836,8 +802,6 @@ class DisplayMenu private constructor(
                 my
             )
         ) return true
-        val onSubtitleButton = subtitleButton.isMouseOver(mx.toDouble(), my.toDouble())
-        if (subtitleDropdown.visible && event.button() == 0 && !onSubtitleButton && subtitleDropdown.handleClick(mx, my)) return true
         return modLabel.handleClick(mx, my)
     }
 
@@ -872,8 +836,6 @@ class DisplayMenu private constructor(
         if (dropdown.visible && button == 0 && !onPopoutButton && dropdown.handleClick(mx, my)) return true
         val onAudioTrackButton = audioTrackButton.isMouseOver(mouseX, mouseY)
         if (audioTrackDropdown.visible && button == 0 && !onAudioTrackButton && audioTrackDropdown.handleClick(mx, my)) return true
-        val onSubtitleButton = subtitleButton.isMouseOver(mouseX, mouseY)
-        if (subtitleDropdown.visible && button == 0 && !onSubtitleButton && subtitleDropdown.handleClick(mx, my)) return true
         return modLabel.handleClick(mx, my)
     }
 

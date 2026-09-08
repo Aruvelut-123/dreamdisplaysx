@@ -141,11 +141,6 @@ class DefaultDisplaySystem(
         apply(commands.setBrightness(displayId, brightness))
     }
 
-    /** Sets the subtitle track language, or null to turn subtitles off. */
-    override fun setSubtitleTrack(displayId: DisplayId, lang: String?) {
-        apply(commands.setSubtitleTrack(displayId, lang))
-    }
-
     /** Mute or unmute the audio for a display. */
     override fun mute(displayId: DisplayId, muted: Boolean) {
         apply(commands.mute(displayId, muted))

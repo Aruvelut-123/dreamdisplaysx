@@ -102,7 +102,7 @@ class Config(private val baseDir: File) {
     /** Whether colored danmaku are hidden (only white kept). */
     var danmakuBlockColored: Boolean = false
 
-    /** Keeps fixed-bottom danmaku clear of the subtitle area by capping the rolling range at 85%. */
+    /** Keeps fixed-bottom danmaku clear of the bottom edge by capping the rolling range at 85%. */
     var danmakuBottomGuard: Boolean = true
 
     init {
@@ -363,7 +363,7 @@ class Config(private val baseDir: File) {
         ),
         ConfigEntry(
             "danmaku-bottom-guard", "Danmaku bottom guard",
-            "Keep fixed-bottom danmaku clear of the subtitle area by capping the rolling range at 85%.",
+            "Keep fixed-bottom danmaku clear of the bottom edge by capping the rolling range at 85%.",
             ConfigEntryType.BOOLEAN,
             get = { danmakuBottomGuard },
             apply = { danmakuBottomGuard = it; save() },

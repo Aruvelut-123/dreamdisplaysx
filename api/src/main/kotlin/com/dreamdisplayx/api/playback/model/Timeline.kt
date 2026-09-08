@@ -27,6 +27,17 @@ data class Timeline(
         return if (loop && durationMs > 0) raw % durationMs else raw
     }
 
+    /**
+     * Position at server-time [nowMs] WITHOUT the loop wrap, kept growing past [durationMs] once the
+     * media has logically finished. Timeline consumers that must detect "ran past the end" (e.g.
+     * playlist auto-advance) use this instead of [positionAt], whose modulo hides completion forever
+     * on looping SYNCED / BROADCAST timelines.
+     */
+    fun rawPositionAt(nowMs: Long): Long {
+        if (paused) return positionMs
+        return (positionMs + (nowMs - serverTimeMs)).coerceAtLeast(0)
+    }
+
     /** Re-anchors so the clock is continuous at [nowMs] (used before pause / seek / duration changes). */
     fun anchoredAt(nowMs: Long): Timeline = copy(positionMs = positionAt(nowMs), serverTimeMs = nowMs)
 

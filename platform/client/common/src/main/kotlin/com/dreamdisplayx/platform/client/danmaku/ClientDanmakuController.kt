@@ -122,23 +122,26 @@ class ClientDanmakuController(private val screen: DisplayScreen) {
             val duration = durationMs(item, canvasWidth)
             val elapsed = animationTime - item.startTime
             if (elapsed < 0 || elapsed > duration) continue
+            val scale = item.effectiveScale()
+            val width = item.effectiveWidth()
+            val height = item.effectiveHeight()
             val x: Float
             val y: Float
             if (item.rolling) {
-                if (item.lane >= rollingLaneCount(item.height)) continue
-                val travel = canvasWidth + item.width
+                if (item.lane >= rollingLaneCount(height)) continue
+                val travel = canvasWidth + width
                 val progress = (elapsed.toFloat() / duration.coerceAtLeast(1)).coerceIn(0f, 1f)
-                x = if (item.leftToRight) -item.width + progress * travel else canvasWidth - progress * travel
+                x = if (item.leftToRight) -width + progress * travel else canvasWidth - progress * travel
                 y = 6f + item.lane * LANE_HEIGHT
             } else if (item.fixedBottom) {
-                x = max(4f, (canvasWidth - item.width) * 0.5f)
+                x = max(4f, (canvasWidth - width) * 0.5f)
                 y = canvasHeight - 8f - (item.lane + 1) * LANE_HEIGHT
             } else {
-                x = max(4f, (canvasWidth - item.width) * 0.5f)
+                x = max(4f, (canvasWidth - width) * 0.5f)
                 y = 6f + item.lane * LANE_HEIGHT
             }
-            if (x + item.width < -0.5f || x > canvasWidth + 0.5f || y + item.height < 0 || y > canvasHeight) continue
-            result.add(RenderableDanmaku(item.text, x, y, item.scale, item.color, item.width, item.height, !item.rolling, op))
+            if (x + width < -0.5f || x > canvasWidth + 0.5f || y + height < 0 || y > canvasHeight) continue
+            result.add(RenderableDanmaku(item.text, x, y, scale, item.color, width, height, !item.rolling, op))
         }
         return result
     }
@@ -294,9 +297,12 @@ class ClientDanmakuController(private val screen: DisplayScreen) {
     }
 
     private fun spawn(entry: DanmakuEntry): Boolean {
-        val scale = entry.scale() * scaleMultiplier()
+        // Store only the entry's base scale: the user scale multiplier is applied at draw time
+        // (see effectiveScale) so changing the danmaku scale setting rescales on-screen comments
+        // immediately instead of only affecting comments spawned after the change.
+        val baseScale = entry.scale()
         val text = entry.content
-        val metrics = DanmakuTextLayoutCache.measure(text, scale)
+        val metrics = DanmakuTextLayoutCache.measure(text, baseScale * scaleMultiplier())
         val width = metrics.width
         val height = metrics.height
         val lane: Int
@@ -313,7 +319,7 @@ class ClientDanmakuController(private val screen: DisplayScreen) {
             if (lane < 0) return false
         }
         if (active.size >= MAX_ACTIVE) active.removeAt(0)
-        active.add(ActiveDanmaku(text, entry.mode, entry.argb(), scale, width, height, lane, animationTime))
+        active.add(ActiveDanmaku(text, entry.mode, entry.argb(), baseScale, lane, animationTime))
         return true
     }
 
@@ -326,7 +332,18 @@ class ClientDanmakuController(private val screen: DisplayScreen) {
     }
 
     private fun durationMs(item: ActiveDanmaku, canvasWidth: Float): Long =
-        if (item.rolling) rollingDuration(canvasWidth, item.width) else FIXED_DURATION_MS
+        if (item.rolling) rollingDuration(canvasWidth, item.effectiveWidth()) else FIXED_DURATION_MS
+
+    // ── live scale (settings applied in real time) ──
+
+    /** Entry base scale times the user scale setting, resolved per frame instead of at spawn. */
+    private fun ActiveDanmaku.effectiveScale(): Float = baseScale * scaleMultiplier()
+
+    /** Width for the current effective scale; served from the text layout cache. */
+    private fun ActiveDanmaku.effectiveWidth(): Float = DanmakuTextLayoutCache.measure(text, effectiveScale()).width
+
+    /** Height for the current effective scale; served from the text layout cache. */
+    private fun ActiveDanmaku.effectiveHeight(): Float = DanmakuTextLayoutCache.measure(text, effectiveScale()).height
 
     // ── lanes ──
 
@@ -371,14 +388,15 @@ class ClientDanmakuController(private val screen: DisplayScreen) {
         val gap = if (density == DENSITY_MORE || density == DENSITY_OVERLAP) max(28f, width * 0.25f) else max(72f, width * 0.75f)
         for (item in active) {
             if (!item.rolling || item.lane != lane) continue
+            val itemWidth = item.effectiveWidth()
             val duration = durationMs(item, canvasWidth)
             val elapsed = animationTime - item.startTime
             if (elapsed < 0 || elapsed > duration) continue
-            val travel = canvasWidth + item.width
+            val travel = canvasWidth + itemWidth
             val progress = (elapsed.toFloat() / duration.coerceAtLeast(1)).coerceIn(0f, 1f)
-            val x = if (item.leftToRight) -item.width + progress * travel else canvasWidth - progress * travel
+            val x = if (item.leftToRight) -itemWidth + progress * travel else canvasWidth - progress * travel
             if (leftToRight) { if (x < gap) return true }
-            else { if (x + item.width > canvasWidth - gap) return true }
+            else { if (x + itemWidth > canvasWidth - gap) return true }
         }
         return false
     }
@@ -425,9 +443,7 @@ class ClientDanmakuController(private val screen: DisplayScreen) {
         val text: String,
         val mode: Int,
         val color: Int,
-        val scale: Float,
-        val width: Float,
-        val height: Float,
+        val baseScale: Float,
         val lane: Int,
         val startTime: Long,
     ) {
