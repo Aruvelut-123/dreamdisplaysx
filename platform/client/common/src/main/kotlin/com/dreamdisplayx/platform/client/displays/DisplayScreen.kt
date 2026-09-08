@@ -1323,10 +1323,15 @@ class DisplayScreen(
         return cachedEnvironment
     }
 
-    /** Called after a user-initiated seek completes; emits the seek intent upstream per mode. */
-    fun afterSeek() {
+    /**
+     * Called after a user-initiated seek to [positionNanos] completes; emits the seek intent upstream
+     * per mode. The reported position must be the requested target: the decoder applies the seek
+     * asynchronously, so reading the live player position here would report the PRE-seek spot and
+     * the server timeline (then the follower on every other viewer) would drag playback back.
+     */
+    fun afterSeek(positionNanos: Long) {
         if (!canSeekHere) return
-        emitPlaybackIntent(PlaybackAction.SEEK)
+        emitPlaybackIntent(PlaybackAction.SEEK, positionNanos / 1_000_000L)
     }
 
     companion object {

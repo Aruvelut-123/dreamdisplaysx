@@ -10,6 +10,6 @@ internal data class PlayerEvents(
     /** Called on an unrecoverable playback error. */
     val onError: (DreamMediaException) -> Unit,
 
-    /** Called after a seek completes so the screen can reset its overlay state. */
-    val onSeek: () -> Unit,
+    /** Called after a seek with the requested target (nanos) so the screen can reset its overlay state. */
+    val onSeek: (Long) -> Unit,
 )

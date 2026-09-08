@@ -48,8 +48,13 @@ interface PlaybackHost {
     /** Last fatal/recoverable media error; the player sets this to surface failures to the UI. */
     var mediaError: DreamMediaException?
 
-    /** Invoked after a seek so the host can react (e.g. clear stale frames). */
-    fun afterSeek()
+    /**
+     * Invoked after a seek with the requested target [positionNanos] so the host can react (e.g.
+     * clear stale frames) and report the intent upstream. The target must be passed through — the
+     * decoder applies the seek asynchronously, so the live player position here still reads the
+     * pre-seek spot and reporting that instead would drag synced playback back to where it was.
+     */
+    fun afterSeek(positionNanos: Long)
 
     /** Begins a dual-texture quality handoff (stage a pending texture). */
     fun beginQualityHandoff()

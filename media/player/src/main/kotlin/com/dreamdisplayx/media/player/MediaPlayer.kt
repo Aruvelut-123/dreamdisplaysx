@@ -214,7 +214,7 @@ class MediaPlayer(
     /** Player events. */
     private val events = PlayerEvents(
         onError = { e -> state.set(PlaybackState.ERROR); host.mediaError = e },
-        onSeek = { host.afterSeek() },
+        onSeek = { target -> host.afterSeek(target) },
     )
 
     /** Debug stats. */
@@ -1077,7 +1077,7 @@ class MediaPlayer(
                         clock.reset(0)
                         startStreams(ss, 0)
                     }
-                    events.onSeek()
+                    events.onSeek(0L)
                 }
             } finally {
                 restartPending.set(false)
@@ -1217,7 +1217,10 @@ class MediaPlayer(
         }
         // When the session is not playing (restart in flight / dead), only the clock is parked:
         // the pending (re)start reads clock.originNanos, so the seek still applies to it.
-        if (fire) events.onSeek()
+        // The event carries the TARGET, never the live position: libvlc applies set_time
+        // asynchronously, so the live position here still reads the pre-seek spot — reporting
+        // that upstream made every synced seek land back at where playback was before it.
+        if (fire) events.onSeek(target)
     }
 
     /**

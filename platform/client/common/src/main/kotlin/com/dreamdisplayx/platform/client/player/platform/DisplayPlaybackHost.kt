@@ -52,8 +52,8 @@ class DisplayPlaybackHost(private val screen: DisplayScreen) : PlaybackHost {
             screen.mediaError = value
         }
 
-    /** Notifies the screen that a user seek completed (emits the intent upstream). */
-    override fun afterSeek() = screen.afterSeek()
+    /** Notifies the screen that a user seek to [positionNanos] completed (emits the intent upstream). */
+    override fun afterSeek(positionNanos: Long) = screen.afterSeek(positionNanos)
 
     /** Stages a new-resolution texture for a quality switch. */
     override fun beginQualityHandoff() = screen.beginQualityHandoff()

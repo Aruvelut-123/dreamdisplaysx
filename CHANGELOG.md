@@ -36,6 +36,7 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 - Fixed playback loop when resuming near VOD end (Flashback/saved time) by treating tail positions as completed and restarting from start
 - Server-broadcast or end-of-stream tail positions are no longer re-applied, saved, or reported as resume points, so the cold-start guard can no longer be re-armed every broadcast (the recurring "plays a few seconds, jumps to end, restarts" loop)
 - Fixed the remaining replay loop for synced displays: a server timeline target parked in the VOD tail (a persisted end-of-stream position) is treated as a stale completion marker, so the follower no longer drags the player to the tail on every seek cooldown (the recurring "plays the opening seconds, then replays" loop)
+- Fixed seeking a paused display destroying the decoder session (every seek then spawned a fresh player on resume), and the seek intent now reports the requested target instead of the not-yet-applied live position, so synced playback no longer snaps back to the pre-seek spot
 - Queued start tasks now yield to a stop that arrived meanwhile, so a blocked attach can no longer resurrect a stopped player under its replacement.
 
 ## Server
