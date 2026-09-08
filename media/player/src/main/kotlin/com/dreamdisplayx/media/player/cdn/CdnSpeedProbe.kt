@@ -249,6 +249,27 @@ object CdnSpeedProbe {
     // ── Bandwidth probe ─────────────────────────────────────────────────────
 
     /**
+     * Aligns a secondary rendition URL (e.g. the scrub-preview stream) to the mirror host of the
+     * currently playing stream. Secondary renditions never go through [reorderForPlayback], so
+     * without this they keep the API's original host — frequently a slow edge (the log showed a
+     * 360p scrub stream on a mirror that probed far below the selected mirror's throughput), which
+     * makes every scrub-preview seek time out.
+     *
+     * Pure and synchronous: rewrites only when BOTH URLs are host-replaceable Bilibili mirrors, so
+     * every selection mode is respected automatically — auto (playing host = probed best edge),
+     * explicit mirror (playing host = the configured one), BASE_URL (original host, not a mirror
+     * URL → no rewrite, scrub stays on its original host too), BACKUP_URL (same as playing).
+     */
+    fun alignSecondaryRenditionHost(url: String, playingUrl: String?): String {
+        if (playingUrl.isNullOrEmpty()) return url
+        if (!MIRROR_REGEX.containsMatchIn(url) || !MIRROR_REGEX.containsMatchIn(playingUrl)) return url
+        val playingHost = MediaHosts.hostOf(playingUrl) ?: return url
+        val currentHost = MediaHosts.hostOf(url) ?: return url
+        if (playingHost == currentHost) return url
+        return replaceHost(url, playingHost)
+    }
+
+    /**
      * Measures throughput to [host] by requesting a Range from [url].
      * @param chunkBytes  number of bytes to request (Range `bytes=0-{chunkBytes-1}`).
      *                    Startup probe uses 8 MB (matching PiliPlus); on-the-fly uses 256 KB.

@@ -742,7 +742,11 @@ class MediaPlayer(
     fun capturedStreamRawUrl(): String? {
         val pm = capturePreparedMedia() ?: return null
         val videos = pm.streamSet.availableVideo
-        return scrubStreamOf(videos).url
+        // Align the scrub rendition's CDN host to the playing stream's mirror: secondary renditions
+        // skip CdnSpeedProbe, so the raw URL often points at a slow edge and every scrub-preview
+        // seek timed out ("ScrubSession: frame timeout") before the extractor's budget expired.
+        val playingUrl = pm.streamSet.currentVideo?.url
+        return CdnSpeedProbe.alignSecondaryRenditionHost(scrubStreamOf(videos).url, playingUrl)
     }
 
     /**

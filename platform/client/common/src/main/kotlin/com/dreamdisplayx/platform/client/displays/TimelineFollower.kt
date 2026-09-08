@@ -36,6 +36,20 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
         pending = null
     }
 
+    /**
+     * Records a USER-initiated seek so the drift corrector does not fight the seek's own recovery:
+     * right after a seek the decoder re-buffers (a few seconds of stall while the new fragments
+     * load), during which the player trails the projected server target by more than the catch-up
+     * tolerance — reading as drift and triggering a second corrective seek (another decoder
+     * restart + another stall). That chain is the "after a seek it keeps auto pausing/resuming
+     * until it loads" loop. Arming the same cooldown corrective seeks use suppresses those
+     * follow-up seeks while the user's seek settles; pause-state matching is unaffected (it never
+     * consults [lastSeekNanos]).
+     */
+    fun onLocalSeek() {
+        lastSeekNanos = System.nanoTime()
+    }
+
     /** Re-applies a timeline packet that arrived before the media player existed or finished init. */
     fun onPlayerCreated() {
         pending?.let(::applyPending)

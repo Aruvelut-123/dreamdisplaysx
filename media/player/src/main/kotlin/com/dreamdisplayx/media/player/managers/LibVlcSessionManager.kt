@@ -825,6 +825,11 @@ internal class LibVlcSessionManager(
                 if (ap != null) {
                     runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
                 }
+                // The two players recover from a seek independently (separate buffers / decoders), so
+                // their clocks can land apart; the 10s auto-resync would leave the audio audibly
+                // off-sync for the first ~10s after every seek. Schedule the same early correction
+                // (~1.5s) the cold-start path uses. Skipped while parked by scheduleInitialAvSync.
+                scheduleInitialAvSync()
             }
             // If a seek left the player in a dead state (stopped/ended — e.g. a backwards seek
             // into an already-released region dropping it out of PLAYING), resume it. Buffering(2)

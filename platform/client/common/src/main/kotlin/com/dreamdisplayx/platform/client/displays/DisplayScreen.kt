@@ -1331,6 +1331,10 @@ class DisplayScreen(
      */
     fun afterSeek(positionNanos: Long) {
         if (!canSeekHere) return
+        // The user's seek starts its own re-buffer window; arm the timeline follower's cooldown so
+        // the post-seek stall is not misread as drift and corrected with a second seek (which
+        // restarts the decoder again — the "keeps auto pause/resuming until it loads" loop).
+        timelineFollower.onLocalSeek()
         emitPlaybackIntent(PlaybackAction.SEEK, positionNanos / 1_000_000L)
     }
 
