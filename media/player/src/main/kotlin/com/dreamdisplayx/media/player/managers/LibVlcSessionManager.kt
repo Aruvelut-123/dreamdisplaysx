@@ -1086,6 +1086,16 @@ internal class LibVlcSessionManager(
 
     fun parkedPositionNanos(): Long? = parkPositionNanos.takeIf { parkFlag.get() && it >= 0 }
 
+    /**
+     * Repositions the frozen anchor of a parked session after an in-place seek. A warm-paused or
+     * parked session reads its position back through [parkedPositionNanos] (UI progress, resume
+     * position, [resume] pacing fallback), so the anchor must follow the seek or the UI would show
+     * the pre-seek position until the session is resumed. No-op when not parked.
+     */
+    fun repositionParked(nanos: Long) {
+        if (parkFlag.get() && nanos >= 0) parkPositionNanos = nanos
+    }
+
     // ── Audio helpers (unused with libvlc default output) ───────────────────
 
     @Suppress("UNUSED_PARAMETER")

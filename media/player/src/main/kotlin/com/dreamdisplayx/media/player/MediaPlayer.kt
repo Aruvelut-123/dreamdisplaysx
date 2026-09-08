@@ -1191,7 +1191,6 @@ class MediaPlayer(
     private fun doSeek(nanos: Long, fire: Boolean) {
         if (!isReady || !seekable) return
         endedAtEnd.set(false)
-        if (isPausedWarm()) freezePausedWarmSession()
         // Clamp to just before the end of the stream: a seek past the last keyframe often makes
         // av_seek_frame fail (or the first grab return EOF), which used to stall the player or
         // cause it to restart the stream from the beginning. Duration above 0 is a VOD hint.
@@ -1200,12 +1199,24 @@ class MediaPlayer(
         // pipe can pace one more frame against a half-updated timeline while the seek is set up.
         clock.reset(target)
         val ss = streams ?: return
-        if (sessionManager.isPlaying && !sessionManager.isParked()) {
+        if (sessionManager.isPlaying) {
+            // In-place seek — for playing, warm-paused AND parked sessions: set_time works on
+            // paused libvlc players and preserves pause semantics. Seeking a warm-paused session
+            // used to freeze it (stopSession), which silently destroyed the session; the next
+            // play() then fell into doPlay's cold start at the seek target, which the user saw
+            // as "seeking creates a brand-new player". beginSeek's resume block only re-plays
+            // STOPPED/ENDED players, so a parked session stays parked at the new position.
             if (!sessionManager.beginSeek(ss, target, lastQuality)) {
                 logger.warn("$debugLabel Seek to ${target / 1_000_000} ms fell back to a full stream restart.")
                 startStreams(ss, target)
+            } else {
+                // A warm-paused/parked session reads its position back from the park anchor
+                // (UI progress + resume position); keep it in step with the seek.
+                sessionManager.repositionParked(target)
             }
         }
+        // When the session is not playing (restart in flight / dead), only the clock is parked:
+        // the pending (re)start reads clock.originNanos, so the seek still applies to it.
         if (fire) events.onSeek()
     }
 
@@ -1306,8 +1317,9 @@ class MediaPlayer(
 
     /**
      * Converts a warm-paused session back to the ordinary paused representation before operations that
-     * need a cold restart later (seek, quality / backend switch). This preserves pause semantics instead of
-     * accidentally starting decode while the UI still says paused.
+     * need a cold restart later (quality / backend switch). This preserves pause semantics instead of
+     * accidentally starting decode while the UI still says paused. Seeks must NOT freeze a warm
+     * session: they seek it in place (see [doSeek]) so pause -> seek -> resume stays seamless.
      */
     private fun freezePausedWarmSession() {
         val pos = sessionManager.parkedPositionNanos() ?: getCurrentTime()
