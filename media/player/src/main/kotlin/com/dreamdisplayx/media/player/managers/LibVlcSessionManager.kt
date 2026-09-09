@@ -170,16 +170,53 @@ internal class LibVlcSessionManager(
      */
     private val SEEK_SETTLE_WINDOW_NANOS = 5_000_000_000L
 
-    /**
-     * A seek whose video clock is still this far from its target after [SEEK_VERIFY_DELAY_NANOS]
-     * is treated as dropped by libvlc (set_time raced the demuxer flush) and is re-applied once.
-     */
+    /** First landing check delay; fast seeks can settle before verification starts. */
     private val SEEK_VERIFY_DELAY_NANOS = 1_500_000_000L
+
+    /** Maximum distance from the target that still counts as landed. */
     private val SEEK_VERIFY_TOLERANCE_MS = 1_200L
+
+    /** Gap between clock samples used to distinguish a dropped seek from an active flush. */
+    private val SEEK_VERIFY_SAMPLE_GAP_NANOS = 500_000_000L
+
+    /** Minimum clock advance across the sample gap that proves old content is still playing. */
+    private val SEEK_VERIFY_DROP_ADVANCE_MS = 300L
+
+    /** Bounded verification passes per seek. */
+    private val SEEK_VERIFY_MAX_CHECKS = 12
+
+    /** Delay after re-applying set_time before checking its result again. */
+    private val SEEK_VERIFY_RECHECK_NANOS = 1_000_000_000L
+
+    /** Fail-open bound for the picture freeze, so a broken seek cannot freeze the display forever. */
+    private val SEEK_FREEZE_MAX_NANOS = 10_000_000_000L
 
     /** Wall deadline (System.nanoTime) until which A/V snapping is suppressed after a seek. */
     @Volatile
     private var seekSettleUntilNanos = 0L
+
+    /**
+     * Monotonic id of the newest seek. A verification task started for an older id is stale and
+     * must not re-apply set_time (a newer seek superseded it). Read at task start, re-checked at
+     * every pass.
+     */
+    private val seekGeneration = AtomicLong(0)
+
+    /**
+     * Picture freeze while a seek settles: while armed and the video clock is still far from the
+     * target, [TextureRenderCallback.publishFrame] drops stale pre-seek frames so the user does
+     * not watch old content "like another player" while the audio player is already at the target.
+     * The last displayed frame simply stays on screen until the decoder resumes past the new
+     * position (the intended hard-switch UX).
+     */
+    @Volatile
+    private var seekFrozen = false
+
+    @Volatile
+    private var seekFrozenTargetMs = -1L
+
+    @Volatile
+    private var seekFrozenDeadlineNanos = 0L
 
     /** True while inside the post-seek settle window during which audio must not be snapped to video. */
     private fun seekSettling(): Boolean = System.nanoTime() < seekSettleUntilNanos
@@ -553,6 +590,8 @@ internal class LibVlcSessionManager(
         // snap-suppression window (armed by beginSeek / seek verification) must not leak in and
         // defer the initial A/V alignment chain.
         seekSettleUntilNanos = 0L
+        seekFrozen = false
+        seekGeneration.incrementAndGet()
         expectedW = w
         expectedH = h
         firstFrameFired = false
@@ -788,11 +827,18 @@ internal class LibVlcSessionManager(
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         // Reset audio flags before the seek so a pause-then-resume immediately after seek starts clean.
         audioOutput?.onSeekReset()
+        // Retire verification from an older seek before publishing this seek's target.
+        seekGeneration.incrementAndGet()
+        val targetMs = offsetNanos / 1_000_000L
+        // Hold the last displayed picture while the video demuxer flushes onto the target. This
+        // prevents pre-seek frames from visibly continuing while the audio player has already moved.
+        seekFrozenTargetMs = targetMs
+        seekFrozenDeadlineNanos = System.nanoTime() + SEEK_FREEZE_MAX_NANOS
+        seekFrozen = true
         // Suppress the A/V snap chain for the settle window: the video demuxer takes seconds to
         // flush onto a far target while the audio player lands there immediately — snapping audio
         // to the video's stale clock would rewind the whole playback to the pre-seek position.
         armSeekSettleWindow()
-        val targetMs = offsetNanos / 1_000_000L
         submit {
             val mp = mediaPlayer ?: return@submit
             // ENDED state ignores set_time and a bare play() is not guaranteed to restart in libvlc
@@ -898,46 +944,96 @@ internal class LibVlcSessionManager(
     }
 
     /**
-     * Verifies that an in-place seek actually landed, and re-applies it once when libvlc dropped it.
+     * Verifies an in-place seek without interrupting a legitimate slow demuxer flush.
      *
-     * `set_time` submitted while the demuxer is mid-flush (typical for a far seek on a throttled
-     * CDN edge) can be silently ignored; the video player then keeps playing from the pre-seek
-     * position while the audio player sits at the target, and the A/V snap logic "resolves" the
-     * mismatch by rewinding everything to the old position. After a short delay the video clock is
-     * compared against the seek target: if it is still far away (in either direction — a dropped
-     * backwards seek leaves the clock ahead of the target), the set_time is re-applied on both
-     * players. One re-assertion is enough in practice; a second dropped seek is left to the caller's
-     * retry machinery rather than risk a seek/flush loop.
+     * Two clock samples distinguish the failure modes: an advancing clock still playing the
+     * pre-seek timeline means libvlc dropped set_time and warrants one re-assertion; a stalled
+     * clock means the demuxer is flushing toward the target, so re-applying set_time would restart
+     * that flush. The loop is bounded and generation-aware, so newer seeks retire stale checks.
      */
     private fun scheduleSeekLandingVerification(targetMs: Long) {
+        val generation = seekGeneration.get()
         Thread {
+            var checks = 0
+            var reasserted = false
             try {
                 Thread.sleep(SEEK_VERIFY_DELAY_NANOS / 1_000_000L)
             } catch (_: InterruptedException) {
                 return@Thread
             }
-            submit {
-                if (stopped.get() || parkFlag.get() || released.get()) return@submit
-                val mp = mediaPlayer ?: return@submit
-                val state = try { LibVlc.lib.libvlc_media_player_get_state(mp) } catch (_: Throwable) { -1 }
-                // 3 = PLAYING, 2 = BUFFERING (transient right after a seek; the clock is still valid
-                // there). Anything else (STOPPED / ENDED / error) must not receive a re-assertion.
-                if (state != LibVlc.LIBVLC_STATE_PLAYING && state != 2) return@submit
-                val videoMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
-                if (videoMs < 0) return@submit
-                if (kotlin.math.abs(videoMs - targetMs) <= SEEK_VERIFY_TOLERANCE_MS) return@submit
-                logger.warn(
-                    "$debugLabel Seek to {} ms did not land (video clock at {} ms); re-applying set_time.",
-                    targetMs, videoMs
-                )
-                runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, targetMs) }
-                audioPlayer?.let { ap ->
-                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, targetMs) }
+            while (checks++ < SEEK_VERIFY_MAX_CHECKS) {
+                if (stopped.get() || parkFlag.get() || released.get()) return@Thread
+                if (seekGeneration.get() != generation) return@Thread
+                val mp = mediaPlayer ?: return@Thread
+                val state = runCatching { LibVlc.lib.libvlc_media_player_get_state(mp) }.getOrDefault(-1)
+                // 3 = PLAYING, 2 = BUFFERING. Other states do not need a seek re-assertion.
+                if (state != LibVlc.LIBVLC_STATE_PLAYING && state != 2) return@Thread
+                val firstMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                if (firstMs < 0) return@Thread
+                if (kotlin.math.abs(firstMs - targetMs) <= SEEK_VERIFY_TOLERANCE_MS) {
+                    seekFrozen = false
+                    return@Thread
                 }
-                // The re-asserted seek needs its own snap-suppression window: the video demuxer
-                // flushes all over again, so the stale-clock argument applies a second time.
+                try {
+                    Thread.sleep(SEEK_VERIFY_SAMPLE_GAP_NANOS / 1_000_000L)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+                if (stopped.get() || parkFlag.get() || released.get()) return@Thread
+                if (seekGeneration.get() != generation) return@Thread
+                val secondMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                if (secondMs < 0) return@Thread
+
+                // Keep audio from being snapped back to the stale video clock while this seek is
+                // still settling, including flushes longer than the original five-second window.
                 armSeekSettleWindow()
+                when (classifySeekLanding(firstMs, secondMs, targetMs, SEEK_VERIFY_TOLERANCE_MS, SEEK_VERIFY_DROP_ADVANCE_MS)) {
+                    SeekLanding.LANDED -> {
+                        seekFrozen = false
+                        return@Thread
+                    }
+                    SeekLanding.FLUSHING -> {
+                        logger.debug(
+                            "$debugLabel Seek to {} ms still flushing (video clock at {} ms); waiting.",
+                            targetMs, secondMs
+                        )
+                    }
+                    SeekLanding.DROPPED -> {
+                        if (reasserted) {
+                            logger.warn(
+                                "$debugLabel Seek to {} ms still not landed after re-assert (video clock advancing at {} ms); giving up.",
+                                targetMs, secondMs
+                            )
+                            seekFrozen = false
+                            return@Thread
+                        }
+                        reasserted = true
+                        logger.warn(
+                            "$debugLabel Seek to {} ms was dropped (video clock advancing {} -> {} ms); re-applying set_time.",
+                            targetMs, firstMs, secondMs
+                        )
+                        runCatching {
+                            submit {
+                                if (stopped.get() || parkFlag.get() || released.get()) return@submit
+                                if (seekGeneration.get() != generation) return@submit
+                                val current = mediaPlayer ?: return@submit
+                                runCatching { LibVlc.lib.libvlc_media_player_set_time(current, targetMs) }
+                                audioPlayer?.let { ap ->
+                                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, targetMs) }
+                                }
+                                armSeekSettleWindow()
+                            }
+                        }
+                        try {
+                            Thread.sleep(SEEK_VERIFY_RECHECK_NANOS / 1_000_000L)
+                        } catch (_: InterruptedException) {
+                            return@Thread
+                        }
+                    }
+                }
             }
+            // Fail open: a permanently broken seek must not leave the display frozen forever.
+            seekFrozen = false
         }.also { it.isDaemon = true }.start()
     }
 
@@ -1018,6 +1114,8 @@ internal class LibVlcSessionManager(
         eosReached = true
         stopped.set(true)
         seekSettleUntilNanos = 0L
+        seekFrozen = false
+        seekGeneration.incrementAndGet()
         submit {
             val mp = mediaPlayer
             if (mp != null) {
@@ -1049,6 +1147,8 @@ internal class LibVlcSessionManager(
         eosReached = true
         stopped.set(true)
         seekSettleUntilNanos = 0L
+        seekFrozen = false
+        seekGeneration.incrementAndGet()
         val mp = mediaPlayer
         if (mp != null) {
             runCatching {
@@ -1188,6 +1288,9 @@ internal class LibVlcSessionManager(
     fun suspend(allowExternalProcess: Boolean = false, retainBuffered: Boolean = false): Boolean {
         val mp = mediaPlayer ?: return false
         parkFlag.set(true)
+        // Parked: the last displayed frame stays on screen naturally; release any pending seek
+        // freeze so a later resume is never gated on a seek that was superseded while parked.
+        seekFrozen = false
         // Persist the authoritative libvlc position (get_time, ms) rather than the wall-clock
         // estimate, so the progress bar resumes exactly where the stream was paused.
         parkPositionNanos = currentPacingNanos().takeIf { it >= 0 } ?: clock.currentTime()
@@ -1421,6 +1524,23 @@ internal class LibVlcSessionManager(
             val ew = expectedW
             val eh = expectedH
             if (ew <= 0 || eh <= 0) return
+            // Seek picture-freeze: while a seek is settling, hold the last displayed picture
+            // instead of visibly continuing the old timeline ("another player"). Drop frames until
+            // the video clock reaches the target, the fail-open deadline expires, or a newer seek /
+            // stop / park releases the gate.
+            if (seekFrozen) {
+                if (System.nanoTime() >= seekFrozenDeadlineNanos) {
+                    seekFrozen = false
+                } else {
+                    val mp = mediaPlayer
+                    val clockMs = if (mp == null) -1L
+                    else runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                    if (clockMs < 0L || kotlin.math.abs(clockMs - seekFrozenTargetMs) > SEEK_VERIFY_TOLERANCE_MS) {
+                        return // stale pre-seek frame: keep the frozen picture
+                    }
+                    seekFrozen = false // video clock reached the target: resume publishing
+                }
+            }
             // DEBUG: count delivered frames for the FPS label (1s sliding window).
             val now = System.nanoTime()
             if (fpsWindowStartNanos == 0L) fpsWindowStartNanos = now
@@ -1701,4 +1821,39 @@ internal class LibVlcSessionManager(
         private fun outputFps(sourceFps: Double?): Double =
             sourceFps?.takeIf { it.isFinite() && it > 1.0 && it <= 240.0 } ?: REPLAY_FPS
     }
+}
+
+/** Verdict of a seek-landing clock-sample pair. */
+internal enum class SeekLanding { LANDED, DROPPED, FLUSHING }
+
+/**
+ * Classifies two video-clock samples (ms) taken roughly [SEEK_VERIFY_SAMPLE_GAP_NANOS] apart
+ * against a seek [targetMs].
+ *
+ * - [SeekLanding.LANDED]: either sample is within [toleranceMs] of the target — the seek reached
+ *   its destination and playback can resume normally.
+ * - [SeekLanding.DROPPED]: the clock advanced at least [advanceMs] while still far from the target
+ *   — the pre-seek timeline is STILL PLAYING (set_time was silently ignored), so re-applying
+ *   set_time is warranted.
+ * - [SeekLanding.FLUSHING]: the clock barely moved while far from the target — the demuxer is
+ *   legitimately flushing toward the target; re-applying set_time would restart that flush and
+ *   should be avoided.
+ *
+ * Negative samples (failed libvlc reads) are treated as [SeekLanding.FLUSHING] so they never
+ * trigger a spurious re-assertion; a restart of the flush is the most expensive error mode.
+ */
+internal fun classifySeekLanding(
+    firstMs: Long,
+    secondMs: Long,
+    targetMs: Long,
+    toleranceMs: Long,
+    advanceMs: Long,
+): SeekLanding {
+    if (firstMs < 0L || secondMs < 0L || targetMs < 0L) return SeekLanding.FLUSHING
+    if (kotlin.math.abs(firstMs - targetMs) <= toleranceMs ||
+        kotlin.math.abs(secondMs - targetMs) <= toleranceMs
+    ) {
+        return SeekLanding.LANDED
+    }
+    return if (secondMs - firstMs >= advanceMs) SeekLanding.DROPPED else SeekLanding.FLUSHING
 }
