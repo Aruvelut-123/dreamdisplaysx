@@ -98,6 +98,23 @@ class MediaPlayer(
         private const val EARLY_EOS_TAIL_NS = 5_000_000_000L
 
         /**
+         * Classifies a normal-EOS as an early death (retry candidate) rather than a genuine
+         * completion. Package-private and side-effect free so the decision is unit-testable.
+         *
+         * A session that dies a few hundred milliseconds in with its duration still unresolved
+         * (`durationNanos <= 0` — the resolver had not reported yet) used to fall through to the
+         * "genuine completion" branch and fire the ended-pause / playlist advance: the new video
+         * "played 0.5 s and paused itself". When the duration IS known, the original rule applies:
+         * EOS is early when it is outside the tail and in the first 90 % of the media.
+         */
+        internal fun isEarlyEos(positionNanos: Long, durationNanos: Long): Boolean {
+            if (durationNanos <= 0L) return positionNanos < EARLY_EOS_MIN_DURATION_NS
+            return durationNanos > EARLY_EOS_MIN_DURATION_NS &&
+                positionNanos < durationNanos - EARLY_EOS_TAIL_NS &&
+                positionNanos * 10L < durationNanos * 9L
+        }
+
+        /**
          * When the user drags the seek bar past the very end of the video, clamp the target to this
          * many nanoseconds before the end; otherwise av_seek_frame may fail (or the first grab returns
          * EOF) and the player stalls or restarts from the beginning instead of playing the tail.
@@ -951,9 +968,10 @@ class MediaPlayer(
             // A CDN/DASH leg can report END_REACHED after only a few seconds. Treating that as a
             // completed VOD makes loop-enabled displays replay the same opening forever, which looks
             // like a player storm. Re-resolve the stream instead when EOS is clearly far from the end.
+            // The classifier also covers the duration-unresolved case: a session dying while the
+            // resolver has not reported yet must retry, not end the video (the 0.5 s auto-pause).
             val duration = durationHintNanos
-            val earlyEnd = duration > EARLY_EOS_MIN_DURATION_NS &&
-                position < duration - EARLY_EOS_TAIL_NS && position * 10L < duration * 9L
+            val earlyEnd = isEarlyEos(position, duration)
             if (earlyEnd) {
                 logger.warn(
                     "$debugLabel Early EOS at {}ms of {}ms; re-resolving instead of looping.",
