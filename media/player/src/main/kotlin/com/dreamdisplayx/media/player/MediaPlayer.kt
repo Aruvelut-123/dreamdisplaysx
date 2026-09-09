@@ -1156,9 +1156,18 @@ class MediaPlayer(
                 // (UI progress + resume position); keep it in step with the seek.
                 sessionManager.repositionParked(target)
             }
+        } else {
+            // A dead session must not silently wait for a later play() to cold-start. Prime any
+            // restart already in flight, then restart immediately when the state is otherwise
+            // ready; this makes a seek deterministic even after a decoder stall or early EOS.
+            primedStartPositionNanos.set(target)
+            if (state.get() != PlaybackState.RESTARTING && !terminated.get()) {
+                logger.warn("$debugLabel Seek to ${target / 1_000_000} ms with a dead session; restarting at target.")
+                startStreams(ss, target)
+            }
         }
-        // When the session is not playing (restart in flight / dead), only the clock is parked:
-        // the pending (re)start reads clock.originNanos, so the seek still applies to it.
+        // The target is parked above so an in-flight restart and the UI both retain the requested
+        // position; a dead session is restarted explicitly rather than deferred to doPlay.
         // The event carries the TARGET, never the live position: libvlc applies set_time
         // asynchronously, so the live position here still reads the pre-seek spot — reporting
         // that upstream made every synced seek land back at where playback was before it.

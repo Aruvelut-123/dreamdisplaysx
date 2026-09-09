@@ -825,6 +825,9 @@ internal class LibVlcSessionManager(
                 if (ap != null) {
                     runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
                 }
+                // Re-arm the EOS gate after every in-place seek, matching the ENDED restart path;
+                // a prior end notification must not suppress the next genuine end event.
+                eosFired.set(false)
                 // The two players recover from a seek independently (separate buffers / decoders), so
                 // their clocks can land apart; the 10s auto-resync would leave the audio audibly
                 // off-sync for the first ~10s after every seek. Schedule the same early correction

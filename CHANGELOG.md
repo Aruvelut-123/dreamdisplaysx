@@ -7,7 +7,6 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 - Per-display playlists stored in SQLite/MySQL: add, remove, reorder, skip, approve, and clear.
 - Configurable end-of-queue behavior (pause / continue / loop) and add-permission policy (everyone / owner approval / owner only), both persisted in the database.
 - Two-tab display menu (playlist / display settings).
-- Ported upstream subtitle support (WebVTT parsing, on-screen overlay, subtitle picker, saved language).
 - Region access levels (`DisplayAccess`: EVERYONE / REGION / LOCKED) replace the locked/unlocked boolean.
 - Experimental Protocol V3 envelope, display groups, and Paper remote-control stick.
 - Legacy Protocol V1 removed; clients still on V1 are notified on connect.
@@ -38,6 +37,8 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 - Fixed the remaining replay loop for synced displays: a server timeline target parked in the VOD tail (a persisted end-of-stream position) is treated as a stale completion marker, so the follower no longer drags the player to the tail on every seek cooldown (the recurring "plays the opening seconds, then replays" loop)
 - Fixed seeking a paused display destroying the decoder session (every seek then spawned a fresh player on resume), and the seek intent now reports the requested target instead of the not-yet-applied live position, so synced playback no longer snaps back to the pre-seek spot
 - Queued start tasks now yield to a stop that arrived meanwhile, so a blocked attach can no longer resurrect a stopped player under its replacement.
+- Enabled playlists now advance or pause at end-of-stream instead of replaying the current item.
+- Seeking after a stalled player now restarts deterministically at the requested position and re-arms end-of-stream handling.
 
 ## Server
 

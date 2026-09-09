@@ -878,6 +878,19 @@ class DisplayScreen(
     /** Whether the active fullscreen presentation should loop when its video ends. */
     internal fun shouldLoopFullscreen(): Boolean = fullscreenLoop
 
+    /**
+     * Whether the media player should replay the current VOD when it reaches the end.
+     * A looping fullscreen overlay replays on purpose (its own loop flag). A plain wall display
+     * without a queue keeps the upstream TV-loop behavior. An enabled playlist owns the end
+     * behavior instead: EOS must fire [onPlaybackEnded] so the queue can advance (CONTINUE /
+     * LOOP_CURRENT) or hold the last frame (PAUSE) rather than replaying the same item forever.
+     */
+    internal fun shouldLoopOnEnd(): Boolean {
+        if (isFullscreenActive) return fullscreenLoop
+        val state = PlaylistStateStore.stateOf(uuid)
+        return state == null || !state.enabled
+    }
+
     /** Applies volume, brightness, and paused state to the media player, then seeks to the saved position. */
     fun startVideo() = media.start()
 
