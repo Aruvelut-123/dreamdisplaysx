@@ -39,8 +39,7 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 - Queued start tasks now yield to a stop that arrived meanwhile, so a blocked attach can no longer resurrect a stopped player under its replacement.
 - Enabled playlists now advance or pause at end-of-stream instead of replaying the current item.
 - Seeking after a stalled player now restarts deterministically at the requested position and re-arms end-of-stream handling.
-- Far seeks no longer snap back to the pre-seek position: audio snapping is suppressed while the video demuxer is still flushing toward the seek target, and a `set_time` dropped by libvlc is verified and re-applied once.
-- Far seeks no longer show the pre-seek timeline playing like a second player: stale video frames are held while the seek settles (the picture freezes on its last frame) and released once the decoder reaches the target or a bounded timeout expires; the dropped-`set_time` re-assertion now only fires when the old timeline is demonstrably still advancing, so it no longer restarts a legitimate slow demuxer flush.
+- Fixed far seeks showing pre-seek video or snapping back before the target loads.
 - A stream that dies while its duration is still unresolved is now treated as an early end and re-resolved, instead of being counted as a completed video that paused or advanced the queue half a second in.
 
 ## Server
