@@ -6,10 +6,12 @@ import com.dreamdisplays.platform.client.core.ClientApplication
 import com.dreamdisplays.platform.client.core.ClientLifecycleEvent
 import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
+import com.dreamdisplays.platform.client.input.MouseButtons
 import com.dreamdisplays.platform.client.managers.*
 import com.dreamdisplays.platform.client.net.LegacyAdapter
 import com.dreamdisplays.platform.client.net.ProtocolRouter
 import com.dreamdisplays.platform.client.overlay.OverlayManager
+import com.dreamdisplays.platform.client.render.DisplayYuvRenderTypes
 import com.dreamdisplays.platform.client.ui.FullscreenOverlayManager
 import com.dreamdisplays.platform.client.ui.MinecraftOverlayRenderContext
 import com.dreamdisplays.platform.client.utils.MinecraftScreenUtil
@@ -34,9 +36,6 @@ object Initializer {
 
     /** Called once during mod startup; initializes config, `yt-dlp`, `FFmpeg`, disk cache, and the focuser thread. */
     fun onModInit(dreamDisplaysMod: Mod) {
-        // On macOS, VideoPopoutWindow uses GLFW (not AWT), so no AWT setup is needed.
-        // On Windows / Linux, AWT is used: override java.awt.headless so a JFrame can open.
-        // Must run before any AWT class initializes the Toolkit.
         if (!OsInfo.isMac) {
             System.setProperty("java.awt.headless", "false")
         }
@@ -99,6 +98,7 @@ object Initializer {
      * handles the right-click shortcut, and applies focus-mode blindness.
      */
     fun onEndTick(minecraft: Minecraft) {
+        DisplayYuvRenderTypes.solidColorType()
         ClientTickManager.tick(minecraft)
     }
 
@@ -113,8 +113,23 @@ object Initializer {
         graphics.nextStratum()
         //?}
         FullscreenOverlayManager.renderAll(mc, graphics, partialTick)
+        val window = mc.window
+        val mouse = mc.mouseHandler
         DreamServices.registry.getOrNull<OverlayManager>()
-            ?.renderAll(MinecraftOverlayRenderContext(mc, graphics, -1, -1, false, partialTick))
+            ?.renderAll(
+                MinecraftOverlayRenderContext(
+                    mc,
+                    graphics,
+                    //? if >=1.21.11 {
+                    mouse.getScaledXPos(window).toInt(),
+                    mouse.getScaledYPos(window).toInt(),
+                    //?} else
+                    /*(mouse.xpos() * window.guiScaledWidth / window.screenWidth).toInt(),
+                    (mouse.ypos() * window.guiScaledHeight / window.screenHeight).toInt(),*/
+                    MouseButtons.hardwareLeftDown(),
+                    partialTick,
+                )
+            )
     }
 
     /** Routes an outgoing [packet] through protocol negotiation (v2 when available, else v1). */
