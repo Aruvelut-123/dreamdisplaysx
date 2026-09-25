@@ -1,6 +1,6 @@
-# 1.9.5.1 Release
+# 1.10.0.1 Release
 
-Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplays/commit/de61bdb78d3ddffc37078d7e2bc1f4eb7583f607).
+Based on Dream Displays [6102d461](https://github.com/arnodoelinger/dreamdisplays/commit/6102d4619db2e8fc79170c15454a7fc48dc76e1f).
 
 ## Highlights
 
