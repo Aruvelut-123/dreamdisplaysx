@@ -51,6 +51,11 @@ class RoundTripTest {
     )
 
     @Test
+    fun serverHelloZeroDefaultVolume() = roundTrip(
+        ServerHello(defaultVolume = 0f),
+    )
+
+    @Test
     fun displayInfoWithNegativeCoordinatesAndUnicode() = roundTrip(
         DisplayInfo(
             id = id,

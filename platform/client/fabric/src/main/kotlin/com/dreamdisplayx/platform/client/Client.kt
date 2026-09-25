@@ -45,6 +45,9 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommands
 //?} else
 /*import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager*/
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
+import com.dreamdisplayx.platform.client.input.DisplayMenuInputHandler
+import net.fabricmc.fabric.api.event.player.UseBlockCallback
+import net.minecraft.world.InteractionResult
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
@@ -201,6 +204,12 @@ class Client : ClientModInitializer, Mod {
                         1
                     }
             )
+        }
+
+        UseBlockCallback.EVENT.register { _, world, _, _ ->
+            if (!world.isClientSide) InteractionResult.PASS
+            else if (DisplayMenuInputHandler.tryOpenFromWorld()) InteractionResult.FAIL
+            else InteractionResult.PASS
         }
         ClientPlayConnectionEvents.JOIN.register { _, _, client ->
             if (client.level != null && client.player != null) {

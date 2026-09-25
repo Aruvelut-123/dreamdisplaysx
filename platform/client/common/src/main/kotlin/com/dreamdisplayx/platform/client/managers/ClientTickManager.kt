@@ -18,7 +18,7 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.TitleScreen
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen
 import net.minecraft.client.multiplayer.ClientLevel
-import org.lwjgl.glfw.GLFW
+import net.minecraft.client.multiplayer.ClientPacketListener
 import java.util.*
 
 /**
@@ -40,6 +40,12 @@ object ClientTickManager {
     /** The level seen last tick, used to detect level changes. */
     @Volatile
     private var lastLevel: ClientLevel? = null
+
+    /**
+     * The play connection last seen in a level. A proxy server switch goes through the configuration phase and
+     * builds a new one, while a dimension change keeps it, so a different instance means a different backend.
+     */
+    private var lastConnection: ClientPacketListener? = null
 
     /** Counter that throttles the unloaded-screen restore check. */
     private var unloadCheckTick = 0
@@ -67,13 +73,20 @@ object ClientTickManager {
 
         val level = minecraft.level
         if (level != null && (minecraft.currentServer != null || minecraft.isLocalServer)) {
+            val connection = minecraft.connection
+            val newBackend = connection != null && lastConnection != null && connection !== lastConnection
+            if (connection != null) lastConnection = connection
             if (lastLevel == null) {
                 lastLevel = level
+                if (newBackend) {
+                    DisplayRegistry.unloadAllForServerSwitch(newBackend = true)
+                    hoveredDisplayScreen = null
+                }
                 checkVersionAndSendPacket()
             }
             if (level !== lastLevel) {
                 lastLevel = level
-                DisplayRegistry.unloadAllForServerSwitch()
+                DisplayRegistry.unloadAllForServerSwitch(newBackend)
                 hoveredDisplayScreen = null
                 checkVersionAndSendPacket()
             }
@@ -88,6 +101,7 @@ object ClientTickManager {
                 FullscreenOverlayManager.closeAll()
                 hoveredDisplayScreen = null
                 lastLevel = null
+                lastConnection = null
                 return
             }
             lastLevel = null
@@ -159,21 +173,22 @@ object ClientTickManager {
 
         // The menu-open button comes from the KeyBindingRegistry; the click itself is routed
         // through the InputHandler chain (DisplayMenuInputHandler consumes sneak + click-on-display).
-        val window =
-            //? if >=1.21.11 {
-            minecraft.window.handle()
-        //?} else
-        /*minecraft.window.window*/
-        val menuButton = DreamServices.registry.getOrNull<KeyBindingRegistry>()
-            ?.findById(DisplayMenuInputHandler.OPEN_MENU_BINDING_ID)?.defaultKey
-            ?: GLFW.GLFW_MOUSE_BUTTON_RIGHT
-        val pressed = GLFW.glfwGetMouseButton(window, menuButton) == GLFW.GLFW_PRESS
-        if (pressed && !wasPressed) {
-            DreamServices.registry.getOrNull<InputHandler>()?.handle(
-                InputAction.MouseClicked(minecraft.mouseHandler.xpos(), minecraft.mouseHandler.ypos(), menuButton)
-            )
+        // 26.3 only updates isRightPressed while no screen is open, so ignore the shortcut (and
+        // freeze wasPressed) whenever a GUI is showing.
+        if (MinecraftScreenUtil.currentScreen(minecraft) != null) {
+            wasPressed = MouseButtons.hardwareRightDown()
+        } else {
+            val menuButton = DreamServices.registry.getOrNull<KeyBindingRegistry>()
+                ?.findById(DisplayMenuInputHandler.OPEN_MENU_BINDING_ID)?.defaultKey
+                ?: DisplayMenuInputHandler.OPEN_MENU_BINDING.defaultKey
+            val pressed = MouseButtons.hardwareRightDown()
+            if (pressed && !wasPressed) {
+                DreamServices.registry.getOrNull<InputHandler>()?.handle(
+                    InputAction.MouseClicked(minecraft.mouseHandler.xpos(), minecraft.mouseHandler.ypos(), menuButton)
+                )
+            }
+            wasPressed = pressed
         }
-        wasPressed = pressed
     }
 
     /** Frees a fully warm dormant display, keeping only its cheap replay snapshot for fast reappearance. */

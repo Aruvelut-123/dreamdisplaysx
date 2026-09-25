@@ -2,6 +2,93 @@
 
 Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplays/commit/de61bdb78d3ddffc37078d7e2bc1f4eb7583f607).
 
+# 1.10.0 Preview 2 (merged from upstream)
+
+## Highlights
+
+- Added experimental support for 26.3 version
+- Fixed duplicated displays on proxy
+- Minor rendering fixes and other improvements
+
+## Client
+
+### Features
+
+- Added experimental support for 26.3 version
+
+### Improvements
+
+- Added stabile support of `Window` mode on macOS
+
+### Fixes
+
+- Fixed a bug where changing the GUI scale while watching a Picture-in-Picture video caused the video to render incorrectly
+- Fixed `&nbsp;` on the end of some subtitles
+- Fixed subtitles blinking
+
+## Server
+
+### Features
+
+- Added experimental support for 26.3 version
+
+### Improvements
+
+- Added `WorldGuard` as an optional dependency in workflow
+- Added `LuckPerms` as an optional dependency for proxy in workflow
+
+### Fixes
+
+- Fixed duplicated displays across servers when using proxy
+- Fixed `default_volume` not applying to newly created displays (`0` was dropped on the wire; 50 now matches the 50% client slider)
+
+# 1.10.0 Preview 1
+
+## Highlights
+
+- Subtitles support
+- Added `WorldGuard` support
+- Replaced the display lock with three access levels: `Everyone`, `Region members` (WorldGuard) and `Locked`
+- Added Simplified Chinese translation
+- Fixes and improvements (like CPU reduction and displays being unaffected by outlines)
+
+## Client
+
+### Features
+
+- Added subtitles support
+- Added support for `WorldGuard` ([#194](https://github.com/arnodoelinger/dreamdisplays/issues/194))
+- Replaced the display lock with three access levels: `Everyone`, `Region members` (WorldGuard) and `Locked`
+- Removed per-display render distance setting; now displays use client's render distance instead
+- Added Simplified Chinese translation ([#180](https://github.com/arnodoelinger/dreamdisplays/pull/180))
+
+### Improvements
+
+- Reduced CPU use of video playback
+- Now displays are unaffected by outlines
+
+### Fixes
+
+- Fixed playback restarting itself a second after start when the first frame took longer to arrive
+- Fixed the game crashing when the server crashes while a display is playing
+- Fixed bad command suggestion syntax after creating a display
+
+## Server
+
+### Features
+
+- Added support for `WorldGuard` ([#194](https://github.com/arnodoelinger/dreamdisplays/issues/194))
+- Added Simplified Chinese translation ([#180](https://github.com/arnodoelinger/dreamdisplays/pull/180))
+
+### Fixes
+
+- Filter out drop-column statements during schema migration
+- Fixed the database connection pool leaking on plugin reload
+- Fixed coroutine error when stopping the server
+- Fixed rare `bStats` JSON warnings
+
+# 1.9.6 Release
+
 ## Highlights
 
 - Per-display playlists stored in SQLite/MySQL: add, remove, reorder, skip, approve, and clear.

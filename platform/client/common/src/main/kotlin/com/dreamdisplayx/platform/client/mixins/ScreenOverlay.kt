@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client.mixins
 
 import com.dreamdisplayx.api.runtime.registry.service.getOrNull
 import com.dreamdisplayx.platform.client.core.DreamServices
+import com.dreamdisplayx.platform.client.input.MouseButtons
 import com.dreamdisplayx.platform.client.overlay.OverlayManager
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
 import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
@@ -13,7 +14,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
 //?} else
 /*import net.minecraft.client.gui.GuiGraphics*/
 import net.minecraft.client.gui.screens.Screen
-import org.lwjgl.glfw.GLFW
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Inject
@@ -96,12 +96,7 @@ open class ScreenOverlay {
         }
         val overlays = DreamServices.registry.getOrNull<OverlayManager>() ?: return
         if (overlays.isEmpty) return
-        val window =
-            //? if >=1.21.11 {
-            mc.window.handle()
-        //?} else
-        /*mc.window.window*/
-        val leftPressed = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
+        val leftPressed = MouseButtons.hardwareLeftDown()
         //? if >=1.21.11 {
         graphics.nextStratum()
         //?}

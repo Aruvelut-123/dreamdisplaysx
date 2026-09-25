@@ -5,7 +5,7 @@
     "id": "dreamdisplayx",
     "version": "${version}",
     "metadata": {
-      "name": "Dream DisplaysX",
+"name": "Dream DisplaysX",
       "description": "Create in-game screens to stream videos on any Minecraft server.",
       "contributors": {
         "Baymaxawa": "Developer",

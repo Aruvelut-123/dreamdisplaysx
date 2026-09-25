@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Redirect
 
-/** `Fabric` / `NeoForge` only. */
+/** `NeoForge` only. `NeoForge`'s Mixin keeps `@Redirect.at` as a single value. */
 @Suppress("NonJavaMixin")
 @Mixin(ArgumentCommandNode::class)
 open class BareTokenArgumentTypeSyncMixin {

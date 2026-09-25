@@ -6,9 +6,11 @@ import com.dreamdisplayx.platform.client.core.ClientApplication
 import com.dreamdisplayx.platform.client.core.ClientLifecycleEvent
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.platform.client.input.MouseButtons
 import com.dreamdisplayx.platform.client.managers.*
 import com.dreamdisplayx.platform.client.net.ProtocolRouter
 import com.dreamdisplayx.platform.client.overlay.OverlayManager
+import com.dreamdisplayx.platform.client.render.DisplayYuvRenderTypes
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
 import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
 import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
@@ -109,6 +111,7 @@ object Initializer {
      * handles the right-click shortcut, and applies focus-mode blindness.
      */
     fun onEndTick(minecraft: Minecraft) {
+        DisplayYuvRenderTypes.solidColorType()
         ClientTickManager.tick(minecraft)
     }
 
@@ -124,8 +127,23 @@ object Initializer {
         graphics.nextStratum()
         //?}
         FullscreenOverlayManager.renderAll(mc, graphics, partialTick)
+        val window = mc.window
+        val mouse = mc.mouseHandler
         DreamServices.registry.getOrNull<OverlayManager>()
-            ?.renderAll(MinecraftOverlayRenderContext(mc, graphics, -1, -1, false, partialTick))
+            ?.renderAll(
+                MinecraftOverlayRenderContext(
+                    mc,
+                    graphics,
+                    //? if >=1.21.11 {
+                    mouse.getScaledXPos(window).toInt(),
+                    mouse.getScaledYPos(window).toInt(),
+                    //?} else
+                    /*(mouse.xpos() * window.guiScaledWidth / window.screenWidth).toInt(),
+                    (mouse.ypos() * window.guiScaledHeight / window.screenHeight).toInt(),*/
+                    MouseButtons.hardwareLeftDown(),
+                    partialTick,
+                )
+            )
     }
 
     /** Routes an outgoing [packet] through protocol negotiation (v2 when available, else v1). */
