@@ -640,7 +640,7 @@ class SuggestionsPanel(
         val mx = mouseX.toInt()
         val my = mouseY.toInt()
         val onSortButton = sortButton.isMouseOver(mouseX, mouseY)
-        if (sortDropdown.visible && button == 0 && !onSortButton && sortDropdown.handleClick(mx, my)) return true
+        if (sortDropdown.visible && MouseButtons.isLeft(button) && !onSortButton && sortDropdown.handleClick(mx, my)) return true
         if (clearButton.isMouseOver(mouseX, mouseY)) return clearButton.mouseClicked(mouseX, mouseY, button)
         if (onSortButton) return sortButton.mouseClicked(mouseX, mouseY, button)
         if (searchButton.isMouseOver(mouseX, mouseY)) return searchButton.mouseClicked(mouseX, mouseY, button)
@@ -650,14 +650,14 @@ class SuggestionsPanel(
             return handled
         }
         searchBox.isFocused = false
-        if (button == 0 && overScrollbar(mouseX, mouseY)) {
+        if (MouseButtons.isLeft(button) && overScrollbar(mouseX, mouseY)) {
             draggingScrollbar = true
             scrollFromPos(if (sbVertical) mouseY else mouseX)
             return true
         }
         // Right-clicking a remembered link removes it from "My links"; a plain left-click plays it.
-        if (button == 1 && forgetCardAt(mx, my)) return true
-        val card = if (button == 0) cardAt(mouseX, mouseY) else -1
+        if (MouseButtons.isRight(button) && forgetCardAt(mx, my)) return true
+        val card = if (MouseButtons.isLeft(button)) cardAt(mouseX, mouseY) else -1
         if (card in controller.visibleCards.indices) {
             val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
             Minecraft.getInstance().soundManager.play(s)

@@ -23,6 +23,7 @@ import com.dreamdisplayx.api.runtime.registry.service.get
 import com.dreamdisplayx.api.watchparty.service.keys.WatchPartyServices
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
+import com.dreamdisplayx.platform.client.input.MouseButtons
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.managers.PlaylistStateStore
@@ -791,13 +792,13 @@ class DisplayMenu private constructor(
         if (replayReadOnly) return true
         val mx = event.x().toInt()
         val my = event.y().toInt()
-        if (event.button() == 0 && handleTabClick(mx, my)) return true
-        if (event.button() == 0 && !showPlaylistTab && settings.handleScrollbarPress(mx, my)) return true
-        if (event.button() == 0 && showPlaylistTab && playlist.handleClick(mx, my)) return true
+        if (MouseButtons.isLeft(event.button()) && handleTabClick(mx, my)) return true
+        if (MouseButtons.isLeft(event.button()) && !showPlaylistTab && settings.handleScrollbarPress(mx, my)) return true
+        if (MouseButtons.isLeft(event.button()) && showPlaylistTab && playlist.handleClick(mx, my)) return true
         val onPopoutButton = popoutButton.isMouseOver(mx.toDouble(), my.toDouble())
-        if (dropdown.visible && event.button() == 0 && !onPopoutButton && dropdown.handleClick(mx, my)) return true
+        if (dropdown.visible && MouseButtons.isLeft(event.button()) && !onPopoutButton && dropdown.handleClick(mx, my)) return true
         val onAudioTrackButton = audioTrackButton.isMouseOver(mx.toDouble(), my.toDouble())
-        if (audioTrackDropdown.visible && event.button() == 0 && !onAudioTrackButton && audioTrackDropdown.handleClick(
+        if (audioTrackDropdown.visible && MouseButtons.isLeft(event.button()) && !onAudioTrackButton && audioTrackDropdown.handleClick(
                 mx,
                 my
             )
@@ -829,13 +830,13 @@ class DisplayMenu private constructor(
         if (replayReadOnly) return true
         val mx = mouseX.toInt()
         val my = mouseY.toInt()
-        if (button == 0 && handleTabClick(mx, my)) return true
-        if (button == 0 && !showPlaylistTab && settings.handleScrollbarPress(mx, my)) return true
-        if (button == 0 && showPlaylistTab && playlist.handleClick(mx, my)) return true
+        if (MouseButtons.isLeft(button) && handleTabClick(mx, my)) return true
+        if (MouseButtons.isLeft(button) && !showPlaylistTab && settings.handleScrollbarPress(mx, my)) return true
+        if (MouseButtons.isLeft(button) && showPlaylistTab && playlist.handleClick(mx, my)) return true
         val onPopoutButton = popoutButton.isMouseOver(mouseX, mouseY)
-        if (dropdown.visible && button == 0 && !onPopoutButton && dropdown.handleClick(mx, my)) return true
+        if (dropdown.visible && MouseButtons.isLeft(button) && !onPopoutButton && dropdown.handleClick(mx, my)) return true
         val onAudioTrackButton = audioTrackButton.isMouseOver(mouseX, mouseY)
-        if (audioTrackDropdown.visible && button == 0 && !onAudioTrackButton && audioTrackDropdown.handleClick(mx, my)) return true
+        if (audioTrackDropdown.visible && MouseButtons.isLeft(button) && !onAudioTrackButton && audioTrackDropdown.handleClick(mx, my)) return true
         return modLabel.handleClick(mx, my)
     }
 
