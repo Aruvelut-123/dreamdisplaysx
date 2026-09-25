@@ -118,7 +118,7 @@ jobs:
           echo "source_version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_trunk=$TRUNK" >> $GITHUB_OUTPUT
 
-# The publish channel is set entirely by the workflow_dispatch `build_type` input.
+          # The publish channel is set entirely by the workflow_dispatch `build_type` input.
           # An empty BUILD_TYPE (e.g. the CI workflow) means "build only, never publish".
           case "$BUILD_TYPE" in
             dev)
