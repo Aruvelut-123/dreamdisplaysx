@@ -1,3 +1,22 @@
+# 1.10.0.2 Release
+
+Based on Dream Displays [6102d461](https://github.com/arnodoelinger/dreamdisplays/commit/6102d4619db2e8fc79170c15454a7fc48dc76e1f).
+
+## Highlights
+
+- Fixed the display menu tab clicks (playlist / settings) not registering on 26.3: the switch from GLFW to SDL changed the left mouse button index from 0 to 1, and the menu still compared against the raw `0`.
+- Mouse button handling now goes through the version-aware `MouseButtons.isLeft` / `isRight` helpers everywhere, so clicks behave consistently across 1.21.11 and 26.3.
+- Cleaned up the temporary `[DIAG]` probes added during the tab-click investigation.
+
+## Client
+
+### Fixes
+
+- Display menu: left-clicking the playlist / settings tabs now switches panels again on 26.3 (`MouseButtonEvent.button()` reports 1 for left on SDL, not 0).
+- Display menu: playlist, popout, audio-track dropdown, and settings scrollbar clicks use the same version-aware left-button check.
+- Suggestions panel: card selection (left) and forget (right) clicks use `MouseButtons.isLeft` / `isRight` in the legacy branch as well.
+- Removed temporary diagnostic logging from `DisplayMenu` and `UiScreenBase`.
+
 # 1.10.0.1 Release
 
 Based on Dream Displays [6102d461](https://github.com/arnodoelinger/dreamdisplays/commit/6102d4619db2e8fc79170c15454a7fc48dc76e1f).
