@@ -2,7 +2,56 @@
 
 Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplays/commit/de61bdb78d3ddffc37078d7e2bc1f4eb7583f607).
 
-# 1.10.0 Preview 2 (merged from upstream)
+## Highlights
+
+- Per-display playlists stored in SQLite/MySQL: add, remove, reorder, skip, approve, and clear.
+- Configurable end-of-queue behavior (pause / continue / loop) and add-permission policy (everyone / owner approval / owner only), both persisted in the database.
+- Two-tab display menu (playlist / display settings).
+- Region access levels (`DisplayAccess`: EVERYONE / REGION / LOCKED) replace the locked/unlocked boolean.
+- Experimental Protocol V3 envelope, display groups, and Paper remote-control stick.
+- Legacy Protocol V1 removed; clients still on V1 are notified on connect.
+- Smoother playback: full libvlc rewrite, two-player A/V split, restored 3D DSP audio, hardware decode by default.
+- Claim protection (WorldGuard + optional GriefPrevention / Residence / Lands / Towny).
+- Video-derived dynamic lighting and Complementary-only shader patcher.
+- Experimental ReplayMod and Flashback compatibility.
+- Android support restored (PojavLauncher / FCL / Zalith).
+- Scrub preview on demand; stretch mode + GPU-scaled rendering.
+
+## Client
+
+- Playlist tab in the display menu with queue rows, pending approvals, skip/remove/reorder actions, and a URL add box.
+- End-behavior and enqueue-policy cycle buttons; both persist to the database through the server.
+- F3 debug overlay shows video FPS, stream codec/resolution, frame timings, and decoder.
+- Bilibili danmaku overlay with per-display toggle and configurable speed, density, opacity, and filters.
+- Danmaku area, speed, density, size, and opacity sliders in the display menu; fixed top-anchored rendering, edge clipping, and erratic per-line font sizes.
+- Global audio multiplier now applies to already-playing displays immediately and its slider caption shows the real value.
+- Fixed short-loop playback storms: early stream end on looped displays re-resolves instead of replaying, and repeated identical video packets no longer recreate the player.
+- Bilibili quality labels, CDN mirror ranking, and fresh resolution per play; fixed 4K blur.
+- Search is now direct (URL paste, `BV`/`av` ids) without the external resolver.
+- Unrecoverable playback errors now log the detailed libvlc reason (player state + recent libvlc log lines).
+- Fixed multiple native player stacking during video switches by extending the old player stop timeout with bounded retry loop.
+- Playlist rows now show the adding player's name instead of a UUID fragment; legacy entries fall back to the UUID.
+- Fixed switch-time player stacking at the root: `MediaPlayer.stop()` now tears the native players down on the calling thread first, so a control queue blocked by a slow CDN attach can no longer delay the stop past the replacement's creation.
+- Fixed playback loop when resuming near VOD end (Flashback/saved time) by treating tail positions as completed and restarting from start
+- Server-broadcast or end-of-stream tail positions are no longer re-applied, saved, or reported as resume points, so the cold-start guard can no longer be re-armed every broadcast (the recurring "plays a few seconds, jumps to end, restarts" loop)
+- Fixed the remaining replay loop for synced displays: a server timeline target parked in the VOD tail (a persisted end-of-stream position) is treated as a stale completion marker, so the follower no longer drags the player to the tail on every seek cooldown (the recurring "plays the opening seconds, then replays" loop)
+- Fixed seeking a paused display destroying the decoder session (every seek then spawned a fresh player on resume), and the seek intent now reports the requested target instead of the not-yet-applied live position, so synced playback no longer snaps back to the pre-seek spot
+- Queued start tasks now yield to a stop that arrived meanwhile, so a blocked attach can no longer resurrect a stopped player under its replacement.
+- Enabled playlists now advance or pause at end-of-stream instead of replaying the current item.
+- Seeking after a stalled player now restarts deterministically at the requested position and re-arms end-of-stream handling.
+- Fixed far seeks showing pre-seek video or snapping back before the target loads.
+- A stream that dies while its duration is still unresolved is now treated as an early end and re-resolved, instead of being counted as a completed video that paused or advanced the queue half a second in.
+
+## Server
+
+- PlaylistManager: per-display queue with end-behavior auto-advance (pause / continue / loop current) and enqueue policies (everyone / owner approval / owner only).
+- Removing the currently playing playlist item now actually switches playback to the item that took its slot (wrapping under loop); exhausting the queue keeps the display idle instead of desyncing the index.
+- Playlists persisted in SQLite/MySQL tables (`playlists`, `playlist_items`); cleaned up when a display is deleted.
+- `/display group` commands for named groups, membership, shared video, and playback control.
+- Fullscreen loop/Esc handling and HUD hiding synced from upstream.
+- Selected audio track persists; Twitch/Vimeo/Kick/Bilibili resolve in `/display video`.
+
+# 1.10.0 Preview 2
 
 ## Highlights
 
@@ -91,52 +140,48 @@ Based on Dream Displays [de61bdb7](https://github.com/arnodoelinger/dreamdisplay
 
 ## Highlights
 
-- Per-display playlists stored in SQLite/MySQL: add, remove, reorder, skip, approve, and clear.
-- Configurable end-of-queue behavior (pause / continue / loop) and add-permission policy (everyone / owner approval / owner only), both persisted in the database.
-- Two-tab display menu (playlist / display settings).
-- Region access levels (`DisplayAccess`: EVERYONE / REGION / LOCKED) replace the locked/unlocked boolean.
-- Experimental Protocol V3 envelope, display groups, and Paper remote-control stick.
-- Legacy Protocol V1 removed; clients still on V1 are notified on connect.
-- Smoother playback: full libvlc rewrite, two-player A/V split, restored 3D DSP audio, hardware decode by default.
-- Claim protection (WorldGuard + optional GriefPrevention / Residence / Lands / Towny).
-- Video-derived dynamic lighting and Complementary-only shader patcher.
-- Experimental ReplayMod and Flashback compatibility.
-- Android support restored (PojavLauncher / FCL / Zalith).
-- Scrub preview on demand; stretch mode + GPU-scaled rendering.
+- Minor display menu improvements and fixes
+- Fixed bad selection logic when trying to create a display
+- Fixed the picked audio track (language) not being remembered after rejoining
+- Codebase improvements, minor refactor and updated dependencies
 
 ## Client
 
-- Playlist tab in the display menu with queue rows, pending approvals, skip/remove/reorder actions, and a URL add box.
-- End-behavior and enqueue-policy cycle buttons; both persist to the database through the server.
-- F3 debug overlay shows video FPS, stream codec/resolution, frame timings, and decoder.
-- Bilibili danmaku overlay with per-display toggle and configurable speed, density, opacity, and filters.
-- Danmaku area, speed, density, size, and opacity sliders in the display menu; fixed top-anchored rendering, edge clipping, and erratic per-line font sizes.
-- Global audio multiplier now applies to already-playing displays immediately and its slider caption shows the real value.
-- Fixed short-loop playback storms: early stream end on looped displays re-resolves instead of replaying, and repeated identical video packets no longer recreate the player.
-- Bilibili quality labels, CDN mirror ranking, and fresh resolution per play; fixed 4K blur.
-- Search is now direct (URL paste, `BV`/`av` ids) without the external resolver.
-- Unrecoverable playback errors now log the detailed libvlc reason (player state + recent libvlc log lines).
-- Fixed multiple native player stacking during video switches by extending the old player stop timeout with bounded retry loop.
-- Playlist rows now show the adding player's name instead of a UUID fragment; legacy entries fall back to the UUID.
-- Fixed switch-time player stacking at the root: `MediaPlayer.stop()` now tears the native players down on the calling thread first, so a control queue blocked by a slow CDN attach can no longer delay the stop past the replacement's creation.
-- Fixed playback loop when resuming near VOD end (Flashback/saved time) by treating tail positions as completed and restarting from start
-- Server-broadcast or end-of-stream tail positions are no longer re-applied, saved, or reported as resume points, so the cold-start guard can no longer be re-armed every broadcast (the recurring "plays a few seconds, jumps to end, restarts" loop)
-- Fixed the remaining replay loop for synced displays: a server timeline target parked in the VOD tail (a persisted end-of-stream position) is treated as a stale completion marker, so the follower no longer drags the player to the tail on every seek cooldown (the recurring "plays the opening seconds, then replays" loop)
-- Fixed seeking a paused display destroying the decoder session (every seek then spawned a fresh player on resume), and the seek intent now reports the requested target instead of the not-yet-applied live position, so synced playback no longer snaps back to the pre-seek spot
-- Queued start tasks now yield to a stop that arrived meanwhile, so a blocked attach can no longer resurrect a stopped player under its replacement.
-- Enabled playlists now advance or pause at end-of-stream instead of replaying the current item.
-- Seeking after a stalled player now restarts deterministically at the requested position and re-arms end-of-stream handling.
-- Fixed far seeks showing pre-seek video or snapping back before the target loads.
-- A stream that dies while its duration is still unresolved is now treated as an early end and re-resolved, instead of being counted as a completed video that paused or advanced the queue half a second in.
+### Improvements
+
+- Improved video suggestions panel scale on high GUI scale
+- Next suggestions now loads earlier instead of right before you hit the end
+- Smoother scrolling for video suggestions and the audio track dropdown
+- Enhanced versionizing mechanism ([#210](https://github.com/arnodoelinger/dreamdisplays/pull/210))
+- Codebase style improvements and minor refactor
+- Updated `FFmpeg` from 8.1.0 to 9.0.0
+- Updated project dependencies
+
+### Fixes
+
+- Fixed the picked audio track (language) not being remembered after rejoining, and videos now load directly on that track instead of switching to it right after starting
+- Fixed no audio for players whose network setup can't reach the TLS ([#209](https://github.com/arnodoelinger/dreamdisplays/issues/209))
+- Fixed videos failing to play entirely for players running an HTTP(S) proxy ([#218](https://github.com/arnodoelinger/dreamdisplays/issues/218))
+- Fixed HUD elements (hotbar, health / hunger, chat, minimaps, ...) staying visible over fullscreen videos ([#213](https://github.com/arnodoelinger/dreamdisplays/issues/213))
+- Fixed fullscreen videos looping forever even without the looped flag ([#214](https://github.com/arnodoelinger/dreamdisplays/issues/214))
+- Pressing Esc on a non-forced fullscreen video now fully stops it (audio included) instead of just hiding it and reappearing 
+  on rejoin ([#215](https://github.com/arnodoelinger/dreamdisplays/issues/215)) (server must be 1.9.6 or higher)
+- Fixed suggestion thumbnails looking squashed on a squeezed strip on high GUI scale
+- Fixed suggestion cards touching the scrollbar with no breathing room on a squeezed strip on high GUI scale
+- Fixed video suggestions being covered by a black bar on `1.21.1` ([#208](https://github.com/arnodoelinger/dreamdisplays/issues/208))
+- Use actual clicked block face for selection instead of player look direction ([#217](https://github.com/arnodoelinger/dreamdisplays/pull/217))
+  (server must be 1.9.6 or higher)
+- Resolve other platforms than YouTube using `/display video` command ([#207](https://github.com/arnodoelinger/dreamdisplays/pull/207))
+  (server must be 1.9.6 or higher)
 
 ## Server
 
-- PlaylistManager: per-display queue with end-behavior auto-advance (pause / continue / loop current) and enqueue policies (everyone / owner approval / owner only).
-- Removing the currently playing playlist item now actually switches playback to the item that took its slot (wrapping under loop); exhausting the queue keeps the display idle instead of desyncing the index.
-- Playlists persisted in SQLite/MySQL tables (`playlists`, `playlist_items`); cleaned up when a display is deleted.
-- `/display group` commands for named groups, membership, shared video, and playback control.
-- Fullscreen loop/Esc handling and HUD hiding synced from upstream.
-- Selected audio track persists; Twitch/Vimeo/Kick/Bilibili resolve in `/display video`.
+### Fixes
+
+- Use actual clicked block face for selection instead of player look direction ([#217](https://github.com/arnodoelinger/dreamdisplays/pull/217))
+- Resolve other platforms than YouTube using `/display video` command ([#207](https://github.com/arnodoelinger/dreamdisplays/pull/207))
+- Pressing Esc on a non-forced fullscreen video now fully stops the session once nobody's left watching, instead of
+  leaving it dismissed-but-alive to reappear on rejoin ([#215](https://github.com/arnodoelinger/dreamdisplays/issues/215))
 
 # 1.9.3.3 Release
 
