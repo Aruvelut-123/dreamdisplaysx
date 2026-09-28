@@ -67,8 +67,12 @@ object NativeMedia {
     private var videoKill: MethodHandle? = null
     private var videoClose: MethodHandle? = null
 
+    private val nativeProbe = lazy { runCatching { init() }.getOrDefault(false) }
+
+    private val lavProbe = lazy { isAvailable && runCatching { initLav() }.getOrDefault(false) }
+
     /** True once the library has been located, loaded, bound, and ABI-checked. */
-    val isAvailable: Boolean by lazy { runCatching { init() }.getOrDefault(false) }
+    val isAvailable: Boolean by nativeProbe
 
     /** Machine-readable cause of unavailability (empty when available). */
     @Volatile
@@ -105,7 +109,13 @@ object NativeMedia {
                 && System.getProperty("dreamdisplays.native.libav.zeroCopy", "false").toBoolean()
 
     /** True once the optional `dreamdisplays_lav` library has been located, loaded, and bound. */
-    val lavAvailable: Boolean by lazy { isAvailable && runCatching { initLav() }.getOrDefault(false) }
+    val lavAvailable: Boolean by lavProbe
+
+    /**
+     * True once both library probes have finished, so reading the flags can no longer block. The first probe loads
+     * native libraries and may download `FFmpeg`, so the game thread must check this instead of touching the flags.
+     */
+    val probesFinished: Boolean get() = nativeProbe.isInitialized() && lavProbe.isInitialized()
 
     /** True when `dreamdisplays_lav` exports the additive hardware-surface ABI. */
     val lavSurfaceInteropAvailable: Boolean

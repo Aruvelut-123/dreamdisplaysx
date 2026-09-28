@@ -15,6 +15,8 @@ import com.dreamdisplays.platform.client.ui.VideoPopoutWindow
 import java.time.Instant
 import java.time.ZoneId
 
+private const val PROBING = "probing"
+
 /**
  * Probes the running client for [ClientHello] capabilities. Popout support comes from the `GLFW`
  * shared-context check in [VideoPopoutWindow], hardware decode from the per-OS
@@ -36,8 +38,9 @@ object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
     /** Snapshots all probes into an immutable [ClientHello] for the handshake. */
     override fun detect(): ClientHello {
         val hwAccel = HwAccelBackend.detectDefault()
-        val nativeAvailable = safeBool { NativeMedia.isAvailable }
-        val lavAvailable = safeBool { NativeMedia.lavAvailable }
+        val probed = safeBool { NativeMedia.probesFinished }
+        val nativeAvailable = probed && safeBool { NativeMedia.isAvailable }
+        val lavAvailable = probed && safeBool { NativeMedia.lavAvailable }
         val memory = ClientMemoryProbe.detected
         return ClientHello(
             supportsPopout = supportsPopout,
@@ -58,8 +61,16 @@ object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
             lavInProcessEnabled = lavAvailable && safeBool { NativeMedia.lavInProcessEnabled },
             lavSurfaceInteropAvailable = lavAvailable && safeBool { NativeMedia.lavSurfaceInteropAvailable },
             lavZeroCopyEnabled = lavAvailable && safeBool { NativeMedia.lavZeroCopyEnabled },
-            nativeUnavailableReason = if (nativeAvailable) "" else safeString("unknown") { NativeMedia.unavailableReason.ifBlank { "unknown" } },
-            lavUnavailableReason = if (lavAvailable) "" else safeString("unknown") { NativeMedia.lavUnavailableReason.ifBlank { "unknown" } },
+            nativeUnavailableReason = when {
+                nativeAvailable -> ""
+                !probed -> PROBING
+                else -> safeString("unknown") { NativeMedia.unavailableReason.ifBlank { "unknown" } }
+            },
+            lavUnavailableReason = when {
+                lavAvailable -> ""
+                !probed -> PROBING
+                else -> safeString("unknown") { NativeMedia.lavUnavailableReason.ifBlank { "unknown" } }
+            },
             systemRamMb = memory.systemRamMb,
             maxJvmMemoryMb = memory.maxJvmMemoryMb,
             dedicatedVramMb = memory.dedicatedVramMb,
@@ -68,13 +79,10 @@ object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
         )
     }
 
-    /** Runs [block] and returns `0` on any exception. */
     private fun safeInt(block: () -> Int): Int = runCatching(block).getOrDefault(0)
 
-    /** Runs [block] and returns `false` on any exception. */
     private fun safeBool(block: () -> Boolean): Boolean = runCatching(block).getOrDefault(false)
 
-    /** Runs [block] and returns the empty string on any exception. */
     private fun safeString(default: String, block: () -> String): String =
         runCatching(block).getOrDefault(default).ifBlank { default }
 }

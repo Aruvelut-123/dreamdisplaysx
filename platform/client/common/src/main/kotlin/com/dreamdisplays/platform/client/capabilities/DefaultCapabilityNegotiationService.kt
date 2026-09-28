@@ -4,6 +4,7 @@ import com.dreamdisplays.api.capability.ServerFeature
 import com.dreamdisplays.core.protocol.common.packets.ClientHello
 import com.dreamdisplays.core.protocol.common.packets.ServerHello
 import com.dreamdisplays.core.protocol.common.hasFeature
+import com.dreamdisplays.media.player.nativebridge.NativeMedia
 import com.dreamdisplays.platform.client.net.ProtocolRouter
 import com.dreamdisplays.util.GeneralUtil
 import org.slf4j.LoggerFactory
@@ -18,10 +19,21 @@ class DefaultCapabilityNegotiationService(
     /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Probed once on first access; capability detection is stable for the process lifetime. */
-    override val localCapabilities: ClientHello by lazy {
-        detector.detect().copy(modVersion = GeneralUtil.getModVersion())
-    }
+    @Volatile
+    private var cachedLocal: ClientHello? = null
+
+    /**
+     * Capability detection is stable for the process lifetime, so it is cached — but only once the background native
+     * probe has finished; a hello taken earlier reports the backend as still probing and is re-taken next time.
+     */
+    override val localCapabilities: ClientHello
+        get() {
+            cachedLocal?.let { return it }
+            // Sample before detecting: a probe finishing mid-detect must not get a "probing" hello cached
+            val final = NativeMedia.probesFinished
+            return detector.detect().copy(modVersion = GeneralUtil.getModVersion())
+                .also { if (final) cachedLocal = it }
+        }
 
     /** Updated as handshake packets arrive; null until the first arrives. */
     @Volatile
