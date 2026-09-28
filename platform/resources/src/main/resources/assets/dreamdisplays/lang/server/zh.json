@@ -1,5 +1,5 @@
 {
-  "noDisplayTerritories": "&7D |&f 你还没有选择任何显示屏区域！请使用 {0} 在 {1} 上选择两个点",
+  "noDisplayTerritories": "&7D |&f 你还没有选择任何显示屏区域！请使用 {0} 在 {1} 或其台阶、楼梯上选择两个点",
   "createDisplayCommand": "&7D |&f 现在输入 /display create 来创建显示屏",
   "secondPointNotSelected": "&7D |&f 你还没有选择第二个点！",
   "displayOverlap": "&7D |&f 该区域已经存在一个显示屏！",
@@ -9,7 +9,7 @@
   "firstPointSelected": "&7D |&f 第一个点已选定！现在请选择第二个点",
   "secondPointSelected": "&7D |&f 第二个点已选定！",
   "structureWrongDepth": "&7D |&f 选择区域必须至少 1 格深",
-  "wrongStructure": "&7D |&f 只有 {0} 方块可用于显示屏",
+  "wrongStructure": "&7D |&f 只有 {0} 方块及其台阶、楼梯可用于显示屏",
   "displayTooHigh": "&7D |&f 显示屏高度过高（最高 %d）",
   "displayTooLow": "&7D |&f 显示屏高度过低（最低 %d）",
   "selectionClear": "&7D |&f 选区已清除！",

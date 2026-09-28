@@ -34,16 +34,11 @@ data class DisplayInfo(
     @ProtoNumber(17) val forced: Boolean = false,
     @ProtoNumber(18) val scheduledStartEpochMillis: Long = 0,
     @ProtoNumber(19) val scheduledAction: Int = -1,
-    /** Wire ordinal of the display's `DisplayAccess`; [isLocked] stays as its frozen-v1 mirror. */
     @ProtoNumber(20) val access: Int = 2,
-    /** True when the display stands inside a `WorldGuard` region, so the region access level means something here. */
     @ProtoNumber(21) val inRegion: Boolean = false,
-    /**
-     * Whether *the player this copy was addressed to* belongs to that region — the one thing a client
-     * cannot work out for itself, since region membership only exists server-side. Meaningful only
-     * while [access] is the region level; the other levels are the same for every viewer.
-     */
     @ProtoNumber(22) val viewerInRegion: Boolean = false,
+    @ProtoNumber(23) val depth: Int = 1,
+    @ProtoNumber(24) val conforming: Boolean = false,
 ) : DreamPacket
 
 /** Removes a display (server broadcast) or requests its deletion (client action). */

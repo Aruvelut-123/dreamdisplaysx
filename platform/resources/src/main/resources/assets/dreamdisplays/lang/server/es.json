@@ -1,5 +1,5 @@
 {
-  "noDisplayTerritories": "&7D |&f ¡Aún no has seleccionado territorios de pantalla! Selecciona dos puntos con {0} en {1}",
+  "noDisplayTerritories": "&7D |&f ¡Aún no has seleccionado territorios de pantalla! Selecciona dos puntos con {0} en {1}, sus losas o sus escaleras",
   "createDisplayCommand": "&7D |&f Ahora escribe /display create para crear una pantalla",
   "secondPointNotSelected": "&7D |&f ¡Aún no has seleccionado el segundo punto!",
   "displayOverlap": "&7D |&f ¡Ya hay una pantalla en esta zona!",
@@ -9,7 +9,7 @@
   "firstPointSelected": "&7D |&f ¡Primer punto seleccionado! Ahora selecciona el segundo punto",
   "secondPointSelected": "&7D |&f ¡Segundo punto seleccionado!",
   "structureWrongDepth": "&7D |&f La selección debe tener al menos 1 bloque de profundidad",
-  "wrongStructure": "&7D |&f Solo se puede usar {0} para las pantallas",
+  "wrongStructure": "&7D |&f Solo se puede usar {0}, sus losas y sus escaleras para las pantallas",
   "displayTooHigh": "&7D |&f La altura de la pantalla es demasiado alta (máx. %d)",
   "displayTooLow": "&7D |&f La pantalla está demasiado baja (mín. %d)",
   "selectionClear": "&7D |&f ¡La selección ha sido limpiada!",

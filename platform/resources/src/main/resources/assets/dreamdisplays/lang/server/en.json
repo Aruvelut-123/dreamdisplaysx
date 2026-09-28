@@ -1,5 +1,5 @@
 {
-  "noDisplayTerritories": "&7D |&f You haven't selected any display territories yet! Please select two points using {0} on {1}",
+  "noDisplayTerritories": "&7D |&f You haven't selected any display territories yet! Please select two points using {0} on {1}, its slabs, or its stairs",
   "createDisplayCommand": "&7D |&f Now type /display create to create a display",
   "secondPointNotSelected": "&7D |&f You haven't selected the second point yet!",
   "displayOverlap": "&7D |&f There is already a display in this area!",
@@ -9,7 +9,7 @@
   "firstPointSelected": "&7D |&f First point selected! Now select the second point",
   "secondPointSelected": "&7D |&f Second point selected!",
   "structureWrongDepth": "&7D |&f Selection must be at least 1 block long",
-  "wrongStructure": "&7D |&f Only {0} blocks can be used for displays",
+  "wrongStructure": "&7D |&f Only {0} blocks, its slabs, and its stairs can be used for displays",
   "displayTooHigh": "&7D |&f Display height is too high (max. %d)",
   "displayTooLow": "&7D |&f Display is too low (min. %d)",
   "selectionClear": "&7D |&f Selection has been cleared!",

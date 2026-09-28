@@ -1,5 +1,5 @@
 {
-  "noDisplayTerritories": "&7D |&f Vous n'avez pas encore sélectionné de zones d'affichage ! Veuillez sélectionner deux points avec {0} sur {1}",
+  "noDisplayTerritories": "&7D |&f Vous n'avez pas encore sélectionné de zones d'affichage ! Veuillez sélectionner deux points avec {0} sur {1}, ses dalles ou ses escaliers",
   "createDisplayCommand": "&7D |&f Tapez maintenant /display create pour créer un affichage",
   "secondPointNotSelected": "&7D |&f Vous n'avez pas encore sélectionné le deuxième point !",
   "displayOverlap": "&7D |&f Un affichage existe déjà dans cette zone !",
@@ -9,7 +9,7 @@
   "firstPointSelected": "&7D |&f Premier point sélectionné ! Sélectionnez maintenant le deuxième point",
   "secondPointSelected": "&7D |&f Deuxième point sélectionné !",
   "structureWrongDepth": "&7D |&f La sélection doit avoir une profondeur d'au moins 1 bloc",
-  "wrongStructure": "&7D |&f Seul {0} peut être utilisé pour les affichages",
+  "wrongStructure": "&7D |&f Seuls {0}, ses dalles et ses escaliers peuvent être utilisés pour les affichages",
   "displayTooHigh": "&7D |&f La hauteur de l'affichage est trop élevée (max. %d)",
   "displayTooLow": "&7D |&f L'affichage est trop bas (min. %d)",
   "selectionClear": "&7D |&f La sélection a été effacée !",

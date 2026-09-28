@@ -1,5 +1,5 @@
 {
-  "noDisplayTerritories": "&7D |&f Ještě jste nevybral žádné území displeje! Vyberte prosím dva body s {0} na {1}",
+  "noDisplayTerritories": "&7D |&f Ještě jste nevybral žádné území displeje! Vyberte prosím dva body s {0} na {1}, jeho deskách nebo schodech",
   "createDisplayCommand": "&7D |&f Nyní zadejte /display create pro vytvoření displeje",
   "secondPointNotSelected": "&7D |&f Ještě jste nevybral druhý bod!",
   "displayOverlap": "&7D |&f V této oblasti už je displej!",
@@ -9,7 +9,7 @@
   "firstPointSelected": "&7D |&f První bod vybrán! Nyní vyberte druhý bod",
   "secondPointSelected": "&7D |&f Druhý bod vybrán!",
   "structureWrongDepth": "&7D |&f Výběr musí být alespoň 1 blok dlouhý",
-  "wrongStructure": "&7D |&f Pro displeje lze použít pouze {0}",
+  "wrongStructure": "&7D |&f Pro displeje lze použít pouze {0}, jeho desky a schody",
   "displayTooHigh": "&7D |&f Výška displeje je příliš vysoká (max. %d)",
   "displayTooLow": "&7D |&f Displej je příliš nízko (min. %d)",
   "selectionClear": "&7D |&f Výběr byl vymazán!",

@@ -3,7 +3,9 @@ package com.dreamdisplays.platform.server.managers
 import com.dreamdisplays.core.protocol.common.packets.DreamPacket
 import com.dreamdisplays.platform.server.PaperServer.Companion.config
 import com.dreamdisplays.platform.server.PaperServer.Companion.getInstance
+import com.dreamdisplays.platform.server.PaperSurfaces
 import com.dreamdisplays.platform.server.VanillaServerState
+import com.dreamdisplays.platform.server.VanillaSurfaces
 import com.dreamdisplays.platform.server.baseMaterial
 import com.dreamdisplays.platform.server.baseMaterialId
 import com.dreamdisplays.platform.server.datatypes.display.DisplayData
@@ -210,6 +212,7 @@ object DisplayManager {
             scheduledAction = display.scheduledAction?.wire ?: -1,
             inRegion = WorldGuardRegions.isProtectedTerritory(display.pos1),
             isRegionMember = { WorldGuardRegions.isRegionMember(it, display.pos1) },
+            depth = display.depth, conforming = display.conforming,
         )
     }
 
@@ -344,7 +347,7 @@ object DisplayManager {
     /** Scans every display's bounding box for the configured base material; displays with none are removed from disk and registry. */
     @PaperOnly
     fun validateDisplaysAndCleanup(): List<UUID> {
-        val baseMaterial = config.settings.baseMaterial
+        val surface = PaperSurfaces.of(config.settings.baseMaterial)
         val invalidDisplays = mutableListOf<PaperDisplayData>()
 
         displays.values.filterIsInstance<PaperDisplayData>().forEach { display ->
@@ -367,7 +370,8 @@ object DisplayManager {
             outerLoop@ for (x in minX until maxX) {
                 for (y in minY until maxY) {
                     for (z in minZ until maxZ) {
-                        if (world.getBlockAt(x, y, z).type == baseMaterial) {
+                        val type = world.getBlockAt(x, y, z).type
+                        if (!type.isAir && surface.accepts(type.name)) {
                             hasBaseMaterial = true
                             break@outerLoop
                         }
@@ -497,7 +501,7 @@ object DisplayManager {
     /** Scans every display's bounding box for the configured base material; displays with none are removed from disk and registry. */
     fun validateDisplaysAndCleanup(server: MinecraftServer): List<UUID> {
         val cfg = VanillaServerState.config
-        val baseMaterialKey = cfg.settings.baseMaterialId
+        val surface = VanillaSurfaces.of(cfg.settings.baseMaterialId)
         val invalidDisplays = mutableListOf<VanillaDisplayData>()
 
         displays.values.filterIsInstance<VanillaDisplayData>().forEach { display ->
@@ -513,7 +517,7 @@ object DisplayManager {
                     for (z in display.minZ..display.maxZ) {
                         val state = level.getBlockState(BlockPos(x, y, z))
                         val regName = BuiltInRegistries.BLOCK.getKey(state.block).toString()
-                        if (regName == baseMaterialKey) {
+                        if (!state.isAir && surface.accepts(regName)) {
                             hasBaseMaterial = true
                             break@outerLoop
                         }

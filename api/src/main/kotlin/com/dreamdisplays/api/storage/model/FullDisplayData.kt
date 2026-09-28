@@ -22,6 +22,8 @@ data class FullDisplayData(
     var facing: DisplayFacing = DisplayFacing.NORTH,
     var width: Int = 1,
     var height: Int = 1,
+    var depth: Int = 1,
+    var conforming: Boolean = false,
     var videoUrl: String = "",
     var lang: String = "",
     var volume: Float = 0.5f,

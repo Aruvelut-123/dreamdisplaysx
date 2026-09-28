@@ -1,5 +1,5 @@
 {
-  "noDisplayTerritories": "&7D |&f Du hast noch keine Display-Territorien ausgewählt! Bitte wähle zwei Punkte mit {0} auf {1}",
+  "noDisplayTerritories": "&7D |&f Du hast noch keine Display-Territorien ausgewählt! Bitte wähle zwei Punkte mit {0} auf {1}, seinen Stufen oder Treppen",
   "createDisplayCommand": "&7D |&f Gib nun /display create ein, um ein Display zu erstellen",
   "secondPointNotSelected": "&7D |&f Du hast den zweiten Punkt noch nicht ausgewählt!",
   "displayOverlap": "&7D |&f Es gibt bereits ein Display in diesem Bereich!",
@@ -9,7 +9,7 @@
   "firstPointSelected": "&7D |&f Erster Punkt ausgewählt! Wähle nun den zweiten Punkt",
   "secondPointSelected": "&7D |&f Zweiter Punkt ausgewählt!",
   "structureWrongDepth": "&7D |&f Die Auswahl muss mindestens 1 Block lang sein",
-  "wrongStructure": "&7D |&f Nur {0} können für Displays verwendet werden",
+  "wrongStructure": "&7D |&f Nur {0}, seine Stufen und Treppen können für Displays verwendet werden",
   "displayTooHigh": "&7D |&f Die Display-Höhe ist zu hoch (max. %d)",
   "displayTooLow": "&7D |&f Das Display ist zu niedrig (min. %d)",
   "selectionClear": "&7D |&f Auswahl wurde gelöscht!",

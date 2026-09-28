@@ -20,33 +20,43 @@ internal object DisplayGeometry {
      * facing [facing]. Width extends along the horizontal axis perpendicular to [facing]; height extends up.
      */
     private inline fun <T> withBounds(
-        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing,
+        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
         block: (maxX: Int, maxY: Int, maxZ: Int) -> T,
     ): T {
         var maxX = x
         var maxZ = z
         var maxY = y + height - 1
         when (facing) {
-            DisplayFacing.NORTH, DisplayFacing.SOUTH -> maxX += width - 1
-            DisplayFacing.EAST, DisplayFacing.WEST -> maxZ += width - 1
+            DisplayFacing.NORTH, DisplayFacing.SOUTH -> {
+                maxX += width - 1
+                maxZ += depth - 1
+            }
+            DisplayFacing.EAST, DisplayFacing.WEST -> {
+                maxZ += width - 1
+                maxX += depth - 1
+            }
             DisplayFacing.UP, DisplayFacing.DOWN -> {
                 maxX += width - 1
                 maxZ += height - 1
-                maxY = y
+                maxY = y + depth - 1
             }
         }
         return block(maxX, maxY, maxZ)
     }
 
     /** Returns true if [pos] falls within the block bounding box of the described screen. */
-    fun isInBounds(pos: BlockPos, x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing): Boolean =
-        withBounds(x, y, z, width, height, facing) { maxX, maxY, maxZ ->
+    fun isInBounds(
+        pos: BlockPos, x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
+    ): Boolean =
+        withBounds(x, y, z, width, height, facing, depth) { maxX, maxY, maxZ ->
             pos.x in x..maxX && pos.y in y..maxY && pos.z in z..maxZ
         }
 
     /** Returns the shortest Euclidean distance from [pos] to any block in the described screen's bounding box. */
-    fun distanceTo(pos: BlockPos, x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing): Double =
-        withBounds(x, y, z, width, height, facing) { maxX, maxY, maxZ ->
+    fun distanceTo(
+        pos: BlockPos, x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
+    ): Double =
+        withBounds(x, y, z, width, height, facing, depth) { maxX, maxY, maxZ ->
             val clampedX = min(max(pos.x, x), maxX)
             val clampedY = min(max(pos.y, y), maxY)
             val clampedZ = min(max(pos.z, z), maxZ)
@@ -58,8 +68,10 @@ internal object DisplayGeometry {
      * [width] / [height] / [facing]. Approximate (block-center precision, no surface offset): good
      * enough for placing acoustic emitters, not for rendering.
      */
-    fun worldPose(x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing): ScreenPose =
-        withBounds(x, y, z, width, height, facing) { maxX, maxY, maxZ ->
+    fun worldPose(
+        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
+    ): ScreenPose =
+        withBounds(x, y, z, width, height, facing, depth) { maxX, maxY, maxZ ->
             val cx = (x + maxX + 1) / 2.0
             val cy = (y + maxY + 1) / 2.0
             val cz = (z + maxZ + 1) / 2.0
@@ -98,7 +110,7 @@ internal object DisplayGeometry {
     private const val SHADER_SURFACE_OFFSET = 0.016f
 
     /** Surface offset in effect right now: widened while a shader pack owns the depth buffer. */
-    private fun surfaceOffset(): Float =
+    fun surfaceClearance(): Float =
         if (ShaderPackCompat.isShaderPackActive) SHADER_SURFACE_OFFSET else SURFACE_OFFSET
 
     /**
@@ -107,7 +119,7 @@ internal object DisplayGeometry {
      * already be translated to the screen's anchor block.
      */
     fun applyScreenTransform(stack: PoseStack, facing: DisplayFacing, width: Int, height: Int) {
-        moveForward(stack, facing, surfaceOffset())
+        moveForward(stack, facing, surfaceClearance())
 
         when (facing) {
             DisplayFacing.NORTH -> {

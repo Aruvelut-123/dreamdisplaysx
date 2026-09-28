@@ -266,6 +266,7 @@ object DisplayActions {
                 display.rotation,
                 inRegion = WorldGuardRegions.isProtectedTerritory(display.pos1),
                 isRegionMember = { WorldGuardRegions.isRegionMember(it, display.pos1) },
+                depth = display.depth, conforming = display.conforming,
             )
         }
     }
