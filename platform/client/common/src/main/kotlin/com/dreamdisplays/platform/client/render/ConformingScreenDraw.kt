@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer
 import net.minecraft.client.renderer.rendertype.RenderType
 //?} else
 /*import net.minecraft.client.renderer.RenderType*/
+import java.util.WeakHashMap
 import kotlin.math.sin
 
 /**
@@ -21,6 +22,26 @@ internal object ConformingScreenDraw {
     private const val SUBTITLE_MAX_WIDTH_FRAC = 0.86f
     private const val SUBTITLE_BOTTOM_MARGIN_FRAC = 0.05f
     private const val OVERLAY_LIFT = 0.002f
+
+    private class Clip(val source: List<ConformQuad>, val rect: FloatArray, val pieces: List<ConformQuad>)
+
+    private val clips = WeakHashMap<DisplayScreen, Array<Clip?>>()
+
+    private const val SLOT_SUBTITLE = 0
+    private const val SLOT_TRACK = 1
+
+    private fun clipped(
+        screen: DisplayScreen, slot: Int, quads: List<ConformQuad>, u0: Float, v0: Float, u1: Float, v1: Float,
+    ): List<ConformQuad> {
+        val slots = clips.getOrPut(screen) { arrayOfNulls(2) }
+        val hit = slots[slot]
+        if (hit != null && hit.source === quads && hit.rect[0] == u0 && hit.rect[1] == v0 &&
+            hit.rect[2] == u1 && hit.rect[3] == v1
+        ) return hit.pieces
+        val pieces = quads.flatMap { clipToUvRect(it, u0, v0, u1, v1) }
+        slots[slot] = Clip(quads, floatArrayOf(u0, v0, u1, v1), pieces)
+        return pieces
+    }
 
     fun render(
         screen: DisplayScreen,
@@ -60,7 +81,7 @@ internal object ConformingScreenDraw {
         val u1 = 0.5f + unitW / 2f
         val texV1 = 1f - SUBTITLE_BOTTOM_MARGIN_FRAC
         val texV0 = 1f - (SUBTITLE_BOTTOM_MARGIN_FRAC + unitH)
-        val pieces = quads.flatMap { clipToUvRect(it, u0, texV0, u1, texV1) }
+        val pieces = clipped(screen, SLOT_SUBTITLE, quads, u0, texV0, u1, texV1)
             .map { quad ->
                 quad.mapUv { u, v ->
                     val su = (u - u0) / (u1 - u0)
@@ -90,8 +111,8 @@ internal object ConformingScreenDraw {
 
         val trackV0 = 1f - 0.075f
         val trackV1 = 1f - 0.045f
-        val track = quads.flatMap { clipToUvRect(it, 0.06f, trackV0, 0.94f, trackV1) }
-            .map { it.mapUv { _, _ -> 0f to 0f } }
+        val band = clipped(screen, SLOT_TRACK, quads, 0.06f, trackV0, 0.94f, trackV1)
+        val track = band.map { it.mapUv { _, _ -> 0f to 0f } }
         val (tr, tg, tb) = Triple(22, 24, 34)
         draw(drawQuad, type, track, clearance + OVERLAY_LIFT, tr, tg, tb)
 
@@ -105,7 +126,7 @@ internal object ConformingScreenDraw {
         val sx0 = segStart.coerceIn(x0, x1)
         val sx1 = (segStart + segW).coerceIn(x0, x1)
         if (sx1 <= sx0) return
-        val accent = quads.flatMap { clipToUvRect(it, sx0, trackV0, sx1, trackV1) }
+        val accent = band.flatMap { clipToUvRect(it, sx0, trackV0, sx1, trackV1) }
             .map { it.mapUv { _, _ -> 0f to 0f } }
         draw(drawQuad, type, accent, clearance + OVERLAY_LIFT * 2f, 40, 110, 255)
     }

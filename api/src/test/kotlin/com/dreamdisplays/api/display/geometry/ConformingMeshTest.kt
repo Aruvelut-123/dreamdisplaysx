@@ -56,15 +56,15 @@ class ConformingMeshTest {
     @Test
     fun bottomSlabSitsOnTheHalfHeightAndWrapsTheTop() {
         val quads = buildConformingMesh(
-            listOf(ShapedBlock(0, 0, 0, listOf(ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0)))),
+            listOf(ShapedBlock(0, 0, 0, listOf(BOTTOM))),
             width = 1, height = 1, depth = 1, facing = DisplayFacing.NORTH,
         )
-        val front = quads.single { it.nz < 0f }
-        assertTrue(front.vertices.all { it.y <= 0.5f + 1e-3f })
-        val top = quads.single { it.ny > 0f }
-        assertTrue(top.vertices.all { abs(it.y - 0.5f) < 1e-3f })
-        assertTrue(normalMatchesWinding(front))
-        assertTrue(normalMatchesWinding(top))
+        val fronts = quads.filter { it.nz < 0f }
+        val tops = quads.filter { it.ny > 0f }
+        assertTrue(fronts.isNotEmpty() && tops.isNotEmpty())
+        assertTrue(fronts.all { q -> q.vertices.all { it.y <= 0.5f + 1e-3f } })
+        assertTrue(tops.all { q -> q.vertices.all { abs(it.y - 0.5f) < 1e-3f } })
+        assertDraped(quads)
     }
 
     @Test
@@ -82,54 +82,6 @@ class ConformingMeshTest {
         assertEquals(0f, near.v)
         val far = top.vertices.single { it.x == 0f && it.z == 1f }
         assertEquals(1f, far.v)
-    }
-
-    @Test
-    fun straightStairWrapsTheRiserAndTheTread() {
-        val quads = buildConformingMesh(
-            listOf(ShapedBlock(0, 0, 0, listOf(BOTTOM, STEP))),
-            width = 1, height = 1, depth = 1, facing = DisplayFacing.NORTH,
-        )
-        val fronts = quads.filter { it.nz < 0f }
-        assertEquals(2, fronts.size)
-        assertTrue(fronts.any { it.vertices.all { v -> v.z == 0f } && it.vertices.maxOf { it.y } <= 0.5f + 1e-3f })
-        assertTrue(fronts.any { it.vertices.all { v -> abs(v.z - 0.5f) < 1e-3f } })
-        val tread = quads.single { it.ny > 0f }
-        assertTrue(tread.vertices.all { abs(it.y - 0.5f) < 1e-3f && it.z <= 0.5f + 1e-3f })
-        assertEquals(3, quads.size, "the top of the step lies on the rim and stays bare")
-        quads.forEach { assertTrue(normalMatchesWinding(it)) }
-    }
-
-    @Test
-    fun grooveWrapsBothSideWallsAndStaysContinuous() {
-        val quads = buildConformingMesh(
-            listOf(
-                ShapedBlock(0, 0, 0, listOf(FULL)), ShapedBlock(0, 0, 1, listOf(FULL)),
-                ShapedBlock(1, 0, 1, listOf(FULL)),
-                ShapedBlock(2, 0, 0, listOf(FULL)), ShapedBlock(2, 0, 1, listOf(FULL)),
-            ),
-            width = 3, height = 1, depth = 2, facing = DisplayFacing.NORTH,
-        )
-        assertEquals(5, quads.size)
-        val walls = quads.filter { it.nx != 0f }
-        assertEquals(2, walls.size, "both side walls of the groove get picture")
-        for (wall in walls) {
-            val us = wall.vertices.map { it.u }
-            assertTrue(us.max() - us.min() > 0.1f, "a wall spans picture, not one smeared column")
-        }
-        quads.forEach { assertTrue(normalMatchesWinding(it)) }
-        for (a in quads) for (b in quads) {
-            if (a === b) continue
-            for (va in a.vertices) for (vb in b.vertices) {
-                if (va.x == vb.x && va.y == vb.y && va.z == vb.z) {
-                    assertTrue(abs(va.u - vb.u) < 1e-4f && abs(va.v - vb.v) < 1e-4f, "seam at $va / $vb")
-                    assertTrue(va.ox == vb.ox && va.oy == vb.oy && va.oz == vb.oz, "lifted faces part at $va / $vb")
-                }
-            }
-        }
-        val all = quads.flatMap { it.vertices }
-        assertEquals(0f, all.minOf { it.u })
-        assertEquals(1f, all.maxOf { it.u })
     }
 
     @Test
@@ -162,6 +114,44 @@ class ConformingMeshTest {
     }
 
     @Test
+    fun straightStairWrapsTheRiserAndTheTread() {
+        val quads = buildConformingMesh(
+            listOf(ShapedBlock(0, 0, 0, listOf(BOTTOM, STEP))),
+            width = 1, height = 1, depth = 1, facing = DisplayFacing.NORTH,
+        )
+        val fronts = quads.filter { it.nz < 0f }
+        assertTrue(fronts.any { q -> q.vertices.all { it.z == 0f && it.y <= 0.5f + 1e-3f } }, "lower front")
+        assertTrue(fronts.any { q -> q.vertices.all { abs(it.z - 0.5f) < 1e-3f } }, "upper front")
+        val treads = quads.filter { it.ny > 0f }
+        assertTrue(treads.isNotEmpty())
+        assertTrue(treads.all { q -> q.vertices.all { abs(it.y - 0.5f) < 1e-3f && it.z <= 0.5f + 1e-3f } })
+        assertTrue(quads.none { q -> q.ny > 0f && q.vertices.all { abs(it.y - 1f) < 1e-3f } }, "the step's top is rim")
+        assertDraped(quads)
+        assertTrue(uvSpan(treads) > 0.1f, "the tread shows picture, not a smeared line")
+    }
+
+    @Test
+    fun grooveWrapsBothSideWallsAndStaysContinuous() {
+        val quads = buildConformingMesh(
+            listOf(
+                ShapedBlock(0, 0, 0, listOf(FULL)), ShapedBlock(0, 0, 1, listOf(FULL)),
+                ShapedBlock(1, 0, 1, listOf(FULL)),
+                ShapedBlock(2, 0, 0, listOf(FULL)), ShapedBlock(2, 0, 1, listOf(FULL)),
+            ),
+            width = 3, height = 1, depth = 2, facing = DisplayFacing.NORTH,
+        )
+        for (plane in listOf(1f, 2f)) {
+            val wall = quads.filter { q -> q.nx != 0f && q.vertices.all { abs(it.x - plane) < 1e-3f } }
+            assertTrue(wall.isNotEmpty(), "wall at x=$plane")
+            assertTrue(uvSpan(wall) > 0.1f, "the wall at x=$plane spans picture, not one smeared column")
+        }
+        assertDraped(quads)
+        val all = quads.flatMap { it.vertices }
+        assertEquals(0f, all.minOf { it.u }, 1e-4f)
+        assertEquals(1f, all.maxOf { it.u }, 1e-4f)
+    }
+
+    @Test
     fun staircasePictureContinuesFromOneStepOntoTheNext() {
         val quads = buildConformingMesh(
             listOf(
@@ -170,11 +160,106 @@ class ConformingMeshTest {
             ),
             width = 1, height = 2, depth = 2, facing = DisplayFacing.NORTH,
         )
-        val firstCap = quads.single { it.ny > 0f && it.vertices.all { v -> abs(v.y - 1f) < 1e-3f && v.z <= 1f } }
-        val nextRiser = quads.single { it.nz < 0f && it.vertices.all { v -> abs(v.z - 1f) < 1e-3f && v.y >= 1f && v.y <= 1.5f + 1e-3f } }
-        val capV = firstCap.vertices.minOf { it.v }
-        val riserV = nextRiser.vertices.maxOf { it.v }
-        assertTrue(abs(capV - riserV) < 1e-3f, "cap v=$capV riser v=$riserV")
+        assertDraped(quads)
+        val all = quads.flatMap { it.vertices }
+        assertEquals(1f, all.filter { it.y == 0f }.maxOf { it.v }, 1e-4f)
+        assertEquals(0f, all.filter { abs(it.y - 2f) < 1e-3f }.minOf { it.v }, 1e-4f)
+    }
+
+    @Test
+    fun aStairInAWallBarelyDisturbsTheRestOfThePicture() {
+        val width = 9
+        val height = 5
+        val stairX = 4
+        val blocks = ArrayList<ShapedBlock>()
+        for (x in 0 until width) for (y in 0 until height) {
+            blocks += if (x == stairX && y == 0) ShapedBlock(x, y, 0, listOf(BOTTOM, STEP)) else ShapedBlock(x, y, 0, listOf(FULL))
+        }
+        val quads = buildConformingMesh(blocks, width, height, depth = 1, facing = DisplayFacing.NORTH)
+        assertDraped(quads)
+        assertTrue(uvSpan(quads.filter { it.ny > 0f }) > 0.02f)
+        for (v in quads.filter { it.nz < 0f }.flatMap { it.vertices }.filter { it.z == 0f }) {
+            val away = maxOf(stairX - v.x, v.x - (stairX + 1), v.y - 1f)
+            val shift = maxOf(abs(v.u - (width - v.x) / width) * width, abs(v.v - (1f - v.y / height)) * height)
+            if (away >= 2f) assertTrue(shift < 0.1f, "shifted $shift of a block ${away} blocks from the stair at $v")
+            if (away >= 4f) assertTrue(shift < 0.03f, "shifted $shift of a block ${away} blocks from the stair at $v")
+        }
+    }
+
+    @Test
+    fun aFloorOfSlabsAndStairsDrapesWithoutSeamsOrFolds() {
+        val blocks = listOf(
+            ShapedBlock(0, 0, 0, listOf(BOTTOM)),
+            ShapedBlock(1, 0, 0, listOf(FULL)),
+            ShapedBlock(2, 0, 0, listOf(BOTTOM, ShapeBox(0.5, 0.5, 0.0, 1.0, 1.0, 1.0))),
+            ShapedBlock(0, 0, 1, listOf(FULL)),
+            ShapedBlock(1, 0, 1, listOf(FULL)),
+            ShapedBlock(2, 0, 1, listOf(FULL)),
+        )
+        val quads = buildConformingMesh(blocks, width = 3, height = 2, depth = 1, facing = DisplayFacing.UP)
+        assertDraped(quads)
+        assertTrue(uvSpan(quads.filter { it.ny == 0f }) > 0.05f)
+    }
+
+    @Test
+    fun stairsFacingEachOtherBetweenSlabsLeaveNoSeam() {
+        val stepSouth = ShapeBox(0.0, 0.5, 0.5, 1.0, 1.0, 1.0)
+        val stepNorth = ShapeBox(0.0, 0.5, 0.0, 1.0, 1.0, 0.5)
+        val stepEast = ShapeBox(0.5, 0.5, 0.0, 1.0, 1.0, 1.0)
+        val stepWest = ShapeBox(0.0, 0.5, 0.0, 0.5, 1.0, 1.0)
+        val between = listOf(
+            ShapedBlock(0, 0, 0, listOf(BOTTOM)), ShapedBlock(1, 0, 0, listOf(BOTTOM, stepSouth)),
+            ShapedBlock(2, 0, 0, listOf(BOTTOM)),
+            ShapedBlock(0, 0, 1, listOf(BOTTOM)), ShapedBlock(1, 0, 1, listOf(BOTTOM, stepNorth)),
+            ShapedBlock(2, 0, 1, listOf(BOTTOM)),
+        )
+        val betweenQuads = buildConformingMesh(between, width = 3, height = 2, depth = 1, facing = DisplayFacing.UP)
+        assertDraped(betweenQuads)
+        assertTrue(uvSpan(betweenQuads.filter { it.nz != 0f }) > 0.05f, "the lone stairs' risers show picture")
+
+        val row = listOf(
+            ShapedBlock(0, 0, 0, listOf(BOTTOM)), ShapedBlock(1, 0, 0, listOf(BOTTOM, stepEast)),
+            ShapedBlock(2, 0, 0, listOf(BOTTOM, stepWest)), ShapedBlock(3, 0, 0, listOf(BOTTOM)),
+        )
+        val rowQuads = buildConformingMesh(row, width = 4, height = 1, depth = 1, facing = DisplayFacing.UP)
+        assertDraped(rowQuads)
+        for (plane in listOf(1.5f, 2.5f)) {
+            val riser = rowQuads.filter { q -> q.nx != 0f && q.vertices.all { abs(it.x - plane) < 1e-3f } }
+            assertTrue(uvSpan(riser) > 0.05f, "the riser at x=$plane unfolds into picture")
+        }
+    }
+
+    private fun assertDraped(quads: List<ConformQuad>) {
+        assertTrue(quads.isNotEmpty())
+        var orientation = 0
+        for (q in quads) {
+            assertTrue(normalMatchesWinding(q), "winding of $q")
+            assertTrue(q.vertices.all { it.u in -1e-4f..1.0001f && it.v in -1e-4f..1.0001f }, "uv of $q")
+            val area = (q.v1.u - q.v0.u) * (q.v2.v - q.v0.v) - (q.v2.u - q.v0.u) * (q.v1.v - q.v0.v)
+            assertTrue(abs(area) > 1e-9f, "a quad collapsed to a line of picture: $q")
+            val sign = if (area > 0f) 1 else -1
+            if (orientation == 0) orientation = sign
+            assertEquals(orientation, sign, "picture folded back over itself at $q")
+        }
+        assertNoSeams(quads)
+    }
+
+    private fun uvSpan(quads: List<ConformQuad>): Float {
+        val vs = quads.flatMap { it.vertices }
+        if (vs.isEmpty()) return 0f
+        return maxOf(vs.maxOf { it.u } - vs.minOf { it.u }, vs.maxOf { it.v } - vs.minOf { it.v })
+    }
+
+    private fun assertNoSeams(quads: List<ConformQuad>) {
+        for (a in quads) for (b in quads) {
+            if (a === b) continue
+            for (va in a.vertices) for (vb in b.vertices) {
+                if (abs(va.x - vb.x) < 1e-4f && abs(va.y - vb.y) < 1e-4f && abs(va.z - vb.z) < 1e-4f) {
+                    assertTrue(abs(va.u - vb.u) < 1e-4f && abs(va.v - vb.v) < 1e-4f, "seam at $va / $vb")
+                    assertTrue(va.ox == vb.ox && va.oy == vb.oy && va.oz == vb.oz, "lifted faces part at $va / $vb")
+                }
+            }
+        }
     }
 
     @Test
