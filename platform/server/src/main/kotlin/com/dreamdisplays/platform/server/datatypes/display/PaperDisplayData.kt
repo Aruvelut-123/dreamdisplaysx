@@ -41,9 +41,20 @@ class PaperDisplayData(
 
     /** True for the synthetic display backing a URL-only fullscreen broadcast. */
     virtual: Boolean = false,
+
+    /** True when the screen wraps slabs and stairs inside the box. */
+    override val conforming: Boolean = false,
 ) : BaseDisplayData(virtual) {
     /** Bounding box of the display area. */
     private val region = RegionUtil.calculateRegion(pos1, pos2)
+
+    /** Blocks the screen extends away from [facing]. Derived from the saved corners, so old rows stay one block deep. */
+    override val depth: Int
+        get() = when (facing) {
+            BlockFace.NORTH, BlockFace.SOUTH -> (box.maxZ - box.minZ).toInt()
+            BlockFace.EAST, BlockFace.WEST -> (box.maxX - box.minX).toInt()
+            else -> (box.maxY - box.minY).toInt()
+        }.coerceAtLeast(1)
 
     /** Bounding box of the display area, calculated from the two corner positions. */
     val box: BoundingBox = BoundingBox(

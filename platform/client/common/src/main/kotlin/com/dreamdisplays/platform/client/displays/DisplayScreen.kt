@@ -96,6 +96,12 @@ class DisplayScreen(
     var rotation: DisplayRotation = DisplayRotation.NONE,
 
     val dimensionKey: String = "",
+
+    /** Blocks the screen extends away from [facing]. `1` for a flat wall. */
+    var depth: Int = 1,
+
+    /** True when the picture hugs slabs and stairs instead of one flat quad. */
+    var conforming: Boolean = false,
 ) {
     /** Per-display client settings (volume, quality, mute, ...) loaded from disk. */
     private val savedSettings = ClientSettingsStore.getSettings(uuid, defaultVolume())
@@ -666,6 +672,8 @@ class DisplayScreen(
         rotation = DisplayRotation.fromQuarterTurns(packet.rotation)
         width = packet.width
         height = packet.height
+        depth = packet.depth.coerceAtLeast(1)
+        conforming = packet.conforming
 
         val nextMode = if (packet.mode == PlaybackMode.LOCAL.wire && packet.isSync) {
             PlaybackMode.SYNCED
@@ -790,15 +798,15 @@ class DisplayScreen(
 
     /** Returns true if [pos] falls within the screen's block bounding box. */
     fun isInScreen(pos: BlockPos): Boolean =
-        DisplayGeometry.isInBounds(pos, x, y, z, width, height, facing)
+        DisplayGeometry.isInBounds(pos, x, y, z, width, height, facing, depth)
 
     /** Returns the shortest Euclidean distance from [pos] to any block in the screen's bounding box. */
     fun getDistanceToScreen(pos: BlockPos): Double =
-        DisplayGeometry.distanceTo(pos, x, y, z, width, height, facing)
+        DisplayGeometry.distanceTo(pos, x, y, z, width, height, facing, depth)
 
     /** Builds the world-space planar sound source fed to the acoustics engine (see [tick]). */
     private fun toSourcePlane(): SourcePlane {
-        val pose = DisplayGeometry.worldPose(x, y, z, width, height, facing)
+        val pose = DisplayGeometry.worldPose(x, y, z, width, height, facing, depth)
         return SourcePlane(
             pose.centerX, pose.centerY, pose.centerZ,
             pose.normalX, pose.normalY, pose.normalZ,

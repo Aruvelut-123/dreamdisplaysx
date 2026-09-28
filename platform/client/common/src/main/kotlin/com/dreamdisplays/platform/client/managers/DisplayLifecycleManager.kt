@@ -13,6 +13,7 @@ import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
 import com.dreamdisplays.platform.client.displays.DisplayScreen
 import com.dreamdisplays.platform.client.managers.DisplayLifecycleManager.MAX_DISPLAY_BLOCKS
+import com.dreamdisplays.platform.client.render.DisplayGeometry
 import com.dreamdisplays.platform.client.storage.ClientSettingsStore
 import com.dreamdisplays.util.FacingUtil
 import net.minecraft.client.Minecraft
@@ -21,7 +22,6 @@ import net.minecraft.core.BlockPos
 import org.joml.Vector3i
 import org.slf4j.LoggerFactory
 import java.util.*
-import kotlin.math.sqrt
 
 /**
  * Handles client-side display creation, restoration, and render-distance lifecycle.
@@ -36,8 +36,8 @@ object DisplayLifecycleManager {
     /** Creates or updates a display from a server [DisplayInfo] packet, honoring render distance and size limits. */
     fun handleInfoPacket(packet: DisplayInfo) {
         if (!ClientStateManager.displaysEnabled) return
-        if (!isValidDisplaySize(packet.width, packet.height)) {
-            logger.warn("Ignoring display ${packet.id}: invalid size ${packet.width} x ${packet.height}.")
+        if (!isValidDisplaySize(packet.width, packet.height, packet.depth)) {
+            logger.warn("Ignoring display ${packet.id}: invalid size ${packet.width} x ${packet.height} x ${packet.depth}.")
             return
         }
 
@@ -61,7 +61,7 @@ object DisplayLifecycleManager {
                 val dist = distanceToScreen(
                     packet.x, packet.y, packet.z,
                     packet.width, packet.height, facing.toDisplayFacing(),
-                    player.blockPosition()
+                    player.blockPosition(), packet.depth,
                 )
                 if (dist > renderDistance) {
                     cacheUnloadedDisplay(packet, facing, mode, currentDimensionKey())
@@ -77,7 +77,7 @@ object DisplayLifecycleManager {
             packet.id, packet.ownerId, Vector3i(packet.x, packet.y, packet.z), facing,
             packet.width, packet.height, packet.url, packet.lang,
             mode, packet.qualityCap, DisplayRotation.fromQuarterTurns(packet.rotation),
-            currentDimensionKey(),
+            currentDimensionKey(), packet.depth, packet.conforming,
         )
         DisplayRegistry.screens[packet.id]?.virtual = packet.virtual
     }
@@ -96,6 +96,7 @@ object DisplayLifecycleManager {
             x = packet.x, y = packet.y, z = packet.z,
             facing = facing.toDisplayFacing(),
             width = packet.width, height = packet.height,
+            depth = packet.depth, conforming = packet.conforming,
             videoUrl = packet.url, lang = packet.lang,
             volume = settings.volume, quality = settings.quality, brightness = settings.brightness,
             muted = settings.muted, mode = mode, ownerUuid = packet.ownerId,
@@ -112,10 +113,12 @@ object DisplayLifecycleManager {
         width: Int, height: Int, code: String, lang: String,
         mode: PlaybackMode, qualityCap: Int, rotation: DisplayRotation = DisplayRotation.NONE,
         dimensionKey: String = currentDimensionKey(),
+        depth: Int = 1, conforming: Boolean = false,
     ) {
         val displayScreen = DisplayScreen(
             uuid, ownerUuid, pos.x(), pos.y(), pos.z(), facingUtil.toDisplayFacing(),
             width, height, mode, qualityCap, rotation, dimensionKey,
+            depth.coerceAtLeast(1), conforming,
         )
 
         displayScreen.createTexture()
@@ -153,8 +156,8 @@ object DisplayLifecycleManager {
 
     /** Rebuilds a [DisplayScreen] from persisted [data] and re-registers it. */
     private fun restoreScreen(data: FullDisplayData) {
-        if (!isValidDisplaySize(data.width, data.height)) {
-            logger.warn("Skipping cached display ${data.uuid}: invalid size ${data.width}x${data.height}.")
+        if (!isValidDisplaySize(data.width, data.height, data.depth)) {
+            logger.warn("Skipping cached display ${data.uuid}: invalid size ${data.width}x${data.height}x${data.depth}.")
             DisplayStorage.removeDisplay(data.uuid)
             return
         }
@@ -164,6 +167,7 @@ object DisplayLifecycleManager {
             data.width, data.height, data.mode ?: PlaybackMode.LOCAL,
             qualityCap = data.qualityCap, rotation = DisplayRotation.fromQuarterTurns(data.rotation),
             dimensionKey = data.dimensionKey.ifEmpty { currentDimensionKey() },
+            depth = data.depth.coerceAtLeast(1), conforming = data.conforming,
         )
         displayScreen.savedTimeNanos = data.currentTimeNanos
         displayScreen.volume = data.volume
@@ -182,36 +186,14 @@ object DisplayLifecycleManager {
 
     /** Distance from [playerPos] to the persisted display [data]'s bounding box. */
     private fun distanceToData(data: FullDisplayData, playerPos: BlockPos) =
-        distanceToScreen(data.x, data.y, data.z, data.width, data.height, data.facing, playerPos)
+        distanceToScreen(data.x, data.y, data.z, data.width, data.height, data.facing, playerPos, data.depth)
 
     /** Shortest distance from [playerPos] to the screen's block bounding box (facing-aware). */
     private fun distanceToScreen(
-        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, playerPos: BlockPos
-    ): Double {
-        var maxX = x
-        var maxY = y + height - 1
-        var maxZ = z
-        when (facing) {
-            DisplayFacing.NORTH, DisplayFacing.SOUTH -> maxX += width - 1
-            DisplayFacing.EAST, DisplayFacing.WEST -> maxZ += width - 1
-            DisplayFacing.UP, DisplayFacing.DOWN -> {
-                maxX += width - 1
-                maxZ += height - 1
-                maxY = y
-            }
-        }
-        return sqrt(
-            playerPos.distSqr(
-                BlockPos(
-                    minOf(maxOf(playerPos.x, x), maxX),
-                    minOf(maxOf(playerPos.y, y), maxY),
-                    minOf(maxOf(playerPos.z, z), maxZ)
-                )
-            )
-        )
-    }
+        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, playerPos: BlockPos, depth: Int = 1,
+    ): Double = DisplayGeometry.distanceTo(playerPos, x, y, z, width, height, facing, depth.coerceAtLeast(1))
 
-    /** True if both dimensions are within `1..`[MAX_DISPLAY_BLOCKS]. */
-    private fun isValidDisplaySize(width: Int, height: Int): Boolean =
-        width in 1..MAX_DISPLAY_BLOCKS && height in 1..MAX_DISPLAY_BLOCKS
+    /** True if every dimension is within `1..`[MAX_DISPLAY_BLOCKS]. */
+    private fun isValidDisplaySize(width: Int, height: Int, depth: Int = 1): Boolean =
+        width in 1..MAX_DISPLAY_BLOCKS && height in 1..MAX_DISPLAY_BLOCKS && depth in 1..MAX_DISPLAY_BLOCKS
 }

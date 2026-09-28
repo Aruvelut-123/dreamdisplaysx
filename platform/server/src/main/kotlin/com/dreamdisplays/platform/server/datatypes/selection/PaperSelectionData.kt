@@ -10,6 +10,7 @@ import org.bukkit.entity.Player
 import org.jspecify.annotations.NullMarked
 import java.util.*
 import java.util.UUID.randomUUID
+import kotlin.math.abs
 
 /**
  * Player's current selection for a feature display.
@@ -28,6 +29,9 @@ class PaperSelectionData(player: Player) : BaseSelectionData() {
 
     /** Player's horizontal look cardinal at first-point time; orients floor / ceiling content. */
     private var horizontal: BlockFace = BlockFace.NORTH
+
+    /** True when the selection contains slabs or stairs and the screen should wrap them. */
+    var conforming: Boolean = false
 
     /** Unique identifier for the player making the selection. */
     private val playerId: UUID = player.uniqueId
@@ -51,6 +55,7 @@ class PaperSelectionData(player: Player) : BaseSelectionData() {
         pos2 = null
         isReady = false
         face = null
+        conforming = false
     }
 
     /**
@@ -74,11 +79,13 @@ class PaperSelectionData(player: Player) : BaseSelectionData() {
          * This affects how we calculate the width and height of the display.
          */
         val isVertical = f == BlockFace.UP || f == BlockFace.DOWN
-        val screenWidth = region.screenWidth(isVertical)
-        val screenHeight = region.screenHeight(isVertical)
+        val (screenWidth, screenHeight, _) = region.screenExtents(abs(f.modX), abs(f.modY), abs(f.modZ))
         val rotation = if (isVertical) horizontal.toCardinal().toContentRotation() else DisplayRotation.NONE
 
-        return PaperDisplayData(randomUUID(), playerId, dPos1, dPos2, screenWidth, screenHeight, f, rotation)
+        return PaperDisplayData(
+            randomUUID(), playerId, dPos1, dPos2, screenWidth, screenHeight, f, rotation,
+            conforming = conforming,
+        )
     }
 
     /** Maps this face to the shared horizontal [Cardinal], defaulting to [Cardinal.NORTH]. */

@@ -40,6 +40,9 @@ class VanillaDisplayData(
 
     /** True for the synthetic display backing a URL-only fullscreen broadcast. */
     virtual: Boolean = false,
+
+    /** True when the screen wraps slabs and stairs inside the box. */
+    override val conforming: Boolean = false,
 ) : BaseDisplayData(virtual) {
     /** Bounding box of the display area. */
     private val region = RegionUtil.calculateRegion(pos1, pos2)
@@ -51,6 +54,14 @@ class VanillaDisplayData(
     val maxX = region.maxX
     val maxY = region.maxY
     val maxZ = region.maxZ
+
+    /** Blocks the screen extends away from [facing]. Derived from the saved corners, so old rows stay one block deep. */
+    override val depth: Int
+        get() = when (facing) {
+            Direction.NORTH, Direction.SOUTH -> maxZ - minZ + 1
+            Direction.EAST, Direction.WEST -> maxX - minX + 1
+            else -> maxY - minY + 1
+        }.coerceAtLeast(1)
 
     /** Bounding box of the display area, calculated from the two corner positions. */
     val box: AABB = AABB(

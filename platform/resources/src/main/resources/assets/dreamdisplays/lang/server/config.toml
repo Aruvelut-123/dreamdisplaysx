@@ -13,7 +13,8 @@ enabled = false
 clock_sync_interval = 5
 
 [display]
-# Selection tool and base material
+# Selection tool and base block.
+# Slabs and stairs of base block are selectable too
 selection_material = "minecraft:diamond_axe"
 base_material = "minecraft:black_concrete"
 

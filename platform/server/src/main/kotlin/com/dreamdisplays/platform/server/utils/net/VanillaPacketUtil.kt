@@ -26,7 +26,7 @@ object VanillaPacketUtil {
     /** Encodes and broadcasts a `display_info` packet describing a single display to [players]. */
     fun sendDisplayInfo(players: List<ServerPlayer>, display: VanillaDisplayData, forced: Boolean = false) {
         val isVertical = display.facing == Direction.UP || display.facing == Direction.DOWN
-        val recipients = if (isVertical) players.filter { supportsVertical(it.uuid) } else players
+        val recipients = players.filter { canReceive(it.uuid, isVertical, display.conforming) }
         val (v2, legacy) = partition(recipients)
         VanillaNetworking.adapter.sendV2(
             v2,
@@ -42,6 +42,7 @@ object VanillaPacketUtil {
                 scheduledStartEpochMillis = display.scheduledStart?.toEpochMilliseconds() ?: 0,
                 scheduledAction = display.scheduledAction?.wire ?: -1,
                 access = display.access.wire,
+                depth = display.depth, conforming = display.conforming,
             ),
         )
         if (legacy.isEmpty()) return

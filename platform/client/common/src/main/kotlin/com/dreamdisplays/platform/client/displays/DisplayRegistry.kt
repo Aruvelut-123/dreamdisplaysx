@@ -9,6 +9,7 @@ import com.dreamdisplays.api.runtime.registry.service.getOrNull
 import com.dreamdisplays.api.storage.model.FullDisplayData
 import com.dreamdisplays.core.services.DisplayStorage
 import com.dreamdisplays.platform.client.core.DreamServices
+import com.dreamdisplays.platform.client.render.ConformingWorldMesh
 import com.dreamdisplays.platform.client.storage.ClientSettingsStore
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -72,6 +73,7 @@ object DisplayRegistry {
 
     /** Unregisters a display; caches world-anchored ones for distance-triggered re-load. */
     fun unregisterScreen(displayScreen: DisplayScreen) {
+        ConformingWorldMesh.forget(displayScreen.uuid)
         if (displayScreen.virtual) {
             ClientSettingsStore.remove(displayScreen.uuid)
         } else {

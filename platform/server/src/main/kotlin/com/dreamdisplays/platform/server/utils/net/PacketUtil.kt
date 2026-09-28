@@ -21,15 +21,36 @@ import org.jspecify.annotations.NullMarked
 import org.slf4j.LoggerFactory
 import java.util.*
 
+private const val VERTICAL_SINCE = "1.8.0"
+private const val CONFORMING_SINCE = "1.10.0-preview.3"
+
 /**
- * Returns true if the client identified by [uuid] runs a mod version that understands vertical
- * (`UP` / `DOWN`) display facings (>= 1.8.0). Older clients would crash decoding facing bytes 4/5,
- * so vertical displays are simply never sent to them. A missing version is treated as unsupported.
+ * @return `true` if the client identified by [uuid] runs a mod version that understands vertical
+ * display facings (>= 1.8.0).
+ *
+ * Older clients would crash decoding facing bytes, so vertical displays are simply never sent to them.
  */
 internal fun supportsVertical(uuid: UUID): Boolean {
     val v = PlayerManager.getVersion(uuid) ?: return false
-    return v.major > 1 || (v.major == 1 && v.minor >= 8)
+    return v.isGreaterThanOrEqualTo(VERTICAL_SINCE)
 }
+
+/**
+ * @return `true` if the client identified by [uuid] can wrap a screen over slabs and stairs (>= 1.10.0 Preview 3).
+ *
+ * Older clients would draw a flat quad hanging in front of the steps, so wrapped displays are never sent to them.
+ */
+internal fun supportsConforming(uuid: UUID): Boolean {
+    val v = PlayerManager.getVersion(uuid) ?: return false
+    if (v.major != 1 || v.minor != 10 || v.patch != 0) return v.isGreaterThan(CONFORMING_SINCE)
+    val tag = v.preRelease.firstOrNull() ?: return true
+    if (tag == "dev") return true
+    return v.isGreaterThanOrEqualTo(CONFORMING_SINCE)
+}
+
+/** Whether the client identified by [uuid] understands a display with these traits. */
+internal fun canReceive(uuid: UUID, vertical: Boolean, conforming: Boolean): Boolean =
+    (!vertical || supportsVertical(uuid)) && (!conforming || supportsConforming(uuid))
 
 /**
  * Dual-protocol send facade for the Paper flavor. Each method partitions the recipients by
@@ -74,9 +95,11 @@ object PacketUtil {
         scheduledAction: Int = -1,
         inRegion: Boolean = false,
         isRegionMember: ((Player) -> Boolean)? = null,
+        depth: Int = 1,
+        conforming: Boolean = false,
     ) {
         val isVertical = facing == BlockFace.UP || facing == BlockFace.DOWN
-        val recipients = if (isVertical) players.filterNotNull().filter { supportsVertical(it.uniqueId) } else players
+        val recipients = players.filterNotNull().filter { canReceive(it.uniqueId, isVertical, conforming) }
         val (v2, players) = partition(recipients)
         val info = DisplayInfo(
             id = id, ownerId = ownerId,
@@ -89,6 +112,7 @@ object PacketUtil {
             virtual = virtual, forced = forced,
             scheduledStartEpochMillis = scheduledStartEpochMillis, scheduledAction = scheduledAction,
             access = access.wire, inRegion = inRegion,
+            depth = depth.coerceAtLeast(1), conforming = conforming,
         )
         if (access == DisplayAccess.REGION && isRegionMember != null) {
             v2.filterNotNull().forEach { player ->
