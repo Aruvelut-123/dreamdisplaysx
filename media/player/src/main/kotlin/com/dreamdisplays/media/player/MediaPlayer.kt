@@ -863,6 +863,11 @@ class MediaPlayer(
             if (host.shouldLoopOnEnd) {
                 restartFromBeginning()
             } else {
+                endedAtEnd.set(true)
+                safeExecute {
+                    stopSession()
+                    state.set(PlaybackState.PAUSED)
+                }
                 host.onPlaybackEnded(durationHintNanos)
             }
             return

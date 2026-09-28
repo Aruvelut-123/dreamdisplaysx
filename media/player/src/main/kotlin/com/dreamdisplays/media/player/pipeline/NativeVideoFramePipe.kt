@@ -124,6 +124,8 @@ internal class NativeVideoFramePipe(
     @Volatile
     private var pendingLavSeek: LavSeekCommand? = null
 
+    private var readerDone = false
+
     override fun textureFilled(): Boolean = surface.textureFilled()
 
     override fun updateFrame(texture: GpuTextureRef, actualW: Int, actualH: Int): Boolean =
@@ -324,6 +326,7 @@ internal class NativeVideoFramePipe(
         if (lh == 0L) return false
         val cmd = LavSeekCommand(offsetNanos, onFirstFrame)
         synchronized(lavSeekMonitor) {
+            if (readerDone) return false
             pendingLavSeek?.let {
                 it.failed = true
                 if (MediaPlayer.DEBUG) {
@@ -481,7 +484,13 @@ internal class NativeVideoFramePipe(
                     continue
                 }
             }
-            if (rc != NativeMedia.READ_OK) break
+            if (rc != NativeMedia.READ_OK) {
+                if (lav && synchronized(lavSeekMonitor) { pendingLavSeek != null || run { readerDone = true; false } }) {
+                    spare.clear()
+                    continue
+                }
+                break
+            }
             if (parked?.get() == true) {
                 lastFrameReceivedNanos.set(System.nanoTime())
                 spare.clear()
@@ -595,6 +604,7 @@ internal class NativeVideoFramePipe(
             if (MediaPlayer.DEBUG) metrics.maybeLog()
         }
 
+        synchronized(lavSeekMonitor) { readerDone = true }
         if (!terminated.get() && !stopFlag.get() && rc == NativeMedia.READ_EOF) {
             prebuffer?.finish()
         } else {
