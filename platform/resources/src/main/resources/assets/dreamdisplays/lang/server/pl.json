@@ -1,5 +1,5 @@
 {
-  "noDisplayTerritories": "&7D |&f Nie wybrałeś jeszcze terytoriów wyświetlacza! Proszę wybrać dwa punkty z {0} na {1}",
+  "noDisplayTerritories": "&7D |&f Nie wybrałeś jeszcze terytoriów wyświetlacza! Proszę wybrać dwa punkty z {0} na {1}, jego półblokach lub schodach",
   "createDisplayCommand": "&7D |&f Teraz wpisz /display create aby utworzyć wyświetlacz",
   "secondPointNotSelected": "&7D |&f Nie wybrałeś jeszcze drugiego punktu!",
   "displayOverlap": "&7D |&f W tym obszarze już jest wyświetlacz!",
@@ -9,7 +9,7 @@
   "firstPointSelected": "&7D |&f Pierwszy punkt wybrany! Teraz wybierz drugi punkt",
   "secondPointSelected": "&7D |&f Drugi punkt wybrany!",
   "structureWrongDepth": "&7D |&f Wybór musi mieć co najmniej 1 blok długości",
-  "wrongStructure": "&7D |&f Dla wyświetlaczy można używać tylko {0}",
+  "wrongStructure": "&7D |&f Dla wyświetlaczy można używać tylko {0}, jego półbloków i schodów",
   "displayTooHigh": "&7D |&f Wysokość wyświetlacza jest zbyt wysoka (max. %d)",
   "displayTooLow": "&7D |&f Wyświetlacz jest zbyt niski (min. %d)",
   "selectionClear": "&7D |&f Wybór wyczyszczony!",
