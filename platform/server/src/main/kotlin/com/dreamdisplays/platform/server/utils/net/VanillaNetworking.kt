@@ -14,8 +14,8 @@ interface VanillaNetworkingAdapter {
     /** Sends a v2 envelope [packet] to [players] via this loader's v2 channel. */
     fun sendV2(players: List<ServerPlayer>, packet: DreamPacket)
 
-    /** Sends a frozen-v1 [packet] to a single [player]. */
-    fun sendLegacy(player: ServerPlayer, packet: CustomPacketPayload)
+    /** Sends a raw, non-envelope [packet] (e.g. the proxy channel) to a single [player]. */
+    fun sendRaw(player: ServerPlayer, packet: CustomPacketPayload)
 }
 
 /** Holds the active [VanillaNetworkingAdapter], set once by whichever vanilla loader is running. */
@@ -23,26 +23,26 @@ object VanillaNetworking {
     lateinit var adapter: VanillaNetworkingAdapter
 }
 
-/** `Fabric` [VanillaNetworkingAdapter]: v2 via [FabricV2Networking], legacy via `ServerPlayNetworking`. */
+/** `Fabric` [VanillaNetworkingAdapter]: v2 via [FabricV2Networking], raw payloads via `ServerPlayNetworking`. */
 @FabricOnly
 object FabricNetworkingAdapter : VanillaNetworkingAdapter {
     override fun sendV2(players: List<ServerPlayer>, packet: DreamPacket) {
         FabricV2Networking.send(players, packet)
     }
 
-    override fun sendLegacy(player: ServerPlayer, packet: CustomPacketPayload) {
+    override fun sendRaw(player: ServerPlayer, packet: CustomPacketPayload) {
         runCatching { ServerPlayNetworking.send(player, packet) }
     }
 }
 
-/** `NeoForge` [VanillaNetworkingAdapter]: v2 via [NeoForgeV2Networking], legacy via `PacketDistributor`. */
+/** `NeoForge` [VanillaNetworkingAdapter]: v2 via [NeoForgeV2Networking], raw payloads via `PacketDistributor`. */
 @NeoForgeOnly
 object NeoForgeNetworkingAdapter : VanillaNetworkingAdapter {
     override fun sendV2(players: List<ServerPlayer>, packet: DreamPacket) {
         NeoForgeV2Networking.send(players, packet)
     }
 
-    override fun sendLegacy(player: ServerPlayer, packet: CustomPacketPayload) {
+    override fun sendRaw(player: ServerPlayer, packet: CustomPacketPayload) {
         runCatching { PacketDistributor.sendToPlayer(player, packet) }
     }
 }

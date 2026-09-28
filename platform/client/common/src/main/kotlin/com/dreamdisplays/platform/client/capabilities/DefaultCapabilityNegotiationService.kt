@@ -31,16 +31,16 @@ class DefaultCapabilityNegotiationService(
     override val isNegotiated: Boolean get() = serverCapabilities != null
 
     /**
-     * Starts the handshake: first the blind v2 [ClientHello] (ignored by pre-v2 servers), then the
-     * legacy `version` packet so old servers run their v1 flow. Order matters — a v2 server must
-     * mark the player as v2 before it processes the legacy packet.
+     * Starts the handshake: first the blind v2 [ClientHello], then the v1 `version` probe that only
+     * v1-only servers answer, so they can be reported as outdated. Order matters — a v2 server must
+     * mark the player as v2 before it sees the probe.
      */
     override fun advertise() {
         runCatching { ProtocolRouter.sendV2(localCapabilities) }
-            .onFailure { logger.debug("v2 hello not deliverable, staying on v1.", it) }
+            .onFailure { e -> logger.error("Unable to send v2 hello.", e) }
 
-        runCatching { ProtocolRouter.send(localCapabilities) }
-            .onFailure { e -> logger.error("Unable to advertise client version.", e) }
+        runCatching { ProtocolRouter.sendLegacyProbe(localCapabilities.modVersion) }
+            .onFailure { logger.debug("v1 probe not deliverable.", it) }
     }
 
     /** Replaces the negotiated [serverCapabilities] snapshot wholesale. */

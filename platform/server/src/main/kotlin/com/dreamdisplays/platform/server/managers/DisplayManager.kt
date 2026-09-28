@@ -13,7 +13,6 @@ import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.datatypes.selection.PaperSelectionData
 import com.dreamdisplays.platform.server.datatypes.selection.VanillaSelectionData
-import com.dreamdisplays.platform.server.datatypes.sync.SyncData
 import com.dreamdisplays.platform.server.meta.Scheduler
 import com.dreamdisplays.platform.server.meta.Scheduler.runAsync
 import com.dreamdisplays.platform.server.meta.Scheduler.runSync
@@ -127,7 +126,6 @@ object DisplayManager {
             FullscreenBroadcastManager.onDisplayRemoved(display.id)
             PipPinManager.onDisplayRemoved(display.id)
             ScheduledPlaybackManager.onDisplayRemoved(display.id)
-            StateManager.remove(display.id)
             delete(display)
             display.id
         }
@@ -251,23 +249,6 @@ object DisplayManager {
         }
     }
 
-    /** Sends a legacy sync packet to tracked nearby v1 players, evaluating each location on that player's entity thread. */
-    @PaperOnly
-    fun sendLegacySyncToTrackedNearbyPlayers(
-        display: PaperDisplayData,
-        packet: SyncData,
-        excludedPlayerId: UUID? = null,
-    ) {
-        Scheduler.forEachTrackedPlayer { player ->
-            if (player.uniqueId != excludedPlayerId && !V2PlayerTracker.isV2(player.uniqueId) && player.isInRange(
-                    display
-                )
-            ) {
-                PacketUtil.sendSync(listOf(player), packet)
-            }
-        }
-    }
-
     /** Sends a v2 packet to tracked nearby v2 players, evaluating each location on that player's entity thread. */
     @PaperOnly
     fun sendV2ToTrackedNearbyPlayers(display: PaperDisplayData, packet: DreamPacket) {
@@ -302,7 +283,6 @@ object DisplayManager {
         WatchPartyManager.remove(displayData.id)
         FullscreenBroadcastManager.onDisplayRemoved(displayData.id)
         PipPinManager.onDisplayRemoved(displayData.id)
-        StateManager.remove(displayData.id)
         displays.remove(displayData.id)
         proximityIndex.forgetDisplay(displayData.id)
     }
@@ -454,7 +434,6 @@ object DisplayManager {
         WatchPartyManager.remove(data.id)
         FullscreenBroadcastManager.onDisplayRemoved(data.id)
         PipPinManager.onDisplayRemoved(data.id)
-        StateManager.remove(data.id)
         ServerCoroutines.io.launch { VanillaServerState.storage?.deleteDisplay(data) }
         if (receivers.isNotEmpty()) VanillaPacketUtil.sendDelete(receivers, data.id)
     }

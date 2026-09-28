@@ -10,7 +10,6 @@ import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.managers.DisplayManager
-import com.dreamdisplays.platform.server.managers.StateManager
 import com.dreamdisplays.platform.server.meta.Scheduler.runAsync
 import com.dreamdisplays.platform.server.meta.ServerCoroutines
 import com.dreamdisplays.platform.server.playback.PlaybackContexts
@@ -81,7 +80,6 @@ class VideoCommand : SubCommand {
             return
         }
 
-        val wasSync = data.isSync
         data.apply {
             url = requestedUrl
             lang = LanguageTag.canonicalAudioCode(args.getOrNull(2)).value
@@ -89,7 +87,6 @@ class VideoCommand : SubCommand {
 
         runAsync { PaperServer.getInstance().storage.saveDisplay(data) }
         DisplayManager.broadcastUpdate(data)
-        if (wasSync) StateManager.resetAndBroadcast(data)
         TimelineManager.onVideoChanged(data)
 
         MessageUtil.sendMessage(player, "settedURL")
@@ -184,14 +181,12 @@ object VanillaVideoCommand {
             return 0
         }
 
-        val wasSync = data.isSync
         data.url = requestedUrl
         data.lang = LanguageTag.canonicalAudioCode(langRaw).value
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(data) }
 
         val receivers = DisplayManager.getReceivers(data, ctx.source.server)
         VanillaPacketUtil.sendDisplayInfo(receivers, data)
-        if (wasSync) StateManager.resetAndBroadcast(data.id, receivers)
         TimelineManager.onVideoChanged(data)
 
         MessageUtil.sendMessage(player, "settedURL")

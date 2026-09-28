@@ -44,6 +44,7 @@
   "displayDeleted": "&7D |&f ¡La pantalla ha sido eliminada!",
   "displayReported": "&7D |&f ¡La pantalla ha sido reportada!",
   "reportNotConfigured": "&7D |&f ¡El sistema de reportes está desactivado en este servidor!",
+  "outdatedClient": "&7D |&f Tu versión de Dream Displays es demasiado antigua para este servidor. ¡Actualiza el mod para usar las pantallas!",
   "newVersion": {
     "text": "",
     "extra": [

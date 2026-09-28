@@ -101,5 +101,6 @@
   "dreamdisplays.button.access.tooltip.no_region": "Cet écran n'est pas dans une région, ce niveau ne laisse donc entrer personne d'autre que vous.",
   "dreamdisplays.access.everyone": "Tout le monde",
   "dreamdisplays.access.region": "Membres de la région",
-  "dreamdisplays.access.locked": "Verrouillé"
+  "dreamdisplays.access.locked": "Verrouillé",
+  "dreamdisplays.message.outdated_server": "La version de Dream Displays de ce serveur est trop ancienne, les écrans ne peuvent donc pas être utilisés ici. Demandez aux administrateurs de la mettre à jour"
 }

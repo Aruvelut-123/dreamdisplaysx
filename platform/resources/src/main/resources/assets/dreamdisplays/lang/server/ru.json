@@ -44,6 +44,7 @@
   "displayDeleted": "&7D |&f Дисплей удалён!",
   "displayReported": "&7D |&f Жалоба на дисплей отправлена!",
   "reportNotConfigured": "&7D |&f Система жалоб не настроена на этом сервере!",
+  "outdatedClient": "&7D |&f Ваша версия Dream Displays слишком старая для этого сервера. Обновите мод, чтобы пользоваться дисплеями!",
   "newVersion": {
     "text": "",
     "extra": [
