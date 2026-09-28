@@ -173,8 +173,8 @@ internal class PlaybackSessionManager(
         fun snapshotCache(positionNanos: Long): ByteArray? = nativePipe?.lavCacheSnapshot(positionNanos)
 
         /** Seeks the in-process LAV decoder without replacing this channel. */
-        fun seekInProcess(offsetNanos: Long, onFirstFrame: () -> Unit): Boolean =
-            inProcess && nativePipe?.seekInProcess(offsetNanos, onFirstFrame) == true
+        fun seekInProcess(offsetNanos: Long, startGate: (() -> Boolean)?, onFirstFrame: () -> Unit): Boolean =
+            inProcess && nativePipe?.seekInProcess(offsetNanos, startGate, onFirstFrame) == true
 
         /** Stops the decode and joins the reader thread (blocking). Must not run on the render thread. */
         fun teardownProcess() {
@@ -443,7 +443,12 @@ internal class PlaybackSessionManager(
             audio.stop()
             clock.reset(offsetNanos)
 
-            val seeked = old.seekInProcess(offsetNanos) {
+            // The new audio process decodes its first PCM while the video pre-rolls; playout restarts once both
+            // are ready (bytes waiting in its pipe), not after a fixed cushion. A dead or absent process never holds it.
+            val soundReady: () -> Boolean = {
+                ap == null || !ap.isAlive || runCatching { ap.inputStream.available() > 0 }.getOrDefault(true)
+            }
+            val seeked = old.seekInProcess(offsetNanos, soundReady) {
                 clock.markFirstFrame()
                 firstVideoFrame.countDown()
             }

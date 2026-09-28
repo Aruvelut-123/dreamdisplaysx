@@ -51,6 +51,16 @@ internal class AudioMasterClock(
 
         /** How often a still-behind audio line may be asked to skip again while a takeover runs. */
         const val RESYNC_REQUEST_INTERVAL_NANOS = 500_000_000L
+
+        /**
+         * Hard cap on how far the clock is carried forward on wall time since the line position last moved. Output
+         * lines report their position in hardware-buffer steps (typically 10-25 ms); without filling the gaps every
+         * frame came due on a step edge instead of at its own PTS, so 60 fps video played at an uneven 11/23 ms cadence.
+         */
+        const val MAX_INTERPOLATION_NANOS = 60_000_000L
+
+        /** Gaps between position updates longer than this are stalls or pauses, not the line's step size. */
+        const val MAX_STEP_NANOS = 100_000_000L
     }
 
     private val lock = Any()
@@ -63,6 +73,15 @@ internal class AudioMasterClock(
 
     /** Last raw line position seen. */
     private var lastRaw = 0L
+
+    /** When [lastRaw] last changed; the clock is interpolated forward from here (see [MAX_INTERPOLATION_NANOS]). */
+    private var lastRawChangeNanos = 0L
+
+    /**
+     * Smoothed interval between line position updates, 0 until measured. Interpolation reaches at most 1.5 steps, so a
+     * line that genuinely stops overshoots by a fraction of a step, and one never seen stepping is not interpolated.
+     */
+    private var stepNanos = 0L
 
     /** True while the line clock is presumed dead and wall time is driving playback. */
     private var takeover = false
@@ -104,13 +123,20 @@ internal class AudioMasterClock(
             if (sample.epoch != epoch) beginEpoch(sample, wallNanos, exactBias, now)
 
             if (sample.nanos != lastRaw) {
+                val interval = now - lastRawChangeNanos
+                if (interval in 1..MAX_STEP_NANOS) {
+                    stepNanos = if (stepNanos == 0L) interval else (stepNanos * 7 + interval) / 8
+                }
                 lastRaw = sample.nanos
+                lastRawChangeNanos = now
                 if (takeover) reconcileTakeover(sample, now)
             }
 
+            val reach = minOf(stepNanos * 3 / 2, MAX_INTERPOLATION_NANOS)
+            val sinceStep = if (suspended) 0L else (now - lastRawChangeNanos).coerceIn(0L, reach)
             val candidate =
                 if (takeover) takeoverAnchorOut + (now - takeoverAnchorWall)
-                else sample.nanos + bias
+                else sample.nanos + bias + sinceStep
 
             when {
                 candidate > lastOut -> {
@@ -185,6 +211,8 @@ internal class AudioMasterClock(
         epoch = sample.epoch
         takeover = false
         lastRaw = sample.nanos
+        lastRawChangeNanos = now
+        stepNanos = 0L
         lastOutAdvanceNanos = now
         lastResyncRequestNanos = Long.MIN_VALUE / 2
         lastOut = Long.MIN_VALUE

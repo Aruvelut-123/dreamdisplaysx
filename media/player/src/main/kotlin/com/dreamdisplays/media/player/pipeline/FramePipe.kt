@@ -145,12 +145,14 @@ internal object FramePacing {
         abort: () -> Boolean = { false },
         dropStaleTimeline: Boolean = true,
         dropWhenBehind: () -> Boolean = { true },
+        leadNs: Long = 0L,
     ): Boolean {
         val started = System.nanoTime()
+        val due = videoPts - leadNs
         while (true) {
             if (abort()) return true
             val clock = audioClock()
-            val diff = videoPts - if (clock >= 0) clock else videoPts
+            val diff = due - if (clock >= 0) clock else due
             if (diff <= 0) break
             if (dropStaleTimeline && diff >= STALE_TIMELINE_DIFF_NS) {
                 val now = System.nanoTime()

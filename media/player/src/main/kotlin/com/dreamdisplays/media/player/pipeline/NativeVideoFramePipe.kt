@@ -102,7 +102,11 @@ internal class NativeVideoFramePipe(
     @Volatile
     private var parked: AtomicBoolean? = null
 
-    private class LavSeekCommand(val offsetNanos: Long, val onFirstFrame: () -> Unit) {
+    private class LavSeekCommand(
+        val offsetNanos: Long,
+        val onFirstFrame: () -> Unit,
+        val startGate: (() -> Boolean)?,
+    ) {
         val createdNanos: Long = System.nanoTime()
 
         @Volatile
@@ -321,10 +325,12 @@ internal class NativeVideoFramePipe(
     }
 
     /** Seeks the live in-process LAV session without closing the decoder or network context. */
-    fun seekInProcess(offsetNanos: Long, onFirstFrame: () -> Unit): Boolean {
+    fun seekInProcess(
+        offsetNanos: Long, startGate: (() -> Boolean)? = null, onFirstFrame: () -> Unit,
+    ): Boolean {
         val lh = lavHandle
         if (lh == 0L) return false
-        val cmd = LavSeekCommand(offsetNanos, onFirstFrame)
+        val cmd = LavSeekCommand(offsetNanos, onFirstFrame, startGate)
         synchronized(lavSeekMonitor) {
             if (readerDone) return false
             pendingLavSeek?.let {
@@ -394,7 +400,7 @@ internal class NativeVideoFramePipe(
             } else if (MediaPlayer.DEBUG) {
                 logger.debug("$debugLabel In-place seek applied $queuedMs ms after request.")
             }
-            prebuffer?.resetForSeek(seek.onFirstFrame)
+            prebuffer?.resetForSeek(seek.onFirstFrame, seek.startGate)
             val ok = NativeMedia.lavSeek(lavHandle, seek.offsetNanos / 1_000L)
             synchronized(lavSeekMonitor) {
                 if (ok) seek.applied = true else seek.failed = true

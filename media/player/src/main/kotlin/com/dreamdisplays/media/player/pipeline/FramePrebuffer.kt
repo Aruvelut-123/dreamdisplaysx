@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 internal class FramePrebuffer(
     private val surface: FrameSurface,
+    private val frameNs: Long,
     private val capacityFrames: Int,
     private val prefillFrames: Int,
     private val getAudioClock: () -> Long,
@@ -56,6 +57,9 @@ internal class FramePrebuffer(
     @Volatile
     private var flushRequested = false
 
+    @Volatile
+    private var seekStartGate: (() -> Boolean)? = null
+
     /**
      * When the first frame of the current fill was queued, or 0 while none has been. Bounds how long the prefill may
      * hold playout back when the source trickles in slower than real time (see [PRIME_DEADLINE_NANOS]).
@@ -92,7 +96,7 @@ internal class FramePrebuffer(
             while (alive() && !flushRequested) {
                 if (queue.offer(Timed(frame, pts, gen), POLL_MS, TimeUnit.MILLISECONDS)) {
                     if (firstSubmitNanos == 0L) firstSubmitNanos = System.nanoTime()
-                    if (!primed && queue.size >= prefillFrames) primed = true
+                    if (!primed && seekStartGate == null && queue.size >= prefillFrames) primed = true
                     logSlowSubmit(blockedSinceNs)
                     return surface.takeOrAllocate(nextSize)
                 }
@@ -131,12 +135,18 @@ internal class FramePrebuffer(
     fun requestFlush() {
         flushRequested = true
         drainAndRecycle()
+        surface.dropQueued()
     }
 
-    /** Drops queued frames and re-primes the same consumer for an in-place decoder seek. */
-    fun resetForSeek(onFirstFrame: () -> Unit) {
+    /**
+     * Drops queued frames and re-primes the same consumer for an in-place decoder seek. With [startGate] (sound
+     * ready?) playout restarts once [SEEK_PREFILL_FRAMES] are decoded and the gate opens, not after the full cushion.
+     */
+    fun resetForSeek(onFirstFrame: () -> Unit, startGate: (() -> Boolean)? = null) {
+        seekStartGate = startGate
         generation.incrementAndGet()
         drainAndRecycle()
+        surface.dropQueued()
         inputClosed = false
         primed = false
         previewPresented = false
@@ -159,6 +169,8 @@ internal class FramePrebuffer(
         drainAndRecycle()
         primed = firstFramePresented.get()
     }
+
+    private val displayLeadNs = frameNs.coerceIn(MIN_DISPLAY_LEAD_NS, MAX_DISPLAY_LEAD_NS)
 
     private fun alive(): Boolean = !aborted && !terminated.get() && !stopFlag.get()
 
@@ -199,9 +211,28 @@ internal class FramePrebuffer(
                             continue
                         }
                     }
+                    val since = firstSubmitNanos
+                    val gate = seekStartGate
+                    if (gate != null) {
+                        if (since != 0L && queue.size >= minOf(SEEK_PREFILL_FRAMES, prefillFrames)) {
+                            val waited = System.nanoTime() - since
+                            val soundReady = runCatching { gate() }.getOrDefault(true)
+                            if (soundReady || waited >= SEEK_START_WAIT_NANOS) {
+                                primed = true
+                                seekStartGate = null
+                                if (MediaPlayer.DEBUG || !soundReady) {
+                                    logger.debug(
+                                        "$debugLabel Seek playout starting after ${waited / 1_000_000} ms " +
+                                                "(queued=${queue.size}, soundReady=$soundReady)."
+                                    )
+                                }
+                                continue
+                            }
+                        }
+                        Thread.sleep(2); continue
+                    }
                     // A source that trickles in slower than real time would otherwise hold the start (and
                     // the audio behind its gate) for as long as it takes to decode the whole cushion.
-                    val since = firstSubmitNanos
                     if (since != 0L && System.nanoTime() - since >= PRIME_DEADLINE_NANOS) {
                         primed = true
                         if (MediaPlayer.DEBUG) {
@@ -246,6 +277,7 @@ internal class FramePrebuffer(
                     dropStaleTimeline = false,
                     // Only worth skipping a late frame while a fresher one is already decoded behind it
                     dropWhenBehind = { !tolerateLateness || queue.isNotEmpty() },
+                    leadNs = displayLeadNs,
                 )
                 if (abortedByPark && !flushRequested && alive()) {
                     pending.set(tf)
@@ -259,7 +291,7 @@ internal class FramePrebuffer(
                 }
                 recordFrame(lateNs, presentedIt = true)
                 onPresent?.invoke(tf.buf)
-                surface.present(tf.buf)
+                surface.present(tf.buf, tf.pts)
                 armPlayout()
             }
         } catch (_: InterruptedException) {
@@ -322,6 +354,11 @@ internal class FramePrebuffer(
 
     companion object {
         private const val POLL_MS = 50L
+
+        private const val SEEK_PREFILL_FRAMES = 2
+        private const val SEEK_START_WAIT_NANOS = 1_500_000_000L
+        private const val MIN_DISPLAY_LEAD_NS = 8_000_000L
+        private const val MAX_DISPLAY_LEAD_NS = 40_000_000L
         private const val JOIN_MS = 500L
 
         private const val PARK_POLL_MS = 10L
@@ -377,9 +414,11 @@ internal class FramePrebuffer(
             val capacity = prefill + 4
             // Let the surface pool retain every in-flight buffer (queue + ready + spare) so steady-state
             // playout reuses buffers instead of churning large direct allocations (which would GC-stutter).
-            surface.setMaxReusableBuffers(capacity + 2)
+            surface.setMaxReusableBuffers(capacity + 2 + FrameSurface.MAX_DISPLAY_QUEUE)
+            surface.enableDisplaySync(getAudioClock, frameNs)
             return FramePrebuffer(
                 surface,
+                frameNs,
                 capacity,
                 prefill,
                 getAudioClock,

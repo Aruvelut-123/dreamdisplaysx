@@ -187,6 +187,33 @@ class AudioMasterClockTest {
     }
 
     @Test
+    fun `a line reporting in buffer steps is smoothed between them`() {
+        val fake = FakeNanos()
+        val clock = AudioMasterClock("test", fake::now)
+        val step = 10 * ms
+        var raw = 10 * second
+        var last = clock.nanos(sample(raw), 10 * second, suspended = false) { null }
+
+        repeat(200) { i ->
+            fake.advance(2 * ms)
+            if ((i + 1) % 5 == 0) raw += step
+            val out = clock.nanos(sample(raw), 10 * second, suspended = false) { null }
+            val truth = 10 * second + (i + 1) * 2 * ms
+            if (i >= 10) {
+                assertTrue(out > last, "The clock must move between line updates (sample $i).")
+                assertTrue(kotlin.math.abs(out - truth) <= 3 * ms, "Drifted ${(out - truth) / ms} ms at sample $i.")
+            }
+            last = out
+        }
+
+        repeat(20) {
+            fake.advance(2 * ms)
+            last = clock.nanos(sample(raw), 10 * second, suspended = false) { null }
+        }
+        assertTrue(last - raw <= 15 * ms, "Overshot a stopped line by ${(last - raw) / ms} ms.")
+    }
+
+    @Test
     fun `no line clock falls through to the wall clock`() {
         val clock = AudioMasterClock("test")
         assertEquals(7 * second, clock.nanos(AudioSink.ClockSample.NONE, 7 * second, suspended = false) { null })

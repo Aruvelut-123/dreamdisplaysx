@@ -12,7 +12,6 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Render-facing half of a frame pipe, shared by [VideoFramePipe] and [NativeVideoFramePipe]: the reusable direct-buffer
@@ -30,6 +29,10 @@ internal class FrameSurface(
 
     companion object {
         private const val MAX_REUSABLE_FRAME_BUFFERS = 4
+        private const val MAX_DISPLAY_TOLERANCE_NS = 20_000_000L
+
+        const val SHOW_NOW = Long.MIN_VALUE
+        const val MAX_DISPLAY_QUEUE = 4
     }
 
     /** Pool retention cap; raised by the prebuffer so its in-flight buffers are reused, not churned. */
@@ -41,7 +44,16 @@ internal class FrameSurface(
         maxReusableBuffers = n.coerceAtLeast(MAX_REUSABLE_FRAME_BUFFERS)
     }
 
-    private val readyBufferRef = AtomicReference<ByteBuffer?>(null)
+    private class Queued(@JvmField val buf: ByteBuffer, @JvmField val pts: Long)
+
+    private val displayQueue = ArrayDeque<Queued>()
+
+    @Volatile
+    private var displayClock: (() -> Long)? = null
+
+    @Volatile
+    private var displayToleranceNs = 0L
+
     private val textureReady = AtomicBoolean(false)
     private val readyDrops = AtomicLong()
     private val reusableFrameBuffers = ConcurrentLinkedQueue<ByteBuffer>()
@@ -54,14 +66,32 @@ internal class FrameSurface(
     private var skippedUploads = 0L
 
     /** Returns true once a frame is available for upload or has already been uploaded to the GPU texture. */
-    fun textureFilled(): Boolean = textureReady.get() || readyBufferRef.get() != null
+    fun textureFilled(): Boolean = textureReady.get() || synchronized(displayQueue) { displayQueue.isNotEmpty() }
+
+    /**
+     * Switches the render thread to display-time frame selection: each draw shows the queued frame nearest to
+     * [clock] (within half of [frameNs]) rather than the last one published. Decoupling the pick from the pacing
+     * thread's wake-ups is what keeps the cadence even when video and game frame rates beat against each other.
+     */
+    fun enableDisplaySync(clock: () -> Long, frameNs: Long) {
+        displayToleranceNs = (frameNs / 2).coerceIn(0L, MAX_DISPLAY_TOLERANCE_NS)
+        displayClock = clock
+    }
+
+    /**
+     * Drops frames queued for display but not yet shown, keeping the uploaded picture on screen. Called when a seek
+     * flushes the pipe, so a pre-seek frame can't surface after it.
+     */
+    fun dropQueued() {
+        synchronized(displayQueue) { drainQueueLocked(countDrops = false) }
+    }
 
     /**
      * Uploads the ready frame to [target] if one is available. [actualW] / [actualH] must match [expectedW] / [expectedH]
      * or the frame is dropped.
      */
     fun updateFrame(target: GpuTextureRef, actualW: Int, actualH: Int, expectedW: Int, expectedH: Int): Boolean {
-        val buf = readyBufferRef.getAndSet(null) ?: return false
+        val buf = takeDueFrame() ?: return false
         if (actualW != expectedW || actualH != expectedH || !uploader.canUpload()) {
             if (MediaPlayer.DEBUG) skippedUploads++
             recycleFrameBuffer(buf)
@@ -92,7 +122,7 @@ internal class FrameSurface(
         y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef,
         actualW: Int, actualH: Int, expectedW: Int, expectedH: Int,
     ): Boolean {
-        val buf = readyBufferRef.getAndSet(null) ?: return false
+        val buf = takeDueFrame() ?: return false
         if (actualW != expectedW || actualH != expectedH || !uploader.canUpload()) {
             if (MediaPlayer.DEBUG) skippedUploads++
             recycleFrameBuffer(buf)
@@ -118,7 +148,7 @@ internal class FrameSurface(
     /** Discards the current ready frame. Call when stopping or seeking. */
     fun clear() {
         textureReady.set(false)
-        readyBufferRef.getAndSet(null)?.let(::recycleFrameBuffer)
+        dropQueued()
         while (reusableFrameBuffers.poll() != null) reusableCount.decrementAndGet()
         readyDrops.set(0)
     }
@@ -133,31 +163,20 @@ internal class FrameSurface(
     }
 
     /**
-     * Swaps [frame] into the ready slot for the render thread and returns a fresh spare buffer
-     * of at least [nextSize] bytes for the reader to fill next.
+     * Hands [frame] (already paced by the caller) to the render thread, due at once, and returns a fresh spare
+     * buffer of at least [nextSize] bytes for the reader to fill next.
      */
     fun publish(frame: ByteBuffer, nextSize: Int): ByteBuffer {
-        val dropped = readyBufferRef.getAndSet(frame)
-        if (dropped !== frame) dropped?.let {
-            readyDrops.incrementAndGet()
-            if (MediaPlayer.DEBUG) MediaPlayer.framesDropped.incrementAndGet()
-            recycleFrameBuffer(it)
-        }
+        enqueue(frame, SHOW_NOW)
         return takeReusableFrameBuffer(nextSize) ?: allocateFrameBuffer(nextSize)
     }
 
     /**
-     * Consumer-side present (used by [FramePrebuffer]): swaps [frame] into the ready slot, recycling any
-     * frame the render thread hadn't picked up yet. Unlike [publish] it returns no spare — the prebuffer's
-     * producer owns spare allocation.
+     * Consumer-side present (used by [FramePrebuffer]): queues [frame] for the render thread, due at [pts]
+     * ([SHOW_NOW] for a preview). Unlike [publish] it returns no spare — the prebuffer's producer owns spares.
      */
-    fun present(frame: ByteBuffer) {
-        val dropped = readyBufferRef.getAndSet(frame)
-        if (dropped !== frame) dropped?.let {
-            readyDrops.incrementAndGet()
-            if (MediaPlayer.DEBUG) MediaPlayer.framesDropped.incrementAndGet()
-            recycleFrameBuffer(it)
-        }
+    fun present(frame: ByteBuffer, pts: Long = SHOW_NOW) {
+        enqueue(frame, pts)
     }
 
     /** Returns a pooled or freshly allocated direct buffer of at least [size] bytes. */
@@ -192,6 +211,49 @@ internal class FrameSurface(
             reusableFrameBuffers.offer(buffer)
         } else {
             reusableCount.decrementAndGet()
+        }
+    }
+
+    private fun takeDueFrame(): ByteBuffer? {
+        val clock = displayClock?.invoke() ?: -1L
+        val horizon = if (clock >= 0L) clock + displayToleranceNs else Long.MAX_VALUE
+        var chosen: ByteBuffer? = null
+        synchronized(displayQueue) {
+            while (true) {
+                val head = displayQueue.firstOrNull() ?: break
+                if (head.pts != SHOW_NOW && head.pts > horizon) break
+                displayQueue.removeFirst()
+                chosen?.let {
+                    readyDrops.incrementAndGet()
+                    if (MediaPlayer.DEBUG) MediaPlayer.framesDropped.incrementAndGet()
+                    recycleFrameBuffer(it)
+                }
+                chosen = head.buf
+            }
+        }
+        return chosen
+    }
+
+    private fun enqueue(frame: ByteBuffer, pts: Long) {
+        synchronized(displayQueue) {
+            val last = displayQueue.lastOrNull()
+            if (last != null && (pts == SHOW_NOW || (last.pts != SHOW_NOW && pts < last.pts))) {
+                drainQueueLocked(countDrops = true)
+            }
+            displayQueue.addLast(Queued(frame, pts))
+            while (displayQueue.size > MAX_DISPLAY_QUEUE) {
+                readyDrops.incrementAndGet()
+                if (MediaPlayer.DEBUG) MediaPlayer.framesDropped.incrementAndGet()
+                recycleFrameBuffer(displayQueue.removeFirst().buf)
+            }
+        }
+    }
+
+    private fun drainQueueLocked(countDrops: Boolean) {
+        while (true) {
+            val q = displayQueue.removeFirstOrNull() ?: break
+            if (countDrops) readyDrops.incrementAndGet()
+            recycleFrameBuffer(q.buf)
         }
     }
 
