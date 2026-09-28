@@ -61,10 +61,12 @@ object ProtocolRouter {
         logger.warn("Server runs a Dream Displays version that only supports protocol v1; displays are disabled.")
         val mc = Minecraft.getInstance()
         mc.execute {
-            mc.gui.chat.addMessage(
-                Component.translatable("dreamdisplays.message.outdated_server")
-                    .withStyle(ChatFormatting.RED)
-            )
+            val message = Component.translatable("dreamdisplays.message.outdated_server")
+                .withStyle(ChatFormatting.RED)
+            //? if >=26.3 {
+            mc.gui.chatListener().handleSystemMessage(message, false)
+            //?} else
+            /*mc.gui.chat.addMessage(message)*/
         }
     }
 
