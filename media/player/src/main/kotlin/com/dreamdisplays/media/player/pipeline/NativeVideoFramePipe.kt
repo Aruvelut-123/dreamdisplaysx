@@ -27,7 +27,7 @@ internal class NativeVideoFramePipe(
 
     companion object {
         private const val EXIT_WAIT_MILLIS = 500
-        internal const val PARK_POLL_MS = 2L
+        internal const val PARK_POLL_MS = 10L
         private const val LAV_HW_AUTO = 1
         private const val LAV_PTS_ORIGIN_TOLERANCE_NS = 10_000_000_000L
         private const val LAV_PREROLL_MARGIN_NS = 50_000_000L

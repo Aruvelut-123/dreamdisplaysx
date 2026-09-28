@@ -55,10 +55,15 @@ internal class LastFrameCache {
     private var buffer: ByteBuffer? = null
     private var width = 0
     private var height = 0
+    private var storedAtNanos = 0L
     private var format = FramePixelFormat.RGB24
 
     /** Reader-thread only: stores a copy of the first [size] bytes of [src] (read from position 0). */
     fun store(src: ByteBuffer, w: Int, h: Int, size: Int, fmt: FramePixelFormat) = synchronized(lock) {
+        val now = System.nanoTime()
+        val sameShape = buffer != null && w == width && h == height && fmt == format
+        if (sameShape && now - storedAtNanos < STORE_INTERVAL_NANOS) return
+        storedAtNanos = now
         var dst = buffer
         if (dst == null || dst.capacity() < size) {
             dst = ByteBuffer.allocateDirect(size)
@@ -78,6 +83,10 @@ internal class LastFrameCache {
     fun replay(sink: (ByteBuffer, Int, Int, FramePixelFormat) -> Unit) = synchronized(lock) {
         val buf = buffer ?: return
         sink(buf.duplicate(), width, height, format)
+    }
+
+    private companion object {
+        const val STORE_INTERVAL_NANOS = 250_000_000L
     }
 }
 

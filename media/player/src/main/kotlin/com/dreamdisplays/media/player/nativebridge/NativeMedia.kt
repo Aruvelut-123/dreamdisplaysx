@@ -141,6 +141,7 @@ object NativeMedia {
     private class PtsScratch {
         val arena: Arena = Arena.ofShared()
         val segment: MemorySegment = arena.allocate(ValueLayout.JAVA_LONG)
+        val surfaceDesc: MemorySegment by lazy { arena.allocate(LAV_SURFACE_DESC_BYTES) }
     }
 
     private val ptsScratches = java.util.concurrent.ConcurrentHashMap<Long, PtsScratch>()
@@ -264,14 +265,12 @@ object NativeMedia {
      */
     fun lavReadSurface(handle: Long): LavSurfaceReadResult {
         val readSurface = lavReadSurfaceHandle ?: return LavSurfaceReadResult(READ_UNSUPPORTED, null)
-        Arena.ofConfined().use { arena ->
-            val seg = arena.allocate(LAV_SURFACE_DESC_BYTES)
-            val rc = readSurface.invoke(handle, seg) as Int
-            return LavSurfaceReadResult(
-                rc,
-                if (rc == READ_OK) readLavSurfaceDescriptor(seg) else null,
-            )
-        }
+        val seg = ptsScratches.getOrPut(handle) { PtsScratch() }.surfaceDesc
+        val rc = readSurface.invoke(handle, seg) as Int
+        return LavSurfaceReadResult(
+            rc,
+            if (rc == READ_OK) readLavSurfaceDescriptor(seg) else null,
+        )
     }
 
     /** Imports one retained surface plane into an existing OpenGL texture object. */

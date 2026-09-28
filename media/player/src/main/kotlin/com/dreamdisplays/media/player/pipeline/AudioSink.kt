@@ -829,9 +829,11 @@ internal class AudioSink(private val debugLabel: String) {
         paceStreaming = true
         // Hold the backlog at the target: wait for playout to drain the surplus before feeding the next chunk.
         while (!terminated.get() && !stopFlag.get()) {
-            if ((ln.bufferSize - ln.available()).coerceAtLeast(0) <= paceTargetBytes) break
+            val surplus = (ln.bufferSize - ln.available()).coerceAtLeast(0) - paceTargetBytes
+            if (surplus <= 0) break
+            val drainMs = (surplus.toLong() * 1_000L / (SAMPLE_RATE * BYTES_PER_FRAME)).coerceIn(1L, 20L)
             try {
-                Thread.sleep(1)
+                Thread.sleep(drainMs)
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt(); break
             }

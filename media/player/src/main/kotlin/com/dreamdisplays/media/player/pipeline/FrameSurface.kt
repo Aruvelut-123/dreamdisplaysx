@@ -10,6 +10,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -44,6 +45,7 @@ internal class FrameSurface(
     private val textureReady = AtomicBoolean(false)
     private val readyDrops = AtomicLong()
     private val reusableFrameBuffers = ConcurrentLinkedQueue<ByteBuffer>()
+    private val reusableCount = AtomicInteger()
 
     private var uploadTotalNs = 0L
     private var uploadMinNs = Long.MAX_VALUE
@@ -117,7 +119,7 @@ internal class FrameSurface(
     fun clear() {
         textureReady.set(false)
         readyBufferRef.getAndSet(null)?.let(::recycleFrameBuffer)
-        reusableFrameBuffers.clear()
+        while (reusableFrameBuffers.poll() != null) reusableCount.decrementAndGet()
         readyDrops.set(0)
     }
 
@@ -172,6 +174,7 @@ internal class FrameSurface(
     fun takeReusableFrameBuffer(requiredSize: Int): ByteBuffer? {
         while (true) {
             val buffer = reusableFrameBuffers.poll() ?: return null
+            reusableCount.decrementAndGet()
             if (buffer.capacity() >= requiredSize) {
                 buffer.clear()
                 return buffer
@@ -185,8 +188,10 @@ internal class FrameSurface(
      */
     fun recycleFrameBuffer(buffer: ByteBuffer) {
         buffer.clear()
-        if (reusableFrameBuffers.size < maxReusableBuffers) {
+        if (reusableCount.incrementAndGet() <= maxReusableBuffers) {
             reusableFrameBuffers.offer(buffer)
+        } else {
+            reusableCount.decrementAndGet()
         }
     }
 
@@ -203,7 +208,7 @@ internal class FrameSurface(
             logger.debug(
                 "$debugLabel $label ${w}x$h avg=${"%.3f".format(avgMs)}ms " +
                         "min=${"%.3f".format(minMs)}ms max=${"%.3f".format(maxMs)}ms " +
-                        "readyDrops=$drops skipped=$skipped pool=${reusableFrameBuffers.size}",
+                        "readyDrops=$drops skipped=$skipped pool=${reusableCount.get()}",
             )
             uploadTotalNs = 0L
             uploadMinNs = Long.MAX_VALUE

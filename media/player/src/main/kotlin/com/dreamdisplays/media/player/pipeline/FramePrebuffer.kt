@@ -324,7 +324,7 @@ internal class FramePrebuffer(
         private const val POLL_MS = 50L
         private const val JOIN_MS = 500L
 
-        private const val PARK_POLL_MS = 2L
+        private const val PARK_POLL_MS = 10L
 
         /** Reporting window for the A / V health counters. */
         private const val HEALTH_WINDOW_NS = 10_000_000_000L

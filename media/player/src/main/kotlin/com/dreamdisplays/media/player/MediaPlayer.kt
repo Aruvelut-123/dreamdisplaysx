@@ -127,6 +127,10 @@ class MediaPlayer(
             Runtime.getRuntime().availableProcessors().coerceIn(4, 8),
         ) { r -> daemon(r, "MediaPlayer-init-${INIT_THREAD_COUNTER.incrementAndGet()}") }
 
+        private val SUBTITLE_EXECUTOR: ExecutorService = Executors.newFixedThreadPool(2) { r ->
+            daemon(r, "MediaPlayer-subtitles-${INIT_THREAD_COUNTER.incrementAndGet()}")
+        }
+
         /** Shared timer for retry back-off delays, so waiting never occupies an [INIT_EXECUTOR] thread. */
         private val RETRY_SCHEDULER: ScheduledExecutorService =
             Executors.newSingleThreadScheduledExecutor { r -> daemon(r, "MediaPlayer-retry") }
@@ -566,7 +570,7 @@ class MediaPlayer(
         subtitleTrack = track
         subtitleCues = emptyList()
         val requestId = subtitleFetchId.incrementAndGet()
-        INIT_EXECUTOR.submit {
+        SUBTITLE_EXECUTOR.submit {
             val cues = runCatching {
                 WebVttParser.parse(DreamHttpClient.readText(track.url))
             }.onFailure { e ->

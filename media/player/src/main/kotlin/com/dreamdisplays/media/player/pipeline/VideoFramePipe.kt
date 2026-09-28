@@ -28,7 +28,7 @@ internal class VideoFramePipe(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     private companion object {
-        const val PARK_POLL_MS = 2L
+        const val PARK_POLL_MS = 10L
     }
 
     /** Updated by the reader thread on every frame; used by the watchdog to detect stalls. */
