@@ -59,7 +59,7 @@ internal class LastFrameCache {
     private var format = FramePixelFormat.RGB24
 
     /** Reader-thread only: stores a copy of the first [size] bytes of [src] (read from position 0). */
-    fun store(src: ByteBuffer, w: Int, h: Int, size: Int, fmt: FramePixelFormat) = synchronized(lock) {
+    fun store(src: ByteBuffer, w: Int, h: Int, size: Int, fmt: FramePixelFormat): Unit = synchronized(lock) {
         val now = System.nanoTime()
         val sameShape = buffer != null && w == width && h == height && fmt == format
         if (sameShape && now - storedAtNanos < STORE_INTERVAL_NANOS) return
@@ -80,7 +80,7 @@ internal class LastFrameCache {
     }
 
     /** Replays the cached frame into [sink], if one has been stored yet. Safe to call from any thread. */
-    fun replay(sink: (ByteBuffer, Int, Int, FramePixelFormat) -> Unit) = synchronized(lock) {
+    fun replay(sink: (ByteBuffer, Int, Int, FramePixelFormat) -> Unit): Unit = synchronized(lock) {
         val buf = buffer ?: return
         sink(buf.duplicate(), width, height, format)
     }

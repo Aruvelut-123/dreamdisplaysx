@@ -63,10 +63,15 @@ object ProtocolRouter {
         mc.execute {
             val message = Component.translatable("dreamdisplays.message.outdated_server")
                 .withStyle(ChatFormatting.RED)
-            //? if >=26.3 {
+            //? if >=26.2 {
             mc.gui.chatListener().handleSystemMessage(message, false)
-            //?} else
-            /*mc.gui.chat.addMessage(message)*/
+            //?}
+            //? if >=26.1 <26.2 {
+            mc.gui.chat.addClientSystemMessage(message)
+            //?}
+            //? if <26.1 {
+            mc.gui.chat.addMessage(message)
+            //?}
         }
     }
 
