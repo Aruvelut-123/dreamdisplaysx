@@ -222,7 +222,7 @@ object ClientTickManager {
         lastHoveredId = hoveredId
     }
 
-    /** Kicks off the capability handshake (legacy Version packet) for the just-joined server. */
+    /** Kicks off the capability handshake (v2 hello + v1 probe) for the just-joined server. */
     private fun checkVersionAndSendPacket() {
         DreamServices.registry.getOrNull<CapabilityNegotiationService>()?.advertise()
     }

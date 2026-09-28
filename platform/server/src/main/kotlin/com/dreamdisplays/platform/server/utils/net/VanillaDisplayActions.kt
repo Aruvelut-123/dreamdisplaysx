@@ -14,7 +14,6 @@ import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.managers.ActionThrottle
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.managers.PlayerManager
-import com.dreamdisplays.platform.server.managers.StateManager
 import com.dreamdisplays.platform.server.meta.ServerCoroutines
 import com.dreamdisplays.platform.server.meta.VersionState
 import com.dreamdisplays.platform.server.playback.PlaybackContexts
@@ -29,13 +28,16 @@ import kotlinx.coroutines.launch
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import org.semver4j.Semver
+import org.slf4j.LoggerFactory
 
 /**
- * Vanilla Minecraft API packet actions, shared between the frozen v1 receivers registered by
+ * Vanilla Minecraft API packet actions, shared between the receivers registered by
  * [VanillaServerPacketHandler] and the protocol-v2 dispatch in [V2Fabric] / [V2NeoForge]. All
  * business logic is shared by `Fabric` and `NeoForge`.
  */
 object VanillaDisplayActions {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     /**
      * Bounds how often one display's video can be changed — each call persists to disk, broadcasts to
      * every viewer, and makes every viewer's client re-resolve the new URL, so unlike the cheap
@@ -47,6 +49,12 @@ object VanillaDisplayActions {
     /** Bounds how often one player may request a catch-up snapshot for one display. */
     private val requestSyncThrottle = ActionThrottle()
     private const val REQUEST_SYNC_COOLDOWN_MS = 250L
+
+    /** Tells a v1-only client that its Dream Displays is too old for this server. */
+    fun notifyOutdatedClient(player: ServerPlayer) {
+        logger.info("${player.name.string} joined with an outdated Dream Displays (protocol v1); asked to update.")
+        MessageUtil.sendMessage(player, "outdatedClient")
+    }
 
     /** Records the player's reported mod version and runs the mod / plugin update checks. */
     fun recordVersionAndCheckUpdates(player: ServerPlayer, version: String) {
@@ -149,14 +157,12 @@ object VanillaDisplayActions {
         if (!DisplayManager.isPlayerInRange(player, displayData)) return
         if (!setVideoThrottle.tryAcquire(displayId, SET_VIDEO_COOLDOWN_MS)) return
 
-        val wasSync = displayData.isSync
         displayData.url = url
         displayData.lang = MediaUrlPolicy.sanitizeLang(lang)
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(displayData) }
 
         val receivers = DisplayManager.getReceivers(displayData, server)
         VanillaPacketUtil.sendDisplayInfo(receivers, displayData)
-        if (wasSync) StateManager.resetAndBroadcast(displayId, receivers) // Frozen-v1 clock
         TimelineManager.onVideoChanged(displayData)
     }
 

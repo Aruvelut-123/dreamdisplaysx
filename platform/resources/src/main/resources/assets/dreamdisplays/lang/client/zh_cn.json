@@ -101,5 +101,6 @@
   "dreamdisplays.button.access.tooltip.no_region": "此显示屏不在任何区域内，因此区域权限级别除你之外不允许任何人使用。",
   "dreamdisplays.access.everyone": "所有人",
   "dreamdisplays.access.region": "区域成员",
-  "dreamdisplays.access.locked": "已锁定"
+  "dreamdisplays.access.locked": "已锁定",
+  "dreamdisplays.message.outdated_server": "此服务器的 Dream Displays 版本过旧，无法在此使用显示屏。请联系服务器管理员进行更新"
 }

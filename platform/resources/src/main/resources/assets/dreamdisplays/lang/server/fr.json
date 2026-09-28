@@ -44,6 +44,7 @@
   "displayDeleted": "&7D |&f L'affichage a été supprimé !",
   "displayReported": "&7D |&f L'affichage a été signalé !",
   "reportNotConfigured": "&7D |&f Le système de signalement est désactivé sur ce serveur !",
+  "outdatedClient": "&7D |&f Votre version de Dream Displays est trop ancienne pour ce serveur. Mettez le mod à jour pour utiliser les écrans !",
   "newVersion": {
     "text": "",
     "extra": [

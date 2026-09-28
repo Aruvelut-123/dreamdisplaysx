@@ -44,6 +44,7 @@
   "displayDeleted": "&7D |&f Displej byl smazán!",
   "displayReported": "&7D |&f Displej byl nahlášen!",
   "reportNotConfigured": "&7D |&f Systém hlášení je na tomto serveru zakázán!",
+  "outdatedClient": "&7D |&f Tvoje verze Dream Displays je pro tento server příliš stará. Aktualizuj mod, abys mohl používat displeje!",
   "newVersion": {
     "text": "",
     "extra": [

@@ -44,6 +44,7 @@
   "displayDeleted": "&7D |&f Display has been deleted!",
   "displayReported": "&7D |&f Display has been reported!",
   "reportNotConfigured": "&7D |&f Report system is disabled on this server!",
+  "outdatedClient": "&7D |&f Your Dream Displays mod is too old for this server. Please update it to use displays!",
   "newVersion": {
     "text": "",
     "extra": [

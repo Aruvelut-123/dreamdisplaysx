@@ -4,6 +4,9 @@ import com.dreamdisplays.api.protocol.model.PacketDirection
 import com.dreamdisplays.core.protocol.common.PacketRegistry
 import com.dreamdisplays.core.protocol.common.packets.*
 import com.dreamdisplays.platform.client.managers.ClientPacketManager
+import net.minecraft.ChatFormatting
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.Component
 import org.slf4j.LoggerFactory
 
 /**
@@ -19,23 +22,24 @@ object ProtocolRouter {
     var v2Negotiated: Boolean = false
         private set
 
-    /**
-     * Sends [packet] over v2 when negotiated, otherwise as the equivalent frozen-v1 payload.
-     * v2-only packets (playback modes / watch parties) have no legacy form and are dropped on v1.
-     */
+    /** True once the player was told this server only speaks protocol v1. */
+    @Volatile
+    private var outdatedServerReported: Boolean = false
+
+    /** Sends [packet] over v2; dropped until the server has negotiated v2. */
     fun send(packet: DreamPacket) {
-        if (v2Negotiated) {
-            sendV2(packet)
-        } else {
-            val legacy = LegacyAdapter.toLegacy(packet)
-            if (legacy != null) ClientPacketManager.send(legacy)
-            else logger.debug("Dropping v2-only packet {} on a v1 server.", packet::class.simpleName)
-        }
+        if (v2Negotiated) sendV2(packet)
+        else logger.debug("Dropping {}: protocol v2 not negotiated.", packet::class.simpleName)
     }
 
     /** Sends [packet] over the v2 channel unconditionally; used for the blind hello bootstrap. */
     fun sendV2(packet: DreamPacket) {
         ClientPacketManager.send(V2Payload(PacketRegistry.encode(packet)))
+    }
+
+    /** Sends the v1 `version` probe; only v1-only servers answer it (see [onLegacyServerDetected]). */
+    fun sendLegacyProbe(modVersion: String) {
+        ClientPacketManager.send(LegacyProbe.Version(modVersion))
     }
 
     /** Decodes and dispatches v2 envelope bytes; the first [ServerHello] flips the v2 switch. */
@@ -50,18 +54,23 @@ object ProtocolRouter {
         ClientPacketManager.handle(packet)
     }
 
-    /** Dispatches a packet adapted from a frozen-v1 payload; never flips the v2 switch. */
-    @Deprecated("Protocol v1 dispatch path; remove when v1 client support is dropped.")
-    fun onLegacyReceived(packet: DreamPacket) {
-        if (v2Negotiated && packet is DisplaySync) {
-            logger.debug("Ignoring legacy sync packet after protocol v2 negotiation.")
-            return
+    /** A v1 reply arrived: the server's `Dream Displays` is too old, so tell the player once. */
+    fun onLegacyServerDetected() {
+        if (v2Negotiated || outdatedServerReported) return
+        outdatedServerReported = true
+        logger.warn("Server runs a Dream Displays version that only supports protocol v1; displays are disabled.")
+        val mc = Minecraft.getInstance()
+        mc.execute {
+            mc.gui.chat.addMessage(
+                Component.translatable("dreamdisplays.message.outdated_server")
+                    .withStyle(ChatFormatting.RED)
+            )
         }
-        ClientPacketManager.handle(packet)
     }
 
-    /** Drops back to v1-until-proven on disconnect. */
+    /** Resets negotiation state on disconnect. */
     fun reset() {
         v2Negotiated = false
+        outdatedServerReported = false
     }
 }

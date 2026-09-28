@@ -44,6 +44,7 @@
   "displayDeleted": "&7D |&f Wyświetlacz został usunięty!",
   "displayReported": "&7D |&f Wyświetlacz został zgłoszony!",
   "reportNotConfigured": "&7D |&f System raportowania jest wyłączony na tym serwerze!",
+  "outdatedClient": "&7D |&f Twoja wersja Dream Displays jest zbyt stara dla tego serwera. Zaktualizuj moda, aby korzystać z ekranów!",
   "newVersion": {
     "text": "",
     "extra": [

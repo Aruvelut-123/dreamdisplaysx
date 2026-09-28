@@ -2,7 +2,6 @@ package com.dreamdisplays.platform.server
 
 import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.platform.server.managers.DisplayManager
-import com.dreamdisplays.platform.server.managers.StateManager
 import com.dreamdisplays.platform.server.managers.StorageManager
 import com.dreamdisplays.platform.server.meta.ServerCoroutines
 import com.dreamdisplays.platform.server.meta.Updater
@@ -66,7 +65,6 @@ object VanillaBootstrap {
                 runCatching {
                     server.execute {
                         DisplayManager.updateAllDisplays(server)
-                        StateManager.tickBroadcast(server)
                         TimelineManager.tick()
                         WatchPartyManager.tick()
                         FullscreenBroadcastManager.tick()

@@ -101,5 +101,6 @@
   "dreamdisplays.button.access.tooltip.no_region": "Tento displej není v žádném regionu, takže tato úroveň nikoho kromě tebe nevpustí.",
   "dreamdisplays.access.everyone": "Všichni",
   "dreamdisplays.access.region": "Členové regionu",
-  "dreamdisplays.access.locked": "Uzamčeno"
+  "dreamdisplays.access.locked": "Uzamčeno",
+  "dreamdisplays.message.outdated_server": "Verze Dream Displays na tomto serveru je příliš stará, takže zde nelze používat displeje. Požádej administrátory serveru o aktualizaci"
 }

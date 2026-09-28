@@ -101,5 +101,6 @@
   "dreamdisplays.button.access.tooltip.no_region": "Dieser Bildschirm steht in keinem Bereich, daher lässt diese Stufe niemanden außer dir hinein.",
   "dreamdisplays.access.everyone": "Alle",
   "dreamdisplays.access.region": "Bereichsmitglieder",
-  "dreamdisplays.access.locked": "Gesperrt"
+  "dreamdisplays.access.locked": "Gesperrt",
+  "dreamdisplays.message.outdated_server": "Die Dream Displays-Version dieses Servers ist zu alt, daher können hier keine Displays genutzt werden. Bitte die Server-Admins, sie zu aktualisieren"
 }

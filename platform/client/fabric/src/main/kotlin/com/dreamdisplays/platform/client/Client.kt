@@ -27,7 +27,7 @@ import net.minecraft.resources.Identifier
 import com.dreamdisplays.api.platform.service.keys.PlatformServices
 import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
-import com.dreamdisplays.platform.client.net.Packets
+import com.dreamdisplays.platform.client.net.LegacyProbe
 import com.dreamdisplays.platform.client.net.V2Payload
 import com.dreamdisplays.platform.client.platform.FabricPlatformIntegrationProvider
 import com.dreamdisplays.platform.client.render.ScreenRenderer
@@ -68,15 +68,9 @@ class Client : ClientModInitializer, Mod {
             Initializer.onV2Packet(payload.bytes)
         }
 
-        // Frozen v1 receivers for pre-v2 servers; payloads are lifted into v2 packets
-        listOf(
-            Packets.Info.PACKET_ID, Packets.Premium.PACKET_ID, Packets.IsAdmin.PACKET_ID,
-            Packets.Delete.PACKET_ID, Packets.DisplayEnabled.PACKET_ID, Packets.Sync.PACKET_ID,
-            Packets.ReportEnabled.PACKET_ID, Packets.ClearCache.PACKET_ID,
-        ).forEach { type ->
-            ClientPlayNetworking.registerGlobalReceiver(type) { payload, _ ->
-                Initializer.onLegacyPacket(payload)
-            }
+        // Protocol v1 is unsupported; a v1 reply only tells us the server is outdated
+        ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID) { _, _ ->
+            Initializer.onLegacyServerDetected()
         }
 
         //? if >=26 {

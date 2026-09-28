@@ -8,7 +8,6 @@ import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
 import com.dreamdisplays.platform.client.input.MouseButtons
 import com.dreamdisplays.platform.client.managers.*
-import com.dreamdisplays.platform.client.net.LegacyAdapter
 import com.dreamdisplays.platform.client.net.ProtocolRouter
 import com.dreamdisplays.platform.client.overlay.OverlayManager
 import com.dreamdisplays.platform.client.render.DisplayYuvRenderTypes
@@ -23,7 +22,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
 /*import net.minecraft.client.gui.GuiGraphics*/
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
 
 /** Main mod initializer. */
@@ -83,9 +81,9 @@ object Initializer {
         }
     }
 
-    /** Lifts an incoming frozen-v1 [payload] into its v2 packet and dispatches it. */
-    fun onLegacyPacket(payload: CustomPacketPayload) {
-        ProtocolRouter.onLegacyReceived(LegacyAdapter.fromLegacy(payload))
+    /** A v1-only reply arrived: the server's `Dream Displays` is too old to use. */
+    fun onLegacyServerDetected() {
+        ProtocolRouter.onLegacyServerDetected()
     }
 
     /** Decodes and dispatches v2 envelope [bytes] from the `dreamdisplays:v2` channel. */

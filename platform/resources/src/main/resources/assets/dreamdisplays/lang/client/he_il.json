@@ -101,5 +101,6 @@
   "dreamdisplays.button.access.tooltip.no_region": "התצוגה הזו אינה בתוך אזור, ולכן רמה זו לא תכניס איש מלבדך.",
   "dreamdisplays.access.everyone": "כולם",
   "dreamdisplays.access.region": "חברי האזור",
-  "dreamdisplays.access.locked": "נעול"
+  "dreamdisplays.access.locked": "נעול",
+  "dreamdisplays.message.outdated_server": "גרסת Dream Displays בשרת זה ישנה מדי, ולכן לא ניתן להשתמש כאן במסכים. בקש ממנהלי השרת לעדכן אותה"
 }

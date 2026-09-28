@@ -44,6 +44,7 @@
   "displayDeleted": "&7D |&f Дысплей быў выдалены!",
   "displayReported": "&7D |&f Дысплей быў паведамлены!",
   "reportNotConfigured": "&7D |&f Сістэма справаздач адключана на гэтым серверы!",
+  "outdatedClient": "&7D |&f Ваша версія Dream Displays занадта старая для гэтага сервера. Абнавіце мод, каб карыстацца дысплеямі!",
   "newVersion": {
     "text": "",
     "extra": [

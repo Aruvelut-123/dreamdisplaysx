@@ -44,6 +44,7 @@
   "displayDeleted": "&7D |&f התצוגה נמחקה!",
   "displayReported": "&7D |&f התצוגה דווחה!",
   "reportNotConfigured": "&7D |&f מערכת הדיווחים מושבתת בשרת זה!",
+  "outdatedClient": "&7D |&f גרסת Dream Displays שלך ישנה מדי עבור שרת זה. עדכן את המוד כדי להשתמש במסכים!",
   "newVersion": {
     "text": "",
     "extra": [

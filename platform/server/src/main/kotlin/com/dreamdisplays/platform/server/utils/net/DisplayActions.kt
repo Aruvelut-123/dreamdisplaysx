@@ -11,7 +11,6 @@ import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.managers.ActionThrottle
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.managers.PlayerManager
-import com.dreamdisplays.platform.server.managers.StateManager
 import com.dreamdisplays.platform.server.meta.Scheduler
 import com.dreamdisplays.platform.server.meta.Scheduler.runAsync
 import com.dreamdisplays.platform.server.meta.VersionState
@@ -32,9 +31,8 @@ import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
- * Protocol-agnostic server-side actions triggered by client packets. Both the frozen-v1
- * [PacketReceiver] and the v2 [PaperV2Networking] dispatch here, so permission checks and
- * business logic exist exactly once.
+ * Server-side actions triggered by client packets. The v2 [PaperV2Networking] dispatches here,
+ * so permission checks and business logic exist exactly once.
  */
 @PaperOnly
 @NullMarked
@@ -99,13 +97,11 @@ object DisplayActions {
         if (!DisplayManager.isPlayerInRange(player, displayData)) return
         if (!setVideoThrottle.tryAcquire(displayId, SET_VIDEO_COOLDOWN_MS)) return
 
-        val wasSync = displayData.isSync
         displayData.url = url
         displayData.lang = MediaUrlPolicy.sanitizeLang(lang)
 
         runAsync { PaperServer.getInstance().storage.saveDisplay(displayData) }
         DisplayManager.broadcastUpdate(displayData)
-        if (wasSync) StateManager.resetAndBroadcast(displayData) // Frozen-v1 clock
         TimelineManager.onVideoChanged(displayData)
     }
 
@@ -209,6 +205,12 @@ object DisplayActions {
             else -> return true
         }
         return player.hasPermission(permission)
+    }
+
+    /** Tells a v1-only client that its Dream Displays is too old for this server. */
+    fun notifyOutdatedClient(player: Player) {
+        logger.info("${player.name} joined with an outdated Dream Displays (protocol v1); asked to update.")
+        MessageUtil.sendMessage(player, "outdatedClient")
     }
 
     /** Records the player's reported mod version and runs the mod / plugin update checks. */

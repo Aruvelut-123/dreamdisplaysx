@@ -13,7 +13,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
 
 /**
- * Single client-side dispatcher for incoming [DreamPacket]s (v2 and legacy-lifted alike) and the
+ * Single client-side dispatcher for incoming [DreamPacket]s and the
  * raw payload sender bound to the platform [Mod] implementation.
  */
 object ClientPacketManager {
@@ -23,7 +23,7 @@ object ClientPacketManager {
     /** The platform [Mod] used to send raw payloads; set via [bind]. */
     private lateinit var mod: Mod
 
-    /** The latest applied [ServerHello]; legacy per-flag packets merge into this snapshot. */
+    /** The latest applied [ServerHello]. */
     @Volatile
     var serverSnapshot: ServerHello = ServerHello(); private set
 
