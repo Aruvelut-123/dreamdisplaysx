@@ -31,6 +31,8 @@ object MediaUtil {
         "Not all references are available",
     )
 
+    private const val STDERR_CAP_CHARS = 64 * 1024
+
     /** Returns true if [line] is not a known benign `FFmpeg` error that can be safely ignored. */
     fun isInterestingStderr(line: String): Boolean = BORING_STDERR.none { it in line }
 
@@ -39,6 +41,12 @@ object MediaUtil {
         s == null -> "null"
         s.length <= 120 -> s
         else -> s.substring(0, 120) + "...(${s.length})"
+    }
+
+    /** Appends [line] to [sb], dropping the oldest text once it exceeds [STDERR_CAP_CHARS] so long sessions don't leak. */
+    fun appendCapped(sb: StringBuilder, line: String) {
+        sb.append(line).append('\n')
+        if (sb.length > STDERR_CAP_CHARS) sb.delete(0, sb.length - STDERR_CAP_CHARS / 2)
     }
 
     /**

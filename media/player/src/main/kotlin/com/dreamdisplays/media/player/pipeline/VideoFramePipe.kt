@@ -159,7 +159,7 @@ internal class VideoFramePipe(
             try {
                 BufferedReader(InputStreamReader(proc.errorStream)).use { r ->
                     r.lineSequence().forEach { line ->
-                        synchronized(stderrBuf) { stderrBuf.append(line).append('\n') }
+                        synchronized(stderrBuf) { MediaUtil.appendCapped(stderrBuf, line) }
                         if (MediaUtil.isInterestingStderr(line)) {
                             logger.warn("$debugLabel FFmpeg[V] $line")
                         }

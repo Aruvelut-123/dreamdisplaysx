@@ -51,14 +51,14 @@ internal interface FramePipe {
  * gets an immediate first frame instead of a blank one.
  */
 internal class LastFrameCache {
-    @Volatile
+    private val lock = Any()
     private var buffer: ByteBuffer? = null
     private var width = 0
     private var height = 0
     private var format = FramePixelFormat.RGB24
 
     /** Reader-thread only: stores a copy of the first [size] bytes of [src] (read from position 0). */
-    fun store(src: ByteBuffer, w: Int, h: Int, size: Int, fmt: FramePixelFormat) {
+    fun store(src: ByteBuffer, w: Int, h: Int, size: Int, fmt: FramePixelFormat) = synchronized(lock) {
         var dst = buffer
         if (dst == null || dst.capacity() < size) {
             dst = ByteBuffer.allocateDirect(size)
@@ -75,7 +75,7 @@ internal class LastFrameCache {
     }
 
     /** Replays the cached frame into [sink], if one has been stored yet. Safe to call from any thread. */
-    fun replay(sink: (ByteBuffer, Int, Int, FramePixelFormat) -> Unit) {
+    fun replay(sink: (ByteBuffer, Int, Int, FramePixelFormat) -> Unit) = synchronized(lock) {
         val buf = buffer ?: return
         sink(buf.duplicate(), width, height, format)
     }

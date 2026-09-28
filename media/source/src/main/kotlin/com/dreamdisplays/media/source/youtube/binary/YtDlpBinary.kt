@@ -164,11 +164,14 @@ object YtDlpBinary {
         return runCatching {
             val p = ProcessBuilder(exe, "--version").redirectErrorStream(true).start()
             runCatching { p.outputStream.close() }
-            val out = p.inputStream.use { String(it.readAllBytes()) }
+            val sink = StringBuilder()
+            val reader = Processes.collector(p.inputStream, sink, "YtDlp-python-probe").also { it.start() }
             if (!p.waitFor(10, TimeUnit.SECONDS)) {
-                p.destroyForcibly()
+                Processes.destroyTree(p)
                 return false
             }
+            reader.join(2_000)
+            val out = sink.toString()
             if (p.exitValue() != 0) return false
             val m = Regex("""Python (\d+)\.(\d+)""").find(out) ?: return false
             val major = m.groupValues[1].toInt()
@@ -230,7 +233,7 @@ object YtDlpBinary {
                 val p = ProcessBuilder(bundled.toString(), "-U", "--no-warnings")
                     .redirectErrorStream(true).start()
                 runCatching { p.outputStream.close() }
-                p.inputStream.use { it.readAllBytes() }
+                Processes.drainAsync(p.inputStream)
                 if (!p.waitFor(120, TimeUnit.SECONDS)) {
                     Processes.destroyTree(p)
                     return@launch
@@ -302,9 +305,9 @@ object YtDlpBinary {
             pb.redirectErrorStream(true)
             val p = pb.start()
             runCatching { p.outputStream.close() }
-            p.inputStream.use { it.readAllBytes() }
+            Processes.drainAsync(p.inputStream)
             if (!p.waitFor(30, TimeUnit.SECONDS)) {
-                p.destroyForcibly()
+                Processes.destroyTree(p)
                 return false
             }
             p.exitValue() == 0

@@ -97,6 +97,12 @@ class MediaPlayer(
          */
         private const val REPEATED_STALL_WINDOW_NS = 90_000_000_000L
 
+        /** Back-off before each re-resolve in a run of stalls; the last entry repeats. */
+        private val STALL_RERESOLVE_BACKOFF_MS = longArrayOf(0L, 2_000L, 5_000L, 15_000L, 30_000L)
+
+        /** Re-resolves allowed within one run of closely spaced stalls before giving up. */
+        private const val MAX_STALL_RERESOLVES = 6
+
         /**
          * Audio and video are two independent `FFmpeg` processes decoding the same source, so their EOS timing can drift;
          * this guards against a premature end-of-stream near the tail.
@@ -198,6 +204,9 @@ class MediaPlayer(
     @Volatile
     private var lastStallNanos = 0L
 
+    /** Re-resolves made in the current run of stalls (reset once a stall-free window passes). */
+    private var stallReResolves = 0
+
     /** In-place audio restarts used by the current session (see [handleAudioFailure]); reset per session. */
     private val audioRestartAttempts = AtomicInteger(0)
 
@@ -283,6 +292,9 @@ class MediaPlayer(
 
     @Volatile
     private var sessionStartNanos = 0L
+
+    @Volatile
+    private var sessionStartOffsetNanos = 0L
 
     private val volume = VolumeController(env.config.defaultDisplayVolume) {
         sessionManager.setVolume(it)
@@ -739,6 +751,7 @@ class MediaPlayer(
         // (which expects new dimensions) would never match and must be dropped to avoid a frozen frame.
         host.cancelQualityHandoff()
         sessionStartNanos = System.nanoTime()
+        sessionStartOffsetNanos = offsetNanos
         audioRestartAttempts.set(0)
         lastAudioFailureNanos = 0L
         sessionManager.start(
@@ -831,7 +844,8 @@ class MediaPlayer(
                 }."
             )
             val ss = streams
-            if (ss != null) safeExecute { if (!terminated.get()) startStreams(ss, 0) }
+            val offset = if (liveStream) 0L else sessionStartOffsetNanos
+            if (ss != null) safeExecute { if (!terminated.get()) startStreams(ss, offset) }
             return
         }
 
@@ -949,14 +963,27 @@ class MediaPlayer(
         val now = System.nanoTime()
         val repeated = lastStallNanos != 0L && now - lastStallNanos < REPEATED_STALL_WINDOW_NS
         lastStallNanos = now
+        if (!repeated) stallReResolves = 0
         if (repeated || liveStream) {
             val kind = if (liveStream) "Live stall" else "Repeated stall"
-            logger.warn("$debugLabel $kind ($reason); invalidating cached URLs and re-resolving.")
+            val attempt = ++stallReResolves
+            if (attempt > MAX_STALL_RERESOLVES) {
+                logger.error("$debugLabel $kind ($reason); giving up after $MAX_STALL_RERESOLVES re-resolves.")
+                state.set(PlaybackState.ERROR)
+                host.mediaError = DreamMediaException.Decode("Stream keeps stalling", isFatal = true)
+                return
+            }
+            val delayMs = STALL_RERESOLVE_BACKOFF_MS[(attempt - 1).coerceAtMost(STALL_RERESOLVE_BACKOFF_MS.lastIndex)]
+            logger.warn(
+                "$debugLabel $kind ($reason); invalidating cached URLs and re-resolving " +
+                        "($attempt/$MAX_STALL_RERESOLVES, in $delayMs ms)."
+            )
             env.cacheInvalidator.invalidate(youtubeUrl)
             forgetResolvedStreamUrls()
             primedStartPositionNanos.set(if (liveStream) 0L else clock.currentTime())
             state.set(PlaybackState.RESTARTING)
-            dispatchInitialize()
+            if (delayMs == 0L) dispatchInitialize()
+            else RETRY_SCHEDULER.schedule({ dispatchInitialize() }, delayMs, TimeUnit.MILLISECONDS)
         } else {
             logger.warn("$debugLabel Stream stalled ($reason); restarting.")
             safeExecute {

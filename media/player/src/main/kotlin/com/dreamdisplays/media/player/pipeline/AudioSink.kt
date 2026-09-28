@@ -895,7 +895,7 @@ internal class AudioSink(private val debugLabel: String) {
                         } else if (MediaUtil.isInterestingStderr(trimmed)) {
                             logger.warn("$debugLabel [audio] FFmpeg stderr: $trimmed.")
                         }
-                        synchronized(buf) { buf.append(line).append('\n') }
+                        synchronized(buf) { MediaUtil.appendCapped(buf, line) }
                     }
                 }
             } catch (_: IOException) {
