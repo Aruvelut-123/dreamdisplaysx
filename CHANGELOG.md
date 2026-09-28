@@ -1,3 +1,57 @@
+# 1.10.0 Preview 3
+
+## Highlights
+
+- Curved displays
+- Dropped packet protocol v1 support
+- Keyboard shortcuts in the display menu
+- Playback stability fixes
+- Some fixes and minor improvements
+
+## Client
+
+### Features
+
+- Curved displays: now you can place them on stairs and slabs (server 1.10.0 Preview 3 or higher required)
+- Dropped packet protocol v1 support: players can no longer join on servers with an ancient version
+- Added keyboard shortcuts to the display menu:
+  - `Space`: play / pause
+  - `←` / `→`: seek 5 seconds back / forward (15 seconds with `Shift`)
+  - `↑` / `↓`: volume up / down by 5% (10% with `Shift`)
+  - `M`: mute / unmute
+  - `0`–`9`: jump to 0%–90% of the video
+  - `F`: fullscreen
+  - `P`: `Picture-in-Picture`
+
+### Improvements
+
+- Reduced CPU usage while `Picture-in-Picture` or the menu preview is open, especially on 4K videos
+- Reduced CPU usage of paused displays and displays out of render distance
+- Smoother video playback: each frame is now picked at the moment the game draws it, which removes micro-stutters
+- Faster seeking: playback resumes as soon as both picture and sound are ready instead of after a fixed buffer
+- Videos start a bit faster when several displays are loading at once
+- Unstable streams now retry with growing pauses and show an error if they keep failing, instead of reloading forever
+- Subtitles now load right away, even when many displays are loading at once
+- Improved stability during long watching sessions
+
+### Fixes
+
+- Fixed the game freezing when entering a world on some Windows setups ([#227](https://github.com/arnodoelinger/dreamdisplays/issues/227))
+- Fixed the game crashing on Linux when opening the display menu while a video is playing ([#229](https://github.com/arnodoelinger/dreamdisplays/issues/229))
+- Fixed videos getting stuck at the end with play / pause doing nothing until another video was selected ([#234](https://github.com/arnodoelinger/dreamdisplays/issues/234))
+- Fixed emojis in video and stream titles showing up as boxes; they are now hidden ([#232](https://github.com/arnodoelinger/dreamdisplays/issues/232))
+- Fixed a video jumping back to the start on some GPUs right after starting or rejoining
+- Fixed volume and brightness showing odd values like 194% instead of 195%
+- Fixed a glitched first frame when opening `Picture-in-Picture` or the menu preview during playback
+- Fixed videos sometimes never starting to load because a background check hung
+
+## Server
+
+### Features
+
+- Curved displays support
+- Dropped packet protocol v1 support: ancient client versions are no longer supported
+
 # 1.10.0 Preview 2
 
 ## Highlights
