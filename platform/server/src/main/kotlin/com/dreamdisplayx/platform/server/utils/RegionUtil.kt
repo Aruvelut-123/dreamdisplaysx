@@ -128,11 +128,15 @@ object RegionUtil {
         val deltaY: Int,
         val deltaZ: Int,
     ) {
-        /** Screen width in blocks; for vertical (floor / ceiling) facings this is the X-axis span. */
-        fun screenWidth(isVertical: Boolean): Int = if (isVertical) deltaX else max(deltaX, deltaZ)
-
-        /** Screen height in blocks; for vertical (floor / ceiling) facings this is the Z-axis span. */
-        fun screenHeight(isVertical: Boolean): Int = if (isVertical) deltaZ else deltaY
+        /**
+         * Width, height, and depth when the clicked face decides which axis is the screen's depth.
+         * Pass the absolute face steps. A north or south face is deep along Z; an up or down face is deep along Y.
+         */
+        fun screenExtents(faceModX: Int, faceModY: Int, faceModZ: Int): Triple<Int, Int, Int> = when {
+            faceModY != 0 -> Triple(deltaX, deltaZ, deltaY)
+            faceModX != 0 -> Triple(deltaZ, deltaY, deltaX)
+            else -> Triple(deltaX, deltaY, deltaZ)
+        }
 
         /** Returns the min-corner [Location] of this region in [world]. */
         @PaperOnly

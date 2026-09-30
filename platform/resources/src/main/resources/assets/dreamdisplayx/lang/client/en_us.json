@@ -229,5 +229,6 @@
   "dreamdisplayx.config.cdn.aliov": "aliov (Alibaba Cloud, overseas)",
   "dreamdisplayx.config.cdn.cosov": "cosov (Tencent Cloud, overseas)",
   "dreamdisplayx.config.cdn.hwov": "hwov (Huawei Cloud, overseas)",
-  "dreamdisplayx.config.cdn.hk_bcache": "hk_bcache (Bilibili, overseas)"
+  "dreamdisplayx.config.cdn.hk_bcache": "hk_bcache (Bilibili, overseas)",
+  "dreamdisplays.message.outdated_server": "This server's Dream DisplaysX is too old, so displays can't be used here. Ask the server admins to update it"
 }

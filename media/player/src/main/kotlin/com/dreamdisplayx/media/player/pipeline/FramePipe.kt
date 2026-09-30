@@ -50,14 +50,19 @@ internal interface FramePipe {
  * gets an immediate first frame instead of a blank one.
  */
 internal class LastFrameCache {
-    @Volatile
+    private val lock = Any()
     private var buffer: ByteBuffer? = null
     private var width = 0
     private var height = 0
+    private var storedAtNanos = 0L
     private var format = FramePixelFormat.RGB24
 
     /** Reader-thread only: stores a copy of the first [size] bytes of [src] (read from position 0). */
-    fun store(src: ByteBuffer, w: Int, h: Int, size: Int, fmt: FramePixelFormat) {
+    fun store(src: ByteBuffer, w: Int, h: Int, size: Int, fmt: FramePixelFormat): Unit = synchronized(lock) {
+        val now = System.nanoTime()
+        val sameShape = buffer != null && w == width && h == height && fmt == format
+        if (sameShape && now - storedAtNanos < STORE_INTERVAL_NANOS) return
+        storedAtNanos = now
         var dst = buffer
         if (dst == null || dst.capacity() < size) {
             dst = ByteBuffer.allocateDirect(size)
@@ -74,9 +79,13 @@ internal class LastFrameCache {
     }
 
     /** Replays the cached frame into [sink], if one has been stored yet. Safe to call from any thread. */
-    fun replay(sink: (ByteBuffer, Int, Int, FramePixelFormat) -> Unit) {
+    fun replay(sink: (ByteBuffer, Int, Int, FramePixelFormat) -> Unit): Unit = synchronized(lock) {
         val buf = buffer ?: return
         sink(buf.duplicate(), width, height, format)
+    }
+
+    private companion object {
+        const val STORE_INTERVAL_NANOS = 250_000_000L
     }
 }
 
@@ -138,12 +147,14 @@ internal object FramePacing {
         abort: () -> Boolean = { false },
         dropStaleTimeline: Boolean = true,
         dropWhenBehind: () -> Boolean = { true },
+        leadNs: Long = 0L,
     ): Boolean {
         val started = System.nanoTime()
+        val due = videoPts - leadNs
         while (true) {
             if (abort()) return true
             val clock = audioClock()
-            val diff = videoPts - if (clock >= 0) clock else videoPts
+            val diff = due - if (clock >= 0) clock else due
             if (diff <= 0) break
             if (dropStaleTimeline && diff >= STALE_TIMELINE_DIFF_NS) {
                 val now = System.nanoTime()

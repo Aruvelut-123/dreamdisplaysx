@@ -27,6 +27,15 @@ interface DisplayData {
     /** Display [height] in blocks. */
     val height: Int
 
+    /**
+     * How many blocks the screen extends away from the clicked face. `1` for a flat wall.
+     * A staircase of slabs or stairs is deeper, and the client wraps the picture over that volume.
+     */
+    val depth: Int get() = 1
+
+    /** True when the screen hugs slabs and stairs instead of a single flat quad. Old rows leave this false. */
+    val conforming: Boolean get() = false
+
     /** Content rotation; only meaningful for floor / ceiling (`UP` / `DOWN`) facings. */
     val rotation: DisplayRotation
 

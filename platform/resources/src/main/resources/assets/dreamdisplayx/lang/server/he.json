@@ -1,5 +1,5 @@
 {
-    "noDisplayTerritories":  "\u00267D |\u0026f עדיין לא בחרת באזורי תצוגה! אנא בחר שני נקודות עם {0} על {1}",
+    "noDisplayTerritories":  "\u00267D |\u0026f עדיין לא בחרת באזורי תצוגה! אנא בחר שתי נקודות עם {0} על {1}, הלוחות שלו או המדרגות שלו",
     "createDisplayCommand":  "\u00267D |\u0026f כעת הקלד /display create כדי ליצור תצוגה",
     "secondPointNotSelected":  "\u00267D |\u0026f עדיין לא בחרת את הנקודה השנייה!",
     "displayOverlap":  "\u00267D |\u0026f כבר יש תצוגה באזור זה!",
@@ -9,7 +9,7 @@
     "firstPointSelected":  "\u00267D |\u0026f נקודה ראשונה נבחרה! כעת בחר את הנקודה השנייה",
     "secondPointSelected":  "\u00267D |\u0026f נקודה שנייה נבחרה!",
     "structureWrongDepth":  "\u00267D |\u0026f הבחירה חייבת להיות באורך של לפחות 1 בלוק",
-    "wrongStructure":  "\u00267D |\u0026f ניתן להשתמש רק ב-{0} לתצוגות",
+    "wrongStructure":  "\u00267D |\u0026f ניתן להשתמש רק ב-{0}, בלוחות שלו ובמדרגות שלו לתצוגות",
     "displayTooHigh":  "\u00267D |\u0026f גובה התצוגה גבוה מדי (מקסימום %d)",
     "displayTooLow":  "\u00267D |\u0026f התצוגה נמוכה מדי (מינימום %d)",
     "selectionClear":  "\u00267D |\u0026f הבחירה נמחקה!",
@@ -207,5 +207,6 @@
     "customMediaTooFast":  "\u00267D |\u0026f אתה מחליף קישורי וידאו מהר מדי. המתן רגע",
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
-    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)"
+    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "outdatedClient":  "\u00267D |\u0026f גרסת Dream DisplaysX שלך ישנה מדי עבור שרת זה. עדכן את המוד כדי להשתמש במסכים!"
 }

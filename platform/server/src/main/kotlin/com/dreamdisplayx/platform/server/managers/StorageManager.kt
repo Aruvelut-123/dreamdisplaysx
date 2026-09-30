@@ -20,6 +20,7 @@ import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.packInts
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.packPos
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.toBytes
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.toUUID
+import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.unpackConforming
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.unpackFacingOrdinal
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.unpackInts
 import com.dreamdisplayx.platform.server.utils.StoragePackingUtil.unpackPos
@@ -250,7 +251,7 @@ class StorageManager(
             data, worldName,
             packPos(data.pos1.blockX, data.pos1.blockY, data.pos1.blockZ),
             packPos(data.pos2.blockX, data.pos2.blockY, data.pos2.blockZ),
-            packFacing(data.facing.ordinal, data.rotation)
+            packFacing(data.facing.ordinal, data.rotation, data.conforming)
         )
     }
 
@@ -279,6 +280,7 @@ class StorageManager(
             Location(world, x1.toDouble(), y1.toDouble(), z1.toDouble()),
             Location(world, x2.toDouble(), y2.toDouble(), z2.toDouble()),
             w, h, facing, rotation,
+            conforming = unpackConforming(row[table.facing]),
         ).applyCommon(row)
     }
 
@@ -293,7 +295,7 @@ class StorageManager(
             data, data.worldKey,
             packPos(data.pos1.x, data.pos1.y, data.pos1.z),
             packPos(data.pos2.x, data.pos2.y, data.pos2.z),
-            packFacing(DIRECTION_TO_ORDINAL.getValue(data.facing), data.rotation)
+            packFacing(DIRECTION_TO_ORDINAL.getValue(data.facing), data.rotation, data.conforming)
         )
     }
 
@@ -310,6 +312,7 @@ class StorageManager(
             row[table.world],
             BlockPos(x1, y1, z1), BlockPos(x2, y2, z2),
             w, h, facing, rotation,
+            conforming = unpackConforming(row[table.facing]),
         ).applyCommon(row)
     }
 

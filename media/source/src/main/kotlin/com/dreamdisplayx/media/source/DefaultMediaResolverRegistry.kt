@@ -9,6 +9,7 @@ import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.dreamdisplayx.util.DreamCoroutines
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -84,7 +85,10 @@ class DefaultMediaResolverRegistry : MediaResolverRegistry {
         val errors = arrayOfNulls<Throwable>(candidates.size)
         val remaining = AtomicInteger(candidates.size)
 
-        candidates.forEachIndexed { index, resolver ->
+        // Once a winner lands, candidates still waiting out their head start are canceled so they never
+        // spawn work. One already resolving is left to finish (not interrupted): an interrupted extract can
+        // surface as "unresolvable" and poison a resolver's negative cache, while a finished one warms it.
+        val jobs = candidates.mapIndexed { index, resolver ->
             DreamCoroutines.clientIo.launch {
                 if (index > 0) delay(RACE_HEAD_START * index)
                 if (!winner.isCompleted) {
@@ -103,7 +107,11 @@ class DefaultMediaResolverRegistry : MediaResolverRegistry {
                 }
             }
         }
-        return winner.await()
+        try {
+            return winner.await()
+        } finally {
+            jobs.forEach(Job::cancel)
+        }
     }
 
     /** SSRF guard: blocks non-public addresses like localhost, 192.168.*, etc. */

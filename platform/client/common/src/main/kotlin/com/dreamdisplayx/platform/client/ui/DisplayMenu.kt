@@ -40,6 +40,7 @@ import com.dreamdisplayx.platform.client.ui.kit.drawPanelSprite
 import com.dreamdisplayx.platform.client.ui.menu.*
 import com.dreamdisplayx.platform.client.ui.widgets.*
 import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
+import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
@@ -123,7 +124,7 @@ class DisplayMenu private constructor(
         volume = addUi(
             ValueSlider(
                 initial = ds.volume.toDouble(),
-                label = { Component.literal("${floor(it * 200).toInt()}%") },
+                label = { Component.literal("${(it * 200).roundToInt()}%") },
                 // Volume's fraction maps to 0-200%, so a 5%-of-displayed-value stop is 0.025 of the fraction.
                 step = 0.025,
             ) { playback.setVolume(displayId, it.toFloat()) })
@@ -158,7 +159,7 @@ class DisplayMenu private constructor(
         brightness = addUi(
             ValueSlider(
                 initial = ds.brightness.toDouble().coerceIn(0.0, 1.0),
-                label = { Component.literal("${floor(it * 100).toInt()}%") },
+                label = { Component.literal("${(it * 100).roundToInt()}%") },
                 step = 0.05,
             ) { playback.setBrightness(displayId, it.toFloat()) })
         brightness.enabledWhen = { !ds.isSync || ds.canEdit }
@@ -860,7 +861,7 @@ class DisplayMenu private constructor(
     //? if >=1.21.11 {
     override fun keyPressed(event: KeyEvent): Boolean {
         if (replayReadOnly) return true
-        return super.keyPressed(event)
+        return handleHotkey(event.key(), event.modifiers()) || super.keyPressed(event)
     }
 
     override fun charTyped(event: CharacterEvent): Boolean {
@@ -870,13 +871,75 @@ class DisplayMenu private constructor(
     //?} else
     /*override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
         if (replayReadOnly) return true
-        return super.keyPressed(keyCode, scanCode, modifiers)
+        return handleHotkey(keyCode, modifiers) || super.keyPressed(keyCode, scanCode, modifiers)
     }
 
     override fun charTyped(codePoint: Char, modifiers: Int): Boolean {
         if (replayReadOnly) return true
         return super.charTyped(codePoint, modifiers)
     }*/
+
+    /**
+     * Menu keyboard shortcuts. Returns false when the key is not a shortcut, so the event keeps
+     * travelling to the focused widget and then to the screen.
+     *
+     * Held Ctrl / Alt / Super disable every shortcut (those combos belong to the game); Shift
+     * switches the seek / volume steps to their coarse variants.
+     */
+    private fun handleHotkey(key: Int, modifiers: Int): Boolean {
+        if (modifiers and (MOD_CONTROL or MOD_ALT or MOD_SUPER) != 0) return false
+        val coarse = modifiers and MOD_SHIFT != 0
+        val seekStep = if (coarse) SEEK_STEP_COARSE_NANOS else SEEK_STEP_NANOS
+        val volumeStep = if (coarse) VOLUME_STEP_COARSE else VOLUME_STEP
+        // While any text box (the suggestions search box, or the playlist URL / title boxes) holds
+        // focus it must receive digits, letters and space itself, so no shortcut may fire.
+        if (::suggestions.isInitialized && suggestions.isTyping) return false
+        if (::playlist.isInitialized && playlist.isTyping()) return false
+        val ds = displayScreen
+        if (ds.errored) return false
+        val displayId = DisplayId(ds.uuid)
+        val playback = DreamServices.registry.get(PlaybackServices.PLAYBACK)
+        val videoReady = ds.isVideoStarted
+        val canSeek = videoReady && ds.canSeek() && !ds.isLive && ds.canSeekHere
+        fun seekTo(nanos: Long) {
+            val target = nanos.coerceIn(0L, ds.mediaPlayerDurationNanos.coerceAtLeast(0L))
+            playback.seek(displayId, (target / 1_000_000L).milliseconds)
+        }
+        fun nudgeVolume(delta: Double) {
+            val next = (((volume.value + delta) / VOLUME_STEP).roundToInt() * VOLUME_STEP).coerceIn(0.0, 1.0)
+            volume.value = next
+            playback.setVolume(displayId, next.toFloat())
+        }
+        when (key) {
+            KEY_SPACE -> {
+                if (!ds.canControlPlayback) return false
+                if (ds.isPaused) playback.play(displayId) else playback.pause(displayId)
+            }
+            KEY_LEFT -> if (canSeek) seekTo(ds.currentTimeNanos - seekStep) else return false
+            KEY_RIGHT -> if (canSeek) seekTo(ds.currentTimeNanos + seekStep) else return false
+            KEY_UP -> if (videoReady) nudgeVolume(volumeStep) else return false
+            KEY_DOWN -> if (videoReady) nudgeVolume(-volumeStep) else return false
+            KEY_M -> if (videoReady) playback.mute(displayId, !ds.muted) else return false
+            in DIGIT_KEYS, in NUMPAD_DIGIT_KEYS -> {
+                if (!canSeek) return false
+                val digit = DIGIT_KEYS.indexOf(key).takeIf { it >= 0 } ?: NUMPAD_DIGIT_KEYS.indexOf(key)
+                seekTo(ds.mediaPlayerDurationNanos / 10 * digit)
+            }
+            KEY_F -> {
+                if (!videoReady || !ds.canPopoutHere) return false
+                popout.openFullscreen(displayId, FullscreenMode.STANDARD)
+                onClose()
+            }
+            KEY_P -> {
+                if (!videoReady) return false
+                if (!ds.isPopoutActive && !ds.canPopoutHere) return false
+                dropdown.hide()
+                if (ds.isPopoutActive) popout.close(displayId) else popout.openPip(displayId)
+            }
+            else -> return false
+        }
+        return true
+    }
 
     override fun isPauseScreen(): Boolean = false
 
@@ -920,6 +983,43 @@ class DisplayMenu private constructor(
     }
 
     companion object {
+        private const val SEEK_STEP_NANOS = 5_000_000_000L
+        private const val VOLUME_STEP = 0.025
+
+        /** Shift-held steps: 15 s seek, 10% volume. */
+        private const val SEEK_STEP_COARSE_NANOS = 15_000_000_000L
+        private const val VOLUME_STEP_COARSE = 0.05
+
+        private const val KEY_SPACE = InputConstants.KEY_SPACE
+        private const val KEY_F = InputConstants.KEY_F
+        private const val KEY_M = InputConstants.KEY_M
+        private const val KEY_P = InputConstants.KEY_P
+        private const val KEY_RIGHT = InputConstants.KEY_RIGHT
+        private const val KEY_LEFT = InputConstants.KEY_LEFT
+        private const val KEY_DOWN = InputConstants.KEY_DOWN
+        private const val KEY_UP = InputConstants.KEY_UP
+
+        private val DIGIT_KEYS = intArrayOf(
+            InputConstants.KEY_0, InputConstants.KEY_1, InputConstants.KEY_2, InputConstants.KEY_3,
+            InputConstants.KEY_4, InputConstants.KEY_5, InputConstants.KEY_6, InputConstants.KEY_7,
+            InputConstants.KEY_8, InputConstants.KEY_9,
+        )
+        private val NUMPAD_DIGIT_KEYS = intArrayOf(
+            InputConstants.KEY_NUMPAD0, InputConstants.KEY_NUMPAD1, InputConstants.KEY_NUMPAD2,
+            InputConstants.KEY_NUMPAD3, InputConstants.KEY_NUMPAD4, InputConstants.KEY_NUMPAD5,
+            InputConstants.KEY_NUMPAD6, InputConstants.KEY_NUMPAD7, InputConstants.KEY_NUMPAD8,
+            InputConstants.KEY_NUMPAD9,
+        )
+
+        //? if >=1.21.11 {
+        private const val MOD_CONTROL = InputConstants.MOD_CONTROL
+        private const val MOD_ALT = InputConstants.MOD_ALT
+        private const val MOD_SUPER = InputConstants.MOD_SUPER
+        private const val MOD_SHIFT = InputConstants.MOD_SHIFT
+        //?} else
+        /*private const val MOD_CONTROL = 0x2; private const val MOD_ALT = 0x4; private const val MOD_SUPER = 0x8
+        private const val MOD_SHIFT = 0x1*/
+
         /** Minimum logical canvas the normal layout is comfortable in; smaller windows scale down. */
         private const val MIN_CONTENT_W = 640
         private const val MIN_CONTENT_H = 410

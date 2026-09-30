@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.runtime.registry.service.getOrNull
 import com.dreamdisplayx.api.storage.model.FullDisplayData
 import com.dreamdisplayx.core.services.DisplayStorage
 import com.dreamdisplayx.platform.client.core.DreamServices
+import com.dreamdisplayx.platform.client.render.ConformingWorldMesh
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -84,12 +85,14 @@ object DisplayRegistry {
         displayScreen.unregister()
         displaySystem?.removeDisplay(DisplayId(displayScreen.uuid))
         DreamServices.registry.getOrNull(AudioAcousticsServices.ACOUSTICS)?.unregisterSource(displayScreen.uuid)
+        ConformingWorldMesh.forget(displayScreen.uuid)
     }
 
     /** Unregisters all display screens. */
     fun unloadAll() {
         val acoustics = DreamServices.registry.getOrNull(AudioAcousticsServices.ACOUSTICS)
         screens.values.forEach { it.unregister(); acoustics?.unregisterSource(it.uuid) }
+        screens.keys.forEach { ConformingWorldMesh.forget(it) }
         screens.clear()
         unloadedScreens.clear()
         awaitingReconfirm.clear()

@@ -39,4 +39,23 @@ class MediaUtilTest {
         assertFalse(MediaUtil.isInterestingStderr("Task finished with error: Invalid argument"))
         assertTrue(MediaUtil.isInterestingStderr("avcodec error: decode failure"))
     }
+
+    @Test
+    fun `appendCapped keeps every line while under the cap`() {
+        val sb = StringBuilder()
+        MediaUtil.appendCapped(sb, "first")
+        MediaUtil.appendCapped(sb, "second")
+        assertEquals("first\nsecond\n", sb.toString())
+    }
+
+    @Test
+    fun `appendCapped bounds a long session and drops the oldest output`() {
+        val sb = StringBuilder()
+        MediaUtil.appendCapped(sb, "oldest")
+        repeat(65) { MediaUtil.appendCapped(sb, "z".repeat(1_024)) }
+
+        assertFalse(sb.contains("oldest"), "The front of the buffer must be trimmed away.")
+        assertTrue(sb.length <= 64 * 1024, "Buffer stayed at or below the cap, was ${sb.length}.")
+        assertTrue(sb.trimEnd().endsWith("z"), "The newest output must survive the trim.")
+    }
 }

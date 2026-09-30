@@ -115,5 +115,6 @@
   "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
   "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
   "dreamdisplayx.suggestions.no_links": "Zatím žádné uložené odkazy. Vlož výše odkaz na video a přehraj ho.",
-  "dreamdisplayx.debug.commit": "unknown"
+  "dreamdisplayx.debug.commit": "unknown",
+  "dreamdisplays.message.outdated_server": "Verze Dream DisplaysX na tomto serveru je příliš stará, takže zde nelze používat displeje. Požádej administrátory serveru o aktualizaci"
 }

@@ -99,6 +99,12 @@ class DisplayScreen(
     var rotation: DisplayRotation = DisplayRotation.NONE,
 
     val dimensionKey: String = "",
+
+    /** Blocks the screen extends away from [facing]. `1` for a flat wall. */
+    var depth: Int = 1,
+
+    /** True when the picture hugs slabs and stairs instead of one flat quad. */
+    var conforming: Boolean = false,
 ) {
     /** Per-display client settings (volume, quality, mute, ...) loaded from disk. */
     internal val savedSettings = ClientSettingsStore.getSettings(uuid, defaultVolume(), defaultStretchMode())
@@ -655,6 +661,8 @@ class DisplayScreen(
         rotation = DisplayRotation.fromQuarterTurns(packet.rotation)
         width = packet.width
         height = packet.height
+        depth = packet.depth.coerceAtLeast(1)
+        conforming = packet.conforming
 
         val nextMode = if (packet.mode == PlaybackMode.LOCAL.wire && packet.isSync) {
             PlaybackMode.SYNCED

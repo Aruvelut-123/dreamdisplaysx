@@ -23,9 +23,9 @@ object StoragePackingUtil {
         4 to Direction.UP, 5 to Direction.DOWN,
     )
 
-    /** Packs the facing ordinal (low byte) and content rotation (next byte) into one column int. */
-    fun packFacing(facingOrdinal: Int, rotation: DisplayRotation): Int =
-        (facingOrdinal and 0xFF) or ((rotation.quarterTurns and 0xFF) shl 8)
+    /** Packs the facing ordinal (low byte), content rotation (next byte), and the conforming-screen bit. */
+    fun packFacing(facingOrdinal: Int, rotation: DisplayRotation, conforming: Boolean = false): Int =
+        (facingOrdinal and 0xFF) or ((rotation.quarterTurns and 0xFF) shl 8) or (if (conforming) 1 shl 16 else 0)
 
     /** Extracts the facing ordinal from a [packFacing] value; legacy rows (rotation=0) decode unchanged. */
     fun unpackFacingOrdinal(packed: Int): Int = packed and 0xFF
@@ -33,6 +33,9 @@ object StoragePackingUtil {
     /** Extracts the content rotation from a [packFacing] value. */
     fun unpackRotation(packed: Int): DisplayRotation =
         DisplayRotation.fromQuarterTurns((packed shr 8) and 0xFF)
+
+    /** True when the packed facing marks a screen that wraps slabs and stairs. Old rows read as false. */
+    fun unpackConforming(packed: Int): Boolean = (packed ushr 16) and 1 == 1
 
     /** Packs a 3D position into a 64-bit long. */
     fun packPos(x: Int, y: Int, z: Int): Long =

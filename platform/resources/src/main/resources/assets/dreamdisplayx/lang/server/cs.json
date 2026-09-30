@@ -1,5 +1,5 @@
 {
-    "noDisplayTerritories":  "\u00267D |\u0026f Ještě jste nevybral žádné území displeje! Vyberte prosím dva body s {0} na {1}",
+    "noDisplayTerritories":  "\u00267D |\u0026f Ještě jste nevybral žádné území displeje! Vyberte prosím dva body s {0} na {1}, jeho deskách nebo schodech",
     "createDisplayCommand":  "\u00267D |\u0026f Nyní zadejte /display create pro vytvoření displeje",
     "secondPointNotSelected":  "\u00267D |\u0026f Ještě jste nevybral druhý bod!",
     "displayOverlap":  "\u00267D |\u0026f V této oblasti už je displej!",
@@ -9,7 +9,7 @@
     "firstPointSelected":  "\u00267D |\u0026f První bod vybrán! Nyní vyberte druhý bod",
     "secondPointSelected":  "\u00267D |\u0026f Druhý bod vybrán!",
     "structureWrongDepth":  "\u00267D |\u0026f Výběr musí být alespoň 1 blok dlouhý",
-    "wrongStructure":  "\u00267D |\u0026f Pro displeje lze použít pouze {0}",
+    "wrongStructure":  "\u00267D |\u0026f Pro displeje lze použít pouze {0}, jeho desky a schody",
     "displayTooHigh":  "\u00267D |\u0026f Výška displeje je příliš vysoká (max. %d)",
     "displayTooLow":  "\u00267D |\u0026f Displej je příliš nízko (min. %d)",
     "selectionClear":  "\u00267D |\u0026f Výběr byl vymazán!",
@@ -207,5 +207,6 @@
     "customMediaTooFast":  "\u00267D |\u0026f Měníš odkazy na videa příliš rychle. Chvíli počkej",
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
-    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)"
+    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "outdatedClient":  "\u00267D |\u0026f Tvoje verze Dream DisplaysX je pro tento server příliš stará. Aktualizuj mod, abys mohl používat displeje!"
 }

@@ -96,6 +96,11 @@ object Initializer {
         }
     }
 
+    /** A v1-only reply arrived: the server's Dream DisplaysX is too old to use. */
+    fun onLegacyServerDetected() {
+        ProtocolRouter.onLegacyServerDetected()
+    }
+
     /** Decodes and dispatches v2 envelope [bytes] from the `dreamdisplayx:v2` channel. */
     fun onV2Packet(bytes: ByteArray) {
         ProtocolRouter.onV2Received(bytes)

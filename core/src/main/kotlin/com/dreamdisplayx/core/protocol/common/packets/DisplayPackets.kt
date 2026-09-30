@@ -41,6 +41,10 @@ data class DisplayInfo(
     @ProtoNumber(22) val inRegion: Boolean = false,
     /** Whether the addressed player belongs to that region. */
     @ProtoNumber(23) val viewerInRegion: Boolean = false,
+    /** Number of blocks the display grid spans away from its face; 1 is a flat wall. */
+    @ProtoNumber(24) val depth: Int = 1,
+    /** True when the display is drawn as one conforming sheet draped over the terrain instead of per-block quads. */
+    @ProtoNumber(25) val conforming: Boolean = false,
 ) : DreamPacket
 
 /** Removes a display (server broadcast) or requests its deletion (client action). */

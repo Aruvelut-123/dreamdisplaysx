@@ -140,6 +140,10 @@ message DisplayInfo {
   optional bool inRegion = 22;
   // WARNING: a default value decoded when value is missing
   optional bool viewerInRegion = 23;
+  // WARNING: a default value decoded when value is missing
+  optional int32 depth = 24;
+  // WARNING: a default value decoded when value is missing
+  optional bool conforming = 25;
 }
 
 // serial name 'com.dreamdisplayx.core.protocol.common.packets.DisplayDelete'

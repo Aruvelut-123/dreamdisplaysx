@@ -115,5 +115,6 @@
   "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
   "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
   "dreamdisplayx.suggestions.no_links": "Brak zapisanych linków. Wklej powyżej link do filmu, aby go odtworzyć.",
-  "dreamdisplayx.debug.commit": "unknown"
+  "dreamdisplayx.debug.commit": "unknown",
+  "dreamdisplays.message.outdated_server": "Wersja Dream DisplaysX na tym serwerze jest zbyt stara, więc nie można tu używać ekranów. Poproś administrację serwera o aktualizację"
 }

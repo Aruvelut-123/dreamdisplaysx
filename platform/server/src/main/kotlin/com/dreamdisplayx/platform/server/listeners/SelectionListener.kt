@@ -51,7 +51,9 @@ class SelectionListener(plugin: PaperServer) : Listener {
             return
         }
 
-        if (heldItem != PaperServer.config.settings.selectionMaterial || block.type != PaperServer.config.settings.baseMaterial) return
+        if (heldItem != PaperServer.config.settings.selectionMaterial ||
+            !PaperSurfaces.of(PaperServer.config.settings.baseMaterial).accepts(block.type.name)
+        ) return
         event.isCancelled = true
 
         when (event.action) {
@@ -78,10 +80,9 @@ object VanillaSelectionListener {
         val heldItemKey = BuiltInRegistries.ITEM.getKey(heldItem.item).toString()
         if (heldItemKey != selMaterialKey) return false
 
-        val baseMaterialKey = config.settings.baseMaterialId
         val blockState = world.getBlockState(pos)
         val blockKey = BuiltInRegistries.BLOCK.getKey(blockState.block).toString()
-        if (blockKey != baseMaterialKey) return false
+        if (!VanillaSurfaces.of(config.settings.baseMaterialId).accepts(blockKey)) return false
 
         val worldKey = RegionUtil.getLevelKey(world)
         SelectionManager.setFirstPoint(player, pos, worldKey, face)
@@ -106,10 +107,9 @@ object VanillaSelectionListener {
             return true
         }
 
-        val baseMaterialKey = config.settings.baseMaterialId
         val blockState = world.getBlockState(pos)
         val blockKey = BuiltInRegistries.BLOCK.getKey(blockState.block).toString()
-        if (blockKey != baseMaterialKey) return false
+        if (!VanillaSurfaces.of(config.settings.baseMaterialId).accepts(blockKey)) return false
 
         SelectionManager.setSecondPoint(player, pos, worldKey)
         return true

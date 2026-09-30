@@ -31,11 +31,15 @@ class DefaultCapabilityNegotiationService(
     override val isNegotiated: Boolean get() = serverCapabilities != null
 
     /**
-     * Starts the protocol-v2 handshake with a client capability hello.
+     * Starts the protocol-v2 handshake with a client capability hello, then broadcasts the legacy
+     * v1 `version` probe so v1-only servers (which never answer the hello) still reveal themselves.
      */
     override fun advertise() {
         runCatching { ProtocolRouter.send(localCapabilities) }
             .onFailure { e -> logger.error("Unable to advertise protocol-v2 capabilities.", e) }
+
+        runCatching { ProtocolRouter.sendLegacyProbe(localCapabilities.modVersion) }
+            .onFailure { logger.debug("v1 probe not deliverable.", it) }
     }
 
     /** Replaces the negotiated [serverCapabilities] snapshot wholesale. */

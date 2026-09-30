@@ -269,7 +269,14 @@ internal class LibVlcSessionManager(
 
     // ── Frame surface ───────────────────────────────────────────────────────
 
-    private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.BGRA32)
+    private val surface = FrameSurface(debugLabel, uploaderFactory, FramePixelFormat.BGRA32).also { s ->
+        // Display-time frame selection: the render thread takes the queued frame that is DUE for the current
+        // playback position (libvlc `get_time`) instead of always taking the newest published one, so a frame
+        // delivered early waits for its slot instead of replacing the picture ahead of time.
+        // libvlc's plane callbacks expose no per-frame PTS, so publishFrame() stamps each frame from the same
+        // media clock the render thread reads (see FrameSurface.enableDisplaySync).
+        s.enableDisplaySync({ currentPacingNanos() }, DISPLAY_SYNC_FRAME_NS)
+    }
 
     @Volatile
     var expectedW = 0; private set
@@ -1589,7 +1596,15 @@ internal class LibVlcSessionManager(
 
                 // Publish to the GPU surface for the render thread. Skippable via diagnostic switch.
                 if (!LibVlcDiagnostics.noVideoPublish) {
-                    surface.publish(spare, frameSize)
+                    // Stamped with the player's current media position: this frame becomes due at that time, so the
+                    // render thread can hold it back for its slot instead of showing whatever arrived last.
+                    val vlcPlayer = mediaPlayer
+                    val framePtsNanos = if (vlcPlayer == null) FrameSurface.SHOW_NOW else {
+                        runCatching { LibVlc.lib.libvlc_media_player_get_time(vlcPlayer) }
+                            .getOrDefault(-1L)
+                            .let { if (it >= 0L) it * 1_000_000L else FrameSurface.SHOW_NOW }
+                    }
+                    surface.publish(spare, frameSize, framePtsNanos)
                     noFrames.set(System.nanoTime())
                 }
 
@@ -1810,6 +1825,12 @@ internal class LibVlcSessionManager(
     companion object {
         private const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
         private const val REPLAY_FPS = 30.0
+
+        /**
+         * Nominal frame duration handed to [FrameSurface.enableDisplaySync]; the surface halves it (and caps the
+         * result at 20 ms), so this is the widest tolerance the queue can use when picking a due frame.
+         */
+        private const val DISPLAY_SYNC_FRAME_NS = 40_000_000L
 
         /** Defensive tail (bytes) added beyond w*h*4 when allocating the RV32 video pool so a marginally
          * oversized libvlc write (alignment drift / transient seek frame) lands in slack instead of

@@ -1,5 +1,5 @@
 {
-    "noDisplayTerritories":  "\u00267D |\u0026f ¡Aún no has seleccionado territorios de pantalla! Selecciona dos puntos con {0} en {1}",
+    "noDisplayTerritories":  "\u00267D |\u0026f ¡Aún no has seleccionado territorios de pantalla! Selecciona dos puntos con {0} en {1}, sus losas o sus escaleras",
     "createDisplayCommand":  "\u00267D |\u0026f Ahora escribe /display create para crear una pantalla",
     "secondPointNotSelected":  "\u00267D |\u0026f ¡Aún no has seleccionado el segundo punto!",
     "displayOverlap":  "\u00267D |\u0026f ¡Ya hay una pantalla en esta zona!",
@@ -9,7 +9,7 @@
     "firstPointSelected":  "\u00267D |\u0026f ¡Primer punto seleccionado! Ahora selecciona el segundo punto",
     "secondPointSelected":  "\u00267D |\u0026f ¡Segundo punto seleccionado!",
     "structureWrongDepth":  "\u00267D |\u0026f La selección debe tener al menos 1 bloque de profundidad",
-    "wrongStructure":  "\u00267D |\u0026f Solo se puede usar {0} para las pantallas",
+    "wrongStructure":  "\u00267D |\u0026f Solo se puede usar {0}, sus losas y sus escaleras para las pantallas",
     "displayTooHigh":  "\u00267D |\u0026f La altura de la pantalla es demasiado alta (máx. %d)",
     "displayTooLow":  "\u00267D |\u0026f La pantalla está demasiado baja (mín. %d)",
     "selectionClear":  "\u00267D |\u0026f ¡La selección ha sido limpiada!",
@@ -207,5 +207,6 @@
     "customMediaTooFast":  "\u00267D |\u0026f Estás cambiando de enlace de vídeo demasiado rápido. Espera un momento",
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
-    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)"
+    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "outdatedClient":  "\u00267D |\u0026f Tu versión de Dream DisplaysX es demasiado antigua para este servidor. ¡Actualiza el mod para usar las pantallas!"
 }

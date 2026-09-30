@@ -229,5 +229,6 @@
   "dreamdisplayx.config.cdn.aliov": "aliov（阿里云海外）",
   "dreamdisplayx.config.cdn.cosov": "cosov（腾讯云海外）",
   "dreamdisplayx.config.cdn.hwov": "hwov（华为云海外）",
-  "dreamdisplayx.config.cdn.hk_bcache": "hk_bcache（Bilibili 海外）"
+  "dreamdisplayx.config.cdn.hk_bcache": "hk_bcache（Bilibili 海外）",
+  "dreamdisplays.message.outdated_server": "此服务器的 Dream DisplaysX 版本过旧，无法在此使用显示屏。请联系服务器管理员进行更新"
 }

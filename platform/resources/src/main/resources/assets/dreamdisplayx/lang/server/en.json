@@ -1,5 +1,5 @@
 {
-    "noDisplayTerritories":  "\u00267D |\u0026f You haven\u0027t selected any display territories yet! Please select two points using {0} on {1}",
+    "noDisplayTerritories":  "\u00267D |\u0026f You haven\u0027t selected any display territories yet! Please select two points using {0} on {1}, its slabs, or its stairs",
     "createDisplayCommand":  "\u00267D |\u0026f Now type /display create to create a display",
     "secondPointNotSelected":  "\u00267D |\u0026f You haven\u0027t selected the second point yet!",
     "displayOverlap":  "\u00267D |\u0026f There is already a display in this area!",
@@ -9,7 +9,7 @@
     "firstPointSelected":  "\u00267D |\u0026f First point selected! Now select the second point",
     "secondPointSelected":  "\u00267D |\u0026f Second point selected!",
     "structureWrongDepth":  "\u00267D |\u0026f Selection must be at least 1 block long",
-    "wrongStructure":  "\u00267D |\u0026f Only {0} blocks can be used for displays",
+    "wrongStructure":  "\u00267D |\u0026f Only {0} blocks, its slabs, and its stairs can be used for displays",
     "displayTooHigh":  "\u00267D |\u0026f Display height is too high (max. %d)",
     "displayTooLow":  "\u00267D |\u0026f Display is too low (min. %d)",
     "selectionClear":  "\u00267D |\u0026f Selection has been cleared!",
@@ -211,5 +211,6 @@
     "loginTokenEmpty":  "\u00267D |\u0026f The credential token must not be empty.",
     "loginUnsupportedPlatform":  "\u00267D |\u0026f Unsupported platform: %s. Supported: bilibili",
     "loginSuccess":  "\u00267D |\u0026f Logged in on %s globally. Credential broadcast to all players.",
-    "logoutSuccess":  "\u00267D |\u0026f Logged out of %s globally."
+    "logoutSuccess":  "\u00267D |\u0026f Logged out of %s globally.",
+    "outdatedClient":  "\u00267D |\u0026f Your Dream DisplaysX mod is too old for this server. Please update it to use displays!"
 }

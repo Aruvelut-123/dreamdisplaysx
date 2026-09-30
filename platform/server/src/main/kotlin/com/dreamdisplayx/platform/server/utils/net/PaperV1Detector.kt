@@ -1,13 +1,14 @@
 package com.dreamdisplayx.platform.server.utils.net
 
 import com.dreamdisplayx.platform.server.PaperServer
+import com.dreamdisplayx.platform.server.utils.MessageUtil
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.bukkit.entity.Player
 import org.bukkit.plugin.messaging.PluginMessageListener
 import org.jspecify.annotations.NullMarked
 import java.util.concurrent.ConcurrentHashMap
 
-/** Detects the legacy v1 handshake without restoring any v1 packet handling. */
+/** Receives the frozen v1 `version` probe on Paper and asks v1-only clients to update. */
 @PaperOnly
 @NullMarked
 object PaperV1Detector : PluginMessageListener {
@@ -15,8 +16,9 @@ object PaperV1Detector : PluginMessageListener {
     private val plugin: PaperServer by lazy { PaperServer.getInstance() }
 
     fun notify(player: Player) {
+        if (V2PlayerTracker.isV2(player.uniqueId)) return
         if (notified.add(player.uniqueId)) {
-            player.sendMessage("Dream DisplaysX: V1 protocol is not supported anymore. Please update your client.")
+            MessageUtil.sendMessage(player, "outdatedClient")
         }
     }
 

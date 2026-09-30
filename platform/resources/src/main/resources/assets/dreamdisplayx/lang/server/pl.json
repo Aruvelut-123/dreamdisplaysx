@@ -1,5 +1,5 @@
 {
-    "noDisplayTerritories":  "\u00267D |\u0026f Nie wybrałeś jeszcze terytoriów wyświetlacza! Proszę wybrać dwa punkty z {0} na {1}",
+    "noDisplayTerritories":  "\u00267D |\u0026f Nie wybrałeś jeszcze terytoriów wyświetlacza! Proszę wybrać dwa punkty z {0} na {1}, jego półblokach lub schodach",
     "createDisplayCommand":  "\u00267D |\u0026f Teraz wpisz /display create aby utworzyć wyświetlacz",
     "secondPointNotSelected":  "\u00267D |\u0026f Nie wybrałeś jeszcze drugiego punktu!",
     "displayOverlap":  "\u00267D |\u0026f W tym obszarze już jest wyświetlacz!",
@@ -9,7 +9,7 @@
     "firstPointSelected":  "\u00267D |\u0026f Pierwszy punkt wybrany! Teraz wybierz drugi punkt",
     "secondPointSelected":  "\u00267D |\u0026f Drugi punkt wybrany!",
     "structureWrongDepth":  "\u00267D |\u0026f Wybór musi mieć co najmniej 1 blok długości",
-    "wrongStructure":  "\u00267D |\u0026f Dla wyświetlaczy można używać tylko {0}",
+    "wrongStructure":  "\u00267D |\u0026f Dla wyświetlaczy można używać tylko {0}, jego półbloków i schodów",
     "displayTooHigh":  "\u00267D |\u0026f Wysokość wyświetlacza jest zbyt wysoka (max. %d)",
     "displayTooLow":  "\u00267D |\u0026f Wyświetlacz jest zbyt niski (min. %d)",
     "selectionClear":  "\u00267D |\u0026f Wybór wyczyszczony!",
@@ -207,5 +207,6 @@
     "customMediaTooFast":  "\u00267D |\u0026f Zbyt szybko zmieniasz linki do filmów. Poczekaj chwilę",
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
-    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)"
+    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "outdatedClient":  "\u00267D |\u0026f Twoja wersja Dream DisplaysX jest zbyt stara dla tego serwera. Zaktualizuj moda, aby korzystać z ekranów!"
 }

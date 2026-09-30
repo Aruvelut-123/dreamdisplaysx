@@ -726,6 +726,9 @@ class SuggestionsPanel(
         return -1
     }
 
+    /** True while the search box has keyboard focus, so screen-level hotkeys must stand aside. */
+    val isTyping: Boolean get() = searchBox.isFocused
+
     //? if >=1.21.11 {
     override fun keyPressed(event: KeyEvent): Boolean {
         if (!available()) return super.keyPressed(event)

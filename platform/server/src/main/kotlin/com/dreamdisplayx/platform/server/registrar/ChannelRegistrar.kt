@@ -10,10 +10,10 @@ import com.dreamdisplayx.platform.server.utils.net.V3_CHANNEL
 import com.dreamdisplayx.platform.server.utils.net.PaperV1Detector
 import io.github.arnodoelinger.platformweaver.PaperOnly
 
-/** Manages registration of the protocol-v2 and proxy plugin channels. */
+/** Manages registration of the protocol-v2, protocol-v3, and proxy plugin channels. */
 @PaperOnly
 object ChannelRegistrar {
-    /** Registers plugin messaging channels for the protocol-v2 and optional proxy bridges. */
+    /** Registers plugin messaging channels for the protocol-v2/v3 and optional proxy bridges. */
     fun registerChannels(plugin: PaperServer) {
         val messenger = plugin.server.messenger
         messenger.registerIncomingPluginChannel(plugin, V2_CHANNEL, PaperV2Networking)

@@ -1,5 +1,5 @@
 {
-    "noDisplayTerritories":  "\u00267D |\u0026f Ви ще не вибрали території дисплея! Виберіть дві точки з {0} на {1}",
+    "noDisplayTerritories":  "\u00267D |\u0026f Ви ще не вибрали території дисплея! Виберіть дві точки з {0} на {1}, його напівблоках або сходах",
     "createDisplayCommand":  "\u00267D |\u0026f Тепер введіть /display create щоб створити дисплей",
     "secondPointNotSelected":  "\u00267D |\u0026f Ви ще не вибрали другу точку!",
     "displayOverlap":  "\u00267D |\u0026f У цій області вже є дисплей!",
@@ -9,7 +9,7 @@
     "firstPointSelected":  "\u00267D |\u0026f Перша точка вибрана! Тепер виберіть другу точку",
     "secondPointSelected":  "\u00267D |\u0026f Друга точка вибрана!",
     "structureWrongDepth":  "\u00267D |\u0026f Вибір повинен бути хоча б 1 блок у довжину",
-    "wrongStructure":  "\u00267D |\u0026f Для дисплеїв можна використовувати тільки {0}",
+    "wrongStructure":  "\u00267D |\u0026f Для дисплеїв можна використовувати тільки {0}, його напівблоки та сходи",
     "displayTooHigh":  "\u00267D |\u0026f Висота дисплея занадто висока (макс. %d)",
     "displayTooLow":  "\u00267D |\u0026f Висота дисплея занадто низька (мин. %d)",
     "selectionClear":  "\u00267D |\u0026f Вибір очищено!",
@@ -207,5 +207,6 @@
     "customMediaTooFast":  "\u00267D |\u0026f Ви занадто часто змінюєте посилання на відео. Зачекайте трохи",
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
-    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)"
+    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "outdatedClient":  "\u00267D |\u0026f Ваша версія Dream DisplaysX застаріла для цього сервера. Оновіть мод, щоб користуватися дисплеями!"
 }

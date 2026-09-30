@@ -1007,6 +1007,13 @@ class MediaPlayer(
             if (host.shouldLoopOnEnd) {
                 restartFromBeginning()
             } else {
+                // Final frame stays on screen: tear the session down (Android pauses instead of stopping) and
+                // park in PAUSED so a later play resumes from the end rather than re-running the tail.
+                endedAtEnd.set(true)
+                safeExecute {
+                    stopSession()
+                    state.set(PlaybackState.PAUSED)
+                }
                 host.onPlaybackEnded(durationHintNanos)
             }
             return

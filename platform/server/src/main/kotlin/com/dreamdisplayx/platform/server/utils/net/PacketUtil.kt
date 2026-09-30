@@ -31,6 +31,8 @@ object PacketUtil {
         positionNanos: Long = 0,
         inRegion: Boolean = false,
         isRegionMember: ((Player) -> Boolean)? = null,
+        depth: Int = 1,
+        conforming: Boolean = false,
     ) {
         val info = DisplayInfo(
             id = id, ownerId = ownerId, x = position.blockX, y = position.blockY, z = position.blockZ,
@@ -40,6 +42,7 @@ object PacketUtil {
             scheduledStartEpochMillis = scheduledStartEpochMillis, scheduledAction = scheduledAction,
             positionNanos = positionNanos,
             access = access.wire, inRegion = inRegion,
+            depth = depth.coerceAtLeast(1), conforming = conforming,
         )
         if (access == DisplayAccess.REGION && isRegionMember != null) {
             players.filterNotNull().forEach { player ->

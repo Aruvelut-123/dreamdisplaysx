@@ -62,6 +62,7 @@ object ScreenRenderer : ClientRenderService {
 
     /** Unregisters the live screen matching [displayId], delegating to [DisplayRegistry]. */
     override fun unregisterDisplay(displayId: DisplayId) {
+        ConformingWorldMesh.forget(displayId.uuid)
         DisplayRegistry.getScreens()
             .firstOrNull { it.uuid == displayId.uuid }
             ?.let { DisplayRegistry.unregisterScreen(it) }
@@ -118,6 +119,16 @@ object ScreenRenderer : ClientRenderService {
         displayScreen: DisplayScreen, stack: PoseStack, replay: Boolean, drawQuad: QuadRenderer,
     ) {
         if (!replay) displayScreen.fitTexture()
+
+        // A conforming display hugs the selected slabs/stairs: the picture is drawn on the surfaces the
+        // server found instead of one flat quad, so the flat transform and its overlays are skipped.
+        if (displayScreen.conforming) {
+            val wrapped = ConformingWorldMesh.quads(displayScreen)
+            if (wrapped != null) {
+                ConformingScreenDraw.render(displayScreen, wrapped, if (replay) REPLAY_LIFT else 0f, drawQuad)
+                return
+            }
+        }
 
         val facing = displayScreen.facing
         val w = displayScreen.width

@@ -115,5 +115,6 @@
   "dreamdisplayx.ui.playlist_end_continue": "Continue queue",
   "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
   "dreamdisplayx.suggestions.no_links": "Захаваных спасылак пакуль няма. Устаўце спасылку на відэа вышэй, каб уключыць яго.",
-  "dreamdisplayx.debug.commit": "unknown"
+  "dreamdisplayx.debug.commit": "unknown",
+  "dreamdisplays.message.outdated_server": "Версія Dream DisplaysX на гэтым серверы занадта старая, таму дысплеі тут недаступныя. Папрасіце адміністрацыю сервера абнавіць яе"
 }

@@ -11,11 +11,11 @@ import com.dreamdisplayx.platform.server.registrar.FabricBareTokenArgumentType
 import com.dreamdisplayx.platform.server.registrar.FabricCommandRegistrar
 import com.dreamdisplayx.platform.server.storage.StorageBackend
 import com.dreamdisplayx.platform.server.utils.net.FabricNetworkingAdapter
+import com.dreamdisplayx.platform.client.net.LegacyProbe
 import com.dreamdisplayx.platform.server.utils.net.FabricProxyNetworking
 import com.dreamdisplayx.platform.server.utils.net.FabricV2Networking
 import com.dreamdisplayx.platform.server.utils.net.FabricV3Networking
 import com.dreamdisplayx.platform.server.utils.net.FabricV1Detector
-import com.dreamdisplayx.platform.server.utils.net.LegacyV1Payload
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import net.fabricmc.api.ModInitializer
@@ -85,15 +85,13 @@ class Server : ModInitializer {
                 registerPayload(clientbound, V2Payload.TYPE, V2Payload.CODEC)
                 registerPayload(clientbound, V3Payload.TYPE, V3Payload.CODEC)
                 registerPayload(clientbound, ProxyPayload.TYPE, ProxyPayload.CODEC)
+                registerPayload(clientbound, LegacyProbe.Premium.PACKET_ID, LegacyProbe.Premium.PACKET_CODEC)
             }
 
             payloadRegistry("serverboundPlay", "playC2S").let { serverbound ->
                 registerPayload(serverbound, V2Payload.TYPE, V2Payload.CODEC)
                 registerPayload(serverbound, V3Payload.TYPE, V3Payload.CODEC)
-                LegacyV1Payload.CHANNELS.forEach { path ->
-                    val type = LegacyV1Payload.type(path)
-                    registerPayload(serverbound, type, LegacyV1Payload.codec(type))
-                }
+                registerPayload(serverbound, LegacyProbe.Version.PACKET_ID, LegacyProbe.Version.PACKET_CODEC)
                 registerPayload(serverbound, ProxyPayload.TYPE, ProxyPayload.CODEC)
             }
         }.onFailure { e ->

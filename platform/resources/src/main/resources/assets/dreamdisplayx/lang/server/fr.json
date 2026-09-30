@@ -1,5 +1,5 @@
 {
-    "noDisplayTerritories":  "\u00267D |\u0026f Vous n\u0027avez pas encore sélectionné de zones d\u0027affichage ! Veuillez sélectionner deux points avec {0} sur {1}",
+    "noDisplayTerritories":  "\u00267D |\u0026f Vous n\u0027avez pas encore sélectionné de zones d\u0027affichage ! Veuillez sélectionner deux points avec {0} sur {1}, ses dalles ou ses escaliers",
     "createDisplayCommand":  "\u00267D |\u0026f Tapez maintenant /display create pour créer un affichage",
     "secondPointNotSelected":  "\u00267D |\u0026f Vous n\u0027avez pas encore sélectionné le deuxième point !",
     "displayOverlap":  "\u00267D |\u0026f Un affichage existe déjà dans cette zone !",
@@ -9,7 +9,7 @@
     "firstPointSelected":  "\u00267D |\u0026f Premier point sélectionné ! Sélectionnez maintenant le deuxième point",
     "secondPointSelected":  "\u00267D |\u0026f Deuxième point sélectionné !",
     "structureWrongDepth":  "\u00267D |\u0026f La sélection doit avoir une profondeur d\u0027au moins 1 bloc",
-    "wrongStructure":  "\u00267D |\u0026f Seul {0} peut être utilisé pour les affichages",
+    "wrongStructure":  "\u00267D |\u0026f Seuls {0}, ses dalles et ses escaliers peuvent être utilisés pour les affichages",
     "displayTooHigh":  "\u00267D |\u0026f La hauteur de l\u0027affichage est trop élevée (max. %d)",
     "displayTooLow":  "\u00267D |\u0026f L\u0027affichage est trop bas (min. %d)",
     "selectionClear":  "\u00267D |\u0026f La sélection a été effacée !",
@@ -207,5 +207,6 @@
     "customMediaTooFast":  "\u00267D |\u0026f Vous changez de lien vidéo trop vite. Patientez un instant",
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
-    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)"
+    "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "outdatedClient":  "\u00267D |\u0026f Votre version de Dream DisplaysX est trop ancienne pour ce serveur. Mettez le mod à jour pour utiliser les écrans !"
 }

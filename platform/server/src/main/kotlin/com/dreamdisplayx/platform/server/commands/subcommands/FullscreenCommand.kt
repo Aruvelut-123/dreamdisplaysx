@@ -4,6 +4,7 @@ import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.api.media.model.VideoQuality
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.platform.server.PaperServer
+import com.dreamdisplayx.platform.server.PaperSurfaces
 import com.dreamdisplayx.platform.server.baseMaterial
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
@@ -148,11 +149,15 @@ object PaperFullscreenCommand {
         val player = sender as? Player ?: return
         val id = if (id.equals("this", ignoreCase = true)) {
             val block = player.getTargetBlock(null, 32)
-            if (block.type != PaperServer.config.settings.baseMaterial) {
-                return MessageUtil.sendMessage(sender, "displayVideoWrongTargetBlock")
-            }
             val data = DisplayManager.isContains(block.location)
-                ?: return MessageUtil.sendMessage(sender, "noDisplay")
+                ?: return MessageUtil.sendMessage(
+                    sender,
+                    if (PaperSurfaces.of(PaperServer.config.settings.baseMaterial).accepts(block.type.name)) {
+                        "noDisplay"
+                    } else {
+                        "displayVideoWrongTargetBlock"
+                    },
+                )
             data.id.toString()
         } else id
         if (serverScope != null) {

@@ -32,6 +32,7 @@ import com.dreamdisplayx.platform.client.login.PlatformLoginScreen
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
+import com.dreamdisplayx.platform.client.net.LegacyProbe
 import com.dreamdisplayx.platform.client.net.V2Payload
 import com.dreamdisplayx.platform.client.net.V3Payload
 import com.dreamdisplayx.platform.client.platform.FabricPlatformIntegrationProvider
@@ -83,6 +84,11 @@ class Client : ClientModInitializer, Mod {
         }
         ClientPlayNetworking.registerGlobalReceiver(V3Payload.TYPE) { payload, _ ->
             Initializer.onV3Packet(payload.bytes)
+        }
+
+        // Protocol v1 is unsupported; a v1 reply only tells us the server is outdated
+        ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID) { _, _ ->
+            Initializer.onLegacyServerDetected()
         }
 
         //? if >=26 {
