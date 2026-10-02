@@ -2,16 +2,16 @@ package com.dreamdisplayx.platform.client.ui.widgets
 
 import com.dreamdisplayx.api.media.service.keys.MediaServices
 import com.dreamdisplayx.api.media.search.model.MediaSearchResult
-import com.dreamdisplayx.api.media.source.url.YouTubeUrls
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
 import com.dreamdisplayx.api.media.source.model.MediaPlatform
 import com.dreamdisplayx.api.media.source.model.MediaSource
+import com.dreamdisplayx.api.security.policy.MediaUrlPolicy
+import com.dreamdisplayx.media.source.PastedMediaCards
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.media.source.bilibili.BilibiliMetadataCache
 import com.dreamdisplayx.media.source.bilibili.BilibiliSearchItem
 import com.dreamdisplayx.media.source.bilibili.BilibiliSearchType
 import com.dreamdisplayx.media.source.kick.KickMetadataCache
-import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
 import com.dreamdisplayx.media.source.twitch.TwitchApi
 import com.dreamdisplayx.media.source.twitch.TwitchMetadata
 import com.dreamdisplayx.media.source.twitch.TwitchMetadataCache
@@ -159,6 +159,17 @@ class SuggestionsController {
         // Pasting into the box is a request to play that link, so leaving a local-list filter
         // active would hide the result the player just asked for.
         if (sortOption.isOwnList) sortOption = SortOption.RELEVANCE
+
+        // A pasted media URL (or bare YouTube id) is a "play this" request: resolve it to a single
+        // card instead of text-searching the URL string. Anything [MediaUrlPolicy] rejects stays a
+        // search phrase.
+        val pasted = pastedResultOrNull(q)
+        if (pasted != null) {
+            lastQuery = q
+            startLoad()
+            publish(requestSeq.incrementAndGet(), listOf(pasted), null, mode = MoreMode.Search(q))
+            return
+        }
 
         lastQuery = q
         startLoad()
@@ -633,19 +644,31 @@ class SuggestionsController {
     }
 
     /** The single card shown for a pasted link. Built purely from the URL: file name as the title, host as the uploader. */
-    private fun customResult(url: String): MediaSearchResult = MediaSearchResult(
-        id = url,
-        title = CustomMediaUrls.displayName(url),
-        uploader = CustomMediaUrls.hostOf(url),
-        durationSec = null,
-        viewCount = null,
-        watchUrlOverride = url,
-        isCustom = true,
-    )
+    private fun customResult(url: String, platform: MediaPlatform = MediaPlatform.YOUTUBE): MediaSearchResult =
+        MediaSearchResult(
+            id = url,
+            title = CustomMediaUrls.displayName(url),
+            uploader = CustomMediaUrls.hostOf(url),
+            durationSec = null,
+            viewCount = null,
+            watchUrlOverride = url,
+            isCustom = true,
+            platform = platform,
+        )
 
-    /** Minimal result used when URL metadata could not be fetched. */
-    private fun fallbackResult(videoId: String) =
-        MediaSearchResult(videoId, YouTubeUrls.watchUrl(videoId), null, null, null)
+    /**
+     * Recognizes a pasted media link typed into the search box and builds its single-card result, or
+     * returns null when [query] is a plain search phrase. Anything [MediaUrlPolicy] trusts — an
+     * http(s) URL, an ingest endpoint or a bare YouTube id — is treated as a link; platform URLs get
+     * typed cards, direct streams / generic remote links fall back to a custom-link card exactly like
+     * the add-link flow. Matching is keyword-free so a URL containing search terms is never half-
+     * search / half-card.
+     *
+     * The pure URL→card mapping lives in [com.dreamdisplayx.media.source.PastedMediaCards] so it can
+     * be unit-tested without a Minecraft runtime; this method is its client-side entry point.
+     */
+    private fun pastedResultOrNull(query: String): MediaSearchResult? =
+        PastedMediaCards.fromQuery(query)
 
     /** Builds a single-card result for a pasted Twitch URL, using [meta] when the Helix lookup succeeded. */
     private fun twitchResult(source: MediaSource.Twitch, meta: TwitchMetadata?): MediaSearchResult {
@@ -664,28 +687,6 @@ class SuggestionsController {
             platform = MediaPlatform.TWITCH,
         )
     }
-
-    /**
-     * Builds a single-card result for a pasted Vimeo / Kick link. The card is keyed by the watch URL
-     * (unlike Twitch, whose id is a cache key) so its thumbnail slot never collides with a YouTube id;
-     * [meta] fills in the title / uploader / thumbnail when the metadata lookup succeeded.
-     */
-    private fun platformResult(
-        url: String,
-        platform: MediaPlatform,
-        meta: PlatformVideoMetadata?,
-        fallbackTitle: String,
-    ): MediaSearchResult = MediaSearchResult(
-        id = url,
-        title = meta?.title?.takeIf { it.isNotBlank() } ?: fallbackTitle,
-        uploader = meta?.uploader,
-        durationSec = meta?.durationSec,
-        viewCount = meta?.viewCount,
-        watchUrlOverride = url,
-        thumbnailUrlOverride = meta?.thumbnailUrl,
-        isLive = meta?.isLive ?: false,
-        platform = platform,
-    )
 
     companion object {
         /** Results fetched per page; the panel loads another page as the user scrolls near the end. */
