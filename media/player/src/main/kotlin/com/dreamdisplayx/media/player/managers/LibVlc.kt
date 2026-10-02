@@ -99,6 +99,126 @@ object LibVlc {
     @Volatile
     var useHwAccel: Boolean = true
 
+    // ── Hardware-decode backend chain & auto-fallback ────────────────────────
+
+    /** GPU vendor used to pick the preferred hw-decode backend on Windows. */
+    private enum class GpuVendor { NVIDIA, INTEL, AMD, UNKNOWN }
+
+    /**
+     * Ordered hw-decode backend candidates for this machine, ending with software decode
+     * (`"none"`, an explicit `:avcodec-hw=none` so libvlc cannot silently pick a broken
+     * backend). Playback failure walks the chain: each [advanceHwBackendAfterHwFailure]
+     * moves to the next candidate and the session restarts with the new media-level
+     * `:avcodec-hw` option. Never reordered at runtime: the GPU does not change.
+     *
+     * The first candidate per vendor follows the FFmpeg `-hwaccel` best-practice table:
+     *   Windows NVIDIA → cuda (NVDEC), Intel → qsv, AMD → d3d11va
+     *   Linux  NVIDIA → cuda, Intel/AMD → vaapi (Mesa)
+     *   macOS  all    → videotoolbox (only system-level HW API)
+     * A generic d3d11va (Windows) / vaapi (Linux) fallback step sits before software decode,
+     * which is always the last resort — never crash, never deadlock.
+     */
+    private val hwBackendChain: List<String> by lazy {
+        when {
+            com.dreamdisplayx.util.OsInfo.isAndroid -> emptyList()
+            com.dreamdisplayx.util.OsInfo.isWindows -> when (detectGpuVendor()) {
+                GpuVendor.NVIDIA -> listOf("cuda", "d3d11va", "none")
+                GpuVendor.INTEL -> listOf("qsv", "d3d11va", "none")
+                GpuVendor.AMD -> listOf("d3d11va", "none")
+                GpuVendor.UNKNOWN -> listOf("d3d11va", "none")
+            }
+            com.dreamdisplayx.util.OsInfo.isLinux -> when (detectGpuVendor()) {
+                GpuVendor.NVIDIA -> listOf("cuda", "vaapi", "none")
+                GpuVendor.INTEL, GpuVendor.AMD, GpuVendor.UNKNOWN -> listOf("vaapi", "none")
+            }
+            com.dreamdisplayx.util.OsInfo.isMac -> listOf("videotoolbox", "none")
+            else -> listOf("any", "none")
+        }
+    }
+
+    /** Index into [hwBackendChain] for the NEXT session start; bumped on hw-decode failure. */
+    @Volatile
+    private var hwBackendStep: Int = 0
+
+    /**
+     * libvlc log markers that identify a hardware-decode backend failure (as opposed to a
+     * network/stream error). Mirrors the exact strings libvlc 3.0's avcodec/d3d11va modules
+     * log: surface-allocation failure and the timestamp-conversion failures that precede it
+     * (observed on NVIDIA d3d11va: "Timestamp conversion failed for X: no reference clock"
+     * then "Could not convert timestamp 0 for FFmpeg", finally "hardware acceleration
+     * picture allocation failed").
+     */
+    private val HW_FAILURE_MARKERS = arrayOf(
+        "hardware acceleration picture allocation failed",
+        "Timestamp conversion failed",
+        "Could not convert timestamp",
+        "Failed to create Direct3D device",
+        "DXVA2 decoding is not supported",
+    )
+
+    /**
+     * Detects the GPU vendor:
+     *   Windows — probes the driver DLLs present in System32; `nvcuda.dll`/`nvapi64.dll` mark
+     *     NVIDIA (and `nvcuda.dll` is exactly what the `cuda` backend needs), `ig9icd64.dll` /
+     *     legacy `igfxcmrt64.dll` mark Intel, `aticfx64.dll`/`amdvlk64.dll` mark AMD.
+     *   Linux — reads `/sys/class/drm/cardN/device/vendor` (PCI vendor id) which needs no
+     *     subprocess: 0x10de NVIDIA, 0x8086 Intel, 0x1002 AMD. Falls back to [GpuVendor.UNKNOWN]
+     *     when the files are unreadable (e.g. a container without sysfs GPU visibility).
+     *   macOS — always [GpuVendor.UNKNOWN]: VideoToolbox is vendor-independent.
+     */
+    private fun detectGpuVendor(): GpuVendor {
+        if (com.dreamdisplayx.util.OsInfo.isWindows) {
+            val sys32 = File(System.getenv("SystemRoot") ?: "C:\\Windows", "System32")
+            fun has(vararg names: String) = names.any { File(sys32, it).exists() }
+            return when {
+                has("nvcuda.dll", "nvapi64.dll") -> GpuVendor.NVIDIA
+                has("ig9icd64.dll", "igfxcmrt64.dll", "igfxDI.dll") -> GpuVendor.INTEL
+                has("aticfx64.dll", "amdvlk64.dll") -> GpuVendor.AMD
+                else -> GpuVendor.UNKNOWN
+            }
+        }
+        if (com.dreamdisplayx.util.OsInfo.isLinux) {
+            // /sys/class/drm/cardN/device/vendor holds "0x10de" etc. for each GPU.
+            val drm = java.io.File("/sys/class/drm")
+            val vendors = drm.listFiles { f ->
+                f.isDirectory && f.name.startsWith("card")
+            }.orEmpty().mapNotNull { card ->
+                val f = java.io.File(card, "device/vendor")
+                if (f.exists()) runCatching { f.readText().trim() }.getOrNull() else null
+            }.distinct()
+            return when {
+                vendors.any { it.equals("0x10de", true) } -> GpuVendor.NVIDIA
+                vendors.any { it.equals("0x8086", true) } -> GpuVendor.INTEL
+                vendors.any { it.equals("0x1002", true) } -> GpuVendor.AMD
+                else -> GpuVendor.UNKNOWN
+            }
+        }
+        return GpuVendor.UNKNOWN
+    }
+
+    /**
+     * Advances [hwBackendChain] to the next candidate when [recentLog] contains a
+     * hardware-decode failure marker. Returns the new backend (`"none"` = software decode)
+     * so the caller can report it, or null when nothing changed (no hw failure detected, an
+     * explicit `-Ddreamdisplayx.hwDecode` override is set, or already at the last candidate).
+     * The instance-level `--avcodec-hw` was fixed when the libvlc instance was created, but
+     * the media-level `:avcodec-hw` built by [configuredHwBackend] on the next start wins.
+     */
+    fun advanceHwBackendAfterHwFailure(recentLog: List<String>): String? {
+        if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
+        if (System.getProperty("dreamdisplayx.hwDecode") != null) return null
+        if (hwBackendChain.isEmpty()) return null
+        if (recentLog.none { line -> HW_FAILURE_MARKERS.any { it in line } }) return null
+        val next = hwBackendStep + 1
+        if (next >= hwBackendChain.size) return null
+        hwBackendStep = next
+        logger.warn(
+            "Hardware-decode backend failure detected; switching to '{}' for the next attempt.",
+            hwBackendChain[next],
+        )
+        return hwBackendChain[next]
+    }
+
     val lib: LibVlcNative by lazy {
         // NOTE: do NOT call ensureLoaded() here — ensureLoaded() itself resolves `lib` while
         // creating the instance, which would deadlock on the lazy initializer. The caller is
@@ -146,13 +266,14 @@ object LibVlc {
             // --avcodec-hw: the avcodec module decodes on the GPU then copies the frame back to
             // system memory before handing it to the lock callback (copy-back) — the same D3D11VA /
             // DXVA2 copy-back that raw FFmpeg supports, since libvlc's avcodec module IS FFmpeg.
-            // We pick the backend explicitly per-OS instead of `any`: `any` can pick a surface
-            // backend that libvlc 3.0 fails to copy back from (then it silently falls back to
-            // software and the F3 debug overlay reports "software").
-            //   Windows → d3d11va (modern D3D11 API, works well on all Windows GPUs — AMD/NVIDIA/
-            //             Intel — and vmem copy-back is confirmed working; dxva2 is the legacy API)
-            //   Linux   → vaapi (drm copy-back works with vmem)
-            //   Mac     → videotoolbox
+            // We pick the backend explicitly per-vendor/OS instead of `any`: `any` can pick a
+            // surface backend that libvlc 3.0 fails to copy back from (then it silently falls
+            // back to software and the F3 debug overlay reports "software").
+            //   Windows NVIDIA → cuda (NVDEC, most reliable on NVIDIA); Intel → qsv; AMD → d3d11va.
+            //   Linux NVIDIA → cuda; Intel/AMD → vaapi (Mesa); Mac → videotoolbox.
+            // The media-level `:avcodec-hw` (configuredHwBackend, below) walks the same chain and
+            // steps down on hw-decode failure (cuda → d3d11va → software, etc.) — the instance
+            // option here only seeds the very first session.
             // Override with -Ddreamdisplayx.hwDecode=<backend> (e.g. dxva2, any, or "" to disable).
             // Android: the single monolithic libvlc.so has EVERY plugin statically linked
             // (VLC-Android builds it with loadplugins disabled — the `--plugin-path` option is
@@ -179,6 +300,9 @@ object LibVlc {
                 // a game JVM) and treats it as "no proxy" → direct connection, no crash.
                 androidDecoderModule()?.let { opts.add("--codec=$it") }
             } else {
+                // Seed the FIRST session's hw backend from the chain head (the instance option is
+                // fixed for the process lifetime; runtime fallback is driven per-media by
+                // currentHwBackend() in LibVlcSessionManager.start, which overrides this).
                 val backend = configuredHwBackend()
                 if (backend != null) opts.add("--avcodec-hw=$backend")
             }
@@ -369,23 +493,26 @@ object LibVlc {
         return "mediacodec_ndk,mediacodec_jni,any"
     }
 
-    fun configuredHwBackend(): String? {
+    /**
+     * The hw-decode backend for the NEXT session start. Null only when hw decode is globally
+     * disabled (`useHwAccel=false` / `-Ddreamdisplayx.noHardwareAccel`) — the caller then adds
+     * no `avcodec-hw` option at all. Otherwise returns the backend name, INCLUDING `"none"` for
+     * explicit software decode (an empty `-Ddreamdisplayx.hwDecode=` override, or the chain's
+     * last step after repeated hw failures). Returning `"none"` matters: with no option libvlc
+     * defaults to `any` and may silently re-pick the very hw backend that just failed.
+     */
+    fun currentHwBackend(): String? {
         if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
         val override = System.getProperty("dreamdisplayx.hwDecode")
         if (override != null) {
-            // Explicit override present: an EMPTY value disables hw decoding entirely (returns null),
-            // a non-blank value forces that backend. This distinguishes "not set" (use per-OS default)
-            // from "set to empty" (disable), so `-Ddreamdisplayx.hwDecode=` truly disables hw instead
-            // of silently falling back to the platform default backend.
-            return override.takeIf { it.isNotBlank() }
+            // Empty override → explicit software decode ("none"); non-blank forces that backend.
+            return override.takeIf { it.isNotBlank() } ?: "none"
         }
-        return when {
-            com.dreamdisplayx.util.OsInfo.isWindows -> "d3d11va"
-            com.dreamdisplayx.util.OsInfo.isLinux -> "vaapi"
-            com.dreamdisplayx.util.OsInfo.isMac -> "videotoolbox"
-            else -> "any"
-        }
+        return hwBackendChain.getOrNull(hwBackendStep)
     }
+
+    /** Backend name for display (F3 / logs); null when hw decode is disabled or at "none". */
+    fun configuredHwBackend(): String? = currentHwBackend()?.takeIf { it != "none" }
 
     /**
      * Network and file caching in milliseconds, configurable via `-Ddreamdisplayx.networkCachingMs`.

@@ -25,7 +25,13 @@ internal class RetryPolicy(private val maxRetries: Int = 3) {
     fun evaluate(stderr: String, normalEos: Boolean, isLive: Boolean): Decision? {
         if (exhausted) return null
         val is403or404 = "403" in stderr || "Forbidden" in stderr || "404" in stderr || "Not Found" in stderr
-        if (is403or404 || MediaUtil.isTransientError(stderr)) return Decision(invalidateCache = is403or404)
+        // A hardware-decode backend failure restarts the SAME stream with the next backend in
+        // the chain (see LibVlc.advanceHwBackendAfterHwFailure); the URL is fine, so the
+        // resolved-URL cache must NOT be invalidated — a re-resolve could even change hosts.
+        val hwFallback = "[hw-decode fallback" in stderr
+        if (is403or404 || MediaUtil.isTransientError(stderr) || hwFallback) {
+            return Decision(invalidateCache = is403or404 && !hwFallback)
+        }
         if (normalEos && isLive) return Decision(invalidateCache = true)
         return null
     }

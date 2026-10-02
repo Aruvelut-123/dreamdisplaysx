@@ -952,12 +952,23 @@ class MediaPlayer(
             val midPlay = !liveStream && position * 10L < durationHintNanos * 9L &&
                 durationHintNanos > EARLY_EOS_MIN_DURATION_NS && position > 0L
             if (midPlay) {
-                logger.warn(
-                    "$debugLabel Mid-play failure at {}ms of {}ms ({}); rotating CDN host.",
-                    position / 1_000_000L, durationHintNanos / 1_000_000L,
-                    MediaUtil.truncate(stderr, 120),
-                )
-                CdnSpeedProbe.penalizeHost(activeVideoUrl)
+                // HW-decode fallback is NOT a CDN problem: never penalize/rotate the host, the
+                // same URL is fine — only the decoder backend changed.
+                val hwFallback = "[hw-decode fallback" in stderr
+                if (!hwFallback) {
+                    logger.warn(
+                        "$debugLabel Mid-play failure at {}ms of {}ms ({}); rotating CDN host.",
+                        position / 1_000_000L, durationHintNanos / 1_000_000L,
+                        MediaUtil.truncate(stderr, 120),
+                    )
+                    CdnSpeedProbe.penalizeHost(activeVideoUrl)
+                } else {
+                    logger.warn(
+                        "$debugLabel Mid-play hw-decode failure at {}ms of {}ms ({}); keeping host.",
+                        position / 1_000_000L, durationHintNanos / 1_000_000L,
+                        MediaUtil.truncate(stderr, 120),
+                    )
+                }
                 primedStartPositionNanos.set(position)
             }
             scheduleRetry(decision.invalidateCache)

@@ -453,11 +453,20 @@ internal class LibVlcSessionManager(
                         }
                     } else "no-player"
                 }.getOrDefault("Unknown")
-                val recentLog = LibVlc.recentLogLines(6)
+                val recentLog = LibVlc.recentLogLines(12)
+                // HW-decode backend failure (e.g. d3d11va surface-allocation crash on NVIDIA):
+                // advance to the next candidate in the per-vendor chain (cuda → d3d11va →
+                // software, vaapi → software, …) and let the MediaPlayer restart the SAME stream
+                // with the new media-level :avcodec-hw. "none" means explicit software decode —
+                // the chain's last resort, never a silent re-pick of the failed backend.
+                val hwFallback = LibVlc.advanceHwBackendAfterHwFailure(recentLog)
                 val detail = buildString {
                     append("libvlc error")
                     if (errmsg.isNotBlank()) append(": ").append(errmsg)
                     append(" [state=").append(stateName).append("]")
+                    if (hwFallback != null) {
+                        append(" [hw-decode fallback -> ").append(hwFallback).append("]")
+                    }
                     if (recentLog.isNotEmpty()) {
                         append(" | libvlc log: ").append(recentLog.joinToString("; "))
                     }
@@ -621,7 +630,13 @@ internal class LibVlcSessionManager(
         // Media-level hw decode is an avcodec-module concept (desktop backends only); on
         // Android the decoder module is chosen at instance level (--codec=mediacodec_*) and
         // avcodec stays the software fallback.
-        if (!systemAudio) LibVlc.configuredHwBackend()?.let { mediaOptions.add(":avcodec-hw=$it") }
+        if (!systemAudio) {
+            // currentHwBackend() may return "none" (explicit software decode after the hw chain
+            // was exhausted, or an empty -Ddreamdisplayx.hwDecode= override): keep that option —
+            // with no option libvlc defaults to `any` and could silently re-pick the broken hw
+            // backend that just failed.
+            LibVlc.currentHwBackend()?.let { mediaOptions.add(":avcodec-hw=$it") }
+        }
         if (systemAudio) {
             // Android: audio stays inside the video player (OpenSL ES); no callback pipeline,
             // no dedicated audio player. Note the media option keeps audio OFF the callbacks —
