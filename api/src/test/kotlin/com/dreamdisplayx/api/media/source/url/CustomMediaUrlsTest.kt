@@ -8,6 +8,7 @@ import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -148,4 +149,36 @@ class CustomMediaUrlsTest {
     @Test
     fun cleanFileNameDropsExtensionAndSeparators() =
         assertEquals("my cool clip", CustomMediaUrls.cleanFileName("my_cool_clip.mp4"))
+
+    @Test
+    fun rtspPullStreamsAreRecognizedAsLiveEndpoints() {
+        assertTrue(CustomMediaUrls.isIngest("rtsp://192.168.1.10:554/stream1"))
+        assertTrue(CustomMediaUrls.isIngest("RTSP://camera.example/live/main"))
+        assertTrue(CustomMediaUrls.isIngest(" rtsp://nvr.example/h264?user=admin "))
+    }
+
+    @Test
+    fun pushIngestSchemesAreStillRecognized() {
+        assertTrue(CustomMediaUrls.isIngest("rtmp://ingest.example/live/key"))
+        assertTrue(CustomMediaUrls.isIngest("rtmps://ingest.example/live/key"))
+        assertTrue(CustomMediaUrls.isIngest("srt://ingest.example:10080?streamid=x"))
+    }
+
+    @Test
+    fun httpMediaUrlsAreNotIngestEndpoints() {
+        assertFalse(CustomMediaUrls.isIngest("https://example.com/video.mp4"))
+        assertFalse(CustomMediaUrls.isIngest("http://example.com/live.m3u8"))
+    }
+
+    @Test
+    fun schemelessOrBogusInputsAreNotIngestEndpoints() {
+        assertFalse(CustomMediaUrls.isIngest("rtsp"))
+        assertFalse(CustomMediaUrls.isIngest(""))
+        assertFalse(CustomMediaUrls.isIngest("myvideo.mp4"))
+        assertFalse(CustomMediaUrls.isIngest("http://"))
+        // Note: "rtsp://" (and "rtmp://") with an empty authority IS recognized — isIngest is a
+        // coarse scheme check by design, mirroring the existing rtmp behavior; it does not
+        // validate path/authority.
+        assertTrue(CustomMediaUrls.isIngest("rtsp://"))
+    }
 }

@@ -26,10 +26,15 @@ object CustomMediaUrls {
         "mp3", "m4a", "aac", "flac", "wav", "opus", "oga", "ogg", "wma", "alac", "aiff", "aif",
     )
 
-    /** Live ingest schemes a player can push to (screen sharing / casting), e.g. `rtmp://`, `srt://`. */
-    private val INGEST_SCHEMES = setOf("rtmp", "rtmps", "srt")
+    /**
+     * Live endpoint schemes a player can open directly: push-only ingest (`rtmp://`, `rtmps://`,
+     * `srt://`) for screen sharing / casting, and `rtsp://` pull streams (IP cameras, NVRs). None
+     * of them is HTTP(S), so the player receives them verbatim instead of going through the
+     * extractor chain.
+     */
+    private val INGEST_SCHEMES = setOf("rtmp", "rtmps", "srt", "rtsp")
 
-    /** True when [url] is a live ingest endpoint a client pushes to rather than an HTTP(S) media URL. */
+    /** True when [url] is a live endpoint a client pushes to or pulls from (rtmp/rtmps/srt/rtsp), not an HTTP(S) media URL. */
     fun isIngest(url: String): Boolean {
         val value = url.trim()
         val scheme = value.substringBefore("://").lowercase(Locale.ROOT)
