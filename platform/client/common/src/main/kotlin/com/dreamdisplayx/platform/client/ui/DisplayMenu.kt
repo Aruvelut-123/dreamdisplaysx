@@ -726,9 +726,15 @@ class DisplayMenu private constructor(
         }
     }
 
-    /** Keeps the synchronization mode slider aligned with server echoes and watch-party state. */
+    /** Keeps all mode sliders aligned with state changes, so a slider can be re-clicked after its
+     *  first apply (syncing clears each slider's pending lock, which otherwise stays set forever
+     *  and makes the control usable only once). */
     private fun resyncModeSlider() {
         sync.syncToCurrent()
+        stretch.syncToCurrent()
+        danmakuArea.syncToCurrent()
+        danmakuSpeed.syncToCurrent()
+        danmakuDensity.syncToCurrent()
     }
 
     override fun onMouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
