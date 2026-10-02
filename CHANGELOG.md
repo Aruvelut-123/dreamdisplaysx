@@ -9,6 +9,11 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Search box now accepts a pasted media link (or bare YouTube id): it plays that video directly instead of text-searching the URL string.
 - Bilibili search results whose title or uploader clearly advertises adult content are filtered out.
 
+### Fixes
+
+- Fixed the display menu's stretch mode and danmaku sliders responding to only one click per menu open: the sliders' pending-applied locks were never cleared, so every later click on the same slider was silently ignored until the menu was reopened.
+- Fixed the game freezing when switching videos or when a video ends: player swaps are now serialized so overlapping start/stop on the libvlc native player can no longer stack and wedge the control queue.
+
 # 1.10.0.3 Release
 
 Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplays/commit/42af16c320f962becc184590e93ebbf6dbf6d4d7).
