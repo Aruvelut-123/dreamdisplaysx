@@ -5,7 +5,7 @@ import com.dreamdisplayx.util.asJsonObjectOrNull
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import com.dreamdisplayx.util.optString
-import org.semver4j.Semver
+import com.dreamdisplayx.util.Version
 import org.slf4j.LoggerFactory
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -17,7 +17,7 @@ import java.net.UnknownHostException
 object VersionState {
     /** Latest stable mod version seen on GitHub, or null before the first successful check. */
     @Volatile
-    var modLatestVersion: Semver? = null
+    var modLatestVersion: Version? = null
 
     /** Latest plugin (`Paper`) version string seen on GitHub, or null before the first check. */
     @Volatile
@@ -103,9 +103,9 @@ object Updater {
             ?.filter { it.tagName.isNotBlank() }
             ?: emptyList()
 
-    /** Extracts a stable semver from a GitHub release tag; returns null for snapshots and unparseable tags. */
-    private fun parseVersion(tag: String): Semver? =
-        Semver.coerce(tag)?.takeIf { it.isStable() }
+    /** Extracts a stable version from a GitHub release tag; returns null for prereleases and unparseable tags. */
+    private fun parseVersion(tag: String): Version? =
+        Version.parse(tag)?.takeIf { it.isStable }
 
     data class Release(
         val tagName: String = "",

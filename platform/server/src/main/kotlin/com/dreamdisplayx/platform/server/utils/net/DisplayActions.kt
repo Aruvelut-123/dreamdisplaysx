@@ -24,11 +24,12 @@ import com.dreamdisplayx.platform.server.utils.MessageUtil
 import com.dreamdisplayx.platform.server.utils.VersionUtil
 import com.dreamdisplayx.platform.server.utils.WorldGuardRegions
 import com.dreamdisplayx.platform.server.utils.net.DisplayActions.context
+import com.dreamdisplayx.util.Version
+import com.dreamdisplayx.util.compareVersions
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.kyori.adventure.text.TextReplacementConfig
 import org.bukkit.entity.Player
 import org.jspecify.annotations.NullMarked
-import org.semver4j.Semver
 import org.slf4j.LoggerFactory
 import java.util.*
 
@@ -287,7 +288,7 @@ object DisplayActions {
     }
 
     /** Tells [player] about a newer mod version if they haven't been notified this session. */
-    private fun checkModUpdate(player: Player, userVersion: Semver) {
+    private fun checkModUpdate(player: Player, userVersion: Version) {
         val latestVersion = VersionState.modLatestVersion ?: return
 
         if (userVersion < latestVersion && !PlayerManager.hasBeenNotifiedAboutModUpdate(player)) {
@@ -309,17 +310,14 @@ object DisplayActions {
             return
         }
 
-        val currentVersion = Semver.coerce(currentVersionString) ?: return
-        val latestVersion = Semver.coerce(latestPluginVersion) ?: return
-
-        if (currentVersion < latestVersion) {
+        if (compareVersions(currentVersionString, latestPluginVersion) < 0) {
             sendPluginUpdateMessage(player, latestPluginVersion)
             PlayerManager.setPluginUpdateNotified(player, true)
         }
     }
 
     /** Sends the localized `newVersion` message to [player], handling both plain and JSON templates. */
-    private fun sendModUpdateMessage(player: Player, version: Semver) {
+    private fun sendModUpdateMessage(player: Player, version: Version) {
         val message = when (val rawMessage = PaperServer.config.getMessageForPlayer(player, "newVersion")) {
             is String -> String.format(rawMessage, version.toString())
             else -> {

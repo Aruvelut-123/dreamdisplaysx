@@ -5,7 +5,7 @@ import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.minecraft.server.level.ServerPlayer
 import org.bukkit.entity.Player
 import org.jspecify.annotations.NullMarked
-import org.semver4j.Semver
+import com.dreamdisplayx.util.Version
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 @NullMarked
 object PlayerManager {
     /** Map of player UUIDs to their reported mod versions. */
-    private val versions: MutableMap<UUID, Semver?> = ConcurrentHashMap()
+    private val versions: MutableMap<UUID, Version?> = ConcurrentHashMap()
 
     /** Set of player UUIDs for which displays are disabled. */
     private val displaysDisabled: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
@@ -41,18 +41,18 @@ object PlayerManager {
     }
 
     /** Records the mod [version] reported by [uuid] for compatibility checks. */
-    fun setVersion(uuid: UUID, version: Semver?) {
+    fun setVersion(uuid: UUID, version: Version?) {
         versions[uuid] = version
     }
 
     /** Records the mod [version] reported by [player] for compatibility checks. */
     @PaperOnly
     @JvmStatic
-    fun setVersion(player: Player, version: Semver?) = setVersion(player.uniqueId, version)
+    fun setVersion(player: Player, version: Version?) = setVersion(player.uniqueId, version)
 
     /** Records the mod [version] reported by [player] for compatibility checks. */
     @ModLoaderOnly
-    fun setVersion(player: ServerPlayer, version: Semver?) = setVersion(player.uuid, version)
+    fun setVersion(player: ServerPlayer, version: Version?) = setVersion(player.uuid, version)
 
     /**
      * Drops transient per-player state on disconnect. The update / mod-required notification flags
@@ -74,19 +74,19 @@ object PlayerManager {
 
     /** Returns a defensive copy of the per-player version map. */
     @JvmStatic
-    fun getVersions(): Map<UUID, Semver?> = HashMap(versions)
+    fun getVersions(): Map<UUID, Version?> = HashMap(versions)
 
     /** Returns the mod version reported by [uuid], or null if none was reported. */
-    fun getVersion(uuid: UUID): Semver? = versions[uuid]
+    fun getVersion(uuid: UUID): Version? = versions[uuid]
 
     /** Returns the mod version reported by [player], or null if none was reported. */
     @PaperOnly
     @JvmStatic
-    fun getVersion(player: Player): Semver? = getVersion(player.uniqueId)
+    fun getVersion(player: Player): Version? = getVersion(player.uniqueId)
 
     /** Returns the mod version reported by [player], or null if none was reported. */
     @ModLoaderOnly
-    fun getVersion(player: ServerPlayer): Semver? = getVersion(player.uuid)
+    fun getVersion(player: ServerPlayer): Version? = getVersion(player.uuid)
 
     /** Returns true if [uuid] has already been informed about a mod update. */
     fun hasBeenNotifiedAboutModUpdate(uuid: UUID): Boolean = hasNotifiedFlag(uuid, MOD_UPDATE_NOTIFIED)

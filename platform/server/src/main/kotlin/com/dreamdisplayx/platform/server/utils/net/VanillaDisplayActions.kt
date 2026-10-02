@@ -27,9 +27,9 @@ import com.dreamdisplayx.platform.server.utils.VanillaPermissions
 import com.dreamdisplayx.platform.server.utils.VersionUtil
 import com.dreamdisplayx.platform.server.utils.net.VanillaDisplayActions.context
 import kotlinx.coroutines.launch
+import com.dreamdisplayx.util.compareVersions
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
-import org.semver4j.Semver
 
 /**
  * Vanilla Minecraft API packet actions, shared by the protocol-v2 dispatch in [V2Fabric] / [V2NeoForge]. All
@@ -76,9 +76,8 @@ object VanillaDisplayActions {
             if (latestPlugin != null && currentVersion != null &&
                 !currentVersion.contains("-SNAPSHOT", ignoreCase = true)
             ) {
-                val current = Semver.coerce(currentVersion)
-                val latest = Semver.coerce(latestPlugin)
-                if (current != null && latest != null && current < latest) {
+                val current = compareVersions(currentVersion, latestPlugin)
+                if (current < 0) {
                     val msg = config.getMessageForPlayer(player, "newPluginVersion") as? String
                     if (msg != null) {
                         MessageUtil.sendColoredMessage(player, String.format(msg, latestPlugin))

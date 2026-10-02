@@ -1,9 +1,9 @@
 package com.dreamdisplayx.platform.server.utils
 
-import org.semver4j.Semver
+import com.dreamdisplayx.util.Version
 
 /**
- * Parses client-supplied mod / plugin version strings into a [Semver], bounded against hostile
+ * Parses client-supplied mod / plugin version strings into a [Version], bounded against hostile
  * input. The version comes straight off the network with no length cap from the decoder, so this
  * enforces one itself before any regex work runs.
  */
@@ -14,10 +14,10 @@ object VersionUtil {
     /** Regex for disallowed characters in version strings. */
     private val DISALLOWED_CHARS = "[^0-9A-Za-z+.-]".toRegex()
 
-    /** Returns the parsed [Semver], or null if [raw] is empty, oversized, or not coercible to a version. */
-    fun parseOrNull(raw: String): Semver? {
+    /** Returns the parsed [Version], or null if [raw] is empty, oversized, or not parseable. */
+    fun parseOrNull(raw: String): Version? {
         if (raw.isEmpty() || raw.length > MAX_VERSION_LENGTH) return null
         val sanitized = raw.trim().replace(DISALLOWED_CHARS, "").takeIf { it.isNotEmpty() } ?: return null
-        return Semver.coerce(sanitized)
+        return Version.parse(sanitized)
     }
 }

@@ -3,7 +3,6 @@ package com.dreamdisplayx.util
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.coroutines.launch
-import org.semver4j.Semver
 import org.slf4j.LoggerFactory
 
 /** Checks mod updates against the latest stable GitHub release. **/
@@ -35,7 +34,8 @@ object UpdateCheck {
 
     /** If [version] is a dev or preview build, returns true. */
     fun isPreRelease(version: String): Boolean =
-        version.contains("-dev", ignoreCase = true) || version.contains("-preview", ignoreCase = true)
+        Version.parse(version)?.isPreRelease
+            ?: (version.contains("-dev", ignoreCase = true) || version.contains("-preview", ignoreCase = true))
 
     /** Start the background update check exactly once; subsequent calls are no-ops. */
     @Synchronized
@@ -80,10 +80,11 @@ object UpdateCheck {
         }
     }
 
-    /** Compares two version strings using semver rules. Returns positive if [a] is newer than [b]. */
+    /** Compares two version strings using the mod's four-part version rules. Returns positive if [a] is newer than [b]. */
     internal fun compareVersions(a: String, b: String): Int {
-        val av = Semver.coerce(a) ?: return a.compareTo(b)
-        val bv = Semver.coerce(b) ?: return a.compareTo(b)
-        return av.compareTo(bv)
+        val av = Version.parse(a)
+        val bv = Version.parse(b)
+        if (av != null && bv != null) return av.compareTo(bv)
+        return a.compareTo(b)
     }
 }
