@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.media.search.model.MediaSearchResult
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
 import com.dreamdisplayx.api.media.source.model.MediaPlatform
 import com.dreamdisplayx.api.media.source.model.MediaSource
+import com.dreamdisplayx.api.security.policy.AdultContentFilter
 import com.dreamdisplayx.api.security.policy.MediaUrlPolicy
 import com.dreamdisplayx.media.source.PastedMediaCards
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
@@ -186,7 +187,7 @@ class SuggestionsController {
                         "Bilibili search '{}': {} video(s), {} bangumi, {} movie (filter={})",
                         q, videos.size, bangumi.size, media.size, bilibiliFilter.apiName,
                     )
-                    all.filter { bilibiliFilter.matches(it) }
+                    all.filter { bilibiliFilter.matches(it) && !AdultContentFilter.isExplicit(it.title, it.uploader) }
                         .mapNotNull(::bilibiliSearchResult)
                         .sortedWith(bilibiliRank(q))
                         .also { pendingResults = it }
@@ -481,7 +482,7 @@ class SuggestionsController {
                         val bangumi = BilibiliApi.searchBangumi(query, nextPage)
                         val media = BilibiliApi.searchMedia(query, nextPage)
                         (videos + bangumi + media)
-                            .filter { bilibiliFilter.matches(it) }
+                            .filter { bilibiliFilter.matches(it) && !AdultContentFilter.isExplicit(it.title, it.uploader) }
                             .mapNotNull(::bilibiliSearchResult)
                     }
                 }.onFailure { e ->
