@@ -64,6 +64,34 @@ class PastedMediaCardsTest {
     }
 
     @Test
+    fun `bare bilibili bvid becomes a bilibili card`() {
+        val card = PastedMediaCards.fromQuery("BV1xx411c7mD")!!
+        assertEquals(MediaPlatform.BILIBILI, card.platform)
+        assertEquals("https://www.bilibili.com/video/BV1xx411c7mD", card.watchUrlOverride)
+    }
+
+    @Test
+    fun `bare bilibili avid becomes a bilibili card`() {
+        val card = PastedMediaCards.fromQuery("av170001")!!
+        assertEquals(MediaPlatform.BILIBILI, card.platform)
+        assertEquals("https://www.bilibili.com/video/av170001", card.watchUrlOverride)
+    }
+
+    @Test
+    fun `bare bilibili episode id becomes a bilibili card`() {
+        val card = PastedMediaCards.fromQuery("ep123456")!!
+        assertEquals(MediaPlatform.BILIBILI, card.platform)
+        assertEquals("https://www.bilibili.com/bangumi/play/ep123456", card.watchUrlOverride)
+    }
+
+    @Test
+    fun `bare bilibili season id becomes a bilibili card`() {
+        val card = PastedMediaCards.fromQuery("ss12345")!!
+        assertEquals(MediaPlatform.BILIBILI, card.platform)
+        assertEquals("https://www.bilibili.com/bangumi/play/ss12345", card.watchUrlOverride)
+    }
+
+    @Test
     fun `twitch channel url becomes a twitch card`() {
         val url = "https://www.twitch.tv/someone"
         val card = PastedMediaCards.fromQuery(url)!!

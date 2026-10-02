@@ -28,11 +28,49 @@ object BilibiliUrls {
     fun isBilibili(url: String): Boolean = parse(url) != null
 
     /**
+     * Parses a bare Bilibili id (`BV...`, `av...`, `ep...`, `ss...`) pasted without a URL, or
+     * returns null when [id] is not one. The returned source carries a canonical `bilibili.com`
+     * URL so downstream resolvers always have something to fetch.
+     */
+    fun parseBareId(id: String): MediaSource.Bilibili? {
+        val trimmed = id.trim()
+        if (BVID_RE.matches(trimmed)) {
+            return MediaSource.Bilibili(
+                url = "https://www.bilibili.com/video/$trimmed",
+                bvid = trimmed,
+            )
+        }
+        AVID_RE.matchEntire(trimmed)?.let { m ->
+            val avid = m.groupValues[1].toLongOrNull() ?: return null
+            return MediaSource.Bilibili(
+                url = "https://www.bilibili.com/video/$trimmed",
+                avid = avid,
+            )
+        }
+        EP_RE.matchEntire(trimmed)?.let { m ->
+            val epId = m.groupValues[1].toLongOrNull() ?: return null
+            return MediaSource.Bilibili(
+                url = "https://www.bilibili.com/bangumi/play/$trimmed",
+                epId = epId,
+            )
+        }
+        SS_RE.matchEntire(trimmed)?.let { m ->
+            val seasonId = m.groupValues[1].toLongOrNull() ?: return null
+            return MediaSource.Bilibili(
+                url = "https://www.bilibili.com/bangumi/play/$trimmed",
+                seasonId = seasonId,
+            )
+        }
+        return null
+    }
+
+    /**
      * Parses [url] into a [com.dreamdisplayx.api.media.source.MediaSource.Bilibili], or null if not recognizable. A `b23.tv` short link
      * is recognized but left unresolved (no bvid / avid / roomId) — following its redirect needs a
      * network call, which belongs in [com.dreamdisplayx.media.source.bilibili.BilibiliApi], not here.
      */
     fun parse(url: String): MediaSource.Bilibili? {
+        parseBareId(url)?.let { return it }
         val parsed = MediaHttpUrl.parse(url) ?: MediaHttpUrl.parse("https://${url.trim()}") ?: return null
         val host = parsed.uri.host?.lowercase(Locale.ROOT)?.removePrefix("www.")?.removePrefix("m.") ?: return null
 

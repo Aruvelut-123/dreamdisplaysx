@@ -2,6 +2,7 @@ package com.dreamdisplayx.api.security.policy
 
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.media.search.model.YouTubeVideoId
+import com.dreamdisplayx.api.media.source.url.BilibiliUrls
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
 import com.dreamdisplayx.api.security.model.LanguageTag
 import com.dreamdisplayx.api.security.model.MediaHttpUrl
@@ -41,6 +42,10 @@ object MediaUrlPolicy {
         if (s.isEmpty()) return false
         if (s.length > MAX_URL_LENGTH) return false
         if (YouTubeVideoId.parse(s) != null) return true
+        // Bare Bilibili ids (BV.../av.../ep.../ss...) are safe alphanumeric tokens; they are not
+        // URLs, so the MediaHttpUrl check below would reject them even though the platform
+        // resolves them fine.
+        if (BilibiliUrls.parseBareId(s) != null) return true
         // Explicit ingest endpoints (rtmp/rtmps/srt) are accepted for screen sharing / casting.
         if (CustomMediaUrls.isIngest(s)) return true
         return MediaHttpUrl.isValid(s, MAX_URL_LENGTH)
