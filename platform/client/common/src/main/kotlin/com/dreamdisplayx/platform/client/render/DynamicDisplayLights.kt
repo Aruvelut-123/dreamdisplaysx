@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.render
 
+import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
@@ -31,7 +32,7 @@ object DynamicDisplayLights {
             remove(id, m)
             return
         }
-        val source = sources[id] ?: createSource(id, pos, m) ?: return
+        val source = sources[id] ?: createSource(id, pos, color, m) ?: return
         SourceState.update(source, pos, color)
     }
 
@@ -59,7 +60,7 @@ object DynamicDisplayLights {
         }
     }
 
-    private fun createSource(id: UUID, pos: BlockPos, m: Any): Any? = runCatching {
+    private fun createSource(id: UUID, pos: BlockPos, color: Int, m: Any): Any? = runCatching {
         val iface = behaviorClass ?: return null
         lateinit var source: Any
         source = Proxy.newProxyInstance(iface.classLoader, arrayOf(iface)) { _, method, args ->
@@ -74,14 +75,28 @@ object DynamicDisplayLights {
                 else -> null
             }
         }
-        m.javaClass.getMethod("add", iface).invoke(m, source)
+        // Cranky: LambDynLights' onEndLevelTick calls getBoundingBox() during its spatial lookup and
+        // NEVER null-checks it (DeferredDynamicLightSource.splitIntoDynamicLightEntries -> boundingBox.endX()).
+        // Register the position/level BEFORE exposing the source, and only mutate its source set on the
+        // render thread, otherwise the libvlc callback thread and the render thread race on the HashMap
+        // and a not-yet-initialized source makes the whole client crash with an NPE.
+        SourceState.update(source, pos, color)
+        onRenderThread { runCatching { m.javaClass.getMethod("add", iface).invoke(m, source) } }
         sources[id] = source
         source
     }.onFailure { logger.debug("LambDynamicLights bridge unavailable: {}", it.message) }.getOrNull()
 
     private fun remove(id: UUID, m: Any?) {
         val source = sources.remove(id) ?: return
-        runCatching { behaviorClass?.let { m?.javaClass?.getMethod("remove", it)?.invoke(m, source) } }
+        onRenderThread {
+            runCatching { behaviorClass?.let { m?.javaClass?.getMethod("remove", it)?.invoke(m, source) } }
+        }
+    }
+
+    /** Runs [action] on the render thread. LambDynLights' light source set must only be mutated there. */
+    private fun onRenderThread(action: () -> Unit) {
+        val mc = Minecraft.getInstance()
+        if (mc.isSameThread) action() else mc.execute(action)
     }
 
     private object SourceState {
@@ -113,10 +128,14 @@ object DynamicDisplayLights {
         }
 
         fun boundingBox(id: UUID): Any? = runCatching {
-            val p = positions[id] ?: return null
+            val p = positions[id]
+            val fallback = p ?: FALLBACK_POS
             boxClass?.getConstructor(Int::class.java, Int::class.java, Int::class.java, Int::class.java, Int::class.java, Int::class.java)
-                ?.newInstance(p.x, p.y, p.z, p.x + 1, p.y + 1, p.z + 1)
+                ?.newInstance(fallback.x, fallback.y, fallback.z, fallback.x + 1, fallback.y + 1, fallback.z + 1)
         }.getOrNull()
+
+        /** Position used when the source has no registered position yet; keeps getBoundingBox() non-null. */
+        private val FALLBACK_POS = BlockPos.ZERO
     }
 
     fun sample(buf: ByteBuffer, w: Int, h: Int, bytesPerPixel: Int): Int {
