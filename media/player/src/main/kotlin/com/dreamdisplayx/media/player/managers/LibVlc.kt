@@ -12,6 +12,9 @@ import com.sun.jna.Pointer
 import com.sun.jna.Structure
 import com.sun.jna.ptr.IntByReference
 import com.sun.jna.ptr.PointerByReference
+import java.io.File
+import java.io.FileWriter
+import java.io.PrintWriter
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentLinkedDeque
 
@@ -57,6 +60,37 @@ object LibVlc {
 
     @Volatile
     private var loadError: Throwable? = null
+
+    /**
+     * `-Ddreamdisplayx.verboseLibvlc=true` switches libvlc to `--verbose=2` AND mirrors every
+     * libvlc log line (all severities) to `dreamdisplayx/logs/libvlc.log` for offline diagnosis
+     * of stalls/freezes, decoder selection and stream errors. Off by default (noise).
+     */
+    private val verboseLibvlc: Boolean by lazy {
+        System.getProperty("dreamdisplayx.verboseLibvlc", "false").equals("true", ignoreCase = true)
+    }
+
+    /** Where the verbose libvlc log is mirrored. */
+    private val verboseLibvlcLogFile: File by lazy {
+        File(System.getProperty("dreamdisplayx.libvlcLogFile", "./dreamdisplayx/logs/libvlc.log"))
+    }
+
+    /**
+     * Lazily opened appending writer for the verbose libvlc mirror. Every log line is flushed
+     * individually so a hard freeze right after a message never loses the final diagnosis lines.
+     */
+    private val verboseLogWriter: PrintWriter? by lazy {
+        if (!verboseLibvlc) null
+        else runCatching {
+            verboseLibvlcLogFile.parentFile?.mkdirs()
+            // Rotate away an oversized previous run so the debug file can't grow unbounded.
+            if (verboseLibvlcLogFile.length() > 20L * 1024 * 1024) verboseLibvlcLogFile.delete()
+            PrintWriter(FileWriter(verboseLibvlcLogFile, true), true)
+        }.getOrElse {
+            logger.warn("Verbose libvlc log file unavailable ({}): {}", verboseLibvlcLogFile.absolutePath, it.message)
+            null
+        }
+    }
 
     @Volatile
     private var loadAttempted = false
@@ -161,8 +195,9 @@ object LibVlc {
             // Verbose libvlc logging (diagnostic): lets us see which decoder/backend libvlc actually
             // selects and why it might fall back to software. Off by default (noise). The default
             // `--verbose=1` (errors + warnings) stays on so the log sink below can capture real
-            // failure reasons; `--verbose=2` additionally shows info/debug.
-            if (System.getProperty("dreamdisplayx.verboseLibvlc", "false").equals("true", ignoreCase = true)) {
+            // failure reasons; `--verbose=2` additionally shows info/debug, mirrored to the
+            // verbose log file (see [verboseLogWriter]).
+            if (verboseLibvlc) {
                 opts.remove("--verbose=1")
                 opts.add("--verbose=2")
             }
@@ -208,9 +243,15 @@ object LibVlc {
     private val logCallback: LogCallback = LogCallback { _, level, _, fmt, args ->
         try {
             val text = formatLogLine(fmt, args) ?: return@LogCallback
+            val line = if (level >= 3) "E: $text" else "W: $text"
             synchronized(logRing) {
-                logRing.add(if (level >= 3) "E: $text" else "W: $text")
+                logRing.add(line)
                 while (logRing.size > LOG_RING_CAP) logRing.removeAt(0)
+            }
+            verboseLogWriter?.let { w ->
+                synchronized(w) {
+                    w.println("[$level] $text")
+                }
             }
         } catch (_: Throwable) { /* never throw from a native callback */ }
     }
