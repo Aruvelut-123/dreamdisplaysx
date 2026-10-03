@@ -12,6 +12,9 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Fixes
 
+- Fixed audio stutter and A/V desync: the audio line write respects the device's backpressure again instead of discarding most blocks, and the A/V lead only counts frames that actually reached the line.
+- Fixed switching video appearing to do nothing (frozen picture, previous audio still playing) after a video ended: the end-of-stream handler no longer blocks the media control thread.
+- Fixed the search box losing its text when the game window is resized.
 - Fixed single-file media (an mp4 direct link, or any source without a separate DASH audio stream) playing with no sound at all: the video player is no longer muted in that case, and volume now reaches it.
 - Fixed the game freezing when a short video ended: the audio line write no longer blocks libvlc's audio thread, so the decoder fifo drains instead of hanging the input thread after end of stream.
 - Fixed display audio still playing after a display is removed or the world is left: shutdown now stops every native player synchronously.
