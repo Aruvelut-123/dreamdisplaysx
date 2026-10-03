@@ -631,10 +631,12 @@ class DisplayMenu private constructor(
         if (!ds.canSetVideoHere) return
         val url = info.getWatchUrl()
 
-        // Playlist mode: enqueue instead of directly playing. The server echoes the queue snapshot,
-        // and an idle queue auto-starts the first non-pending item, so picking a video behaves like
-        // a normal play while still building the queue.
-        if (PlaylistStateStore.stateOf(ds.uuid)?.enabled != false) {
+        // Playlist mode: only enqueue while the queue is explicitly enabled AND idle — the server
+        // auto-starts the first non-pending item of an idle queue, so a pick still plays right away.
+        // In every other state (playlist never seen, or the queue already playing) the user wants
+        // "play this now": fall through to the direct set-video path so the click always plays.
+        val playlist = PlaylistStateStore.stateOf(ds.uuid)
+        if (playlist?.enabled == true && playlist.currentIndex < 0) {
             PlaylistStateStore.send(ds.uuid, PlaylistCommandAction.ADD.wire, url = url, title = info.title)
             if (info.isCustom) {
                 CustomVideoStore.remember(url, info.title)

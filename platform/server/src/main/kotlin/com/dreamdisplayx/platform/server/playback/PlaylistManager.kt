@@ -59,6 +59,11 @@ object PlaylistManager {
         val isOwner = senderId == display.ownerId
         val action = PlaylistCommandAction.fromWire(packet.action) ?: return false
 
+        logger.debug(
+            "playlist {} from {} (owner={}, admin={}) for display {}",
+            action, senderName, isOwner, isSenderAdmin, display.id,
+        )
+
         // Policy gates: settings changes are owner/admin only; skip controls are owner/admin;
         // item mutations depend on the display's enqueue policy.
         when (action) {
@@ -75,7 +80,13 @@ object PlaylistManager {
                 val policy = playlist.enqueuePolicy
                 val mayDirect = isOwner || isSenderAdmin ||
                     policy == PlaylistEnqueuePolicy.EVERYONE
-                if (!mayDirect && !(policy == PlaylistEnqueuePolicy.OWNER_APPROVAL)) return false
+                if (!mayDirect && !(policy == PlaylistEnqueuePolicy.OWNER_APPROVAL)) {
+                    logger.warn(
+                        "rejected playlist ADD from {} for display {}: enqueuePolicy={}, isOwner={}, isAdmin={}",
+                        senderName, display.id, policy, isOwner, isSenderAdmin,
+                    )
+                    return false
+                }
             }
 
             PlaylistCommandAction.APPROVE,

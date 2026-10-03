@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client.ui.widgets
 
 import com.dreamdisplayx.api.media.search.model.MediaSearchResult
 import com.dreamdisplayx.platform.client.input.MouseButtons
+import com.dreamdisplayx.platform.client.render.FirstFrameThumbnails
 import com.dreamdisplayx.platform.client.render.Thumbnails
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
@@ -381,6 +382,8 @@ class SuggestionsPanel(
         info.thumbnailUrlOverride != null -> Thumbnails.get(info.id)
         // Only real YouTube results derive an image from the id; everything else has none to show
         info.isYouTubeResult -> Thumbnails.get(info.id, Thumbnails.Quality.LOW)
+        // A direct link gets a locally extracted first frame, registered under the raw id key
+        info.isCustom -> Thumbnails.get(info.id)
         else -> null
     }
 
@@ -388,15 +391,26 @@ class SuggestionsPanel(
     private fun cardThumbnailFailed(info: MediaSearchResult): Boolean = when {
         info.thumbnailUrlOverride != null -> Thumbnails.isFailed(info.id)
         info.isYouTubeResult -> Thumbnails.isFailed(info.id, Thumbnails.Quality.LOW)
+        info.isCustom -> Thumbnails.isFailed(info.id)
         else -> false
     }
 
     /** Requests [info]'s card thumbnail via the path matching [cardThumbnail]'s key, if not already loaded. */
     private fun requestCardThumbnail(info: MediaSearchResult) {
         val url = info.thumbnailUrlOverride
+        val watchUrl = info.watchUrlOverride
         when {
             url != null -> Thumbnails.request(info.id, url)
             info.isYouTubeResult -> Thumbnails.request(info.id, Thumbnails.Quality.LOW)
+            // A pasted direct link has no platform thumbnail: extract the video's first frame
+            // instead. Guarded by READY/FAILED so finished extraction (success or failure) is never
+            // re-attempted; coalescing inside FirstFrameThumbnails dedupes in-flight renders.
+            info.isCustom && watchUrl != null ->
+                if (Thumbnails.get(info.id) == null && !Thumbnails.isFailed(info.id)) {
+                    FirstFrameThumbnails.request(info.id, watchUrl) { jpeg ->
+                        if (jpeg != null) Thumbnails.registerBytes(info.id, jpeg)
+                    }
+                }
         }
     }
 

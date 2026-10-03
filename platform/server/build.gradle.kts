@@ -66,7 +66,9 @@ if (activeStonecutterVersion == paperPinVersion) {
         description = "Builds the cross-version Paper jar, pinning the active Stonecutter version to " +
                 "$paperPinVersion (currently $activeStonecutterVersion) for a nested Gradle invocation."
         val versionsJsonFile = rootProject.file("versions.json")
-        val gradlewPath = rootProject.file("gradlew").absolutePath
+        // Windows cannot exec the shell-script gradlew; use the .bat wrapper there.
+        val isWindows = System.getProperty("os.name").lowercase().contains("win")
+        val gradlewPath = rootProject.file(if (isWindows) "gradlew.bat" else "gradlew").absolutePath
         val rootDir = rootProject.projectDir
         val pinVersion = paperPinVersion
         val currentVersion = activeStonecutterVersion
