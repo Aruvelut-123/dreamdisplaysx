@@ -1,9 +1,11 @@
 ---
 name: Question
-about: Ask a question about using or developing the mod
-title: ''
-labels: "type: question"
-assignees: Aruvelut-123
+description: Ask a question about using or developing the mod.
+title: "[Question]: "
+labels: ["type: question"]
+assignees:
+  - Aruvelut-123
+type: question
 
 ---
 body:

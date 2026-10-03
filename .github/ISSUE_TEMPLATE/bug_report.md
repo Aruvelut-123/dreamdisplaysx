@@ -1,3 +1,4 @@
+---
 name: Bug Report
 description: File a bug report.
 title: "[Bug]: "
@@ -11,13 +12,13 @@ body:
   attributes:
     value: |
       Thanks for taking the time to fill out this bug report!
-- type: textarea
-  id: what-happened
+      Before submitting, make sure you are on the **latest version** (see [CHANGELOG.md](../../CHANGELOG.md)) and have **searched existing issues** (open and closed) for a duplicate.
+- type: input
+  id: mod-version
   attributes:
-    label: What happened?
-    description: A clear and concise description of what the bug is.
-    placeholder: Tell us what you see!
-    value: "A bug happened!"
+    label: Mod version
+    description: The Dream DisplaysX version you are running (e.g. `1.10.0.4` — see CHANGELOG.md or your mods folder).
+    placeholder: 1.10.0.4
   validations:
     required: true
 - type: dropdown
@@ -42,55 +43,78 @@ body:
     description: What operating system are you running?
     options:
       - Windows
-      - Linux (fill more detail about your distro in "What happend?" section)
+      - Linux (fill more detail about your distro in "What happened?" section)
       - MacOS
-      - Android (fill more detail about the launcher and your android version in "What happend?" section)
+      - Android (fill more detail about the launcher and your android version in "What happened?" section)
     default: 0
   validations:
     required: true
 - type: dropdown
-  id: software-type
+  id: problem-side
   attributes:
-    label: Client or Server Software Type
-    description: What Mod Loader or Server software are you using?
+    label: Client or Server
+    description: Where does the problem appear?
     options:
-      - Fabric Loader
-      - NeoForge
-      - Forge
-      - Spigot
-      - Paper
-      - Folia
-      - Other (fill more detail in "What happend?" section)
+      - Client (Fabric / NeoForge)
+      - Server (Paper / Folia)
+      - Both
     default: 0
   validations:
     required: true
 - type: dropdown
-  id: client-type
+  id: loader
   attributes:
-    label: Client or Server Mod Loader Type
-    description: What Mod Loader or Server software are you using?
+    label: Mod loader / server software
+    description: Which mod loader or server software are you using?
     options:
       - Fabric Loader
       - NeoForge
       - Forge
-      - Spigot
       - Paper
       - Folia
-      - Other (fill more detail in "What happend?" section)
+      - Other (fill more detail in "What happened?" section)
     default: 0
   validations:
     required: true
+- type: textarea
+  id: what-happened
+  attributes:
+    label: What happened?
+    description: A clear and concise description of what the bug is.
+    placeholder: Tell us what you see!
+    value: "A bug happened!"
+  validations:
+    required: true
+- type: textarea
+  id: expected
+  attributes:
+    label: Expected behavior
+    description: What did you expect to happen instead?
+    placeholder: I expected ... to happen.
+  validations:
+    required: true
+- type: textarea
+  id: steps-to-reproduce
+  attributes:
+    label: Steps to reproduce
+    description: Numbered steps that trigger the bug, starting from a fresh world/settings if possible.
+    placeholder: |
+      1. Place a display and open its menu.
+      2. ...
+      3. ...
+    validations:
+      required: true
 - type: input
   id: gpu-info
   attributes:
     label: Graphics Card info
-    description: What graphics card are you using? Also make sure your driver is latest in case it's driver problem. (won't need to fill for server side problem)
+    description: What graphics card are you using? Also make sure your driver is up to date in case it is a driver problem. (Not needed for server-side issues.)
     placeholder: AMD Radeon RX 6600 with 32.0.21045.5002 (Adrenalin 26.8.1) driver
 - type: textarea
   id: logs
   attributes:
     label: Relevant Minecraft log output
-    description: Please upload your logs to some website like pastebin or mclo.gs is fine, just provide the link. Also if it's libvlc related issue, please attatch a libvlc log link here too.
+    description: Please upload your logs to a paste site like pastebin or mclo.gs and provide the link here. If it is a libvlc-related issue, please also attach a libvlc log link.
 - type: upload
   id: screenshots
   attributes:
@@ -98,3 +122,12 @@ body:
     description: If applicable, add screenshots to help explain your problem.
   validations:
     required: false
+- type: checkboxes
+  id: confirmations
+  attributes:
+    label: Confirmation
+    options:
+      - label: I am on the latest version of the mod.
+        required: true
+      - label: I searched existing issues and found no duplicate.
+        required: true

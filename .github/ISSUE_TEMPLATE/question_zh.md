@@ -1,9 +1,11 @@
 ---
 name: 提问
-about: 询问关于使用或开发本 mod 的问题
-title: ''
-labels: "type: question"
-assignees: Aruvelut-123
+description: 询问关于使用或开发本 mod 的问题。
+title: "[提问]: "
+labels: ["type: question"]
+assignees:
+  - Aruvelut-123
+type: question
 
 ---
 body:

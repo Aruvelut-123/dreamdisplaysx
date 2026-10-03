@@ -1,9 +1,11 @@
 ---
 name: 建议
-about: 提出功能或改进建议
-title: ''
-labels: "type: suggestion"
-assignees: Aruvelut-123
+description: 提出功能或改进建议。
+title: "[建议]: "
+labels: ["type: suggestion"]
+assignees:
+  - Aruvelut-123
+type: suggestion
 
 ---
 body:

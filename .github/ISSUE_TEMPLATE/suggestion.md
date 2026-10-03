@@ -1,9 +1,11 @@
 ---
 name: Suggestion
-about: Suggest a feature or an improvement
-title: ''
-labels: "type: suggestion"
-assignees: Aruvelut-123
+description: Suggest a feature or an improvement.
+title: "[Suggestion]: "
+labels: ["type: suggestion"]
+assignees:
+  - Aruvelut-123
+type: suggestion
 
 ---
 body:
