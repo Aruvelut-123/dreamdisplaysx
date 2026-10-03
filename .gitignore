@@ -39,6 +39,15 @@ native/target/
 
 # Local build logs
 build-*.log
+build-*.txt
+
+# Local investigation / scratch artifacts
+WIP_*.md
+*.backup
+vp_danmaku_controller.java
+dsx-debugscreenoverlay-javap.txt
+build-decomp/
+platform/server/logs/
 
 # Stonecutter
 versions/

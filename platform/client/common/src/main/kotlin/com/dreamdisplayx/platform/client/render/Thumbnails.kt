@@ -162,6 +162,18 @@ object Thumbnails {
         DreamCoroutines.clientIo.launch { download(key, key, loadBytesAsync(key) { fetch(directUrl) }) }
     }
 
+    /**
+     * Registers already-decoded image bytes (e.g. a first frame extracted locally by
+     * [FirstFrameThumbnails]) as [key]'s thumbnail. The bytes flow through the same
+     * decode / GPU-register / disk-cache pipeline as a downloaded image, so a locally extracted frame
+     * is cached and re-rendered exactly like a network thumbnail. Safe to call from any thread.
+     */
+    fun registerBytes(key: String, bytes: ByteArray) {
+        if (READY.getIfPresent(key) != null || FAILED.getIfPresent(key) != null) return
+        if (IN_FLIGHT.asMap().putIfAbsent(key, true) != null) return
+        DreamCoroutines.clientIo.launch { download(key, key, loadBytesAsync(key) { bytes }) }
+    }
+
     /** Starts or joins the thumbnail byte load under [key], fetching via [fetchBytes] on a cache miss. */
     private fun loadBytesAsync(key: String, fetchBytes: () -> ByteArray?): Deferred<ByteArray> =
         BYTES.load(key) { loadBytes(key, fetchBytes) }
