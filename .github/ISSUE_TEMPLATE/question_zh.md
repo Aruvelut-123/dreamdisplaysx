@@ -1,0 +1,52 @@
+---
+name: 提问
+about: 询问关于使用或开发本 mod 的问题
+title: ''
+labels: "type: question"
+assignees: Aruvelut-123
+
+---
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **提问前请确认** —— 感谢你的咨询！请：
+        1. **先搜索现有 issues**（含已关闭的）——你的问题可能已经有答案。
+        2. 查看 [README.md](../../README.md) 和游戏内显示器菜单——很多内容可以直接查到。
+        3. 附上你的**运行环境**。没有环境信息的话，像"播放很卡"这类问题无法有效回答。
+
+        **环境基本信息**（可用时在菜单的"关于"界面查看）：
+        - Mod 版本、Minecraft 版本、加载器（Fabric / NeoForge / Paper）。
+        - 操作系统、GPU、JDK —— 与播放/性能问题相关时较为重要。
+  - type: dropdown
+    id: category
+    attributes:
+      label: 你的问题属于哪一类？
+      options:
+        - 使用（怎么……？）
+        - 配置（设置、快捷键、显示器搭建）
+        - 兼容性（加载器版本、其他 mod、插件）
+        - 播放 / 媒体（编码、格式、URL、硬件解码）
+        - 开发（构建、贡献代码、代码库结构）
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: 你的问题
+      description: 请具体描述：你想达到什么目的、尝试过什么、结果如何。
+      placeholder: 我想……我尝试了……但……
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      description: Mod 版本、Minecraft 版本、加载器、操作系统 —— 尽可能给出相关信息。
+      placeholder: 1.10.0.4、Minecraft 26.2、Fabric、Windows 11
+  - type: textarea
+    id: tried
+    attributes:
+      label: 你尝试过什么？
+      description: 已经尝试或查阅过的内容——能为大家节省时间。

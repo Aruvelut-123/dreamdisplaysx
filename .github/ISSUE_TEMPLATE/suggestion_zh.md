@@ -1,0 +1,58 @@
+---
+name: 建议
+about: 提出功能或改进建议
+title: ''
+labels: "type: suggestion"
+assignees: Aruvelut-123
+
+---
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **提交建议前请确认** —— 感谢你的想法！请：
+        1. **先搜索现有 issues**（含已关闭的）——可能已经有人提过同样的需求。
+        2. 让建议**聚焦**：一个 issue 只提一个想法，更容易讨论和实现。
+        3. 不仅要说明**做什么**，还要说明**为什么**——动机往往比功能本身更重要。
+  - type: dropdown
+    id: category
+    attributes:
+      label: 这条建议涉及哪些方面？
+      options:
+        - 播放 / 媒体（编码、格式、硬件解码、同步）
+        - 搜索 / 粘贴链接
+        - 显示器菜单（设置、滑块、快捷键）
+        - 播放列表 / 队列
+        - 缩略图 / 首帧预览
+        - 弹幕叠加
+        - 曲面显示器（台阶 / 楼梯）
+        - 网络 / 多显示器同步
+        - UI / 视觉效果
+        - 性能
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你的想法
+      description: 描述你希望的功能或改进：它做什么，玩家会怎么使用它？
+      placeholder: 我希望可以……这样就能……
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 动机
+      description: 你为什么想要这个？它解决了什么问题，或者带来了什么新的用法？
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已考虑的替代方案
+      description: 你目前使用的替代办法、其他 mod 或功能有哪些？
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 如果与建议相关：Mod 版本、Minecraft 版本、加载器、操作系统。
+      placeholder: 1.10.0.4、Minecraft 26.2、Fabric、Windows 11
