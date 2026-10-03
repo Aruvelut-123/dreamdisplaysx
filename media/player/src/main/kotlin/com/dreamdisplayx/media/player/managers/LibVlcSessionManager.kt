@@ -1189,6 +1189,24 @@ internal class LibVlcSessionManager(
     }
 
     /**
+     * Immediately PAUSES both native players from the caller's thread WITHOUT the blocking native
+     * stop: `libvlc_media_player_set_pause` returns at once and does not join the input / vout / aout
+     * worker threads, unlike `libvlc_media_player_stop` (which can sit for seconds behind a throttled
+     * CDN edge). A caller about to release GPU resources can therefore be sure no further frames are
+     * produced without freezing the render / client thread.
+     */
+    fun pauseNow() {
+        isPlaying = false
+        parkFlag.set(true)
+        val mp = mediaPlayer
+        if (mp != null) runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
+        val ap = audioPlayer
+        if (ap != null) runCatching { LibVlc.lib.libvlc_media_player_set_pause(ap, 1) }
+        audioOutput?.setPaused(true)
+        surface.clear()
+    }
+
+    /**
      * Android: pause instead of stop (see [stop] KDoc) — worker threads stay alive, the TLS
      * destructor never observes freed state. Desktop: plain stop.
      */
@@ -1322,6 +1340,10 @@ internal class LibVlcSessionManager(
             if (ap != null) {
                 runCatching { LibVlc.lib.libvlc_media_player_set_pause(ap, 1) }
             }
+            // Gate the PCM feed explicitly. libvlc's own aout pause callback must not control this:
+            // it also fires while the input rebuffers, and a missing resume muted the session for
+            // good (see LibVlcAudioOutput.onPause).
+            audioOutput?.setPaused(true)
         }
         return true
     }
@@ -1335,6 +1357,7 @@ internal class LibVlcSessionManager(
             if (ap != null) {
                 runCatching { LibVlc.lib.libvlc_media_player_set_pause(ap, 0) }
             }
+            audioOutput?.setPaused(false)
         }
     }
 

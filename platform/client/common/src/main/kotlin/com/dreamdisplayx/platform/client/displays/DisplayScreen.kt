@@ -1046,7 +1046,11 @@ class DisplayScreen(
         captureReplayCache()
         val currentPlayer = media.shutdown()
         popoutManager.unregister(currentPlayer)
-        currentPlayer?.stop()
+        // Non-blocking: this runs on the client tick / render thread, and libvlc's synchronous stop
+        // waits on the input / vout / aout worker threads (seconds behind a throttled CDN edge), which
+        // froze the game on every display unload. stopAsync pauses the native players immediately
+        // (so no further frames reach the texture being released below) and tears them down off-thread.
+        currentPlayer?.stopAsync()
 
         textureResource.releaseAsync()
         previewFrameCache?.closeAsync()
@@ -1253,6 +1257,14 @@ class DisplayScreen(
     /** Ticks remaining before the next voxel-acoustics re-probe; jittered per-display to avoid synchronized spikes. */
     private var envProbeCountdown: Int = uuid.hashCode().mod(ENV_PROBE_INTERVAL_TICKS)
 
+    /** Listener position the acoustic environment was last probed from (NaN = never probed). */
+    private var envProbeX = Double.NaN
+    private var envProbeY = Double.NaN
+    private var envProbeZ = Double.NaN
+
+    /** Ticks elapsed since the last forced re-probe while the listener stayed still. */
+    private var envProbeHeartbeat: Int = 0
+
     /** Last ReplayMod pause state applied to this display. */
     private var replayPauseApplied = false
     private var replayMediaHeld = false
@@ -1344,7 +1356,14 @@ class DisplayScreen(
     }
 
 
-    /** Acoustic environment (voxel raytrace cached every [ENV_PROBE_INTERVAL_TICKS] ticks). */
+    /**
+     * Acoustic environment for the 3D DSP. The voxel raytrace behind it is expensive — 5 occlusion
+     * rays x up to [VoxelAcousticsProbe]'s 5 `level.clip` steps plus 24 reverb rays x up to 6 pierce
+     * steps (up to ~49 block raycasts) — and it runs on the game thread, so re-probing it on a fixed
+     * fast cadence regardless of movement made the client hitch every couple of ticks. Instead the
+     * environment is re-probed only when the listener actually moved, with a slow heartbeat so a
+     * stationary world change still refreshes eventually; the cached result is returned otherwise.
+     */
     private fun probeEnvironment(plane: SourcePlane): AcousticEnvironment {
         val tier = ClientStateManager.config.audioAcoustics
         if (isPopoutActive || !acousticsEnabled || (tier != AcousticQuality.ADVANCED && tier != AcousticQuality.ULTRA)) {
@@ -1352,13 +1371,30 @@ class DisplayScreen(
             envProbeCountdown = 0
             return cachedEnvironment
         }
-        if (envProbeCountdown <= 0) {
-            cachedEnvironment =
-                VoxelAcousticsProbe.probe(plane, ListenerPoseTracker.currentPose(Minecraft.getInstance()))
-            envProbeCountdown = ENV_PROBE_INTERVAL_TICKS
-        } else {
+        if (envProbeCountdown > 0) {
             envProbeCountdown--
+            return cachedEnvironment
         }
+        envProbeCountdown = ENV_PROBE_INTERVAL_TICKS
+        val pose = ListenerPoseTracker.currentPose(Minecraft.getInstance())
+        val px = pose.x.toDouble()
+        val py = pose.y.toDouble()
+        val pz = pose.z.toDouble()
+        val movedSq = if (envProbeX.isNaN()) Double.MAX_VALUE else {
+            val dx = px - envProbeX
+            val dy = py - envProbeY
+            val dz = pz - envProbeZ
+            dx * dx + dy * dy + dz * dz
+        }
+        envProbeHeartbeat++
+        if (movedSq < ENV_PROBE_MOVE_EPSILON_SQ && envProbeHeartbeat < ENV_PROBE_HEARTBEAT_TICKS) {
+            return cachedEnvironment
+        }
+        envProbeHeartbeat = 0
+        envProbeX = px
+        envProbeY = py
+        envProbeZ = pz
+        cachedEnvironment = VoxelAcousticsProbe.probe(plane, pose)
         return cachedEnvironment
     }
 
@@ -1383,6 +1419,12 @@ class DisplayScreen(
 
         /** Ticks between voxel-acoustics re-probes; the DSP chain smooths across this gap. */
         private const val ENV_PROBE_INTERVAL_TICKS = 2
+
+        /** Re-probe the acoustic environment at least this often even while the listener is still (ticks). */
+        private const val ENV_PROBE_HEARTBEAT_TICKS = 40
+
+        /** Squared listener movement (blocks²) below which the environment is not re-probed. */
+        private const val ENV_PROBE_MOVE_EPSILON_SQ = 1.0
 
         /** Grace window after a manual retry during which new media errors are swallowed rather than shown. */
         private val ERROR_RETRY_COOLDOWN = 15.seconds

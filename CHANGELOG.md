@@ -12,6 +12,10 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Fixes
 
+- Fixed displays playing with no sound: libvlc's own aout pause (which also fires while the stream rebuffers) no longer gates the PCM feed, so a missing resume can no longer mute a session for good, and the alt-tab mute state can no longer latch on when the option is off.
+- Fixed the game hitching during playback: the voxel acoustics probe now re-runs only when the listener actually moves (with a slow heartbeat) instead of every two ticks on the game thread.
+- Fixed the game still freezing when a display is unloaded: the blocking libvlc player teardown no longer runs on the client tick thread.
+- Fixed the danmaku toggle button showing a mute icon when danmaku was off; it now uses dedicated danmaku sprites.
 - Fixed the display menu's stretch mode and danmaku sliders responding to only one click per menu open: the sliders' pending-applied locks were never cleared, so every later click on the same slider was silently ignored until the menu was reopened.
 - Fixed the game freezing when switching videos or when a video ends: player swaps are now serialized so overlapping start/stop on the libvlc native player can no longer stack and wedge the control queue.
 - Fixed clicking a search result not playing the video: picks only enqueue while the playlist is explicitly enabled and idle; in every other state they fall through to the direct play path, so a click always plays.

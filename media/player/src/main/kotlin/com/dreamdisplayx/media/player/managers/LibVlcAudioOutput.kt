@@ -112,6 +112,10 @@ internal class LibVlcAudioOutput(
     /** Reusable PCM buffer, read on the libvlc audio thread only (play callbacks are serialised). */
     private var pcmBuffer = ByteArray(0)
 
+    /** Set once the first real PCM block reaches the line in a session (one-shot INFO diagnostic). */
+    @Volatile
+    private var loggedFirstBlock = false
+
     // ── A/V sync clock ───────────────────────────────────────────────────────
     //
     // After the audio split, libvlc's own clock advances as samples are *delivered* to our play
@@ -145,6 +149,7 @@ internal class LibVlcAudioOutput(
         resyncPending = false
         cachedLeadNanos = null
         totalWrittenFrames = 0L
+        loggedFirstBlock = false
     }
 
     /**
@@ -237,6 +242,13 @@ internal class LibVlcAudioOutput(
         val bytes = count * BYTES_PER_FRAME
         if (pcmBuffer.size < bytes) pcmBuffer = ByteArray(bytes)
         samples.read(0, pcmBuffer, 0, bytes)
+        // One INFO line per session once real PCM reaches the line: "video plays but there is no
+        // sound" reports are otherwise impossible to tell apart from a dead wire, since every other
+        // log on this path is DEBUG-gated.
+        if (!loggedFirstBlock) {
+            loggedFirstBlock = true
+            logger.info("$debugLabel first audio block delivered to the line ({} frames).", count)
+        }
         // If the render thread asked for a re-sync, drain the residue BEFORE writing this block so the
         // audible audio snaps back to the video clock. This must run on the audio thread (the line's
         // owner) — never from the render thread, which would race the line and corrupt the heap.
@@ -322,17 +334,29 @@ internal class LibVlcAudioOutput(
      * `start()` on resume) from the libvlc audio thread was a native crash (0xC0000409 / 0xC0000005, no
      * JVM log) — the stop/start round-trip on Java Sound's Windows layer corrupted its internal state.
      * The line is instead kept running permanently; [onPlay] drops samples while [paused] is true, so
-     * the line drains to silence and resumes naturally. */
+     * the line drains to silence and resumes naturally.
+     *
+     * Deliberately does NOT set [paused] here: libvlc also pauses its aout internally while the input
+     * is buffering/rebuffering, and treating that as a user pause made [onPlay] drop every block until
+     * a matching resume arrived. When that resume never came (stream restart, seek, EOS) audio stayed
+     * muted for the rest of the session — the reported "video plays but there is no sound". The audible
+     * pause is now driven explicitly by [setPaused] from the session manager's suspend/resume. */
     @Suppress("UNUSED_PARAMETER")
     fun onPause(data: Pointer?, pts: Long) {
-        paused = true
         resyncPending = false
     }
 
     @Suppress("UNUSED_PARAMETER")
     fun onResume(data: Pointer?, pts: Long) {
-        paused = false
         clockLive = false
+    }
+
+    /**
+     * Explicit pause gate for the PCM feed. Only the session manager's suspend/resume calls this
+     * (libvlc's own aout pause/resume callbacks must never gate audio; see [onPause]).
+     */
+    fun setPaused(value: Boolean) {
+        paused = value
     }
 
     /** Discards buffered PCM (seek / stop): pretend only the already-emitted frames exist. Does NOT touch

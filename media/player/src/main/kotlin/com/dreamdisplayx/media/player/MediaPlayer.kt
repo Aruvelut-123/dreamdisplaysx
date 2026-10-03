@@ -379,6 +379,38 @@ class MediaPlayer(
     }
 
     /**
+     * Like [stop], but never blocks the calling thread: the native players are PAUSED synchronously
+     * (cheap, immediately stops frame delivery) and the blocking native teardown runs on the control
+     * executor (or a daemon worker). Use this from the client tick / render thread — [stop]'s
+     * synchronous `libvlc_media_player_stop` waits on the input / vout / aout threads and can sit for
+     * seconds behind a throttled CDN edge, which froze the game whenever a display was unloaded.
+     */
+    fun stopAsync() {
+        if (terminated.getAndSet(true)) return
+        state.set(PlaybackState.STOPPED)
+        runCatching { sessionManager.pauseNow() }
+        val submitted = runCatching {
+            controlExecutor.submit {
+                try {
+                    doStop()
+                } finally {
+                    stoppedLatch.countDown()
+                    controlExecutor.shutdown()
+                }
+            }
+        }.isSuccess
+        if (!submitted) {
+            daemon({
+                try {
+                    doStop()
+                } finally {
+                    stoppedLatch.countDown()
+                }
+            }, "MediaPlayer-stop").start()
+        }
+    }
+
+    /**
      * Blocks until [stop]'s teardown has fully completed, or [timeoutMs] elapses. Returns true when
      * the player is fully stopped (including a never-started player). On Android this is required
      * before creating a replacement player for the same display: overlapping native libvlc players
