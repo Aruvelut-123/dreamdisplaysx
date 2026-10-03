@@ -352,7 +352,7 @@ class DisplayMenu private constructor(
 
         val danmakuButton = addUi(
             IconButton(
-                icon = { IconButton.modIcon(if (ds.danmakuEnabled) "cc" else "mute") },
+                icon = { IconButton.modIcon(if (ds.danmakuEnabled) "danmaku" else "danmaku_off") },
             ) {
                 val next = !ds.danmakuEnabled
                 ds.danmakuEnabled = next
