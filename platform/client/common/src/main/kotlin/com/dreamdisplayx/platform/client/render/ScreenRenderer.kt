@@ -114,6 +114,14 @@ object ScreenRenderer : ClientRenderService {
     /** Distance the [UnshadedDisplayPass] replay is lifted off the level-pass quad it repeats, in blocks. */
     private const val REPLAY_LIFT = 0.01f
 
+    /**
+     * Base depth lift for every flat display overlay, in blocks. Keeps the quads off the block face they
+     * cover so they cannot z-fight it; see [renderScreenTexture]. Small enough to stay invisible (about
+     * an eighth of a texture pixel at the vanilla 16 px/block), and less than [OVERLAY_LIFT] so the
+     * existing per-layer separations (backdrop < video < danmaku) are unchanged.
+     */
+    private const val SURFACE_LIFT = 0.005f
+
     /** Translates and rotates the pose for [displayScreen]'s facing direction, then renders the video or fallback color. */
     private fun renderScreenTexture(
         displayScreen: DisplayScreen, stack: PoseStack, replay: Boolean, drawQuad: QuadRenderer,
@@ -133,7 +141,13 @@ object ScreenRenderer : ClientRenderService {
         val facing = displayScreen.facing
         val w = displayScreen.width
         val h = displayScreen.height
-        val lift = if (replay) REPLAY_LIFT else 0f
+        // Every flat overlay (video, letterbox backdrop, placeholder, danmaku) sits on this base lift.
+        // It must never be 0: [drawLayer] skips `liftTowardViewer` entirely when the lift is 0, which
+        // left the quad exactly coplanar with the block face it covers. LETTERBOX masked that behind
+        // its OVERLAY_LIFT video quad, but CROP and STRETCH draw a single quad at the base depth, so
+        // they z-fought the wall (flicker, or the picture vanishing behind the block face) until the
+        // mode was switched back to LETTERBOX.
+        val lift = if (replay) REPLAY_LIFT else SURFACE_LIFT
 
         if (displayScreen.isVideoStarted && displayScreen.hasTexture && displayScreen.renderType != null) {
             // Each quad is drawn through its own drawLayer so the backdrop and video can sit at distinct

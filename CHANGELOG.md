@@ -12,6 +12,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Fixes
 
+- Fixed CROP and STRETCH stretch modes z-fighting the block face behind the display, which made the picture flicker or disappear until the mode was switched back to letterbox.
 - Fixed displays playing with no sound: libvlc's own aout pause (which also fires while the stream rebuffers) no longer gates the PCM feed, so a missing resume can no longer mute a session for good, and the alt-tab mute state can no longer latch on when the option is off.
 - Fixed the game hitching during playback: the voxel acoustics probe now re-runs only when the listener actually moves (with a slow heartbeat) instead of every two ticks on the game thread.
 - Fixed the game still freezing when a display is unloaded: the blocking libvlc player teardown no longer runs on the client tick thread.
