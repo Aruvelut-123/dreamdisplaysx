@@ -6,8 +6,6 @@ labels: ["type: question"]
 assignees:
   - Aruvelut-123
 type: question
-
----
 body:
   - type: markdown
     attributes:
@@ -52,3 +50,4 @@ body:
     attributes:
       label: What have you tried?
       description: Anything you already attempted or looked up — it saves everyone time.
+---

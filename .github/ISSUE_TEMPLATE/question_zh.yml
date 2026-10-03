@@ -6,8 +6,6 @@ labels: ["type: question"]
 assignees:
   - Aruvelut-123
 type: question
-
----
 body:
   - type: markdown
     attributes:
@@ -52,3 +50,4 @@ body:
     attributes:
       label: 你尝试过什么？
       description: 已经尝试或查阅过的内容——能为大家节省时间。
+---

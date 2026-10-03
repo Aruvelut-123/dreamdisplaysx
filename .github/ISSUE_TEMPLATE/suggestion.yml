@@ -6,8 +6,6 @@ labels: ["type: suggestion"]
 assignees:
   - Aruvelut-123
 type: suggestion
-
----
 body:
   - type: markdown
     attributes:
@@ -58,3 +56,4 @@ body:
       label: Environment
       description: Mod version, Minecraft version, loader, OS — if relevant to the suggestion.
       placeholder: 1.10.0.4, Minecraft 26.2, Fabric, Windows 11
+---
