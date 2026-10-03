@@ -95,9 +95,17 @@ object ScrubPreview {
      * Releases the long-lived extractor (and cached frames/textures) for [key]. Call when the video
      * is switched away or unloaded so the native libvlc player is destroyed; the next [frameAt] on
      * this key lazily recreates it.
+     *
+     * The close is handed to a background coroutine: [LibVlcFrameExtractor.ScrubSession.close] stops and
+     * releases a native libvlc player, which blocks until its input/vout/aout threads finish. Running
+     * that inline blocked the caller — and the caller is the display's serial swap executor, so a slow
+     * preview teardown made every later video switch queue up behind it ("switching only works after
+     * closing and reopening the screen").
      */
     fun release(key: String) {
-        sessions.remove(key)?.close()
+        sessions.remove(key)?.let { session ->
+            DreamCoroutines.clientIo.launch { runCatching { session.close() } }
+        }
         pendingPositions.remove(key)
         val frames = FRAMES.getIfPresent(key)
         FRAMES.invalidate(key)

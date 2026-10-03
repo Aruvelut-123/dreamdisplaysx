@@ -12,6 +12,8 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Fixes
 
+- Fixed video switching only working after closing and reopening the screen: the scrub-preview player's teardown no longer blocks the display's serial swap thread.
+- Fixed single-file media (an mp4 direct link) occasionally freezing the game at the end: its audio now goes through the dedicated audio player and Java Sound line like every other source, instead of libvlc's own output, which reported write-index/underflow errors and could wedge the decoder at end of stream.
 - Fixed audio stutter and A/V desync: the audio line write respects the device's backpressure again instead of discarding most blocks, and the A/V lead only counts frames that actually reached the line.
 - Fixed switching video appearing to do nothing (frozen picture, previous audio still playing) after a video ended: the end-of-stream handler no longer blocks the media control thread.
 - Fixed the search box losing its text when the game window is resized.
