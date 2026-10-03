@@ -168,7 +168,23 @@ class SuggestionsController {
         if (pasted != null) {
             lastQuery = q
             startLoad()
-            publish(requestSeq.incrementAndGet(), listOf(pasted), null, mode = MoreMode.Search(q))
+            val seq = requestSeq.incrementAndGet()
+            publish(seq, listOf(pasted), null, mode = MoreMode.Search(q))
+            // A pasted Bilibili link starts as a URL-fallback card when its metadata is not cached
+            // yet; resolve it in the background and re-publish the enriched card once the real
+            // title / thumbnail land, so the paste flow shows a proper card instead of a bare URL.
+            if (pasted.platform == MediaPlatform.BILIBILI && pasted.thumbnailUrlOverride == null) {
+                launchLoad {
+                    val source = MediaSource.from(q) as? MediaSource.Bilibili
+                    val meta = source?.let { BilibiliMetadataCache.resolveBlocking(it) }
+                    if (source != null && meta != null && requestSeq.value == seq) {
+                        publish(
+                            seq, listOf(PastedMediaCards.bilibiliResult(source, meta)),
+                            null, mode = MoreMode.Search(q),
+                        )
+                    }
+                }
+            }
             return
         }
 

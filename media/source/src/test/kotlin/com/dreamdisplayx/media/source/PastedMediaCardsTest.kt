@@ -4,6 +4,8 @@ package com.dreamdisplayx.media.source
 
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.media.source.model.MediaPlatform
+import com.dreamdisplayx.api.media.source.model.MediaSource
+import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -61,6 +63,36 @@ class PastedMediaCardsTest {
         val card = PastedMediaCards.fromQuery(url)!!
         assertEquals(MediaPlatform.BILIBILI, card.platform)
         assertEquals(url, card.watchUrlOverride)
+    }
+
+    @Test
+    fun `bilibili card without metadata falls back to the url display name`() {
+        val url = "https://www.bilibili.com/video/BV1xx411c7mD"
+        val card = PastedMediaCards.fromQuery(url)!!
+        assertEquals("BV1xx411c7mD", card.title, "no cached metadata means the last path segment shows until it resolves")
+        assertNull(card.thumbnailUrlOverride)
+        assertFalse(card.isLive)
+    }
+
+    @Test
+    fun `bilibili card with metadata carries the real title uploader thumbnail and live state`() {
+        val source = MediaSource.from("https://www.bilibili.com/video/BV1xx411c7mD") as MediaSource.Bilibili
+        val meta = PlatformVideoMetadata(
+            title = "Some Real Title",
+            uploader = "Some Up",
+            thumbnailUrl = "https://i0.hdslb.com/bfs/archive/abc.jpg",
+            viewCount = 1234L,
+            durationSec = 3600L,
+            isLive = false,
+        )
+        val card = PastedMediaCards.bilibiliResult(source, meta)
+        assertEquals("Some Real Title", card.title)
+        assertEquals("Some Up", card.uploader)
+        assertEquals("https://i0.hdslb.com/bfs/archive/abc.jpg", card.thumbnailUrlOverride)
+        assertEquals(1234L, card.viewCount)
+        assertEquals(3600L, card.durationSec)
+        assertEquals(source.url, card.watchUrlOverride)
+        assertEquals(MediaPlatform.BILIBILI, card.platform)
     }
 
     @Test

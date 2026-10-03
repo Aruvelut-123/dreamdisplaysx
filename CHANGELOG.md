@@ -8,6 +8,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 - Search box now accepts a pasted media link (or bare YouTube id): it plays that video directly instead of text-searching the URL string.
 - Bilibili search results whose title or uploader clearly advertises adult content are filtered out.
+- Pasting a Bilibili link now shows the video's real title and thumbnail once resolved instead of a bare URL card.
 
 ### Fixes
 

@@ -7,6 +7,7 @@ import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
 import com.dreamdisplayx.api.media.source.url.YouTubeUrls
 import com.dreamdisplayx.api.security.policy.MediaUrlPolicy
+import com.dreamdisplayx.media.source.bilibili.BilibiliMetadataCache
 import com.dreamdisplayx.media.source.platform.PlatformVideoMetadata
 import com.dreamdisplayx.media.source.twitch.TwitchMetadata
 import com.dreamdisplayx.media.source.twitch.TwitchMetadataCache
@@ -42,7 +43,12 @@ object PastedMediaCards {
                 source.url, MediaPlatform.KICK, null, CustomMediaUrls.displayName(source.url),
             )
             // Bilibili URLs keep their platform badge; bangumi / episode / live URLs stay playable as-is.
-            is MediaSource.Bilibili -> customResult(source.url, MediaPlatform.BILIBILI)
+            // Any metadata the cache already holds (a previously played / resolved link) fills in a real
+            // title and thumbnail right away; the client enriches the card in the background otherwise.
+            is MediaSource.Bilibili -> bilibiliResult(
+                source,
+                BilibiliMetadataCache.cacheKey(source)?.let(BilibiliMetadataCache::get),
+            )
             is MediaSource.DirectStream -> customResult(source.streamUrl)
             is MediaSource.Remote -> customResult(source.url)
             is MediaSource.Ingest -> customResult(source.url)
@@ -92,6 +98,24 @@ object PastedMediaCards {
         isLive = meta?.isLive ?: false,
         platform = platform,
     )
+
+    /**
+     * Builds a single-card result for a pasted Bilibili link. [meta] fills in the title / uploader /
+     * thumbnail when available (a cached or just-resolved entry); the card falls back to the URL's
+     * display name so the link stays visible even before metadata lands.
+     */
+    fun bilibiliResult(source: MediaSource.Bilibili, meta: PlatformVideoMetadata?): MediaSearchResult =
+        MediaSearchResult(
+            id = source.url,
+            title = meta?.title?.takeIf { it.isNotBlank() } ?: CustomMediaUrls.displayName(source.url),
+            uploader = meta?.uploader,
+            durationSec = meta?.durationSec,
+            viewCount = meta?.viewCount,
+            watchUrlOverride = source.url,
+            thumbnailUrlOverride = meta?.thumbnailUrl,
+            isLive = meta?.isLive ?: false,
+            platform = MediaPlatform.BILIBILI,
+        )
 
     /** The single card shown for a pasted link. Built purely from the URL: file name as the title, host as the uploader. */
     private fun customResult(url: String, platform: MediaPlatform = MediaPlatform.YOUTUBE): MediaSearchResult =
