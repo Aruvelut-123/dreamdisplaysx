@@ -101,8 +101,8 @@ body:
         1. Place a display and open its menu.
         2. ...
         3. ...
-      validations:
-        required: true
+    validations:
+      required: true
   - type: input
     id: gpu-info
     attributes:

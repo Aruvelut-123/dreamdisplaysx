@@ -101,8 +101,8 @@ body:
         1. 放置一个显示器并打开它的菜单。
         2. ...
         3. ...
-      validations:
-        required: true
+    validations:
+      required: true
   - type: input
     id: gpu-info
     attributes:
