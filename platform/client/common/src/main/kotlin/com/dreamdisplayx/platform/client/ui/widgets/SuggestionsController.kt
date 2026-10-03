@@ -80,6 +80,13 @@ class SuggestionsController {
     /** The last non-empty text search query, so [setSort] knows what to re-run for a network sort change. */
     private var lastQuery: String? = null
 
+    /**
+     * Text currently in the search box. Owned here rather than by the [SuggestionsPanel] because
+     * Minecraft rebuilds every screen child on [DisplayMenu.init] whenever the window is resized — a
+     * fresh EditBox would otherwise come up empty and the user's pasted link would be lost.
+     */
+    var searchText: String = ""
+
     /** How to continue the current result list when [loadMoreIfNeeded] fires; null when the current
      *  list isn't paginable (single-video / Twitch-only results). */
     private var moreMode: MoreMode? = null

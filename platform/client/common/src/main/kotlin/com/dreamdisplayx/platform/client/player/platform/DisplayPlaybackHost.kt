@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.media.model.VideoQuality
 import com.dreamdisplayx.api.media.player.PlaybackHost
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
+import net.minecraft.client.Minecraft
 import java.util.*
 
 /**
@@ -64,6 +65,15 @@ class DisplayPlaybackHost(private val screen: DisplayScreen) : PlaybackHost {
     /** Recreates the GPU texture (e.g. after a resolution change). */
     override fun reloadTexture() = screen.reloadTexture()
 
-    /** Marks playback as ended at [positionNanos]. */
-    override fun onPlaybackEnded(positionNanos: Long) = screen.onPlaybackEnded(positionNanos)
+    /**
+     * Marks playback as ended at [positionNanos], on the game thread.
+     *
+     * The call arrives from libvlc's event thread (or the media control executor). `onPlaybackEnded`
+     * persists per-display settings and can close a fullscreen overlay, so it must not run there:
+     * doing it on the control executor stalled every later start/stop queued behind it, which is what
+     * made video switching appear dead until the display was reloaded.
+     */
+    override fun onPlaybackEnded(positionNanos: Long) {
+        Minecraft.getInstance().execute { screen.onPlaybackEnded(positionNanos) }
+    }
 }

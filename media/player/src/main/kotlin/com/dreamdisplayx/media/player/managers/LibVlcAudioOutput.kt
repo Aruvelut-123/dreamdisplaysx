@@ -46,6 +46,13 @@ internal class LibVlcAudioOutput(
         private const val MAX_COUNT_PER_BLOCK = SAMPLE_RATE / 4
 
         /**
+         * How long the PCM write may stall on a full ring before the rest of that block is dropped.
+         * Normal backpressure lasts milliseconds; anything near this budget means the consumer stopped,
+         * and waiting further would wedge libvlc's audio thread (see [feed]).
+         */
+        private const val WRITE_STALL_GIVE_UP_NS = 1_000_000_000L
+
+        /**
          * Line buffer bytes (~0.1 s of stereo S16). Tight enough that the constant video-ahead (libvlc
          * paces video from its delivery clock while the sound leaves the speakers only after this ring
          * drains — the lead equals the buffer, baked into the architecture with no public way to inject
@@ -228,17 +235,11 @@ internal class LibVlcAudioOutput(
             logger.warn("$debugLabel audio block too large ({} frames) — dropping to avoid a native overrun.", count)
             return
         }
-        val countL = count.toLong()
-        totalWrittenFrames += countL
-        clockLive = true
-        // While paused, do not touch the line at all (see [onPause]) — drop the samples and, crucially,
-        // do NOT accumulate them into [totalWrittenFrames] (they were never handed to the line, so the
-        // written-vs-emitted delta would balloon and desync the A/V clock after seek→pause→resume). The
-        // line keeps running and drains to silence; resume flows again.
-        if (paused) {
-            totalWrittenFrames -= countL
-            return
-        }
+        // While paused, do not touch the line at all (see [onPause]) — drop the samples entirely. They
+        // must not reach [totalWrittenFrames] either: the line never saw them, so the written-vs-emitted
+        // delta (the A/V lead) would balloon after seek→pause→resume. The line keeps running and drains
+        // to silence; resume flows again.
+        if (paused) return
         val bytes = count * BYTES_PER_FRAME
         if (pcmBuffer.size < bytes) pcmBuffer = ByteArray(bytes)
         samples.read(0, pcmBuffer, 0, bytes)
@@ -261,7 +262,13 @@ internal class LibVlcAudioOutput(
             clockLive = false
             logger.debug("$debugLabel audio flushed on audio thread to re-sync A/V.")
         }
-        feed(pcmBuffer, bytes, ln)
+        // Only frames that actually reached the line count. The write watchdog can drop the tail of a
+        // block when the device stalls, and counting the full block made the written-vs-emitted delta
+        // (the A/V lead) read as huge, which tripped the auto-resync flush over and over — audible
+        // stutter and desync.
+        val writtenFrames = feed(pcmBuffer, bytes, ln)
+        totalWrittenFrames += writtenFrames
+        clockLive = writtenFrames > 0
         // Refresh the A/V lead cache on the audio thread (the line's owner); the render thread reads
         // only this cached value so the native line is never touched cross-thread (heap-corruption risk).
         updateLeadCache()
@@ -306,7 +313,20 @@ internal class LibVlcAudioOutput(
         return (referenceNanos - buf).coerceAtLeast(0L)
     }
 
-    private fun feed(buf: ByteArray, bytes: Int, ln: SourceDataLine) {
+    /**
+     * Applies gain/DSP, writes [bytes] of PCM to [ln], and returns how many full frames actually
+     * reached the line.
+     *
+     * Normally the ring's backpressure paces libvlc's audio thread (a full ring parks us briefly, the
+     * device drains, we carry on), which keeps the audio intact. The catch is that `write()` blocks
+     * *inside* the line while the ring is full, and a genuinely stalled consumer (a dead sink, a line
+     * whose device stopped consuming) would block there forever — backing up the audio decoder's fifo
+     * until libvlc's input thread spins in "waiting decoder fifos to empty" and the player wedges. So
+     * this loop polls [SourceDataLine.available] and gives up after [WRITE_STALL_GIVE_UP_NS], dropping
+     * only the tail of that one block.
+     */
+    private fun feed(buf: ByteArray, bytes: Int, ln: SourceDataLine): Int {
+        var written = 0
         try {
             val g = gain
             if (dspStage != null) {
@@ -316,27 +336,35 @@ internal class LibVlcAudioOutput(
             }
             // Serialise the write against the render thread's flush / position reads and the pause /
             // resume stop / start (see [lineLock]) so the tiny ring never underruns into a native crash.
-            //
-            // The write must never BLOCK: when the line's ring is full, `write()` sleeps until the
-            // device drains it, which stalls libvlc's audio thread mid-callback. That stall backs up the
-            // audio decoder's fifo, so libvlc's input thread spins in "waiting decoder fifos to empty"
-            // forever at end of stream — the hang that froze the game when a short video finished
-            // (observed as the log simply stopping right after EOF reached). Drop what does not fit
-            // instead: a few milliseconds of audio is far better than a wedged player.
             synchronized(lineLock) {
-                var written = 0
+                var stalledNs = 0L
                 while (written < bytes) {
                     val room = runCatching { ln.available() }.getOrDefault(0)
-                    if (room <= 0) return
-                    val n = ln.write(buf, written, minOf(room, bytes - written))
-                    if (n <= 0) return
-                    written += n
+                    if (room > 0) {
+                        val n = ln.write(buf, written, minOf(room, bytes - written))
+                        if (n <= 0) break
+                        written += n
+                        stalledNs = 0L
+                        continue
+                    }
+                    if (stalledNs >= WRITE_STALL_GIVE_UP_NS) {
+                        logger.warn(
+                            "$debugLabel audio line stalled {} ms — dropping the rest of this block.",
+                            stalledNs / 1_000_000L,
+                        )
+                        break
+                    }
+                    // Park briefly instead of blocking inside write(): normal backpressure (the ring
+                    // refills as the device drains) is preserved, yet the wait stays bounded.
+                    runCatching { Thread.sleep(2) }
+                    stalledNs += 2_000_000L
                 }
             }
         } catch (t: Throwable) {
             // Never throw into the JNA callback trampoline; just drop the block.
             logger.warn("$debugLabel audio write dropped: ${t.message}")
         }
+        return written / BYTES_PER_FRAME
     }
 
     /** Marks the output paused. Does NOT touch the line: calling `SourceDataLine.stop()` on pause (and

@@ -88,6 +88,10 @@ class SuggestionsPanel(
         )
         searchBox.setHint(Component.translatable("dreamdisplayx.suggestions.search"))
         searchBox.setMaxLength(200)
+        // The controller owns the text: Minecraft rebuilds this panel (and so this EditBox) whenever
+        // DisplayMenu.init runs, e.g. on a window resize, and the user's typed/pasted link must survive.
+        searchBox.setValue(controller.searchText)
+        searchBox.setResponder { controller.searchText = it }
         clearButton = IconButton(icon = { IconButton.modIcon("cross") }, margin = 4) {
             searchBox.value = ""
             searchBox.isFocused = true
