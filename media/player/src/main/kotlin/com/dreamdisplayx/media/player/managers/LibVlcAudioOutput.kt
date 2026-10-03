@@ -316,10 +316,19 @@ internal class LibVlcAudioOutput(
             }
             // Serialise the write against the render thread's flush / position reads and the pause /
             // resume stop / start (see [lineLock]) so the tiny ring never underruns into a native crash.
+            //
+            // The write must never BLOCK: when the line's ring is full, `write()` sleeps until the
+            // device drains it, which stalls libvlc's audio thread mid-callback. That stall backs up the
+            // audio decoder's fifo, so libvlc's input thread spins in "waiting decoder fifos to empty"
+            // forever at end of stream — the hang that froze the game when a short video finished
+            // (observed as the log simply stopping right after EOF reached). Drop what does not fit
+            // instead: a few milliseconds of audio is far better than a wedged player.
             synchronized(lineLock) {
                 var written = 0
                 while (written < bytes) {
-                    val n = ln.write(buf, written, bytes - written)
+                    val room = runCatching { ln.available() }.getOrDefault(0)
+                    if (room <= 0) return
+                    val n = ln.write(buf, written, minOf(room, bytes - written))
                     if (n <= 0) return
                     written += n
                 }

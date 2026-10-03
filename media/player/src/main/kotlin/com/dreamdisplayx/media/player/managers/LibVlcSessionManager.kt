@@ -257,6 +257,19 @@ internal class LibVlcSessionManager(
     @Volatile
     private var audioPlayer: Pointer? = null
 
+    /**
+     * True when the video player carries this display's audio itself, i.e. a single-file media with no
+     * separate DASH audio stream (see [start]). Volume then has to go through `libvlc_audio_set_volume`
+     * on that player: the desktop gain lives in `LibVlcAudioOutput`, which receives no samples in this
+     * mode.
+     */
+    @Volatile
+    private var videoPlayerOwnsAudio = false
+
+    /** Last volume handed to [setVolume], re-asserted after an attach (libvlc volume is per-player). */
+    @Volatile
+    private var lastVolume = 1.0
+
     /** Retired Android players stay strongly referenced and paused until process exit. */
     private val retiredAndroidPlayers = java.util.Collections.synchronizedList(mutableListOf<Pointer>())
 
@@ -497,17 +510,21 @@ internal class LibVlcSessionManager(
      */
     fun setVolume(volume: Double) {
         audioOutput?.setVolume(volume)
-        // Android (system audio): route the volume into libvlc's own output. Both the video player
-        // and the separate DASH audio player (created in audioPlayer()) need it — libvlc volume is
-        // per-player, so the audio m4s alone would otherwise play at 100%.
-        if (systemAudio) {
+        // libvlc's own output needs the volume as well: always on Android (system audio), and on
+        // desktop whenever the video player carries the audio itself (single-file media, see [start]).
+        // libvlc volume is per-player, so a player that owns audio would otherwise stay at 100%.
+        val pct = (volume.coerceIn(0.0, 1.0) * 100).toInt()
+        lastVolume = volume
+        if (systemAudio || videoPlayerOwnsAudio) {
             val mp = mediaPlayer
             if (mp != null) {
-                runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, (volume.coerceIn(0.0, 1.0) * 100).toInt()) }
+                runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, pct) }
             }
+        }
+        if (systemAudio) {
             val ap = audioPlayer
             if (ap != null) {
-                runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, (volume.coerceIn(0.0, 1.0) * 100).toInt()) }
+                runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, pct) }
             }
         }
     }
@@ -637,20 +654,31 @@ internal class LibVlcSessionManager(
             // backend that just failed.
             LibVlc.currentHwBackend()?.let { mediaOptions.add(":avcodec-hw=$it") }
         }
+        // A separate audio stream only exists for DASH-style sources (Bilibili's split m4s). A plain
+        // single-file media — an mp4 direct link, or any resolved stream whose audio URL equals the
+        // video URL — carries its audio INSIDE the container: muting the video player and then skipping
+        // the dedicated audio player left that display completely silent (the reported "sometimes there
+        // is no audio"). In that case the video player now keeps its own track and libvlc's output plays
+        // it; volume goes through libvlc_audio_set_volume (see [setVolume]).
+        val audioUrl = streamSet.currentAudio.url
+        val separateAudio = audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)
+        videoPlayerOwnsAudio = !systemAudio && !separateAudio
         if (systemAudio) {
             // Android: audio stays inside the video player (OpenSL ES); no callback pipeline,
-            // no dedicated audio player. Note the media option keeps audio OFF the callbacks —
-            // it is ":no-audio" on desktop because a separate player owns sound there.
+            // no dedicated audio player.
             mediaOptions.remove(":no-audio")
-        } else {
+        } else if (separateAudio) {
+            // Desktop DASH split: the video player is silenced so its system-clock vout is never dragged
+            // by the audio clock, and the separate audio player feeds the 3D DSP + Java Sound line.
             mediaOptions.add(":no-audio")
         }
-        val audioUrl = streamSet.currentAudio.url
-        if (audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)) {
+        if (separateAudio) {
             logger.info("$debugLabel audio will be played by the separate audio player.")
         } else {
-            logger.warn("$debugLabel audio NOT started: audioUrl='{}' equalsVideo={}.",
-                audioUrl.ifBlank { "<blank>" }, audioUrl.equals(safeUrl, ignoreCase = true))
+            logger.info(
+                "$debugLabel no separate audio stream (audioUrl='{}', equalsVideo={}); the video player plays its own audio.",
+                audioUrl.ifBlank { "<blank>" }, audioUrl.equals(safeUrl, ignoreCase = true),
+            )
         }
 
         submit {
@@ -708,6 +736,13 @@ internal class LibVlcSessionManager(
                     logger.info("$debugLabel audio player skipped (no separate audio URL).")
                 }
                 LibVlc.lib.libvlc_media_player_play(activeMp)
+                // Re-assert our volume on the video player: when the media is single-file it now owns
+                // the audio (see [videoPlayerOwnsAudio]), and a fresh play() can reset libvlc's volume.
+                if (systemAudio || videoPlayerOwnsAudio) {
+                    runCatching {
+                        LibVlc.lib.libvlc_audio_set_volume(activeMp, (lastVolume.coerceIn(0.0, 1.0) * 100).toInt())
+                    }
+                }
                 isPlaying = true
                 // Initial A/V sync: both players start independently, so the audio player's clock can
                 // drift from the video's right from the start. Schedule an early correction (~1.5s)

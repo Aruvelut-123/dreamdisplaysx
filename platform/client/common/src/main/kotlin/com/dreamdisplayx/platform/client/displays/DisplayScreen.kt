@@ -1063,9 +1063,19 @@ class DisplayScreen(
         if (screen is DisplayMenu && screen.displayScreen === this) screen.onClose()
     }
 
+    /**
+     * Synchronously stops this display's media player. SHUTDOWN ONLY: libvlc's stop blocks until its
+     * input / vout / aout threads have finished, so this must never run on the client tick thread
+     * during normal play ([unregister] uses the async path for that reason). It exists because the
+     * async teardown queued by [unregister] can be dropped once the client executors are shut down,
+     * which left a display's audio playing after the world was closed.
+     */
+    internal fun stopMediaBlocking() {
+        runCatching { media.shutdown()?.stop() }
+    }
+
     /** Captures a native replay snapshot before a local display is softly unloaded. */
-    private fun captureReplayCache() {
-        if (mode != PlaybackMode.LOCAL || watchParty != null || isLive) return
+    private fun captureReplayCache() {        if (mode != PlaybackMode.LOCAL || watchParty != null || isLive) return
         val url = videoUrl ?: return
         val mp = mediaPlayer ?: return
         val position = currentTimeNanos
@@ -1377,9 +1387,9 @@ class DisplayScreen(
         }
         envProbeCountdown = ENV_PROBE_INTERVAL_TICKS
         val pose = ListenerPoseTracker.currentPose(Minecraft.getInstance())
-        val px = pose.x.toDouble()
-        val py = pose.y.toDouble()
-        val pz = pose.z.toDouble()
+        val px = pose.x
+        val py = pose.y
+        val pz = pose.z
         val movedSq = if (envProbeX.isNaN()) Double.MAX_VALUE else {
             val dx = px - envProbeX
             val dy = py - envProbeY

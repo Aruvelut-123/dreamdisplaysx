@@ -12,6 +12,9 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Fixes
 
+- Fixed single-file media (an mp4 direct link, or any source without a separate DASH audio stream) playing with no sound at all: the video player is no longer muted in that case, and volume now reaches it.
+- Fixed the game freezing when a short video ended: the audio line write no longer blocks libvlc's audio thread, so the decoder fifo drains instead of hanging the input thread after end of stream.
+- Fixed display audio still playing after a display is removed or the world is left: shutdown now stops every native player synchronously.
 - Fixed a pasted link listing unrelated Bilibili search results below its card: scrolling no longer sends the pasted URL to Bilibili search, and a share-sheet title wrapped around the link is now unwrapped so the link is recognised as a link in the first place.
 - Fixed a pasted Bilibili episode link playing a different episode: when the requested episode id is not in the season payload the resolver now reports a failure instead of silently playing the season's first episode (special/preview episodes are searched too).
 - Fixed the game freezing right after a video ends: the end-of-stream report no longer blocks libvlc's event pump.

@@ -99,6 +99,16 @@ object DisplayRegistry {
         displaySystem?.clearDisplays()
     }
 
+    /**
+     * Stops every display's native player synchronously. SHUTDOWN ONLY: normal unloading uses the
+     * async teardown so the client tick thread is never blocked, but that async work can be dropped
+     * once the client executors are shut down — which left a display's libvlc audio player running
+     * (audible) after the world was closed.
+     */
+    fun stopAllMediaBlocking() {
+        screens.values.forEach { runCatching { it.stopMediaBlocking() } }
+    }
+
     /** How long a carried-over display waits to be re-announced by the new server before it is dropped. */
     private const val RECONFIRM_GRACE_MS = 12_000L
 
