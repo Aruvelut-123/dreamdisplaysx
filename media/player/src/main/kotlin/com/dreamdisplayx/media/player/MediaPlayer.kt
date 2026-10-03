@@ -1056,8 +1056,13 @@ class MediaPlayer(
                 safeExecute {
                     stopSession()
                     state.set(PlaybackState.PAUSED)
+                    // Report the end from the control thread, never from this libvlc event callback:
+                    // onPlaybackEnded persists per-display settings and can send a playlist-advance
+                    // packet, and handleStreamEnd runs synchronously inside libvlc's event pump. Blocking
+                    // that pump while the control thread's stop() waits on libvlc's input thread is the
+                    // reported freeze right after a video ends.
+                    host.onPlaybackEnded(durationHintNanos)
                 }
-                host.onPlaybackEnded(durationHintNanos)
             }
             return
         }

@@ -405,9 +405,15 @@ object BilibiliApi {
         val result = seasonRoot?.obj("result") ?: return null
 
         val episodes = result.array("episodes")?.mapNotNull { it.asJsonObjectOrNull() } ?: return null
-        val episode = epId?.let { id -> episodes.firstOrNull { it.optLong("ep_id") == id } }
-            ?: episodes.firstOrNull()
-            ?: return null
+        val sections = sectionEpisodes(result)
+        val episode = selectBangumiEpisode(episodes, sections, epId)
+        if (episode == null) {
+            logger.warn(
+                "Bilibili bangumi ep {} is not in the season payload ({} main episodes, {} section episodes); refusing to fall back to the first episode.",
+                epId, episodes.size, sections.size,
+            )
+            return null
+        }
         val resolvedEpId = episode.optLong("ep_id") ?: return null
 
         val playurlRoot =
@@ -431,6 +437,33 @@ object BilibiliApi {
         )
         return BilibiliPlayback(streams = streams, metadata = metadata, isSeekable = true)
     }
+
+    /**
+     * Flattens the `section` lists (specials / previews / trailers) that Bilibili returns beside the
+     * main-run `episodes` of a season payload.
+     */
+    private fun sectionEpisodes(result: JsonObject): List<JsonObject> =
+        result.array("section")
+            ?.mapNotNull { it.asJsonObjectOrNull() }
+            ?.flatMap { section -> section.array("episodes")?.mapNotNull { it.asJsonObjectOrNull() }.orEmpty() }
+            .orEmpty()
+
+    /**
+     * Picks the episode to play from a season payload.
+     *
+     * An explicit [epId] must match a main-run or `section` episode exactly: falling back to
+     * `episodes.first()` played the season's FIRST episode for a pasted `ep<id>` link, which is the
+     * reported "the link resolved to a different video". A [seasonId]-only request legitimately
+     * starts at the first episode. Returns null when an explicit [epId] is present nowhere, so the
+     * caller reports a failure instead of playing the wrong episode.
+     */
+    internal fun selectBangumiEpisode(episodes: List<JsonObject>, sections: List<JsonObject>, epId: Long?): JsonObject? =
+        if (epId != null) {
+            episodes.firstOrNull { it.optLong("ep_id") == epId }
+                ?: sections.firstOrNull { it.optLong("ep_id") == epId }
+        } else {
+            episodes.firstOrNull()
+        }
 
     /** Resolves a live room identified by [roomId]. */
     private fun resolveLive(roomId: Long): BilibiliPlayback {
