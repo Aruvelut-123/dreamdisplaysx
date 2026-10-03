@@ -124,6 +124,28 @@ class PastedMediaCardsTest {
     }
 
     @Test
+    fun `share-sheet text with an embedded bilibili link resolves to that one video`() {
+        // The Bilibili app share sheet wraps the link in a title. Treating the whole blob as a search
+        // phrase listed unrelated Bilibili search results instead of the shared video.
+        val card = PastedMediaCards.fromQuery("【番剧】第 1 话 来看看这个 https://www.bilibili.com/bangumi/play/ep123456 很好看")!!
+        assertEquals(MediaPlatform.BILIBILI, card.platform)
+        assertEquals("https://www.bilibili.com/bangumi/play/ep123456", card.watchUrlOverride)
+    }
+
+    @Test
+    fun `trailing punctuation stuck to an embedded link is stripped`() {
+        val card = PastedMediaCards.fromQuery("分享给你：https://b23.tv/abcdefg）")!!
+        assertEquals(MediaPlatform.BILIBILI, card.platform)
+        assertTrue(card.watchUrlOverride!!.contains("b23.tv/abcdefg"))
+        assertFalse(card.watchUrlOverride!!.endsWith("）"))
+    }
+
+    @Test
+    fun `plain text without a link stays a search phrase`() {
+        assertNull(PastedMediaCards.fromQuery("进击的巨人 第一季"))
+    }
+
+    @Test
     fun `twitch channel url becomes a twitch card`() {
         val url = "https://www.twitch.tv/someone"
         val card = PastedMediaCards.fromQuery(url)!!

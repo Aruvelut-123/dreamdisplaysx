@@ -12,6 +12,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Fixes
 
+- Fixed a pasted link listing unrelated Bilibili search results below its card: scrolling no longer sends the pasted URL to Bilibili search, and a share-sheet title wrapped around the link is now unwrapped so the link is recognised as a link in the first place.
 - Fixed a pasted Bilibili episode link playing a different episode: when the requested episode id is not in the season payload the resolver now reports a failure instead of silently playing the season's first episode (special/preview episodes are searched too).
 - Fixed the game freezing right after a video ends: the end-of-stream report no longer blocks libvlc's event pump.
 - Fixed CROP and STRETCH stretch modes z-fighting the block face behind the display, which made the picture flicker or disappear until the mode was switched back to letterbox.

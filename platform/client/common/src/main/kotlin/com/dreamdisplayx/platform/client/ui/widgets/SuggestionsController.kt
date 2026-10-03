@@ -169,7 +169,11 @@ class SuggestionsController {
             lastQuery = q
             startLoad()
             val seq = requestSeq.incrementAndGet()
-            publish(seq, listOf(pasted), null, mode = MoreMode.Search(q))
+            // mode = null: a pasted link is a single result, not a paginable search. Marking it
+            // MoreMode.Search(q) made loadMoreIfNeeded() take the query (the URL!) to Bilibili and
+            // append its search results underneath the card — the reported "pasting a link still
+            // lists other videos from Bilibili search".
+            publish(seq, listOf(pasted), null)
             // A pasted Bilibili link starts as a URL-fallback card when its metadata is not cached
             // yet; resolve it in the background and re-publish the enriched card once the real
             // title / thumbnail land, so the paste flow shows a proper card instead of a bare URL.
@@ -178,10 +182,7 @@ class SuggestionsController {
                     val source = MediaSource.from(q) as? MediaSource.Bilibili
                     val meta = source?.let { BilibiliMetadataCache.resolveBlocking(it) }
                     if (source != null && meta != null && requestSeq.value == seq) {
-                        publish(
-                            seq, listOf(PastedMediaCards.bilibiliResult(source, meta)),
-                            null, mode = MoreMode.Search(q),
-                        )
+                        publish(seq, listOf(PastedMediaCards.bilibiliResult(source, meta)), null)
                     }
                 }
             }

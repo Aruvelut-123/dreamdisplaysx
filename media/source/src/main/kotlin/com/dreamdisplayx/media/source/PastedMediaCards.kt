@@ -28,11 +28,16 @@ object PastedMediaCards {
     /**
      * Recognizes [query] as a pasted media link and builds its single-card result, or returns null
      * for a plain search phrase.
+     *
+     * A share sheet / chat message wraps the link in text ("【标题】 https://b23.tv/xxxx"), so the
+     * first embedded URL is extracted first: treating the whole blob as a search phrase is why a
+     * pasted link still listed Bilibili search results instead of resolving to that one video.
      */
     fun fromQuery(query: String): MediaSearchResult? {
         if (query.isBlank()) return null
-        if (!MediaUrlPolicy.isAllowed(query)) return null
-        val source = MediaSource.from(query)
+        val candidate = urlInText(query) ?: query.trim()
+        if (!MediaUrlPolicy.isAllowed(candidate)) return null
+        val source = MediaSource.from(candidate)
         return when (source) {
             is MediaSource.YouTube -> fallbackResult(source.videoId)
             is MediaSource.Twitch -> twitchResult(source, null)
@@ -55,9 +60,21 @@ object PastedMediaCards {
         }
     }
 
+    /** Matches the first http(s) URL inside a pasted blob of text. */
+    private val URL_IN_TEXT = Regex("""https?://\S+""", RegexOption.IGNORE_CASE)
+
+    /** Punctuation a share sheet / chat message leaves stuck to the end of the URL. */
+    private const val URL_TRAILING = ".,;:!?)]}>\"'，。；：！？）】》”’"
+
+    /**
+     * The first URL embedded in [text] with trailing punctuation stripped, or null when the text
+     * carries no link (then it really is a search phrase).
+     */
+    private fun urlInText(text: String): String? =
+        URL_IN_TEXT.find(text)?.value?.trimEnd { it in URL_TRAILING }?.takeIf { it.isNotBlank() }
+
     /** Minimal result used when URL metadata could not be fetched. */
-    private fun fallbackResult(videoId: String) =
-        MediaSearchResult(videoId, YouTubeUrls.watchUrl(videoId), null, null, null)
+    private fun fallbackResult(videoId: String) =        MediaSearchResult(videoId, YouTubeUrls.watchUrl(videoId), null, null, null)
 
     /** Builds a single-card result for a pasted Twitch URL, using [meta] when the Helix lookup succeeded. */
     private fun twitchResult(source: MediaSource.Twitch, meta: TwitchMetadata?): MediaSearchResult {
