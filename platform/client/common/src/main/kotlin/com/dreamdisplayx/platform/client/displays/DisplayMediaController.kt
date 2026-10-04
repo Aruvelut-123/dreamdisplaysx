@@ -67,7 +67,7 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
      * popout sinks, and defers [start] until the player reports initialized. When
      * [preservePausedState] is true the screen's current paused state is reapplied after start.
      */
-    fun load(videoUrl: String, lang: String, preservePausedState: Boolean) {
+    fun load(videoUrl: String, lang: String, preservePausedState: Boolean, forceReload: Boolean = false) {
         if (videoUrl == "") return
         val request = PendingLoad(videoUrl, lang)
         val expected: Long
@@ -79,8 +79,8 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
             // target repeatedly while the previous player is stopping or the replacement is being
             // constructed: every duplicate used to add another task to the serial worker, making a
             // slow teardown look like a switch that only worked after reopening the display.
-            if (pendingLoad == request) return
-            if (player != null && screen.videoUrl == videoUrl && screen.lang == lang && !screen.errored) return
+            if (!forceReload && pendingLoad == request) return
+            if (!forceReload && player != null && screen.videoUrl == videoUrl && screen.lang == lang && !screen.errored) return
 
             pendingLoad = request
             expected = generation.incrementAndGet()

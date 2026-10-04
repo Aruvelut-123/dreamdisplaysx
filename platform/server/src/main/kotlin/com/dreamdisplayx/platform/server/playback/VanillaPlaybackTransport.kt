@@ -6,7 +6,6 @@ import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.managers.DisplayManager
-import com.dreamdisplayx.platform.server.managers.StateManager
 import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.utils.RegionUtil
@@ -106,9 +105,11 @@ object VanillaPlaybackTransport : PlaybackTransport {
         val vanilla = display as? VanillaDisplayData ?: return
         val s = server ?: return
         val receivers = DisplayManager.getReceivers(vanilla, s)
+        // TimelineManager is the sole authoritative clock for protocol-v2/v3 clients. Reset it
+        // before publishing DisplayInfo, then publish the fresh timeline after the URL update.
+        TimelineManager.resetVideo(vanilla)
         DisplayManager.sendUpdate(vanilla, receivers)
-        StateManager.resetAndBroadcast(vanilla.id, receivers)
-        TimelineManager.onVideoChanged(vanilla)
+        TimelineManager.broadcastCurrent(vanilla)
     }
 
     /** Loads every persisted playlist via the vanilla storage backend. */

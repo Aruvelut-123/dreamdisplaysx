@@ -74,6 +74,10 @@
 
 ### 2026-10-04 — Linux VOD loop and video-switch lifecycle hardening
 - Normal desktop VOD loops restart an ended libvlc input with a zero-position `play()` path instead of synchronously stopping both video and dedicated audio inputs on every loop. Non-zero seeks retain the stop/play/set-time fallback.
+- A delayed, generation-guarded check revives only the video or audio input that remains `STOPPED`/`ENDED`, covering silent loops without stopping healthy channels.
+- The legacy `StateManager` reset/tick path no longer participates in v2/v3 timelines; `TimelineManager` resets before publishing a new `DisplayInfo` so playlist switches cannot be rewound by `serverTime=0` packets.
+- Playlist snapshots carry an append-only playback generation so a same-URL item still forces a fresh player swap; queue edits do not increment it.
+- Verbose libvlc logging rotates a previous `libvlc.log` to a timestamped gzip archive (keeping the newest ten) before opening a fresh UTF-8 log.
 - Player teardown wakes the first-frame wait immediately and exposes an asynchronous stop path for display swaps, so a stream that never delivers its first frame cannot hold later video changes behind the ten-second start timeout.
 - `DisplayMediaController` coalesces duplicate pending URL/language loads, discards stale player errors before installing a newer generation, and waits for asynchronous teardown before creating the replacement.
 

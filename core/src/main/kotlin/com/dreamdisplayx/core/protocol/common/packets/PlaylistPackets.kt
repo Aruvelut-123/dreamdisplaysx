@@ -25,6 +25,8 @@ data class PlaylistState(
     @ProtoNumber(4) val endBehavior: Int = 0,
     @ProtoNumber(5) val enqueuePolicy: Int = 2,
     @ProtoNumber(6) val enabled: Boolean = true,
+    /** Monotonic playback generation; increments whenever the server starts an item, even if URL is unchanged. */
+    @ProtoNumber(7) val playRevision: Long = 0,
 ) : DreamPacket
 
 /** One playlist entry as it travels on the wire. */

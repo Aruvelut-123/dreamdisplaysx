@@ -6,7 +6,6 @@ import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
-import com.dreamdisplayx.platform.server.managers.StateManager
 import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.dreamdisplayx.platform.server.meta.Scheduler
 import com.dreamdisplayx.platform.server.utils.PlatformUtil
@@ -108,9 +107,11 @@ object PaperPlaybackTransport : PlaybackTransport {
     override fun notifyVideoChanged(display: DisplayData) {
         val paper = display as? PaperDisplayData ?: return
         val receivers = DisplayManager.getReceivers(paper)
+        // TimelineManager is the sole authoritative clock for protocol-v2/v3 clients. Reset it
+        // before publishing DisplayInfo, then publish the fresh timeline after the URL update.
+        TimelineManager.resetVideo(paper)
         DisplayManager.sendUpdate(paper, receivers)
-        StateManager.resetAndBroadcast(paper)
-        TimelineManager.onVideoChanged(paper)
+        TimelineManager.broadcastCurrent(paper)
     }
 
     /** Loads every persisted playlist via the `Paper` storage backend. */

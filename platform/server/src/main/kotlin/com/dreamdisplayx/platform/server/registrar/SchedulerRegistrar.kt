@@ -2,7 +2,6 @@ package com.dreamdisplayx.platform.server.registrar
 
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.managers.DisplayManager
-import com.dreamdisplayx.platform.server.managers.StateManager
 import com.dreamdisplayx.platform.server.meta.Updater
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.playback.PlaylistManager
@@ -39,10 +38,8 @@ object SchedulerRegistrar {
         ) {
             if (PlatformUtil.isFolia) {
                 DisplayManager.updateAllDisplaysForTrackedPlayers()
-                StateManager.tickBroadcastForTrackedPlayers()
             } else {
                 DisplayManager.updateAllDisplays()
-                StateManager.tickBroadcast()
             }
             TimelineManager.tick()
             PlaylistManager.tick()

@@ -32,9 +32,13 @@ object PlaylistManager {
     /** The current in-memory playlist for each display. */
     private val playlists = ConcurrentHashMap<UUID, DisplayPlaylist>()
 
+    /** Monotonic playback generations; separate from queue edits so ADD/MOVE do not retrigger media. */
+    private val playRevisions = ConcurrentHashMap<UUID, Long>()
+
     /** Wires the platform transport and seeds in-memory playlists from persisted rows. */
     fun init(transport: PlaybackTransport, persisted: List<DisplayPlaylist>) {
         this.transport = transport
+        playRevisions.clear()
         persisted.forEach { playlists[it.displayId] = it }
     }
 
@@ -44,6 +48,7 @@ object PlaylistManager {
     /** Drops the playlist for a deleted display, both in memory and from the database. */
     fun onDisplayRemoved(displayId: UUID) {
         playlists.remove(displayId)
+        playRevisions.remove(displayId)
         deletePersisted(displayId)
     }
 
@@ -270,6 +275,9 @@ object PlaylistManager {
         else -> currentIndex
     }
 
+    /** Advances the wire playback generation without coupling it to queue edits. */
+    internal fun advancePlayRevision(previous: Long?): Long = (previous ?: 0L) + 1L
+
     /**
      * Plays [index] immediately: loads the item's URL onto the display through the normal
      * set-video pipeline (permissions/throttles bypassed — the queue is owner-scoped already),
@@ -277,6 +285,7 @@ object PlaylistManager {
      */
     fun playIndex(display: DisplayData, playlist: DisplayPlaylist, index: Int) {
         val item = playlist.items.getOrNull(index) ?: return
+        playRevisions.compute(display.id) { _, previous -> advancePlayRevision(previous) }
         playlists[display.id] = playlist.copy(currentIndex = index)
         persist(display.id)
         display.url = item.url
@@ -348,6 +357,7 @@ object PlaylistManager {
             endBehavior = playlist.endBehavior.wire,
             enqueuePolicy = playlist.enqueuePolicy.wire,
             enabled = playlist.enabled,
+            playRevision = playRevisions[displayId] ?: 0L,
             items = playlist.items.map { item ->
                 PlaylistItem(
                     itemId = item.itemId,

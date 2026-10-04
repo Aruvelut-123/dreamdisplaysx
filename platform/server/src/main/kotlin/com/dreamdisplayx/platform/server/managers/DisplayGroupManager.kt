@@ -30,8 +30,9 @@ object DisplayGroupManager {
             display.url = url
             display.lang = lang
             display.mode = PlaybackMode.SYNCED
+            TimelineManager.resetVideo(display)
             persistAndBroadcast(display)
-            TimelineManager.onVideoChanged(display)
+            TimelineManager.broadcastCurrent(display)
         }
     }
 }

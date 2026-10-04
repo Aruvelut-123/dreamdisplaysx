@@ -5,7 +5,6 @@ import com.dreamdisplayx.platform.server.credentials.CredentialStore
 import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.managers.DisplayManager
-import com.dreamdisplayx.platform.server.managers.StateManager
 import com.dreamdisplayx.platform.server.managers.StorageManager
 import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.meta.Updater
@@ -115,7 +114,6 @@ object VanillaBootstrap {
                 runCatching {
                     server.execute {
                         DisplayManager.updateAllDisplays(server)
-                        StateManager.tickBroadcast(server)
                         TimelineManager.tick()
                         PlaylistManager.tick()
                         WatchPartyManager.tick()

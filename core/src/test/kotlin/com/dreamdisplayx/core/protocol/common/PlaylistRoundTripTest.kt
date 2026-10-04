@@ -31,6 +31,7 @@ class PlaylistRoundTripTest {
             currentIndex = 0,
             endBehavior = PlaylistEndBehavior.CONTINUE.wire,
             enqueuePolicy = PlaylistEnqueuePolicy.OWNER_APPROVAL.wire,
+            playRevision = 17,
         )
 
         assertEquals(

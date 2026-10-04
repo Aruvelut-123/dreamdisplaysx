@@ -132,12 +132,23 @@ object TimelineManager {
     }
 
     /** Resets the clock to 0 when the video changes (`SYNCED` / `BROADCAST` only). */
-    fun onVideoChanged(display: DisplayData) {
+    fun resetVideo(display: DisplayData) {
         if (display.mode != PlaybackMode.SYNCED && display.mode != PlaybackMode.BROADCAST) return
         display.duration = null // Fresh video: let onDurationReported accept its own report.
         val fresh = Timeline.start(transport.nowMs(), loop = true)
         timelines[display.id] = fresh
-        broadcast(display, fresh)
+    }
+
+    /** Broadcasts the freshly reset video timeline after its new DisplayInfo has been published. */
+    fun broadcastCurrent(display: DisplayData) {
+        if (display.mode != PlaybackMode.SYNCED && display.mode != PlaybackMode.BROADCAST) return
+        timelines[display.id]?.let { broadcast(display, it) }
+    }
+
+    /** Resets and immediately broadcasts the clock for callers that do not publish DisplayInfo separately. */
+    fun onVideoChanged(display: DisplayData) {
+        resetVideo(display)
+        broadcastCurrent(display)
     }
 
     /**

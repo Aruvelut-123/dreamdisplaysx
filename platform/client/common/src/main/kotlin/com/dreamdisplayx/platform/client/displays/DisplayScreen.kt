@@ -584,6 +584,16 @@ class DisplayScreen(
         media.load(videoUrl, lang, preservePausedState)
     }
 
+    /** Restarts a playlist item whose URL is unchanged, using the server's new playback generation. */
+    internal fun replayPlaylistItem(videoUrl: String, lang: String) {
+        if (this.videoUrl != videoUrl || this.lang != lang) return
+        pausedByEnded = false
+        paused = false
+        savedTimeNanos = 0L
+        media.load(videoUrl, lang, preservePausedState = false, forceReload = true)
+        if (requiresServerTimeline()) sendRequestSyncPacket()
+    }
+
     /** Records the new [videoUrl] and [lang] when the media controller swaps players. */
     internal fun onVideoSwapped(videoUrl: String, lang: String) {
         previousVideoUrl = this.videoUrl

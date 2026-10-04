@@ -266,6 +266,7 @@ internal class LibVlcSessionManager(
 
     private val released = AtomicBoolean(false)
     private val stopped = AtomicBoolean(false)
+    private val lifecycleLock = Any()
 
     /** Serialises every libvlc control call, mirroring VideoPlayer's control executor. */
     private val controlExecutor: ExecutorService =
@@ -870,8 +871,12 @@ internal class LibVlcSessionManager(
     fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         // Reset audio flags before the seek so a pause-then-resume immediately after seek starts clean.
         audioOutput?.onSeekReset()
+        // A seek/loop reuses the native player, but it also resets the software clock. Let the first
+        // frame at the new target mark that clock again; otherwise firstFrameFired stays true from
+        // the previous position and sync following sees a permanently stopped clock.
+        firstFrameFired = false
         // Retire verification from an older seek before publishing this seek's target.
-        seekGeneration.incrementAndGet()
+        val seekId = seekGeneration.incrementAndGet()
         val targetMs = offsetNanos / 1_000_000L
         // Hold the last displayed picture while the video demuxer flushes onto the target. This
         // prevents pre-seek frames from visibly continuing while the audio player has already moved.
@@ -883,6 +888,7 @@ internal class LibVlcSessionManager(
         // to the video's stale clock would rewind the whole playback to the pre-seek position.
         armSeekSettleWindow()
         submit {
+            if (seekId != seekGeneration.get() || stopped.get() || released.get()) return@submit
             val mp = mediaPlayer ?: return@submit
             // ENDED state ignores set_time and a bare play() is not guaranteed to restart in libvlc
             // 3.0 — stop() first, then play() restarts from the beginning (loop/replay path).
@@ -980,6 +986,7 @@ internal class LibVlcSessionManager(
                 // (~1.5s) the cold-start path uses. Skipped while parked by scheduleInitialAvSync.
                 scheduleInitialAvSync()
             }
+            if (seekId != seekGeneration.get() || stopped.get() || released.get()) return@submit
             // If a seek left the player in a dead state (stopped/ended — e.g. a backwards seek
             // into an already-released region dropping it out of PLAYING), resume it. Buffering(2)
             // is a normal transient after a backwards seek and MUST NOT be play()ed — that would
@@ -990,12 +997,92 @@ internal class LibVlcSessionManager(
                 val currentMp = mediaPlayer ?: return@submit
                 val after = LibVlc.lib.libvlc_media_player_get_state(currentMp)
                 if (after == LibVlc.LIBVLC_STATE_STOPPED || after == LibVlc.LIBVLC_STATE_ENDED) {
+                    // `play()` is asynchronous, so an immediate state sample can still read ENDED
+                    // even when the input is already leaving EOF. Do not stop here: that would
+                    // reintroduce the decoder-fifo teardown that froze repeated loops. A delayed,
+                    // generation-aware fallback below handles a genuinely latched ENDED state.
                     LibVlc.lib.libvlc_media_player_play(currentMp)
+                }
+                // A successful loop is logically playing immediately; the asynchronous PLAYING
+                // callback will confirm it later. Updating this flag here prevents playlist/sync
+                // callbacks arriving in that short window from treating the session as dead and
+                // queueing another cold start on top of the just-restarted inputs.
+                if (after == LibVlc.LIBVLC_STATE_STOPPED || after == LibVlc.LIBVLC_STATE_ENDED ||
+                    after == LibVlc.LIBVLC_STATE_PLAYING || after == LibVlc.LIBVLC_STATE_PAUSED
+                ) {
+                    if (!reviveIfCurrentSeek(seekId)) return@submit
+                }
+                if (!systemAudio && targetMs == 0L) {
+                    scheduleEndedRestartFallback(seekId)
                 }
             } catch (_: Throwable) { }
         }
         logger.debug("$debugLabel libvlc seek to ${offsetNanos / 1_000_000} ms.")
         return true
+    }
+
+    /** Re-checks an ended desktop replay after libvlc has had time to leave ENDED asynchronously. */
+    private fun scheduleEndedRestartFallback(seekId: Long) {
+        Thread({
+            // libvlc transitions out of ENDED asynchronously. Give the normal play()+set_time
+            // path a short window before using the conservative desktop stop/play fallback.
+            try {
+                Thread.sleep(400)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return@Thread
+            }
+            submit {
+                if (seekId != seekGeneration.get() || stopped.get() || released.get()) return@submit
+                val mp = mediaPlayer ?: return@submit
+                val videoState = runCatching { LibVlc.lib.libvlc_media_player_get_state(mp) }.getOrDefault(-1)
+                val videoDead = videoState == LibVlc.LIBVLC_STATE_STOPPED || videoState == LibVlc.LIBVLC_STATE_ENDED
+                val ap = audioPlayer
+                val audioState = ap?.let {
+                    runCatching { LibVlc.lib.libvlc_media_player_get_state(it) }.getOrDefault(-1)
+                }
+                val audioDead = audioState == LibVlc.LIBVLC_STATE_STOPPED || audioState == LibVlc.LIBVLC_STATE_ENDED
+                if (!videoDead && !audioDead) return@submit
+                logger.warn(
+                    "$debugLabel ended replay remained in native state (video={}, audio={}); retrying dead channel(s) with stop/play.",
+                    videoState, audioState,
+                )
+                if (videoDead) {
+                    runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
+                    runCatching { LibVlc.lib.libvlc_media_player_play(mp) }
+                    runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, 0L) }
+                }
+                if (audioDead && ap != null) {
+                    runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                    runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
+                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, 0L) }
+                }
+                reviveIfCurrentSeek(seekId)
+            }
+        }, "$debugLabel-loop-recovery").also { it.isDaemon = true }.start()
+    }
+
+    /** Reopens a seek only if no newer seek or stop won the lifecycle race. */
+    private fun reviveIfCurrentSeek(seekId: Long): Boolean = synchronized(lifecycleLock) {
+        if (seekId != seekGeneration.get() || stopped.get() || released.get()) return@synchronized false
+        isPlaying = true
+        stopped.set(false)
+        eosReached = false
+        true
+    }
+
+    /** Publishes a stop and invalidates queued seek/recovery work as one lifecycle transition. */
+    private fun markStopped(parked: Boolean, releasing: Boolean = false) {
+        synchronized(lifecycleLock) {
+            isPlaying = false
+            parkFlag.set(parked)
+            eosReached = true
+            stopped.set(true)
+            if (releasing) released.set(true)
+            seekSettleUntilNanos = 0L
+            seekFrozen = false
+            seekGeneration.incrementAndGet()
+        }
     }
 
     /**
@@ -1164,13 +1251,7 @@ internal class LibVlcSessionManager(
      * Desktop keeps stop (its threads join synchronously and there is no Android TLS destructor).
      */
     fun stop() {
-        isPlaying = false
-        parkFlag.set(false)
-        eosReached = true
-        stopped.set(true)
-        seekSettleUntilNanos = 0L
-        seekFrozen = false
-        seekGeneration.incrementAndGet()
+        markStopped(parked = false)
         // Wake a MediaPlayer.start() waiting for its first frame. Without this, a switch that
         // arrives while the old stream is buffering waits the full ten-second first-frame timeout
         // before its teardown can run.
@@ -1201,13 +1282,7 @@ internal class LibVlcSessionManager(
      * the queued [stop]/[cleanup] tasks that follow become near-instant no-ops.
      */
     fun stopNow() {
-        isPlaying = false
-        parkFlag.set(false)
-        eosReached = true
-        stopped.set(true)
-        seekSettleUntilNanos = 0L
-        seekFrozen = false
-        seekGeneration.incrementAndGet()
+        markStopped(parked = false)
         firstFrameLatch.countDown()
         val mp = mediaPlayer
         if (mp != null) {
@@ -1234,13 +1309,7 @@ internal class LibVlcSessionManager(
      * produced without freezing the render / client thread.
      */
     fun pauseNow() {
-        isPlaying = false
-        parkFlag.set(true)
-        stopped.set(true)
-        eosReached = true
-        seekSettleUntilNanos = 0L
-        seekFrozen = false
-        seekGeneration.incrementAndGet()
+        markStopped(parked = true)
         // stopAsync() uses this path while a start task may be waiting for the first frame.
         firstFrameLatch.countDown()
         val mp = mediaPlayer
@@ -1299,11 +1368,7 @@ internal class LibVlcSessionManager(
      * serialised stop -> release.
      */
     fun cleanup() {
-        isPlaying = false
-        parkFlag.set(false)
-        eosReached = true
-        stopped.set(true)
-        released.set(true)
+        markStopped(parked = false, releasing = true)
         val mp = mediaPlayer
         mediaPlayer = null
         val ap = audioPlayer
@@ -1782,6 +1847,7 @@ internal class LibVlcSessionManager(
     // ── First-frame latch ───────────────────────────────────────────────────
 
     private var firstFrameLatch = CountDownLatch(1)
+    @Volatile
     private var firstFrameFired = false
 
     // ── Frame conversion helpers ────────────────────────────────────────────

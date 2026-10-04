@@ -26,6 +26,11 @@ object PlaylistStateStore {
         states.remove(displayId)
     }
 
+    /** Clears all mirrors when the connection is torn down. */
+    fun clear() {
+        states.clear()
+    }
+
     /** Sends one queue command for [displayId]; the authoritative echo refreshes the panel. */
     fun send(
         displayId: java.util.UUID,

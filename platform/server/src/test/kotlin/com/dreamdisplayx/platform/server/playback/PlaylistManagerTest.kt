@@ -3,6 +3,7 @@ package com.dreamdisplayx.platform.server.playback
 import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
 import com.dreamdisplayx.api.playback.model.PlaylistItemRecord
 import com.dreamdisplayx.api.playback.model.DisplayPlaylist
+import com.dreamdisplayx.core.protocol.common.packets.PlaylistState
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,6 +45,19 @@ class PlaylistManagerTest {
         )
         val updated = playlist.copy(enabled = false)
         assertFalse(updated.enabled, "should be disabled after SET_ENABLED")
+    }
+
+    @Test
+    fun playbackRevisionChangesOnlyWhenStartingAnItem() {
+        val initial = PlaylistState(
+            displayId = UUID.randomUUID(), currentIndex = 0, playRevision = 4,
+        )
+        val queueEdit = initial.copy(items = listOf())
+        val replay = queueEdit.copy(currentIndex = 0, playRevision = 5)
+        assertEquals(4, queueEdit.playRevision, "ordinary queue edits must not retrigger the current URL")
+        assertTrue(replay.playRevision != queueEdit.playRevision, "starting an item must publish a new generation")
+        assertEquals(1L, PlaylistManager.advancePlayRevision(null))
+        assertEquals(5L, PlaylistManager.advancePlayRevision(4L))
     }
 
     @Test

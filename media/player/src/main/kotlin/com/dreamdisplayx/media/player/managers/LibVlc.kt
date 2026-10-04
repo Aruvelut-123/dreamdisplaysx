@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.player.managers
 
+import com.dreamdisplayx.media.player.util.LibVlcLogRotation
 import com.sun.jna.Callback
 import com.sun.jna.Function
 import com.sun.jna.Library
@@ -13,7 +14,8 @@ import com.sun.jna.Structure
 import com.sun.jna.ptr.IntByReference
 import com.sun.jna.ptr.PointerByReference
 import java.io.File
-import java.io.FileWriter
+import java.io.FileOutputStream
+import java.io.OutputStreamWriter
 import java.io.PrintWriter
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentLinkedDeque
@@ -75,17 +77,23 @@ object LibVlc {
         File(System.getProperty("dreamdisplayx.libvlcLogFile", "./dreamdisplayx/logs/libvlc.log"))
     }
 
-    /**
-     * Lazily opened appending writer for the verbose libvlc mirror. Every log line is flushed
-     * individually so a hard freeze right after a message never loses the final diagnosis lines.
-     */
+    /** Lazily opened writer for the current run; the previous run is compressed before opening it. */
     private val verboseLogWriter: PrintWriter? by lazy {
         if (!verboseLibvlc) null
         else runCatching {
             verboseLibvlcLogFile.parentFile?.mkdirs()
-            // Rotate away an oversized previous run so the debug file can't grow unbounded.
-            if (verboseLibvlcLogFile.length() > 20L * 1024 * 1024) verboseLibvlcLogFile.delete()
-            PrintWriter(FileWriter(verboseLibvlcLogFile, true), true)
+            LibVlcLogRotation.rotate(verboseLibvlcLogFile)?.let { rotated ->
+                logger.info("Rotated previous libvlc log to {}", rotated.absolutePath)
+            }
+            // Every startup gets a fresh UTF-8 file. Each line is flushed so a hard freeze right
+            // after a message never loses the final diagnosis lines.
+            PrintWriter(
+                OutputStreamWriter(
+                    FileOutputStream(verboseLibvlcLogFile, false),
+                    StandardCharsets.UTF_8,
+                ),
+                true,
+            )
         }.getOrElse {
             logger.warn("Verbose libvlc log file unavailable ({}): {}", verboseLibvlcLogFile.absolutePath, it.message)
             null

@@ -11,7 +11,6 @@ import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.managers.ActionThrottle
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.PlayerManager
-import com.dreamdisplayx.platform.server.managers.StateManager
 import com.dreamdisplayx.platform.server.meta.Scheduler
 import com.dreamdisplayx.platform.server.meta.Scheduler.runAsync
 import com.dreamdisplayx.platform.server.meta.VersionState
@@ -105,14 +104,13 @@ object DisplayActions {
         if (!DisplayManager.isPlayerInRange(player, displayData)) return
         if (!setVideoThrottle.tryAcquire(displayId, SET_VIDEO_COOLDOWN_MS)) return
 
-        val wasSync = displayData.isSync
         displayData.url = url
         displayData.lang = MediaUrlPolicy.sanitizeLang(lang)
 
         runAsync { PaperServer.getInstance().storage.saveDisplay(displayData) }
+        TimelineManager.resetVideo(displayData)
         DisplayManager.broadcastUpdate(displayData)
-        if (wasSync) StateManager.resetAndBroadcast(displayData) // Frozen-v1 clock
-        TimelineManager.onVideoChanged(displayData)
+        TimelineManager.broadcastCurrent(displayData)
     }
 
     /** Sets who may use a display owned by [player] and rebroadcasts. */

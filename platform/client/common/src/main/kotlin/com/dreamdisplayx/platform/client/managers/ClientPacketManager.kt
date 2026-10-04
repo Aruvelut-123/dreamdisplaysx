@@ -59,8 +59,19 @@ object ClientPacketManager {
 
             is FullscreenState -> FullscreenController.handle(packet)
             is PlaylistState -> {
+                val previous = PlaylistStateStore.stateOf(packet.displayId)
                 PlaylistStateStore.apply(packet)
                 if (packet.currentIndex < 0) PlaylistStateStore.remove(packet.displayId)
+                else if (previous != null && packet.playRevision > previous.playRevision) {
+                    val item = packet.items.getOrNull(packet.currentIndex)
+                    val previousItem = previous.items.getOrNull(previous.currentIndex)
+                    // A URL change already arrives through DisplayInfo. Only force a fresh
+                    // generation when the selected item is the same media, which DisplayInfo
+                    // deliberately de-duplicates.
+                    if (item != null && previousItem?.url == item.url && previousItem.lang == item.lang) {
+                        DisplayRegistry.screens[packet.displayId]?.replayPlaylistItem(item.url, item.lang)
+                    }
+                }
             }
             is RemotePlaybackToggle -> DisplayRegistry.screens[packet.id]?.setPaused(packet.paused)
             is RemoteControlOpen -> DisplayRegistry.screens[packet.displayId]?.let { screen ->
@@ -138,6 +149,7 @@ object ClientPacketManager {
     /** Resets per-server negotiation state on disconnect. */
     fun reset() {
         serverSnapshot = ServerHello()
+        PlaylistStateStore.clear()
         FullscreenController.reset()
     }
 }

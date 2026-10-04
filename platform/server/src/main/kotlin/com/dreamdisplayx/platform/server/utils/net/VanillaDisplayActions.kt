@@ -14,7 +14,6 @@ import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplayx.platform.server.managers.ActionThrottle
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.PlayerManager
-import com.dreamdisplayx.platform.server.managers.StateManager
 import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.meta.VersionState
 import com.dreamdisplayx.platform.server.playback.PlaybackContexts
@@ -152,15 +151,14 @@ object VanillaDisplayActions {
         if (!DisplayManager.isPlayerInRange(player, displayData)) return
         if (!setVideoThrottle.tryAcquire(displayId, SET_VIDEO_COOLDOWN_MS)) return
 
-        val wasSync = displayData.isSync
         displayData.url = url
         displayData.lang = MediaUrlPolicy.sanitizeLang(lang)
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(displayData) }
 
+        TimelineManager.resetVideo(displayData)
         val receivers = DisplayManager.getReceivers(displayData, server)
         VanillaPacketUtil.sendDisplayInfo(receivers, displayData)
-        if (wasSync) StateManager.resetAndBroadcast(displayId, receivers) // Frozen-v1 clock
-        TimelineManager.onVideoChanged(displayData)
+        TimelineManager.broadcastCurrent(displayData)
     }
 
     /** Sets who may use a display owned by [player] and rebroadcasts. */

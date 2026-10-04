@@ -61,6 +61,9 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
      * forward by the time elapsed across that defer so the comparison uses an up-to-date position.
      */
     fun apply(targetMs: Long, serverTimeMs: Long, paused: Boolean, loop: Boolean) {
+        // A zero timestamp is the legacy StateManager marker, not a real server timeline. Accepting
+        // it after a video swap rewinds the freshly loaded player to 0 every periodic broadcast.
+        if (serverTimeMs <= 0L) return
         if (serverTimeMs in 1..<lastServerTimeMs) return
         if (serverTimeMs > 0L) lastServerTimeMs = serverTimeMs
         val packet = Pending(++nextSeq, targetMs, serverTimeMs, paused, loop, System.nanoTime())
