@@ -19,8 +19,8 @@ import java.util.concurrent.ConcurrentHashMap
  * storage backend, and every mutation is echoed back as a [PlaylistState] snapshot so clients render
  * the queue directly from server truth.
  *
- * The queue drives the display through [TimelineManager.onVideoChanged] / [applyScheduled], so the
- * authoritative timeline, throttles, and same-content grouping all keep working unchanged.
+ * The queue drives the display through [PlaybackTransport.notifyVideoChanged] / [TimelineManager.applyScheduled],
+ * so the authoritative timeline, throttles, and same-content grouping all keep working unchanged.
  */
 object PlaylistManager {
     /** Logger. */
