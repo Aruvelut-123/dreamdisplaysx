@@ -1,202 +1,155 @@
-[![Latest release](https://img.shields.io/github/release/Aruvelut-123/dreamdisplaysx.svg)](https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest)
-[![License](https://img.shields.io/github/license/Aruvelut-123/dreamdisplaysx)](https://github.com/Aruvelut-123/dreamdisplaysx/blob/main/LICENSE)
+[![最新版本](https://img.shields.io/github/release/Aruvelut-123/dreamdisplaysx.svg)](https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest)
+[![许可证](https://img.shields.io/github/license/Aruvelut-123/dreamdisplaysx)](https://github.com/Aruvelut-123/dreamdisplaysx/blob/main/LICENSE)
 
 <div align="center">
   <img src="https://i.imgur.com/HM4JUdj.png" alt="Dream DisplaysX">
 </div>
 
-# Bring real video playback to Minecraft
+# 在 Minecraft 中播放视频
 
-Watch videos, livestreams, and more directly on in-game displays — together with your friends.
+Dream DisplaysX 可以把视频、直播和更多媒体直接放进游戏里的显示器，与朋友一起观看。
 
-Create a display, paste a link and that's it!
+创建显示器、粘贴链接，就可以开始播放喵~
 
-![Player watching on displays](https://i.imgur.com/JoARVeu.png)
+[English README](README.en.md) · [项目主页](https://github.com/Aruvelut-123/dreamdisplaysx)
 
-Dream DisplaysX is a fork of [Dream Displays](https://github.com/arnodoelinger/dreamdisplays). If you encounter any
-error on this version, **do not** submit issues to the original repository — open an issue
-[here](https://github.com/Aruvelut-123/dreamdisplaysx/issues) instead. Thanks!
+![显示器播放视频](https://i.imgur.com/JoARVeu.png)
 
-# Watch anything
+Dream DisplaysX 是 [Dream Displays](https://github.com/arnodoelinger/dreamdisplays) 的分支。如果发现本分支的问题，请在[本仓库](https://github.com/Aruvelut-123/dreamdisplaysx/issues)提交 issue，不要提交到上游仓库。
 
-![Display menu](https://i.imgur.com/wGnDzrT.png)
+# 支持的媒体来源
 
-|                                                                                                                                                                                                                                                                           | Source                        | What works                                                                     |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|--------------------------------------------------------------------------------|
-| <img src="https://cdn.simpleicons.org/twitch" width="32" height="32" alt="Twitch">                                                                                                                                                                                        | **Twitch**                    | Live channels, VODs, and clips                                                 |
-| <img src="https://cdn.simpleicons.org/kick" width="32" height="32" alt="Kick">                                                                                                                                                                                            | **Kick**                      | Live channels and VODs                                                         |
-| <img src="https://cdn.simpleicons.org/vimeo" width="32" height="32" alt="Vimeo">                                                                                                                                                                                          | **Vimeo**                     | Public videos and live events                                                  |
-| <img src="https://cdn.simpleicons.org/bilibili" width="32" height="32" alt="Bilibili">                                                                                                                                                                                    | **Bilibili**                  | Videos, live channels, and bangumi episodes/seasons/movies                     |
-| <img src="https://cdn.simpleicons.org/ffmpeg" width="32" height="32" alt="Video file">                                                                                                                                                                                    | **Any video link**            | Direct video files and live streams (`.m3u8` / `.mpd`) just work               |
-| <img src="https://cdn.simpleicons.org/googledrive" width="32" height="32" alt="Google Drive"><br><img src="https://cdn.simpleicons.org/dropbox" width="32" height="32" alt="Dropbox"><br><img src="https://cdn.simpleicons.org/imgur" width="32" height="32" alt="Imgur"> | **Share links**               | Google Drive, Dropbox, and Imgur links are rewritten to the file they point at |
-| <img src="https://cdn.simpleicons.org/googlechrome" width="32" height="32" alt="Web">                                                                                                                                                                                     | **Pretty much anywhere else** | Not on the list? Try it anyway — chances are it'll play                        |
+![显示器菜单](https://i.imgur.com/wGnDzrT.png)
 
-# Built for multiplayer
+| 来源 | 支持内容 |
+|---|---|
+| **Twitch** | 直播频道、VOD 和 clips |
+| **Kick** | 直播频道和 VOD |
+| **Vimeo** | 公开视频和直播活动 |
+| **Bilibili** | 视频、直播、番剧、剧集和电影 |
+| **任意视频链接** | 直接视频文件和 `.m3u8` / `.mpd` 直播流 |
+| **分享链接** | Google Drive、Dropbox、Imgur 分享链接会改写为实际文件链接 |
+| **其他网站** | 不在列表中的链接也可以直接尝试播放 |
 
-Create a display, paste a link with `/display video <link>` — Dream DisplaysX figures out the rest.
+# 多人同步播放
 
-Watch together with your friends with seamless multiplayer synchronization. Choose between local, synchronized, and
-broadcast playback depending on how you want your displays to behave.
+创建显示器后输入 `/display video <link>`，Dream DisplaysX 会自动解析链接。
 
-Dream DisplaysX keeps playback synchronized across the server while keeping network usage extremely low.
+显示器支持本地、同步和广播三种播放模式，可以和服务器上的其他玩家一起观看，同时尽量减少网络流量。
 
-## Playback troubleshooting
+## 播放故障排查
 
-Local VOD resume positions are stored in nanoseconds. Positions within the final 500 ms are treated as completed rather than restored, preventing an immediate end-of-stream followed by a cold-start replay loop. The guard is enforced on every resume source — cold start, saved-time restore, server-broadcast display updates, end-of-stream recording, and periodic position reports — so a tail position is never re-applied, re-persisted, or re-reported as a resume point. Enabled playlists advance or pause at end-of-stream instead of replaying the current item. Seeking after a stalled player restarts at the requested position, while early stream termination is re-resolved with a bounded retry instead of looping the opening segment.
+本地 VOD 的恢复位置使用纳秒保存。距离结尾 500 毫秒以内的位置会视为已播放完成，不会恢复到结尾后立刻触发 EOS 再重新冷启动。这个保护覆盖冷启动、保存位置恢复、服务器广播更新、EOS 记录和定期位置上报。启用播放列表时，视频结束会按照播放列表设置暂停、继续或循环；播放器卡住后会从请求位置重启，过早结束的流会在有限次数内重新解析。
 
-Two seek / video-switch robustness guards complete that set: audio-to-video snapping is suppressed for a settle window after a far seek (the video demuxer takes seconds to flush toward the target while the audio player is already there, so an eager snap used to rewind playback to the pre-seek position), and a `set_time` dropped by libvlc during that flush is detected by sampling the video clock twice and re-applied only when the old timeline is demonstrably still advancing — a stalled clock means the demuxer is still flushing, and re-asserting would just restart it. While the seek settles, stale pre-seek frames are held so the display freezes on its last picture instead of visibly continuing the old timeline like a second player; the freeze always releases once the video clock reaches the target or a bounded timeout expires. A stream that dies while its duration is still unresolved — the "new video plays 0.5 s then pauses" case — is classified as an early end and re-resolved instead of firing the ended-pause or advancing the playlist.
+远距离拖动进度条后，播放器会等待视频解码器落到目标位置再重新同步音频；如果 libvlc 丢弃了 `set_time`，只有确认旧时间线仍在前进时才会重试。等待期间会保持最后一帧，避免旧画面继续播放成第二个播放器，并在目标到达或超时后自动解除。
 
-## Protocol compatibility
+Linux 上的短视频循环会在 0 秒位置直接让已结束的 libvlc 输入重新播放，避免每一轮同步 stop 视频和独立音频输入造成 decoder FIFO 堵塞。切换视频时会取消未完成的首帧等待、合并重复的 URL 请求，并在旧播放器 teardown 完成后才创建新播放器。
 
-Clients negotiate the batch-capable **V3** envelope (`dreamdisplayx:v3`) when available and fall back to the compatible **V2** envelope (`dreamdisplayx:v2`) otherwise. V3 same-content snapshots bind multiple displays to one URL and playback timeline. Legacy **V1** traffic is detected and the affected player is notified in chat, but V1 packets are not processed.
+## 协议兼容性
 
-V3, `/display group`, the Paper remote-control stick, and the Flashback / ReplayMod bridges are experimental and may change.
+客户端优先协商支持批量数据的 **V3** 信封（`dreamdisplayx:v3`），不可用时自动回退到 **V2**（`dreamdisplayx:v2`）。V3 的同内容快照可以让多个显示器共享 URL 和播放时间线。旧版 **V1** 流量会被识别并在聊天中提示，但不会被处理。
 
-![Cinema](https://i.imgur.com/PKxe0oG.png)
+V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接仍属于实验功能，接口可能变化。
 
-# Made for you
+![影院](https://i.imgur.com/PKxe0oG.png)
 
-Dream DisplaysX is built to make watching videos in Minecraft feel as natural as possible.
+# 功能特点
 
-<table>
-<tr>
-<td valign="top" width="50%" align="center">
+- 无缝多人播放：本地、同步和广播模式
+- 强大的媒体播放器：搜索、画中画等
+- 沉浸式音频：3D 声音，音量最高 200%
+- 可调分辨率：144p 到 4K
+- 硬件加速：libvlc 支持 d3d11va、vaapi、videotoolbox 等后端
+- 视频动态光照：安装 LambDynamicLights 后，显示器画面可以照亮周围世界
+- Complementary 着色器修补：只为 Complementary r5.8.1 创建临时副本，不修改其他着色器包
+- 可自定义显示器：尺寸、亮度、拉伸模式和方向
+- 服务器支持：Paper、Fabric、NeoForge、Velocity、BungeeCord
+- 权限和领地保护：支持 LuckPerms、WorldGuard 以及可选领地插件
+- 实验性 ReplayMod / Flashback 兼容：回放可以暂停、拖动、切换视频并跟随时间线
+- 数据库播放列表：SQLite/MySQL 持久化队列，支持添加、批准、移除、跳过和队列结束策略
 
-## Your experience
+# 本分支新增内容
 
-<div align="left">
+相较于原版 Dream Displays，本分支还提供：
 
-- **Seamless multiplayer playback** — local, synced, and broadcast modes
-- **Powerful media player** — search, Picture-in-Picture & more
-- **Immersive audio** — 3D sound, volume up to 200% & more
-- **Adjustable resolutions** — from 144p up to 4K
-- **Hardware-accelerated playback** — libvlc hardware decode (d3d11va / vaapi / videotoolbox)
-- **Video-derived dynamic lighting** — display frames light the world when LambDynamicLights is installed
-- **Complementary shader patcher** — patches Complementary r5.8.1 packs into disposable copies, leaving other packs untouched
-- **Customizable displays** — size, brightness, stretch mode & orientation
+- Bilibili 扫码登录（`/dlogin`），服务器使用 AES-256-GCM 加密保存 `SESSDATA`
+- 全局 Bilibili 登录，在服务器网络内同步并广播给在线玩家，支持 LuckPerms
+- Bilibili VIP 标识、搜索、简体中文和弹幕
+- RTMP / RTMPS / SRT 推流输入
+- libvlc 播放引擎：通过 JNA 调用原生 libvlc，视频和音频使用独立时钟
+- Minecraft 1.21.1、1.21.11、26.1.2 和 26.2 支持
 
-</div>
+# 开始使用
 
-</td>
-<td valign="top" width="50%" align="center">
+使用黑色混凝土搭建显示器，用钻石斧选中区域并输入 `/display create`。创建完成后注视显示器，输入 `/display video <link> [language]`。按住 Shift 右键可以打开显示器设置菜单。
 
-## Your server
+## 命令参考
 
-<div align="left">
+| 命令 | 位置 | 作用 |
+|---|---|---|
+| `/display create` / `/display delete` | 服务器 | 创建 / 删除显示器 |
+| `/display video <link> [language]` | 服务器 | 播放视频、直播或推流地址 |
+| `/display list` / `/display info` | 服务器 | 列出 / 查看显示器 |
+| `/display on` / `/display off` | 服务器 | 开启 / 关闭所有显示器 |
+| `/display login bilibili <sessdata>` | 服务器 | 全局保存 Bilibili 凭据（仅 OP） |
+| `/display logout bilibili` | 服务器 | 删除全局 Bilibili 凭据（仅 OP） |
+| `/dlogin` | 客户端 | 打开 Bilibili 登录界面（仅 OP） |
+| `/dlogoff` | 客户端 | 注销 Bilibili（仅 OP） |
 
-- **Broad server support** — Paper, Fabric, NeoForge, Velocity, BungeeCord
-- **Fullscreen mode** — great for events and presentations
-- **Simple config** — precise control over displays and playback
-- **Permissions** — fine-grained control with LuckPerms support
-- **Claim protection** — display creation respects WorldGuard and optional claim plugins (GriefPrevention, Residence, Lands, Towny)
-- **Experimental ReplayMod & Flashback compatibility** — replay rendering can freeze display media and follow the replay timeline, with pause / seek / video-change / GUI actions using replay markers. Flashback support is optional and reflection-based (works through Sinytra Connector on NeoForge). A global display-audio multiplier lives in Minecraft's Sound Options; display audio is not yet captured into replay exports.
-- **Ultra-low network impact** — minimal impact for your traffic
-- **Persistent displays** — settings survive server restarts and unloading
-- **Per-display playlists** — database-backed queue (SQLite/MySQL) with add/approve/remove/skip, configurable end-of-queue behavior (pause / continue / loop), and add-permission policies (everyone / owner approval / owner only), all persisted in the database
+> **Bilibili 登录提示：** 在游戏中执行 `/dlogin`，使用 Bilibili 手机客户端扫描二维码。成功后，mod 会把 `SESSDATA` 发送到服务器并加密保存，再同步到服务器网络和在线客户端。
 
-</div>
+## 下载
 
-</td>
-</tr>
-</table>
+从[最新版本](https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest)下载与你的加载器和 Minecraft 版本对应的 jar：
 
-# What's new in this fork?
+- `dreamdisplayx-fabric-<mc>-<version>.jar`：Fabric / Quilt 客户端或服务器 mod
+- `dreamdisplayx-neoforge-<mc>-<version>.jar`：NeoForge 客户端或服务器 mod
+- `dreamdisplayx-paper-<version>.jar`：Paper 插件（1.21.1 – 26.2）
+- `dreamdisplayx-velocity-<version>.jar` / `dreamdisplayx-bungeecord-<version>.jar`：代理插件
 
-Compared to the original Dream Displays, this fork adds:
+客户端把 mod 放进 mods 文件夹，服务器安装匹配的 mod 或插件即可。LambDynamicLights 是可选的客户端动态光照集成。
 
-- **Bilibili account login** — QR-code login screen (`/dlogin`); `SESSDATA` is stored **encrypted** on the server
-  (AES-256-GCM) and pushed back to unlock higher-quality / VIP Bilibili streams.
-- **Global Bilibili login** — single account per server/network, broadcast to all players,
-  OP-only with LuckPerms support and cross-server credential sync (SQLite/MySQL).
-- **Bilibili VIP badge** — official VIP badge image, differentiating normal and annual VIP.
-- **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions, unreleased-content filter.
-- **Bilibili danmaku** — viewer-local scrolling comments over displays, with per-display toggle and global speed/density/filter settings.
-- **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
-- **Built-in Simplified Chinese** (`zh_cn`) language file.
-- **libvlc playback engine** — low-level JNA libvlc binding (no vlcj, no FFmpeg binary, no Rust, no Python).
-  Video and audio run on decoupled clocks for full-framerate playback; native runtimes are downloaded automatically
-  on first boot.
-- Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.
+## 支持的版本
 
-# Get started
+| Minecraft | Fabric | NeoForge | Paper | 备注 |
+|---|---|---|---|---|
+| 1.21.1 | ✅ | ✅ | ✅ | 长期支持版本 |
+| 1.21.11 | ✅ | ✅ | ✅ | 上游默认版本 |
+| 26.1.2 | ✅ | ✅ | ✅ | |
+| 26.2 | ✅ | ✅ | ✅ | |
 
-Build your first display, invite your friends, and make displays a part of your world.
+## Android（PojavLauncher / FCL / Zalith）
 
-Set up a display using black concrete, select it with a diamond axe, and type `/display create`. After the display is
-created, type `/display video <link> [language]`. Done! To customize the display, look at it and press `Shift + RMB`.
+- 支持 ARM64 和 x86_64 启动器
+- 使用 libvlc OpenSL ES 输出音频；桌面 3D 定位音频（`javax.sound`）在 Android 不可用
+- 使用 MediaCodec 解码，可用 `-Ddreamdisplayx.hwDecode=<module>` 覆盖后端
+- teardown 时 Android libvlc 播放器只暂停、不 stop 或 release，避免原生 `SIGSEGV`
+- Android SQLite 和独立命名的 `libc++` 会解压到应用内部可执行目录
+- 提供安全的 libvlc JNI 桥接和 `android.os.Environment` stub，不加载 `libvlcjni.so`
 
-## Command reference
+## JVM 参数（高级调试）
 
-| Command                                          | Where      | What it does                                              |
-|--------------------------------------------------|------------|-----------------------------------------------------------|
-| `/display create` / `/display delete`            | Server     | Create / delete a display                                 |
-| `/display video <link> [language]`               | Server     | Play a video, live stream, or ingest URL                  |
-| `/display list` / `/display info`                | Server     | List / inspect displays                                   |
-| `/display on` / `/display off`                   | Server     | Toggle all displays                                       |
-| `/display login bilibili <sessdata>`             | Server     | Store Bilibili credential globally (OP-only)              |
-| `/display logout bilibili`                       | Server     | Remove stored Bilibili credential (OP-only)               |
-| `/dlogin`                                        | Client     | Open the Bilibili login screen (OP-only)                  |
-| `/dlogoff`                                       | Client     | Log out of Bilibili (OP-only)                             |
+以下参数都可选，默认值适用于大多数情况：
 
-> **Bilibili login tip:** run `/dlogin` in-game and scan the QR code with the Bilibili mobile app.
-> On success the mod sends your `SESSDATA` to the server, which stores it encrypted, syncs it across
-> the server network, and broadcasts it to all online players — everyone gets the unlocked streams.
+| 参数 | 默认值 | 作用 |
+|---|---|---|
+| `-Ddreamdisplayx.hwDecode=<backend>` | Windows `d3d11va` / Linux `vaapi` / Mac `videotoolbox` / Android `mediacodec_ndk,mediacodec_jni,any` | libvlc 硬件解码后端；可用 `dxva2`、`any`，空值表示禁用硬件解码 |
+| `-Ddreamdisplayx.audioBufferMs=<ms>` | `100` | Java Sound 音频缓冲区；增大更稳，减小可降低延迟 |
+| `-Ddreamdisplayx.networkCachingMs=<ms>` | `300` | libvlc 网络 / 文件缓存；网络卡顿时可以增大 |
+| `-Ddreamdisplayx.debugFps=true` | 关闭 | 在显示器菜单预览中显示实际视频 FPS |
+| `-Ddreamdisplayx.verboseLibvlc=true` | 关闭 | 打开 libvlc 调试日志 |
+| `-Ddreamdisplayx.noDropLateFrames=true` | 关闭 | 禁止丢弃迟到帧（仅诊断，可能造成画面闪烁） |
+| `-Ddreamdisplayx.noAutoResync=true` | 关闭 | 禁用音视频漂移修正 |
+| `-Ddreamdisplayx.silentAudio=true` | 关闭 | 不创建音频输出，用于定位问题 |
+| `-Ddreamdisplayx.noAudioCallback=true` | 关闭 | 不注册 libvlc 音频回调 |
+| `-Ddreamdisplayx.noVideoCallback=true` | 关闭 | 不注册 libvlc 视频回调 |
+| `-Ddreamdisplayx.noFrameSink=true` | 关闭 | 跳过预览和弹出窗口的画面接收 |
+| `-Ddreamdisplayx.noVideoPublish=true` | 关闭 | 跳过 GPU 画面发布，用于定位问题 |
+| `-Ddreamdisplayx.noHardwareAccel=true` | 关闭 | 不向 libvlc 传递 `--avcodec-hw` |
 
-## Download
+![显示器](https://i.imgur.com/yyIKdp8.png)
 
-Grab the `.jar` for your loader and Minecraft version from the
-[latest release](https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest):
-
-- `dreamdisplayx-fabric-<mc>-<version>.jar` — Fabric / Quilt client or server mod
-- `dreamdisplayx-neoforge-<mc>-<version>.jar` — NeoForge client or server mod
-- `dreamdisplayx-paper-<version>.jar` — Paper plugin (cross-version, 1.21.1 – 26.2)
-- `dreamdisplayx-velocity-<version>.jar` / `dreamdisplayx-bungeecord-<version>.jar` — proxy plugins
-
-On the **client**, install the mod into your mods folder. On the **server**, install the matching jar (plugin or mod).
-That's it — no extra dependencies required. LambDynamicLights is an optional client integration for video-derived dynamic lighting.
-
-## Supported versions
-
-| Minecraft | Fabric | NeoForge | Paper | Notes             |
-|-----------|--------|----------|-------|-------------------|
-| 1.21.1    | ✅      | ✅        | ✅     | Legacy LTS line   |
-| 1.21.11   | ✅      | ✅        | ✅     | Upstream default  |
-| 26.1.2    | ✅      | ✅        | ✅     |                   |
-| 26.2      | ✅      | ✅        | ✅     |                   |
-
-## Android (PojavLauncher / FCL / Zalith)
-
-- Runs on **ARM64** and **x86_64** launchers (PojavLauncher / FCL / Zalith).
-- Audio uses libvlc's OpenSL ES output; desktop 3D positional audio (`javax.sound`) is unavailable. DASH streams (e.g. Bilibili) play through a separate audio-only libvlc player kept in sync by A/V auto-resync.
-- Video decode uses MediaCodec; override with `-Ddreamdisplayx.hwDecode=<module>` or disable with an empty value, same as desktop.
-- Android libvlc players are paused (never stopped or released) on teardown to avoid native `SIGSEGV` crashes; stale native files are cleaned at startup.
-- Bundles Android SQLite and a uniquely-named `libc++`; all `.so` files load from executable app-internal storage (emulated storage is `noexec`).
-- Ships a safe libvlc JNI bridge and an `android.os.Environment` stub; `libvlcjni.so` and Android-incompatible libvlc options are never used.
-
-## JVM arguments (advanced tuning & diagnostics)
-
-Add these to your launcher's JVM arguments (e.g. Prism: `Settings → Java → JVM arguments`). All are
-optional — defaults work fine.
-
-| Argument | Default | What it does |
-|----------|---------|--------------|
-| `-Ddreamdisplayx.hwDecode=<backend>` | `d3d11va` (Win) / `vaapi` (Linux) / `videotoolbox` (Mac) / `mediacodec_ndk,mediacodec_jni,any` (Android) | Hardware decode backend for libvlc. Other values: `dxva2`, `any`, empty string = disable hardware decode. |
-| `-Ddreamdisplayx.audioBufferMs=<ms>` | `100` | Java Sound line buffer for audio. Larger is safer (45ms crashed historically); lower tightens lip-sync. |
-| `-Ddreamdisplayx.networkCachingMs=<ms>` | `300` | libvlc `--network-caching` / `--file-caching`. Raise if streams stutter on slow networks. |
-| `-Ddreamdisplayx.debugFps=true` | off | Draw the live delivered video FPS on the display-menu preview. |
-| `-Ddreamdisplayx.verboseLibvlc=true` | off | Enable libvlc debug logging (shows decoder/backend selection, fallback reasons). |
-| `-Ddreamdisplayx.noDropLateFrames=true` | off | Add `--no-drop-late-frames --no-skip-frames` (diagnostic; causes old/new-frame flicker). |
-| `-Ddreamdisplayx.noAutoResync=true` | off | Disable the A/V drift correction entirely (bisection). |
-| `-Ddreamdisplayx.silentAudio=true` | off | Never open the audio line (bisection). |
-| `-Ddreamdisplayx.noAudioCallback=true` | off | Don't register libvlc audio callbacks (bisection). |
-| `-Ddreamdisplayx.noVideoCallback=true` | off | Don't register libvlc video callbacks (bisection). |
-| `-Ddreamdisplayx.noFrameSink=true` | off | Skip preview/popout frame sinks (bisection). |
-| `-Ddreamdisplayx.noVideoPublish=true` | off | Skip the GPU surface publish — video frozen, audio only (bisection). |
-| `-Ddreamdisplayx.noHardwareAccel=true` | off | Don't pass `--avcodec-hw` to libvlc at all (bisection). |
-
-![Display](https://i.imgur.com/yyIKdp8.png)
-
-## Building from source
+## 从源码构建
 
 ```bash
 git clone https://github.com/Aruvelut-123/dreamdisplaysx.git
@@ -204,16 +157,13 @@ cd dreamdisplaysx
 ./gradlew :platform:client:fabric:build :platform:client:neoforge:build
 ```
 
-The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds (version properties in
-`versions.json`, active version in `versions/active.txt`). The libvlc + SQLite natives are built by the CI
-"Build Natives" workflow from official VideoLAN distributions and **downloaded at runtime** on first boot into
-`./dreamdisplayx/natives/<os>/<arch>/` (never bundled, keeping the jar small).
+项目使用 [Stonecutter](https://github.com/kikugie/stonecutter) 构建多版本，版本属性在 `versions.json`，当前版本在 `versions/active.txt`。libvlc 和 SQLite 原生文件由 CI 的 Build Natives 工作流构建，首次启动时下载到 `./dreamdisplayx/natives/<os>/<arch>/`，不会打进 jar。
 
-## Disclaimer
+## 免责声明
 
-Dream DisplaysX is not affiliated with original Dream Display nor Mojang Studio.
+Dream DisplaysX 与原 Dream Displays 项目及 Mojang Studios 没有隶属关系。
 
-## Credits
+## 致谢
 
-- **[Dream Displays](https://github.com/arnodoelinger/dreamdisplays)** — the original upstream project that this fork is based on.
-- **[VideoPlayer-Library](https://github.com/squi2rel/VideoPlayer-Library)** — reference for libvlc native build and packaging (used during CI workflow development).
+- **[Dream Displays](https://github.com/arnodoelinger/dreamdisplays)**：本分支基于的上游项目
+- **[VideoPlayer-Library](https://github.com/squi2rel/VideoPlayer-Library)**：libvlc 原生构建和打包参考

@@ -9,3 +9,4 @@
   - [ ] Danmaku overlay is not drawn on conforming (stairs/slabs) displays; decide whether to project it onto the fitted mesh.
   - [ ] Smoke-test curved displays in game on 26.3 (Fabric + NeoForge) with slabs, stairs and mixed air/shaped selections.
   - [ ] Consider filtering `DisplayInfo` recipients by client conforming support (old clients ignore fields 24/25 and draw flat).
+- [ ] Manually smoke-test Linux 1.21.11 Fabric with repeated short-video loops and rapid URL switches.

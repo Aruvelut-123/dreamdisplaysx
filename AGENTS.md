@@ -72,6 +72,11 @@
 
 ## Changes & Commits
 
+### 2026-10-04 — Linux VOD loop and video-switch lifecycle hardening
+- Normal desktop VOD loops restart an ended libvlc input with a zero-position `play()` path instead of synchronously stopping both video and dedicated audio inputs on every loop. Non-zero seeks retain the stop/play/set-time fallback.
+- Player teardown wakes the first-frame wait immediately and exposes an asynchronous stop path for display swaps, so a stream that never delivers its first frame cannot hold later video changes behind the ten-second start timeout.
+- `DisplayMediaController` coalesces duplicate pending URL/language loads, discards stale player errors before installing a newer generation, and waits for asynchronous teardown before creating the replacement.
+
 ### 2026-02-DD — Upstream 42af16c3 sync (1.10.0.3): curved displays, keyboard shortcuts, protocol v1 drop
 - Synced upstream `42af16c3` (= tag `v1.10.0-preview.3`) on top of `6102d461`, then ported the changes worth having into the fork's own paths.
 - **Sync procedure** (the fork's package rename makes a plain merge unusable):

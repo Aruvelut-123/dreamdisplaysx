@@ -1087,8 +1087,11 @@ class MediaPlayer(
                 val ss = streams
                 if (ss != null && !terminated.get() && !host.isPaused) {
                     endedAtEnd.set(false)
+                    // beginSeek() restarts the existing native players in place. Rebase the
+                    // software clock before doing that, otherwise every completed loop keeps the
+                    // first session's origin and the position grows past the VOD duration.
+                    clock.reset(0L)
                     if (!sessionManager.beginSeek(ss, 0, lastQuality)) {
-                        clock.reset(0)
                         startStreams(ss, 0)
                     }
                     events.onSeek(0L)

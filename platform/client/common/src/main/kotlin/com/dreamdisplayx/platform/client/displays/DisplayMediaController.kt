@@ -24,6 +24,21 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
     private companion object {
         val LOG = LoggerFactory.getLogger("DreamDisplaysX/DisplayMediaController")
     }
+
+    /** A URL/language pair waiting for the serial swap worker to install it. */
+    private data class PendingLoad(val videoUrl: String, val lang: String)
+
+    /**
+     * Guards the small state transition performed by [load] and the final player installation.
+     * The native player itself is still created and torn down on [swapExecutor]; this lock only
+     * prevents a newer load from racing the generation check immediately before [player] is set.
+     */
+    private val loadLock = Any()
+
+    /** The newest request that has not finished installing a player yet. */
+    @Volatile
+    private var pendingLoad: PendingLoad? = null
+
     /** Generation counter for async callbacks. */
     private val generation = atomic(0L)
 
@@ -53,25 +68,34 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
      * [preservePausedState] is true the screen's current paused state is reapplied after start.
      */
     fun load(videoUrl: String, lang: String, preservePausedState: Boolean) {
-        if (swapExecutor.isShutdown) return // Unregister is final; late network packets must not resurrect a player.
         if (videoUrl == "") return
-        // DisplayInfo can be rebroadcast while the server is syncing. Do not tear down and recreate
-        // a healthy player for an identical URL/track: doing so resets playback to the first frame,
-        // and repeated packets can otherwise create a player storm and exhaust decoder buffers.
-        if (player != null && screen.videoUrl == videoUrl && screen.lang == lang && !screen.errored) return
+        val request = PendingLoad(videoUrl, lang)
+        val expected: Long
+        val oldPlayer: MediaPlayer?
+        synchronized(loadLock) {
+            if (swapExecutor.isShutdown) return // Unregister is final; late network packets must not resurrect a player.
+
+            // DisplayInfo can be rebroadcast while the server is syncing. Do not enqueue the same
+            // target repeatedly while the previous player is stopping or the replacement is being
+            // constructed: every duplicate used to add another task to the serial worker, making a
+            // slow teardown look like a switch that only worked after reopening the display.
+            if (pendingLoad == request) return
+            if (player != null && screen.videoUrl == videoUrl && screen.lang == lang && !screen.errored) return
+
+            pendingLoad = request
+            expected = generation.incrementAndGet()
+            // Capture the old player HERE on the caller's thread so this specific swap owns its
+            // teardown. Rapid consecutive loads each enqueue their own task with their own captured
+            // old player; only the newest generation ever builds, but every captured old player is
+            // still stopped exactly once (MediaPlayer.stop() is idempotent via its terminated flag).
+            oldPlayer = player
+            player = null
+            videoStarted = false
+            screen.mediaError = null
+            screen.timelineFollower.reset()
+        }
 
         DreamServices.registry.getOrNull(MediaServices.RESOLVER_REGISTRY)?.prefetch(MediaSource.from(videoUrl))
-
-        val expected = generation.incrementAndGet()
-        // Capture the old player HERE on the caller's thread so this specific swap owns its
-        // teardown. Rapid consecutive loads each enqueue their own task with their own captured
-        // old player; only the newest generation ever builds, but every captured old player is
-        // still stopped exactly once (MediaPlayer.stop() is idempotent via its terminated flag).
-        val oldPlayer = player
-        player = null
-        videoStarted = false
-        screen.mediaError = null
-        screen.timelineFollower.reset()
         // Android: never stack a second native libvlc player on the same display while the previous
         // one is still tearing down. VLC-Android's jni TLS destructor (jni_detach_thread) runs when a
         // VLC worker thread exits and dereferences thread-local state; if the previous player's
@@ -88,8 +112,13 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         // immediately. The single worker thread also serializes rapid consecutive loads (e.g.
         // network thread racing an in-flight teardown), so two native players can never overlap on
         // this display.
-        swapExecutor.execute {
-            drainSwapTask(oldPlayer, videoUrl, lang, preservePausedState, expected)
+        try {
+            swapExecutor.execute {
+                drainSwapTask(oldPlayer, videoUrl, lang, preservePausedState, expected)
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Shutdown won the race after the lock was released. It already invalidated the
+            // generation and pending request; there is no player to resurrect here.
         }
     }
 
@@ -108,23 +137,31 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         expected: Long,
     ) {
         oldPlayer?.let { old ->
-            old.stop()
-            if (!old.awaitStopped()) {
-                LOG.warn("Old player did not stop within timeout; waiting more before creating replacement.")
-                // Try to wait longer in a loop with a total cap to avoid stacking multiple native players.
-                var waited = 0L
-                val maxWaitMs = 15_000L // Total max wait time: 15 seconds
-                while (!old.awaitStopped(5_000L)) { // Check every 5 seconds
-                    waited += 5_000L
-                    if (waited >= maxWaitMs) break // Stop waiting after total cap
-                    LOG.warn("Still waiting for old player to stop (total: ${waited / 1000}s/${maxWaitMs / 1000}s)...")
+            // The desktop native stop can block behind a media attach or a decoder FIFO. Run the
+            // full teardown asynchronously so the swap worker itself never becomes the thread that
+            // is stuck in libvlc. The first-frame latch is cancelled by stopAsync(), so a buffering
+            // start cannot hold this teardown for its ten-second timeout.
+            old.stopAsync()
+            var waited = 0L
+            while (!old.awaitStopped(1_000L)) {
+                waited += 1_000L
+                if (waited % 5_000L == 0L) {
+                    LOG.warn("Still waiting for old player to stop ({}s); replacement remains queued.", waited / 1000L)
                 }
             }
             // The old player is fully torn down; only now build the replacement so we never
             // stack two native libvlc players on one display.
         }
         if (expected == generation.value && player == null) {
-            buildReplacement(videoUrl, lang, preservePausedState, expected)
+            runCatching { buildReplacement(videoUrl, lang, preservePausedState, expected) }
+                .onFailure { error ->
+                    synchronized(loadLock) {
+                        if (expected == generation.value && pendingLoad == PendingLoad(videoUrl, lang)) {
+                            pendingLoad = null
+                        }
+                    }
+                    LOG.error("Failed to build replacement player for {}: {}", videoUrl, error.message, error)
+                }
         }
     }
 
@@ -143,19 +180,41 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         if (player != null) return // Another swap already installed its player.
         val screen = this.screen
 
+        // The old player's error callback can arrive after load() cleared mediaError but before
+        // stop()'s teardown completed. At this point that player is fully stopped, so discard the
+        // stale error before constructing the replacement. Keeping the errored guard here strands
+        // the display with no player until it is closed and reopened.
+        screen.mediaError = null
         screen.onVideoSwapped(videoUrl, lang)
         // The video changed: drop the long-lived scrub extractor (and its cached thumbnails) for the
         // previous URL so the native libvlc player is destroyed; the next hover lazily recreates one.
         screen.previousVideoUrl?.let { com.dreamdisplayx.platform.client.render.ScrubPreview.release(it) }
         DisplayRegistry.recordScreen(screen)
         val shouldBePaused = preservePausedState && screen.paused
-        if (screen.errored) return // The screen errored while we were waiting; do not install a player.
         val audioStage = DreamServices.registry.getOrNull(AudioAcousticsServices.ACOUSTICS)?.registerSource(screen.uuid)
         val newPlayer = MediaPlayer(
             videoUrl, lang, DisplayPlaybackHost(screen), DreamPlaybackEnvironment,
             screen.takeReplayBootstrap(videoUrl), audioStage,
         )
-        player = newPlayer
+
+        // A newer load may have arrived while MediaPlayer resolved its constructor arguments. Do
+        // not publish this stale player: otherwise the newer request captured null and its task
+        // would see this old player as healthy and never install the requested URL.
+        val stale = synchronized(loadLock) {
+            if (expected != generation.value || swapExecutor.isShutdown || player != null) {
+                true
+            } else {
+                player = newPlayer
+                if (pendingLoad == PendingLoad(videoUrl, lang)) pendingLoad = null
+                false
+            }
+        }
+        if (stale) {
+            // This constructor starts resolve work immediately. Retire an overtaken player without
+            // putting the swap worker back into a synchronous native stop.
+            runCatching { newPlayer.stopAsync() }
+            return
+        }
         screen.timelineFollower.onPlayerCreated()
         // Set the effective volume (incl. distance) now, before the bridge prelude (which starts at
         // construction) becomes audible — otherwise its first moment plays at the un-attenuated level.
@@ -221,22 +280,28 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         mp.whenInitialized {
             if (expectedGeneration != generation.value) return@whenInitialized
             if (mp !== player) return@whenInitialized
-            if (screen.errored) return@whenInitialized
+            // A previous player's initialization failure can race its stop and land on the shared
+            // DisplayScreen after this generation was queued. The current player reached its own
+            // initialized callback successfully, so that stale error must not suppress start().
+            screen.mediaError = null
             action()
         }
     }
 
     /** Detaches the current player and invalidates pending callbacks; returns it for final teardown. */
     fun shutdown(): MediaPlayer? {
-        generation.incrementAndGet()
-        videoStarted = false
-        val current = player
-        player = null
-        // Release the serial swap thread so the controller (and its screen) can be GC'd — a live
-        // executor thread is a GC root that would keep the whole display graph alive forever.
-        // Tasks already queued still run: their generation guard turns the build into a no-op, and
-        // stop() is idempotent, so queued old-player teardowns finish cleanly before the thread dies.
-        swapExecutor.shutdown()
-        return current
+        synchronized(loadLock) {
+            generation.incrementAndGet()
+            pendingLoad = null
+            videoStarted = false
+            val current = player
+            player = null
+            // Release the serial swap thread so the controller (and its screen) can be GC'd — a live
+            // executor thread is a GC root that would keep the whole display graph alive forever.
+            // Tasks already queued still run: their generation guard turns the build into a no-op, and
+            // stop() is idempotent, so queued old-player teardowns finish cleanly before the thread dies.
+            swapExecutor.shutdown()
+            return current
+        }
     }
 }

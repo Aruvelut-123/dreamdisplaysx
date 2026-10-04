@@ -920,23 +920,35 @@ internal class LibVlcSessionManager(
                             }
                         }
                     } else {
-                        // Desktop: stop() first, then play() restarts from the beginning
-                        // (loop/replay path; desktop has no Android TLS destructor).
-                        LibVlc.lib.libvlc_media_player_stop(mp)
-                        LibVlc.lib.libvlc_media_player_play(mp)
-                        // play() after stop() restarts from 0, so the video must be re-anchored at
-                        // the seek target explicitly — otherwise the video replays from the top
-                        // while the audio player below jumps to the target, and the A/V snap then
-                        // drags one of them to the other's wrong position.
-                        runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, targetMs) }
+                        // Desktop loop/replay (there is no Android TLS destructor). For the normal
+                        // loop target (0 ms), play() is enough to leave ENDED without stopping the
+                        // input first. Stopping the dedicated audio player at every five-second EOF
+                        // made libvlc wait for decoder FIFOs to drain; after several loops that was
+                        // the last line in the native log and the display froze. User seeks to a
+                        // non-zero target still use the conservative stop -> play -> set_time path.
+                        val zeroTarget = targetMs == 0L
+                        if (zeroTarget) {
+                            runCatching { LibVlc.lib.libvlc_media_player_play(mp) }
+                            runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, 0L) }
+                        } else {
+                            LibVlc.lib.libvlc_media_player_stop(mp)
+                            LibVlc.lib.libvlc_media_player_play(mp)
+                            runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, targetMs) }
+                        }
                         // The audio player must be restarted too: its own stream also reached ENDED
-                        // (Bilibili DASH audio is often shorter than the video), so a bare set_time on
-                        // an ENDED audio player does nothing — video replays but audio stays silent.
+                        // (Bilibili DASH audio is often shorter than the video). Avoid stopping it on
+                        // the ordinary loop; a stopped audio input is what leaves the decoder FIFO
+                        // teardown pending in the reported Linux trace.
                         val ap = audioPlayer
                         if (ap != null) {
-                            runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
-                            runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
-                            runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, targetMs) }
+                            if (zeroTarget) {
+                                runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
+                                runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, 0L) }
+                            } else {
+                                runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                                runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
+                                runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, targetMs) }
+                            }
                         }
                         scheduleSeekLandingVerification(targetMs)
                     }
@@ -1159,6 +1171,10 @@ internal class LibVlcSessionManager(
         seekSettleUntilNanos = 0L
         seekFrozen = false
         seekGeneration.incrementAndGet()
+        // Wake a MediaPlayer.start() waiting for its first frame. Without this, a switch that
+        // arrives while the old stream is buffering waits the full ten-second first-frame timeout
+        // before its teardown can run.
+        firstFrameLatch.countDown()
         submit {
             val mp = mediaPlayer
             if (mp != null) {
@@ -1192,6 +1208,7 @@ internal class LibVlcSessionManager(
         seekSettleUntilNanos = 0L
         seekFrozen = false
         seekGeneration.incrementAndGet()
+        firstFrameLatch.countDown()
         val mp = mediaPlayer
         if (mp != null) {
             runCatching {
@@ -1219,6 +1236,13 @@ internal class LibVlcSessionManager(
     fun pauseNow() {
         isPlaying = false
         parkFlag.set(true)
+        stopped.set(true)
+        eosReached = true
+        seekSettleUntilNanos = 0L
+        seekFrozen = false
+        seekGeneration.incrementAndGet()
+        // stopAsync() uses this path while a start task may be waiting for the first frame.
+        firstFrameLatch.countDown()
         val mp = mediaPlayer
         if (mp != null) runCatching { LibVlc.lib.libvlc_media_player_set_pause(mp, 1) }
         val ap = audioPlayer
