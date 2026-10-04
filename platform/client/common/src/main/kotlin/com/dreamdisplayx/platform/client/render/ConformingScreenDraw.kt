@@ -51,7 +51,9 @@ internal object ConformingScreenDraw {
         val clearance = DisplayGeometry.surfaceClearance() + lift
         if (screen.isVideoStarted && screen.hasTexture && screen.renderType != null) {
             val appear = screen.appearProgress()
-            val base = if (screen.isYuvTexture) screen.brightness.coerceIn(0f, 1f) * 255f else 255f
+            // Match the flat-screen renderer: vertex colour applies brightness to both texture
+            // formats, while the vout callback remains a bulk copy for smooth playback.
+            val base = screen.brightness.coerceIn(0f, 1f) * 255f
             val color = (base * appear).toInt().coerceIn(0, 255)
             draw(drawQuad, screen.renderType!!, quads, clearance, color, color, color)
         } else {

@@ -53,7 +53,6 @@ internal class LibVlcSessionManager(
 
     /** Returns the current GPU texture dimensions (width to height). */
     private val getTextureSize: () -> Pair<Int, Int>,
-    private val getBrightness: () -> Double,
     private val getStretchMode: () -> StretchMode = { StretchMode.LETTERBOX },
 
     /** Invoked when the stream ends or errors. */
@@ -1729,7 +1728,6 @@ internal class LibVlcSessionManager(
                     scratch.flip()
                     fitFrame(scratch, frameWidth, frameHeight, spare, ew, eh)
                 }
-                applyBrightness(spare, frameSize, getBrightness())
                 spare.flip()
 
                 if (parkFlag.get()) return
@@ -1954,21 +1952,6 @@ internal class LibVlcSessionManager(
             }
         }
         src.rewind()
-    }
-
-    private fun applyBrightness(buf: ByteBuffer, size: Int, brightness: Double) {
-        val factor = brightness.coerceIn(0.0, 2.0)
-        if (factor == 1.0) return
-        buf.flip()
-        var i = 0
-        while (i + 3 < size) {
-            val r = ((buf.get(i).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
-            val g = ((buf.get(i + 1).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
-            val b = ((buf.get(i + 2).toInt() and 0xFF) * factor).toInt().coerceIn(0, 255)
-            buf.put(i, r.toByte()); buf.put(i + 1, g.toByte()); buf.put(i + 2, b.toByte())
-            // keep alpha (i+3) untouched
-            i += 4
-        }
     }
 
     companion object {

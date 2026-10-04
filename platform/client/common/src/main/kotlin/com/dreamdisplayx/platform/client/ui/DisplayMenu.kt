@@ -139,7 +139,7 @@ class DisplayMenu private constructor(
                         // Broadcast pins everyone to the highest quality within the cap; show that, not the saved setting
                         ds.qualityCap > 0 -> Component.literal("${broadcastQuality()}p")
                         ds.qualityList.isNotEmpty() -> Component.literal("${qualityFromFraction(it)}p")
-                        else -> Component.literal("${ds.quality.serialize()}p")
+                        else -> Component.literal(qualityDisplayLabel(ds.quality))
                     }
                 },
                 // One stop per available quality, so the handle can only ever rest exactly on a real option
@@ -985,10 +985,17 @@ class DisplayMenu private constructor(
     /** Maps a fractional slider position back to the nearest quality string from the available list. */
     private fun qualityFromFraction(v: Double): String {
         val list = displayScreen.qualityList
-        if (list.isEmpty()) return "144"
+        // Direct/muxed files do not expose a quality ladder.  Keep the persisted request (or the
+        // normal 1080p default) in the tooltip instead of presenting the lowest ladder rung as if
+        // the player had been forced to 144p.
+        if (list.isEmpty()) return (displayScreen.quality.targetHeight ?: 1080).toString()
         val idx = (v * (list.size - 1)).roundToInt().coerceIn(0, list.size - 1)
         return list[idx].toString()
     }
+
+    /** Human label for a quality request when no resolved quality ladder is available yet. */
+    private fun qualityDisplayLabel(value: VideoQuality): String =
+        value.targetHeight?.let { "${it}p" } ?: "Auto"
 
     companion object {
         private const val SEEK_STEP_NANOS = 5_000_000_000L

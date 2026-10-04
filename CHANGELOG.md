@@ -13,6 +13,11 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Fixes
 
+- Fixed direct-file brightness changes freezing playback by applying brightness at render time instead of rewriting every decoded frame on the libvlc callback thread.
+- Fixed direct-file displays showing a false 144p quality label when no quality ladder is available.
+- Fixed local seek reports being overwritten by stale pre-seek positions during decoder rebuffering.
+- Fixed `/display on` and `/display off` not repairing a client that missed the previous toggle packet.
+- Fixed percent-encoded WebDAV video links being treated as Bilibili searches instead of direct media cards.
 - Fixed video switching only working after closing and reopening the screen: the scrub-preview player's teardown no longer blocks the display's serial swap thread.
 - Fixed single-file media (an mp4 direct link) occasionally freezing the game at the end: its audio now goes through the dedicated audio player and Java Sound line like every other source, instead of libvlc's own output, which reported write-index/underflow errors and could wedge the decoder at end of stream.
 - Fixed audio stutter and A/V desync: the audio line write respects the device's backpressure again instead of discarding most blocks, and the A/V lead only counts frames that actually reached the line.

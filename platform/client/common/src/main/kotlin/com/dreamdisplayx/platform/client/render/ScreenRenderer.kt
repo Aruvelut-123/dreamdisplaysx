@@ -233,7 +233,10 @@ object ScreenRenderer : ClientRenderService {
      *  per-layer separation the loading placeholder already uses. */
     private fun renderVideo(stack: PoseStack, displayScreen: DisplayScreen, drawQuad: QuadRenderer, lift: Float) {
         val appear = displayScreen.appearProgress()
-        val base = if (displayScreen.isYuvTexture) displayScreen.brightness.coerceIn(0f, 1f) * 255f else 255f
+        // Apply brightness in the vertex colour for both YUV and RGBA textures. Keeping the
+        // decoded RGBA bytes untouched avoids a per-pixel CPU pass on libvlc's vout callback,
+        // which could stall decoding whenever the slider moved away from 100%.
+        val base = displayScreen.brightness.coerceIn(0f, 1f) * 255f
         val c = (base * appear).toInt().coerceIn(0, 255)
         val facing = displayScreen.facing
         val w = displayScreen.width

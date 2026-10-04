@@ -292,7 +292,6 @@ class DisplayScreen(
     var brightness: Float = savedSettings.brightness
         set(value) {
             field = value.coerceIn(0f, 2f)
-            mediaPlayer?.setBrightness(field)
             ClientSettingsStore.updateSettings(uuid, volume, quality, field, muted, paused)
             DisplayRegistry.recordScreen(this)
         }
@@ -394,6 +393,14 @@ class DisplayScreen(
 
     /** Tick counter throttling how often this LOCAL screen reports its position to the server. */
     private var positionReportTicks = 0
+
+    /** Target of the most recent local seek while libvlc is still settling its clock. */
+    @Volatile
+    private var pendingPositionReportNanos = Long.MIN_VALUE
+
+    /** Monotonic deadline through which a stale pre-seek clock must not be reported. */
+    @Volatile
+    private var pendingPositionReportUntilNanos = 0L
 
     /** Follows the server-authoritative timeline (Synced / Broadcast / watch party). */
     internal val timelineFollower = TimelineFollower(this)
@@ -1021,6 +1028,12 @@ class DisplayScreen(
         PlaybackAction.RESTART -> WatchPartyAction.RESTART
     }
 
+    /** Drops a seek target that belongs to a previous video before a new player is installed. */
+    internal fun clearPendingPositionReport() {
+        pendingPositionReportNanos = Long.MIN_VALUE
+        pendingPositionReportUntilNanos = 0L
+    }
+
     /** Seeks [seconds] seconds relative to the current playback position (negative = backward). */
     fun seekVideoRelative(seconds: Double) {
         if (!canSeekHere) return
@@ -1198,7 +1211,17 @@ class DisplayScreen(
         if (com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive) return
         if (mode != PlaybackMode.LOCAL || watchParty != null || paused) return
         if (++positionReportTicks % POSITION_REPORT_INTERVAL_TICKS != 0) return
-        val nanos = currentTimeNanos
+        val nowNanos = System.nanoTime()
+        val pendingTarget = pendingPositionReportNanos.takeIf {
+            nowNanos < pendingPositionReportUntilNanos
+        } ?: run {
+            pendingPositionReportNanos = Long.MIN_VALUE
+            Long.MIN_VALUE
+        }
+        // libvlc updates its clock asynchronously.  During that short re-buffer window the old
+        // position can be sampled and written back to the server, which later makes a local seek
+        // jump back.  Keep reporting the requested target until the seek has settled.
+        val nanos = if (pendingTarget != Long.MIN_VALUE) pendingTarget else currentTimeNanos
         // Do not report a completed VOD tail as a resume point; the server would persist it and
         // feed it back on the next display update, re-triggering the cold-start guard.
         val reportNanos = if (isTailResumePosition(nanos)) 0L else nanos
@@ -1426,6 +1449,8 @@ class DisplayScreen(
      */
     fun afterSeek(positionNanos: Long) {
         if (!canSeekHere) return
+        pendingPositionReportNanos = positionNanos.coerceAtLeast(0L)
+        pendingPositionReportUntilNanos = System.nanoTime() + LOCAL_SEEK_REPORT_GUARD_NANOS
         // The user's seek starts its own re-buffer window; arm the timeline follower's cooldown so
         // the post-seek stall is not misread as drift and corrected with a second seek (which
         // restarts the decoder again — the "keeps auto pause/resuming until it loads" loop).
@@ -1483,6 +1508,9 @@ class DisplayScreen(
 
         /** Every N ticks a LOCAL display reports its position to the server (~1s at 20 TPS). */
         private const val POSITION_REPORT_INTERVAL_TICKS = 20
+
+        /** Keep stale pre-seek samples out of LOCAL position reports while the decoder re-buffers. */
+        private const val LOCAL_SEEK_REPORT_GUARD_NANOS = 7_000_000_000L
 
         /** Duration of the first-frame fade-in (see [appearProgress]). */
         private const val APPEAR_FADE_NANOS = 260_000_000L

@@ -39,6 +39,10 @@ class OnCommand : SubCommand {
         }
 
         if (PlayerManager.isDisplaysEnabled(target)) {
+            // Re-send the authoritative state even when the server already agrees.  The client
+            // keeps this preference locally, so a reconnect can leave it disabled while the
+            // per-session server map has reset to enabled; `/display on` must repair that drift.
+            PacketUtil.sendDisplayEnabled(target, true)
             MessageUtil.sendMessage(target, "display.already-enabled")
             if (!selfTarget) {
                 MessageUtil.sendColoredMessage(
@@ -134,6 +138,8 @@ object VanillaOnCommand {
         }
 
         if (PlayerManager.isDisplaysEnabled(target)) {
+            // Keep the command idempotent and repair a client that missed the previous toggle.
+            VanillaPacketUtil.sendDisplayEnabled(target, true)
             MessageUtil.sendMessage(target, "display.already-enabled")
             if (!selfTarget) {
                 val msg = config.getMessageForPlayer(self, "display.already-enabled.target") as? String

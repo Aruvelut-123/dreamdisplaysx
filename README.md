@@ -50,7 +50,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 - 无缝多人播放：本地、同步和广播模式
 - 强大的媒体播放器：搜索、画中画等
 - 沉浸式音频：3D 声音，音量最高 200%
-- 可调分辨率：144p 到 4K
+- 可调分辨率：按媒体源提供的档位选择，最高支持 4K
 - 硬件加速：libvlc 支持 d3d11va、vaapi、videotoolbox 等后端
 - 视频动态光照：安装 LambDynamicLights 后，显示器画面可以照亮周围世界
 - Complementary 着色器修补：只为 Complementary r5.8.1 创建临时副本，不修改其他着色器包
@@ -89,6 +89,8 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 | `/dlogoff` | 客户端 | 注销 Bilibili（仅 OP） |
 
 > **Bilibili 登录提示：** 在游戏中执行 `/dlogin`，使用 Bilibili 手机客户端扫描二维码。成功后，mod 会把 `SESSDATA` 发送到服务器并加密保存，再同步到服务器网络和在线客户端。
+
+搜索框和 `/display video` 都支持直接粘贴完整的 `http(s)` 视频文件地址；链接中的百分号编码路径会原样保留，适合 WebDAV 等直链文件。
 
 ## 下载
 

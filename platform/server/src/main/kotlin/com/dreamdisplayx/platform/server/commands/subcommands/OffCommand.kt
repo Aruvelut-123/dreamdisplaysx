@@ -39,6 +39,9 @@ class OffCommand : SubCommand {
         }
 
         if (!PlayerManager.isDisplaysEnabled(target)) {
+            // Re-send the authoritative state even when the server already agrees.  The client
+            // persists its preference locally, so this also repairs a missed toggle packet.
+            PacketUtil.sendDisplayEnabled(target, false)
             MessageUtil.sendMessage(target, "display.already-disabled")
             if (!selfTarget) {
                 MessageUtil.sendColoredMessage(
@@ -134,6 +137,8 @@ object VanillaOffCommand {
         }
 
         if (!PlayerManager.isDisplaysEnabled(target)) {
+            // Keep the command idempotent and repair a client that missed the previous toggle.
+            VanillaPacketUtil.sendDisplayEnabled(target, false)
             MessageUtil.sendMessage(target, "display.already-disabled")
             if (!selfTarget) {
                 val msg = config.getMessageForPlayer(self, "display.already-disabled.target") as? String

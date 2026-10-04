@@ -42,6 +42,16 @@ class PastedMediaCardsTest {
     }
 
     @Test
+    fun `encoded webdav mkv url stays a direct custom card`() {
+        val url = "https://www.kylesu.qzz.io/webdav/Data/Movies/%E9%98%B3%E5%85%89%E7%94%B5%E5%BD%B1dygod.org.%E5%93%AA%E5%90%92%E4%B9%8B%E9%AD%94%E7%AB%A5%E9%97%B9%E6%B5%B7.2025.HD.1080P.%E5%9B%BD%E8%AF%AD%E4%B8%AD%E5%AD%97.mkv"
+        val card = PastedMediaCards.fromQuery(url)!!
+        assertTrue(card.isCustom)
+        assertEquals(url, card.id)
+        assertEquals(url, card.watchUrlOverride)
+        assertEquals("阳光电影dygod.org.哪吒之魔童闹海.2025.HD.1080P.国语中字", card.title)
+    }
+
+    @Test
     fun `youtube watch url becomes a youTube card with extracted id`() {
         val card = PastedMediaCards.fromQuery("https://www.youtube.com/watch?v=dQw4w9WgXcQ")!!
         assertTrue(card.isYouTubeResult)
