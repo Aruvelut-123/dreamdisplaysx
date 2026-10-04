@@ -3,6 +3,7 @@
 Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplays/commit/42af16c320f962becc184590e93ebbf6dbf6d4d7).
 
 ## Client
+- Simplified the Chinese README by removing internal troubleshooting details.
 
 ### Features
 
