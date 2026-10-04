@@ -31,11 +31,22 @@ internal object DirectHlsPlaylist {
         val isDefault: Boolean,
     )
 
+    /** One WebVTT/IMSC subtitle rendition declared by an HLS master playlist. */
+    data class SubtitleRendition(
+        val url: String,
+        val groupId: String,
+        val name: String?,
+        val language: String?,
+        val isDefault: Boolean,
+        val isForced: Boolean,
+    )
+
     /** A parsed playlist. [isLive] is true when it has no `#EXT-X-ENDLIST` tag, which is exactly the shape a live stream has. */
     data class Parsed(
         val variants: List<Variant>,
         val audioRenditions: List<AudioRendition>,
         val isLive: Boolean,
+        val subtitleRenditions: List<SubtitleRendition> = emptyList(),
         val hasInitSegment: Boolean = false,
         val totalDurationNanos: Long = 0L,
     ) {
@@ -59,6 +70,7 @@ internal object DirectHlsPlaylist {
     fun parse(text: String, baseUrl: String): Parsed {
         val variants = ArrayList<Variant>()
         val audio = ArrayList<AudioRendition>()
+        val subtitles = ArrayList<SubtitleRendition>()
         val seenVariantUrls = HashSet<String>()
         var pending: Map<String, String>? = null
         var hasSegments = false
@@ -74,9 +86,15 @@ internal object DirectHlsPlaylist {
                 line.startsWith("#EXT-X-STREAM-INF:") ->
                     pending = parseAttributes(line.removePrefix("#EXT-X-STREAM-INF:"))
 
-                line.startsWith("#EXT-X-MEDIA:") ->
-                    parseAudioRendition(parseAttributes(line.removePrefix("#EXT-X-MEDIA:")), baseUrl)
-                        ?.let(audio::add)
+                line.startsWith("#EXT-X-MEDIA:") -> {
+                    val attrs = parseAttributes(line.removePrefix("#EXT-X-MEDIA:"))
+                    when {
+                        attrs["TYPE"].equals("AUDIO", ignoreCase = true) ->
+                            parseAudioRendition(attrs, baseUrl)?.let(audio::add)
+                        attrs["TYPE"].equals("SUBTITLES", ignoreCase = true) ->
+                            parseSubtitleRendition(attrs, baseUrl)?.let(subtitles::add)
+                    }
+                }
 
                 line.startsWith("#EXT-X-MAP") -> hasInit = true
                 line.startsWith("#EXTINF") -> {
@@ -118,6 +136,7 @@ internal object DirectHlsPlaylist {
             variants = variants.sortedByDescending { it.height ?: it.bandwidthBps ?: 0 },
             audioRenditions = audio,
             isLive = variants.isEmpty() && hasSegments && !ended && !vod,
+            subtitleRenditions = subtitles,
             hasInitSegment = hasInit,
             totalDurationNanos = segmentNanos,
         )
@@ -145,6 +164,20 @@ internal object DirectHlsPlaylist {
             name = attrs["NAME"]?.takeIf { it.isNotBlank() },
             language = attrs["LANGUAGE"]?.takeIf { it.isNotBlank() },
             isDefault = attrs["DEFAULT"].equals("YES", ignoreCase = true),
+        )
+    }
+
+    private fun parseSubtitleRendition(attrs: Map<String, String>, baseUrl: String): SubtitleRendition? {
+        if (!attrs["TYPE"].equals("SUBTITLES", ignoreCase = true)) return null
+        val uri = attrs["URI"]?.takeIf { it.isNotBlank() } ?: return null
+        val group = attrs["GROUP-ID"]?.takeIf { it.isNotBlank() } ?: return null
+        return SubtitleRendition(
+            url = resolve(baseUrl, uri),
+            groupId = group,
+            name = attrs["NAME"]?.takeIf { it.isNotBlank() },
+            language = attrs["LANGUAGE"]?.takeIf { it.isNotBlank() },
+            isDefault = attrs["DEFAULT"].equals("YES", ignoreCase = true),
+            isForced = attrs["FORCED"].equals("YES", ignoreCase = true),
         )
     }
 

@@ -71,7 +71,10 @@ class Client : ClientModInitializer, Mod {
         DreamServices.registry.register(PlatformServices.PLATFORM, FabricPlatformIntegrationProvider.create())
         Initializer.onModInit(this)
 
-        //? if >=26 {
+        // NeoForge owns registration through RegisterDebugEntriesEvent. Fabric's debug entry
+        // registrar is intentionally disabled: mutating the vanilla map here races the F3
+        // screen bootstrap on Sodium/modern MC and corrupts overlay layout.
+        //? if >=26 && false {
         com.dreamdisplayx.platform.client.debug.DebugScreenEntryRegistrar.register()
         //?}
 

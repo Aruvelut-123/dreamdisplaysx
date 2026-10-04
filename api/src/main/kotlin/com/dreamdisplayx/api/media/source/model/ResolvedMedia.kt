@@ -21,6 +21,9 @@ data class ResolvedMedia(
 
     /** True when playback may seek within the media timeline. */
     val isSeekable: Boolean,
+
+    /** Subtitle renditions discovered by a resolver, keyed by a stable track identity. */
+    val subtitleTracks: List<SubtitleTrack> = emptyList(),
 ) {
     /** Streams that contain video. */
     val videoStreams: List<MediaStream> get() = streams.filter { it.type.hasVideo }
@@ -33,4 +36,15 @@ data class ResolvedMedia(
 
     /** True when any stream contains audio. */
     val hasAudio: Boolean get() = audioStreams.isNotEmpty()
+
 }
+
+/** One selectable subtitle rendition; the player may render it or combine two tracks. */
+@DreamDisplaysXUnstableApi
+data class SubtitleTrack(
+    val url: String,
+    val language: String? = null,
+    val name: String? = null,
+    val isDefault: Boolean = false,
+    val isForced: Boolean = false,
+)

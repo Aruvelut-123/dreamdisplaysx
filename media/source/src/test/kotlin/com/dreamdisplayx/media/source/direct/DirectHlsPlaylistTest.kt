@@ -115,7 +115,7 @@ class DirectHlsPlaylistTest {
             #EXTM3U
             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud1",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="a1/prog.m3u8"
             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud2",NAME="English AC-3",LANGUAGE="en",URI="a2/prog.m3u8"
-            #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="sub1",NAME="English",URI="s1/prog.m3u8"
+            #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="sub1",NAME="English",LANGUAGE="en",URI="s1/prog.m3u8"
             #EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=640x360,AUDIO="aud1"
             v1/prog.m3u8
             #EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=640x360,AUDIO="aud2"
@@ -127,6 +127,9 @@ class DirectHlsPlaylistTest {
         assertEquals(1, parsed.variants.size, "The same rendition listed per audio group is one quality.")
         assertEquals("aud1", parsed.variants[0].audioGroupId)
         assertEquals(2, parsed.audioRenditions.size, "Subtitle renditions are not audio.")
+        assertEquals(1, parsed.subtitleRenditions.size)
+        assertEquals("https://cdn.example.com/vod/s1/prog.m3u8", parsed.subtitleRenditions.single().url)
+        assertEquals("en", parsed.subtitleRenditions.single().language)
 
         val paired = parsed.audioFor(parsed.variants[0])
         assertEquals(1, paired.size)

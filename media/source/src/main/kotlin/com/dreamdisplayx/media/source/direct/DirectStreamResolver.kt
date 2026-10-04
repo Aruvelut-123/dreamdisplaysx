@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.media.source.model.CustomMediaKind
 import com.dreamdisplayx.api.media.source.model.MediaMetadata
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.source.model.ResolvedMedia
+import com.dreamdisplayx.api.media.source.model.SubtitleTrack
 import com.dreamdisplayx.api.media.source.service.MediaResolverService
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
 import com.dreamdisplayx.api.media.stream.model.MediaStream
@@ -261,6 +262,15 @@ object DirectStreamResolver : MediaResolverService {
             metadata = metadataFor(playlistUrl, durationNanos, fileName = null),
             isLive = isLive,
             isSeekable = !isLive,
+            subtitleTracks = parsed.subtitleRenditions.map {
+                SubtitleTrack(
+                    url = it.url,
+                    language = it.language,
+                    name = it.name,
+                    isDefault = it.isDefault,
+                    isForced = it.isForced,
+                )
+            },
         )
     }
 
