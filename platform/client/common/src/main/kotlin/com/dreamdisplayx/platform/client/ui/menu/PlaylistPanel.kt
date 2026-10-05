@@ -114,7 +114,10 @@ class PlaylistPanel(
     }
 
     private fun reject(item: PlaylistItem) {
-        PlaylistStateStore.send(displayId, PlaylistCommandAction.REJECT.wire, itemId = item.itemId)
+        // Owners reject pending requests; requesters cancel their own pending rows. The server
+        // intentionally exposes cancellation as REMOVE, not REJECT, to keep approval semantics owner-only.
+        val action = if (isOwnerOrAdmin()) PlaylistCommandAction.REJECT else PlaylistCommandAction.REMOVE
+        PlaylistStateStore.send(displayId, action.wire, itemId = item.itemId)
     }
 
     private fun move(item: PlaylistItem, to: Int) {

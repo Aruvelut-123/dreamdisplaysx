@@ -46,6 +46,9 @@ class DisplayPlaybackHost(private val screen: DisplayScreen) : PlaybackHost {
         get() = screen.videoContentHeight
         set(value) { screen.videoContentHeight = value }
 
+    /** Current display media generation; each MediaPlayer captures this when it is created. */
+    override val playbackGeneration: Long get() = screen.mediaGeneration
+
     /** The display's current media error, or `null` when healthy. */
     override var mediaError: DreamMediaException?
         get() = screen.mediaError
@@ -74,6 +77,10 @@ class DisplayPlaybackHost(private val screen: DisplayScreen) : PlaybackHost {
      * made video switching appear dead until the display was reloaded.
      */
     override fun onPlaybackEnded(positionNanos: Long) {
-        Minecraft.getInstance().execute { screen.onPlaybackEnded(positionNanos) }
+        onPlaybackEnded(positionNanos, playbackGeneration)
+    }
+
+    override fun onPlaybackEnded(positionNanos: Long, playbackGeneration: Long) {
+        Minecraft.getInstance().execute { screen.onPlaybackEnded(positionNanos, playbackGeneration) }
     }
 }

@@ -136,6 +136,16 @@ class DefaultDisplaySystem(
         apply(commands.setAudioTrack(displayId, trackUrl))
     }
 
+    /** Set the subtitle language for a display. */
+    override fun setSubtitleTrack(displayId: DisplayId, lang: String?) {
+        apply(commands.setSubtitleTrack(displayId, lang))
+    }
+
+    /** Set primary and optional secondary subtitle languages for bilingual rendering. */
+    override fun setSubtitleTracks(displayId: DisplayId, primaryLang: String?, secondaryLang: String?) {
+        apply(commands.setSubtitleTracks(displayId, primaryLang, secondaryLang))
+    }
+
     /** Set the brightness multiplier for a display. */
     override fun setBrightness(displayId: DisplayId, brightness: Float) {
         apply(commands.setBrightness(displayId, brightness))

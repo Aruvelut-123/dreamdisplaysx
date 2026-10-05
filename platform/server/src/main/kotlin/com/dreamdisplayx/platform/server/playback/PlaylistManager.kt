@@ -26,6 +26,9 @@ object PlaylistManager {
     /** Logger. */
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/PlaylistManager")
 
+    /** Zero UUID used by protobuf defaults for absent optional item identities. */
+    private val ZERO_UUID = UUID(0L, 0L)
+
     /** Live platform transport, injected at startup. */
     private lateinit var transport: PlaybackTransport
 
@@ -127,15 +130,12 @@ object PlaylistManager {
                 val items = playlist.items.toMutableList()
                 val at = if (packet.position in 0..items.size) packet.position else items.size
                 items.add(at, item)
-                // A pending insertion at/after the playing index shifts nothing visible until approved,
-                // but approved insertions before the playing index shift it.
-                playlist.copy(items = items).let {
-                    if (!pending && at <= playlist.currentIndex) {
-                        it.copy(currentIndex = playlist.currentIndex + 1)
-                    } else {
-                        it
-                    }
-                }
+                // Keep the same current item selected after insertion, irrespective of whether the
+                // inserted row is pending or approved immediately.
+                playlist.copy(
+                    items = items,
+                    currentIndex = remapCurrentIndex(playlist.items, items, playlist.currentIndex),
+                )
             }
 
             PlaylistCommandAction.REMOVE -> {
@@ -156,8 +156,8 @@ object PlaylistManager {
                     if (nextIndex >= 0) {
                         playIndex(display, updated, nextIndex) // persists + broadcasts
                     } else {
-                        // Queue exhausted: keep the display on the removed video; nothing in the
-                        // queue is playing now, and a later ADD restarts through the idle rule.
+                        // Queue exhausted: the player may keep its last frame, but the playlist is
+                        // explicitly idle so a later ADD restarts through the idle rule.
                         persist(display.id)
                         broadcast(display.id)
                     }
@@ -173,33 +173,35 @@ object PlaylistManager {
                 val record = items.removeAt(from)
                 val to = packet.position.coerceIn(0, items.size)
                 items.add(to, record)
-                // Remap the playing index across the same move applied to it.
-                val currentIndex = when {
-                    playlist.currentIndex == from -> to
-                    from < playlist.currentIndex && to >= playlist.currentIndex -> playlist.currentIndex - 1
-                    to <= playlist.currentIndex && from > playlist.currentIndex -> playlist.currentIndex + 1
-                    else -> playlist.currentIndex
-                }
-                playlist.copy(items = items, currentIndex = currentIndex)
+                // Remap by the stable current item identity rather than by positional heuristics;
+                // this remains correct when the moved row crosses pending rows or the current slot.
+                playlist.copy(
+                    items = items,
+                    currentIndex = remapCurrentIndex(playlist.items, items, playlist.currentIndex),
+                )
             }
 
             PlaylistCommandAction.CLEAR -> playlist.copy(items = emptyList(), currentIndex = -1)
 
             PlaylistCommandAction.SKIP_TO -> {
                 val index = playlist.items.indexOfFirst { it.itemId == packet.itemId }
-                if (index < 0) return false
+                if (index < 0 || playlist.items[index].pending) return false
                 playIndex(display, playlist, index)
                 return true // playIndex already persisted + broadcast
             }
 
             PlaylistCommandAction.NEXT -> {
-                val next = playlist.currentIndex + 1
-                if (next >= playlist.items.size &&
-                    playlist.endBehavior != PlaylistEndBehavior.LOOP_CURRENT
-                ) {
-                    return false
-                }
-                playIndex(display, playlist, if (next < playlist.items.size) next else 0)
+                // Automatic EOS advances carry the play revision and current item identity. Reject a
+                // stale callback after another client/player already started the next item; otherwise
+                // two owner/admin viewers can advance A -> B -> C before either echo is observed.
+                val currentRevision = playRevisions[display.id] ?: 0L
+                if (!acceptsExpectedNext(playlist, currentRevision, packet)) return false
+                val next = nextPlayableIndex(
+                    playlist.items,
+                    playlist.currentIndex,
+                    playlist.endBehavior == PlaylistEndBehavior.LOOP_CURRENT,
+                ) ?: return false
+                playIndex(display, playlist, next)
                 return true
             }
 
@@ -217,9 +219,9 @@ object PlaylistManager {
                 if (index < 0) return false
                 val items = playlist.items.toMutableList()
                 items[index] = items[index].copy(pending = false)
-                playlist.copy(items = items).let {
-                    if (index <= it.currentIndex) it.copy(currentIndex = it.currentIndex + 1) else it
-                }
+                // Approval changes playability, not list order: currentIndex must continue to refer
+                // to the same stable item (or remain idle), never jump merely because a row became live.
+                playlist.copy(items = items)
             }
 
             PlaylistCommandAction.REJECT -> {
@@ -227,11 +229,10 @@ object PlaylistManager {
                 if (index < 0) return false
                 val items = playlist.items.toMutableList()
                 items.removeAt(index)
-                // Removing an item BEFORE the playing index shifts the playing item one slot left
-                // (same bookkeeping as REMOVE); without this the index pointed past the real item.
-                playlist.copy(items = items).let {
-                    if (index < it.currentIndex) it.copy(currentIndex = it.currentIndex - 1) else it
-                }
+                playlist.copy(
+                    items = items,
+                    currentIndex = remapCurrentIndex(playlist.items, items, playlist.currentIndex),
+                )
             }
         }
 
@@ -251,12 +252,25 @@ object PlaylistManager {
     }
 
     /**
+     * Checks the optimistic-concurrency token carried by an automatic NEXT request.
+     * Unrestricted manual NEXT requests retain the legacy -1/zero defaults.
+     */
+    internal fun acceptsExpectedNext(
+        playlist: DisplayPlaylist,
+        currentRevision: Long,
+        packet: PlaylistCommand,
+    ): Boolean {
+        if (packet.expectedPlayRevision >= 0L && packet.expectedPlayRevision != currentRevision) return false
+        return packet.expectedItemId == ZERO_UUID ||
+            playlist.items.getOrNull(playlist.currentIndex)?.itemId == packet.expectedItemId
+    }
+
+    /**
      * Computes the playing index after removing the item at [removedIndex] from [remaining].
      * Pure function so the bookkeeping rules are unit-testable:
      * - nothing playing → stay -1
      * - removal before the playing index shifts it one slot left
-     * - removal OF the playing item falls to the item that took its slot; an empty or
-     *   exhausted non-loop queue yields -1, and LOOP_CURRENT wraps to 0
+     * - removal OF the playing item selects the next non-pending item, wrapping only when requested
      * - otherwise the playing index is unchanged
      */
     fun indexAfterRemoval(
@@ -264,15 +278,44 @@ object PlaylistManager {
         removedIndex: Int,
         currentIndex: Int,
         loopCurrent: Boolean,
-    ): Int = when {
-        currentIndex < 0 -> -1
-        removedIndex < currentIndex -> currentIndex - 1
-        removedIndex == currentIndex -> when {
-            removedIndex < remaining.size -> removedIndex // the item that took the slot
-            loopCurrent && remaining.isNotEmpty() -> 0    // wrap under LOOP_CURRENT
-            else -> -1                                    // nothing left to play: queue exhausted
+    ): Int {
+        if (currentIndex < 0) return -1
+        if (removedIndex < currentIndex) return currentIndex - 1
+        if (removedIndex > currentIndex) return currentIndex
+        return nextPlayableIndex(remaining, removedIndex - 1, loopCurrent) ?: -1
+    }
+
+    /**
+     * Finds the next playable queue entry after [currentIndex], skipping pending rows. When
+     * [loopCurrent] is true, the search wraps to the beginning and may select the current row again
+     * when it is the only playable item. A null result means the queue has no playable entry.
+     */
+    fun nextPlayableIndex(
+        items: List<PlaylistItemRecord>,
+        currentIndex: Int,
+        loopCurrent: Boolean,
+    ): Int? {
+        if (items.isEmpty()) return null
+        val normalized = currentIndex.coerceIn(-1, items.lastIndex)
+        for (index in (normalized + 1) until items.size) {
+            if (!items[index].pending) return index
         }
-        else -> currentIndex
+        if (!loopCurrent) return null
+        for (index in 0..normalized) {
+            if (!items[index].pending) return index
+        }
+        return null
+    }
+
+    /** Returns the index of the same stable item in [after], or -1 when no item is playing. */
+    internal fun remapCurrentIndex(
+        before: List<PlaylistItemRecord>,
+        after: List<PlaylistItemRecord>,
+        currentIndex: Int,
+    ): Int {
+        if (currentIndex !in before.indices) return -1
+        val currentItemId = before[currentIndex].itemId
+        return after.indexOfFirst { it.itemId == currentItemId }
     }
 
     /** Advances the wire playback generation without coupling it to queue edits. */
@@ -285,6 +328,10 @@ object PlaylistManager {
      */
     fun playIndex(display: DisplayData, playlist: DisplayPlaylist, index: Int) {
         val item = playlist.items.getOrNull(index) ?: return
+        if (item.pending) {
+            logger.debug("Ignoring attempt to play pending playlist item {} on display {}.", item.itemId, display.id)
+            return
+        }
         playRevisions.compute(display.id) { _, previous -> advancePlayRevision(previous) }
         playlists[display.id] = playlist.copy(currentIndex = index)
         persist(display.id)
@@ -311,6 +358,9 @@ object PlaylistManager {
             val item = playlist.items[index]
             if (item.pending) continue
             val display = DisplayManager.getDisplayData(displayId) ?: continue
+            // A user may play a direct URL while a playlist is still present. Never let the old
+            // queue reclaim that unrelated media when its authoritative timeline later reaches EOS.
+            if (display.url != item.url || display.lang != item.lang) continue
             if (display.mode != com.dreamdisplayx.api.playback.model.PlaybackMode.SYNCED &&
                 display.mode != com.dreamdisplayx.api.playback.model.PlaybackMode.BROADCAST
             ) continue
@@ -332,8 +382,8 @@ object PlaylistManager {
                 }
 
                 PlaylistEndBehavior.CONTINUE -> {
-                    val next = index + 1
-                    if (next < playlist.items.size) {
+                    val next = nextPlayableIndex(playlist.items, index, loopCurrent = false)
+                    if (next != null) {
                         playIndex(display, playlist, next)
                     } else {
                         TimelineManager.applyScheduled(display, com.dreamdisplayx.api.playback.model.PlaybackAction.PAUSE)
@@ -341,8 +391,9 @@ object PlaylistManager {
                 }
 
                 PlaylistEndBehavior.LOOP_CURRENT -> {
-                    val next = if (index + 1 < playlist.items.size) index + 1 else 0
-                    playIndex(display, playlist, next)
+                    val next = nextPlayableIndex(playlist.items, index, loopCurrent = true)
+                    if (next != null) playIndex(display, playlist, next)
+                    else TimelineManager.applyScheduled(display, com.dreamdisplayx.api.playback.model.PlaybackAction.PAUSE)
                 }
             }
         }

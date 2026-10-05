@@ -82,6 +82,26 @@ class DisplayMenu private constructor(
         },
     )
 
+    private val subtitleDropdown = SubtitleDropdown(
+        getTracks = { displayScreen.subtitleTrackList },
+        currentKey = { displayScreen.currentSubtitleSelectionKey.takeIf { displayScreen.subtitlesEnabled } },
+        onSelect = {
+            DreamServices.registry.get(PlaybackServices.PLAYBACK).setSubtitleTracks(
+                DisplayId(displayScreen.uuid), it?.selectionKey,
+                it?.selectionKey?.let { _ -> displayScreen.currentSubtitleSecondarySelectionKey },
+            )
+        },
+    )
+    private val subtitleSecondaryDropdown = SubtitleDropdown(
+        getTracks = { displayScreen.subtitleTrackList },
+        currentKey = { displayScreen.currentSubtitleSecondarySelectionKey.takeIf { displayScreen.subtitlesEnabled } },
+        onSelect = {
+            DreamServices.registry.get(PlaybackServices.PLAYBACK).setSubtitleTracks(
+                DisplayId(displayScreen.uuid), displayScreen.currentSubtitleSelectionKey, it?.selectionKey,
+            )
+        },
+    )
+
     private lateinit var volume: ValueSlider
     private lateinit var quality: ValueSlider
     private lateinit var brightness: ValueSlider
@@ -101,6 +121,8 @@ class DisplayMenu private constructor(
     private lateinit var errorPanel: ErrorPanel
     private lateinit var popoutButton: IconButton
     private lateinit var audioTrackButton: IconButton
+    private lateinit var subtitleButton: IconButton
+    private lateinit var subtitleSecondaryButton: IconButton
 
 
     /** Which sub-panel the settings column shows: `false` = display settings, `true` = playlist. */
@@ -349,7 +371,12 @@ class DisplayMenu private constructor(
         audioTrackButton = addUi(IconButton("lang") { audioTrackDropdown.toggle() })
         audioTrackButton.enabledWhen = { videoReady() && ds.audioTrackList.size > 1 }
         audioTrackButton.visibleWhen = notErrored
-
+        subtitleButton = addUi(IconButton("cc") { subtitleDropdown.toggle() })
+        subtitleButton.enabledWhen = { videoReady() && ds.subtitleTrackList.isNotEmpty() }
+        subtitleButton.visibleWhen = notErrored
+        subtitleSecondaryButton = addUi(IconButton("cc") { subtitleSecondaryDropdown.toggle() })
+        subtitleSecondaryButton.enabledWhen = { videoReady() && ds.subtitlesEnabled && ds.subtitleTrackList.size > 1 }
+        subtitleSecondaryButton.visibleWhen = notErrored
         val danmakuButton = addUi(
             IconButton(
                 icon = { IconButton.modIcon(if (ds.danmakuEnabled) "danmaku" else "danmaku_off") },
@@ -448,8 +475,8 @@ class DisplayMenu private constructor(
 
         preview =
             PreviewSection(
-                ds, muteButton, volume, popoutButton, audioTrackButton, danmakuButton, pauseButton, progress,
-                dropdown, audioTrackDropdown,
+                ds, muteButton, volume, popoutButton, audioTrackButton, subtitleButton, subtitleSecondaryButton, danmakuButton, pauseButton, progress,
+                dropdown, audioTrackDropdown, subtitleDropdown, subtitleSecondaryDropdown,
             )
         settings = SettingsSection(
             rows = settingsRows(
@@ -745,7 +772,9 @@ class DisplayMenu private constructor(
             playlist.handleScroll(mouseY.toInt(), scrollY)
         } else {
             settings.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
-        } || audioTrackDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
+        } || audioTrackDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY) ||
+            subtitleDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY) ||
+            subtitleSecondaryDropdown.handleScroll(mouseX.toInt(), mouseY.toInt(), scrollY)
     }
 
     /** Draws the two-tab header (playlist / display settings) atop a full settings panel background. */
@@ -812,18 +841,26 @@ class DisplayMenu private constructor(
                 my
             )
         ) return true
+        val onSubtitleButton = subtitleButton.isMouseOver(mx.toDouble(), my.toDouble())
+        if (subtitleDropdown.visible && MouseButtons.isLeft(event.button()) && !onSubtitleButton && subtitleDropdown.handleClick(mx, my)) return true
+        val onSecondarySubtitleButton = subtitleSecondaryButton.isMouseOver(mx.toDouble(), my.toDouble())
+        if (subtitleSecondaryDropdown.visible && MouseButtons.isLeft(event.button()) && !onSecondarySubtitleButton && subtitleSecondaryDropdown.handleClick(mx, my)) return true
         return modLabel.handleClick(mx, my)
     }
 
     override fun onMouseDragged(event: MouseButtonEvent, dragX: Double, dragY: Double): Boolean {
         if (replayReadOnly) return true
         return settings.handleScrollbarDrag(event.y().toInt()) ||
-            audioTrackDropdown.handleDrag(event.y().toInt())
+            audioTrackDropdown.handleDrag(event.y().toInt()) ||
+            subtitleDropdown.handleDrag(event.y().toInt()) ||
+            subtitleSecondaryDropdown.handleDrag(event.y().toInt())
     }
     override fun onMouseReleased(event: MouseButtonEvent): Boolean {
         if (replayReadOnly) return true
         return settings.handleScrollbarRelease() ||
             audioTrackDropdown.handleRelease() ||
+            subtitleDropdown.handleRelease() ||
+            subtitleSecondaryDropdown.handleRelease() ||
             progress.commitDragIfActive()
     }
 
@@ -851,11 +888,14 @@ class DisplayMenu private constructor(
 
     override fun onMouseDragged(mouseX: Double, mouseY: Double, button: Int, dragX: Double, dragY: Double): Boolean =
         settings.handleScrollbarDrag(mouseY.toInt()) ||
-            audioTrackDropdown.handleDrag(mouseY.toInt())
+            audioTrackDropdown.handleDrag(mouseY.toInt()) ||
+            subtitleDropdown.handleDrag(mouseY.toInt())
 
     override fun onMouseReleased(mouseX: Double, mouseY: Double, button: Int): Boolean =
         settings.handleScrollbarRelease() ||
             audioTrackDropdown.handleRelease() ||
+            subtitleDropdown.handleRelease() ||
+            subtitleSecondaryDropdown.handleRelease() ||
             progress.commitDragIfActive()*/
 
 

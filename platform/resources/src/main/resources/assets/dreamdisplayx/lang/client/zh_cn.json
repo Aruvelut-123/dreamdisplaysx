@@ -101,6 +101,7 @@
   "dreamdisplayx.mode.danmaku_density_2": "重叠",
   "dreamdisplayx.ui.waiting": "等待视频...",
   "dreamdisplayx.ui.audio_track_loading": "正在加载音轨...",
+  "dreamdisplayx.ui.subtitles_off": "关闭字幕",
   "dreamdisplayx.ui.quality_applying": "正在应用画质...",
   "dreamdisplayx.ui.schedule_play": "%s 后开始",
   "dreamdisplayx.ui.schedule_pause": "%s 后暂停",

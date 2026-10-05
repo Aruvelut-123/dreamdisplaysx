@@ -87,8 +87,10 @@ class PlaybackClockTest {
         clock.markFirstFrame()
         Thread.sleep(20)
         val beforePark = clock.currentTime()
+        val parkedAt = System.nanoTime()
         Thread.sleep(80) // Stand in for a dormant interval
-        clock.addPausedDuration(80_000_000L)
+        val parkedDuration = System.nanoTime() - parkedAt
+        clock.addPausedDuration(parkedDuration)
         val afterPark = clock.currentTime()
         assertTrue(
             afterPark - beforePark < 60_000_000L,

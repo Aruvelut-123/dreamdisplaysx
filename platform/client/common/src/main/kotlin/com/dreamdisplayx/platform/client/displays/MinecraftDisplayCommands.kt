@@ -130,6 +130,20 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
+    /** Sets the stable subtitle identity; null disables subtitles for this viewer. */
+    override fun setSubtitleTrack(displayId: DisplayId, lang: String?): Display? {
+        val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
+        screen.subtitleTrack = lang
+        return screen.toDisplay()
+    }
+
+    /** Sets primary and optional secondary subtitle identities for bilingual rendering. */
+    override fun setSubtitleTracks(displayId: DisplayId, primaryLang: String?, secondaryLang: String?): Display? {
+        val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
+        screen.setSubtitleTracks(primaryLang, secondaryLang)
+        return screen.toDisplay()
+    }
+
     /** Sets the display [brightness]. */
     override fun setBrightness(displayId: DisplayId, brightness: Float): Display? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null

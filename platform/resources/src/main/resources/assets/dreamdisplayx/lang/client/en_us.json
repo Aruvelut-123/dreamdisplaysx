@@ -101,6 +101,7 @@
   "dreamdisplayx.mode.danmaku_density_2": "Overlap",
   "dreamdisplayx.ui.waiting": "Waiting for video...",
   "dreamdisplayx.ui.audio_track_loading": "Loading audio track...",
+  "dreamdisplayx.ui.subtitles_off": "Subtitles off",
   "dreamdisplayx.ui.quality_applying": "Applying quality...",
   "dreamdisplayx.ui.schedule_play": "Starts in %s",
   "dreamdisplayx.ui.schedule_pause": "Pauses in %s",

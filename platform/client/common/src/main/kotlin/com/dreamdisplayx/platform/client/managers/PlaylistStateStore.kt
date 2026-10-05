@@ -43,6 +43,8 @@ object PlaylistStateStore {
         endBehavior: Int = 0,
         enqueuePolicy: Int = 0,
         enabled: Boolean = true,
+        expectedPlayRevision: Long = -1L,
+        expectedItemId: java.util.UUID? = null,
     ) {
         Initializer.sendPacket(
             PlaylistCommand(
@@ -56,6 +58,8 @@ object PlaylistStateStore {
                 endBehavior = endBehavior,
                 enqueuePolicy = enqueuePolicy,
                 enabled = enabled,
+                expectedPlayRevision = expectedPlayRevision,
+                expectedItemId = expectedItemId ?: java.util.UUID(0L, 0L),
             ),
         )
     }

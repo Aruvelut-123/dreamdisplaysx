@@ -73,6 +73,7 @@
   "dreamdisplayx.button.report.tooltip.2": "Nahlásit nevhodný obsah",
   "dreamdisplayx.ui.waiting": "Čekání na video...",
   "dreamdisplayx.ui.audio_track_loading": "Načítání zvukové stopy...",
+  "dreamdisplayx.ui.subtitles_off": "Titulky vypnuté",
   "dreamdisplayx.ui.quality_applying": "Použití kvality...",
   "dreamdisplayx.ui.schedule_play": "Spustí se za %s",
   "dreamdisplayx.ui.schedule_pause": "Pozastaví se za %s",

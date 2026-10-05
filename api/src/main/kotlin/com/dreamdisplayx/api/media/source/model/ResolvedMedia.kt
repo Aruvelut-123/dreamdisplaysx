@@ -47,4 +47,14 @@ data class SubtitleTrack(
     val name: String? = null,
     val isDefault: Boolean = false,
     val isForced: Boolean = false,
-)
+) {
+    /** Stable across signed-URL refreshes and distinct for same-language named/forced renditions. */
+    val selectionKey: String
+        get() = if (!language.isNullOrBlank() || !name.isNullOrBlank())
+            "track:${language.orEmpty().lowercase(java.util.Locale.ROOT)}|${name.orEmpty()}|$isForced"
+        else "url:" + url.substringBefore('?').substringBefore('#')
+
+    /** Accepts old language-only preferences for backwards-compatible settings restores. */
+    fun matchesPreference(value: String): Boolean = selectionKey == value ||
+        language?.equals(value, ignoreCase = true) == true || name?.equals(value, ignoreCase = true) == true
+}

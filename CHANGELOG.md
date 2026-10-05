@@ -7,6 +7,8 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Features
 
+- Added per-viewer audio-track and subtitle-track selection, bilingual subtitle rendering, and bounded HLS WebVTT loading.
+- Added playlist safeguards so pending items cannot be selected or auto-played.
 - Search box now accepts a pasted media link (or bare YouTube id): it plays that video directly instead of text-searching the URL string.
 - Bilibili search results whose title or uploader clearly advertises adult content are filtered out.
 - Pasting a Bilibili link now shows the video's real title and thumbnail once resolved instead of a bare URL card.
@@ -43,6 +45,9 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Verbose libvlc logs now gzip the previous run and start a fresh `libvlc.log` file.
 - Fixed rapid video changes being held behind a buffering player's first-frame wait or duplicate pending load requests.
 - Fixed clicking a search result not playing the video: picks only enqueue while the playlist is explicitly enabled and idle; in every other state they fall through to the direct play path, so a click always plays.
+- Fixed direct 1080p/1440p links being decoded into an unknown-height 4K callback buffer, which could soften the picture through unnecessary upscaling.
+- Fixed stale playlist EOS callbacks advancing the wrong queue item: media generations and item/revision tokens now make automatic NEXT idempotent, and direct playback cannot be reclaimed by an old queue.
+- Fixed server default-volume percentages being halved before reaching clients.
 - Fixed pasted custom media links showing an empty placeholder card: the first video frame is now extracted and used as the search card's thumbnail.
 
 # 1.10.0.3 Release

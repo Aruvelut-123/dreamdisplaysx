@@ -73,6 +73,7 @@
   "dreamdisplayx.button.report.tooltip.2": "Inhalt melden, der unangemessen ist",
   "dreamdisplayx.ui.waiting": "Warten auf Video...",
   "dreamdisplayx.ui.audio_track_loading": "Audiospur wird geladen...",
+  "dreamdisplayx.ui.subtitles_off": "Untertitel aus",
   "dreamdisplayx.ui.quality_applying": "Qualität wird angewendet...",
   "dreamdisplayx.ui.schedule_play": "Startet in %s",
   "dreamdisplayx.ui.schedule_pause": "Pausiert in %s",

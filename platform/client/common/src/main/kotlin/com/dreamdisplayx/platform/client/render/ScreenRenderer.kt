@@ -170,6 +170,33 @@ object ScreenRenderer : ClientRenderService {
         }
 
         renderDanmakuOverlay(displayScreen, stack, facing, w, h, lift, drawQuad)
+        renderSubtitleOverlay(displayScreen, stack, facing, w, h, lift, drawQuad)
+    }
+
+    /** Renders the selected subtitle cue as a viewer-local textured overlay. */
+    private fun renderSubtitleOverlay(
+        displayScreen: DisplayScreen, stack: PoseStack, facing: DisplayFacing, w: Int, h: Int,
+        lift: Float, drawQuad: QuadRenderer,
+    ) {
+        if (!displayScreen.isVideoStarted || !displayScreen.hasTexture || !displayScreen.subtitlesEnabled) return
+        val overlay = displayScreen.subtitleOverlayTexture()
+        overlay.update(displayScreen.currentSubtitleText)
+        val type = overlay.renderType() ?: return
+        val aspect = overlay.aspectRatio.coerceAtLeast(0.1f)
+        val qWidth = 0.84f
+        val qHeight = (qWidth * w.toFloat() / h.coerceAtLeast(1) / aspect).coerceIn(0.035f, 0.42f)
+        val x0 = (1f - qWidth) / 2f
+        val x1 = x0 + qWidth
+        val y0 = (0.065f).coerceAtMost(0.92f - qHeight)
+        val y1 = y0 + qHeight
+        drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT * 3f) {
+            drawQuad(type) { pose, vb ->
+                addTexturedVertex(pose, vb, x0, y0, 0f, 255, 255, 255, 0f, 1f, 255f)
+                addTexturedVertex(pose, vb, x1, y0, 0f, 255, 255, 255, 1f, 1f, 255f)
+                addTexturedVertex(pose, vb, x1, y1, 0f, 255, 255, 255, 1f, 0f, 255f)
+                addTexturedVertex(pose, vb, x0, y1, 0f, 255, 255, 255, 0f, 0f, 255f)
+            }
+        }
     }
 
     /** Renders each Bilibili danmaku as an independent transparent text glyph; no subtitle-style background. */

@@ -45,10 +45,16 @@ data class MediaStream(
     /** True when seeking requires decoding from start instead of seeking via demuxer. */
     val seekByDecoding: Boolean = false,
 ) {
-    /**
-     * Key that identifies this audio track across separate resolves of the same video. Prefers [audioTrackLang]
-     * since it's the more stable / normalized field; many
-     * providers only populate [audioTrackName] though, so that's the fallback rather than giving up.
-     */
+    /** Legacy language/name identity retained for old settings files and callers. */
     val audioIdentity: String? get() = audioTrackLang ?: audioTrackName
+
+    /** Stable key that distinguishes same-language audio renditions when providers expose a name. */
+    val audioSelectionKey: String
+        get() = if (!audioTrackLang.isNullOrBlank() || !audioTrackName.isNullOrBlank())
+            "track:${audioTrackLang.orEmpty().lowercase(java.util.Locale.ROOT)}|${audioTrackName.orEmpty()}"
+        else "url:" + url.substringBefore('?').substringBefore('#')
+
+    /** Matches both the new stable key and the old language/name-only preference. */
+    fun matchesAudioPreference(value: String): Boolean = audioSelectionKey == value ||
+        audioIdentity?.equals(value, ignoreCase = true) == true
 }

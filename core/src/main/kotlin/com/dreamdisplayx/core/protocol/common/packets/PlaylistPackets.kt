@@ -56,4 +56,8 @@ data class PlaylistCommand(
     @ProtoNumber(8) val endBehavior: Int = 0,
     @ProtoNumber(9) val enqueuePolicy: Int = 2,
     @ProtoNumber(10) val enabled: Boolean = true,
+    /** Optional optimistic-concurrency token for EOS/automatic NEXT; -1 means an unrestricted manual command. */
+    @ProtoNumber(11) val expectedPlayRevision: Long = -1L,
+    /** Optional stable item identity paired with [expectedPlayRevision]. */
+    @ProtoNumber(12) @Serializable(UuidSerializer::class) val expectedItemId: UUID = UUID(0, 0),
 ) : DreamPacket

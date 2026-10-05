@@ -1580,15 +1580,12 @@ internal class LibVlcSessionManager(
 
     // ── Target dimensions ────────────────────────────────────────────────────
 
-    private fun targetDims(streamSet: ActiveStreams?, lastQuality: Int = 0): Pair<Int, Int> {
-        val q = when {
-            lastQuality > 0 -> lastQuality
-            streamSet != null -> MediaStreamSelector.parseQuality(streamSet.currentVideo)
-            else -> 0
-        }
-        if (q <= 0) return 854 to 480
-        return MediaStreamSelector.qualityToDims(q).let { it[0] to it[1] }
-    }
+    private fun targetDims(streamSet: ActiveStreams?, lastQuality: Int = 0): Pair<Int, Int> =
+        MediaStreamSelector.targetDimensions(
+            streamSet?.currentVideo,
+            lastQuality,
+            getTextureSize(),
+        )
 
     /**
      * Triple-buffered video frame pool driven by the low-level libvlc video callbacks

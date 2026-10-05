@@ -32,8 +32,17 @@ data class ClientDisplaySettings(
     /** Language override for the video, or null if not overridden. */
     var langOverride: String? = null,
 
-    /** Viewer-picked audio track language (from the audio-track dropdown), re-applied after rejoining. */
+    /** Viewer-picked stable audio track identity (language/name key), re-applied after rejoining. */
     var audioTrackLang: String? = null,
+
+    /** Whether the viewer turned subtitles on for this display. */
+    var subtitlesEnabled: Boolean = false,
+
+    /** Viewer-picked stable subtitle identity, re-applied after rejoining. */
+    var subtitleTrackLang: String? = null,
+
+    /** Optional second subtitle identity rendered below the primary cue. */
+    var subtitleSecondaryLang: String? = null,
 
     /** Last known playback position in nanoseconds, resumed on Local displays after a restart. */
     var savedTimeNanos: Long = 0,

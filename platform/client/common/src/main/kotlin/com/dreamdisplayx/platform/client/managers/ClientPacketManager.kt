@@ -60,16 +60,23 @@ object ClientPacketManager {
             is FullscreenState -> FullscreenController.handle(packet)
             is PlaylistState -> {
                 val previous = PlaylistStateStore.stateOf(packet.displayId)
+                // An idle / empty / all-pending queue is still a valid server snapshot. Keep it in
+                // the mirror so the panel can show policy, mode, and pending rows until the display
+                // is explicitly deleted or the connection is reset.
                 PlaylistStateStore.apply(packet)
-                if (packet.currentIndex < 0) PlaylistStateStore.remove(packet.displayId)
-                else if (previous != null && packet.playRevision > previous.playRevision) {
+                if (previous != null && packet.playRevision > previous.playRevision) {
                     val item = packet.items.getOrNull(packet.currentIndex)
                     val previousItem = previous.items.getOrNull(previous.currentIndex)
-                    // A URL change already arrives through DisplayInfo. Only force a fresh
-                    // generation when the selected item is the same media, which DisplayInfo
-                    // deliberately de-duplicates.
-                    if (item != null && previousItem?.url == item.url && previousItem.lang == item.lang) {
-                        DisplayRegistry.screens[packet.displayId]?.replayPlaylistItem(item.url, item.lang)
+                    // A URL change already arrives through DisplayInfo. Force a fresh generation
+                    // when the selected item is the same media, which DisplayInfo deliberately
+                    // de-duplicates. The previous item may be absent when an idle queue starts
+                    // after CLEAR, so compare against the screen as the final source of truth.
+                    val screen = DisplayRegistry.screens[packet.displayId]
+                    if (item != null && screen != null &&
+                        screen.videoUrl == item.url && screen.lang == item.lang &&
+                        (previousItem == null || (previousItem.url == item.url && previousItem.lang == item.lang))
+                    ) {
+                        screen.replayPlaylistItem(item.url, item.lang)
                     }
                 }
             }

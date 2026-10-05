@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.api.media.player.PlaybackEnvironment
 import com.dreamdisplayx.api.media.player.PlaybackHost
 import com.dreamdisplayx.api.media.stream.model.MediaStream
+import com.dreamdisplayx.api.media.source.model.SubtitleTrack
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplayx.media.player.events.PlayerEvents
@@ -19,6 +20,9 @@ import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.policy.RetryPolicy
 import com.dreamdisplayx.media.player.preparation.MediaPreparationService
 import com.dreamdisplayx.media.player.preparation.PreparedMedia
+import com.dreamdisplayx.media.player.subtitle.SubtitleCue
+import com.dreamdisplayx.media.player.subtitle.SubtitleLoader
+import com.dreamdisplayx.media.player.subtitle.SubtitleTimeline
 import com.dreamdisplayx.media.player.cdn.CdnSpeedProbe
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
@@ -44,6 +48,9 @@ class MediaPlayer(
     replayBootstrap: ReplayBootstrap? = null,
     private val audioStage: AudioDspStage? = null,
 ) {
+    /** Generation captured at construction so queued EOS callbacks identify their source player. */
+    private val playbackGeneration = host.playbackGeneration
+
     /** One-shot native packet-cache bootstrap for display reappearance (includes optional audio PCM). */
     data class ReplayBootstrap(val snapshot: ByteArray, val positionNanos: Long, val audioPcm: ByteArray? = null) {
         /** Cached resolved streams for fast reappear (null = skip / re-resolve). */
@@ -274,6 +281,30 @@ class MediaPlayer(
 
     @Volatile
     private var streams: ActiveStreams? = null
+
+    @Volatile
+    private var subtitleTracks: List<SubtitleTrack> = emptyList()
+
+    @Volatile
+    private var subtitleTrack: SubtitleTrack? = null
+
+    @Volatile
+    private var subtitleSecondaryTrack: SubtitleTrack? = null
+
+    @Volatile
+    private var subtitleCues: List<SubtitleCue> = emptyList()
+
+    @Volatile
+    private var subtitleSecondaryCues: List<SubtitleCue> = emptyList()
+
+    @Volatile
+    private var subtitleTimeline = SubtitleTimeline(emptyList())
+
+    @Volatile
+    private var subtitleSecondaryTimeline = SubtitleTimeline(emptyList())
+
+    private val subtitlesEnabled = AtomicBoolean(false)
+    private val subtitleFetchId = AtomicInteger(0)
 
     /**
      * The video URL actually handed to the decoder in the last [startStreams] — i.e. AFTER the CDN
@@ -607,6 +638,93 @@ class MediaPlayer(
         stretchMode = mode
     }
 
+    /** Returns subtitle renditions discovered by the resolver for the current stream. */
+    fun getAvailableSubtitleTracks(): List<SubtitleTrack> = subtitleTracks
+
+    /** Language of the selected primary subtitle, or null when subtitles are off. */
+    fun getCurrentSubtitleLang(): String? = subtitleTrack?.language
+
+    /** Stable selection key for the selected primary subtitle rendition. */
+    fun getCurrentSubtitleSelectionKey(): String? = subtitleTrack?.selectionKey
+
+    /** Language of the optional secondary subtitle used for bilingual rendering. */
+    fun getCurrentSubtitleSecondaryLang(): String? = subtitleSecondaryTrack?.language
+
+    /** Stable key of the optional secondary subtitle rendition. */
+    fun getCurrentSubtitleSecondarySelectionKey(): String? = subtitleSecondaryTrack?.selectionKey
+
+    /** True while a subtitle track is enabled for this viewer. */
+    fun isSubtitlesEnabled(): Boolean = subtitlesEnabled.get()
+
+    /** Selects one subtitle language, or disables subtitle rendering when [language] is null/blank. */
+    fun setSubtitleTrack(language: String?) = setSubtitleTracks(language, null)
+
+    /** Selects primary and optional secondary subtitle languages for bilingual rendering. */
+    fun setSubtitleTracks(primaryLanguage: String?, secondaryLanguage: String?) {
+        val primary = primaryLanguage?.trim()?.takeIf { it.isNotEmpty() }
+        if (primary == null) {
+            subtitlesEnabled.set(false)
+            subtitleTrack = null
+            subtitleSecondaryTrack = null
+            subtitleCues = emptyList()
+            subtitleSecondaryCues = emptyList()
+            subtitleTimeline = SubtitleTimeline(emptyList())
+            subtitleSecondaryTimeline = SubtitleTimeline(emptyList())
+            subtitleFetchId.incrementAndGet()
+            return
+        }
+        val selected = subtitleTracks.firstOrNull { it.matchesPreference(primary) }
+        if (selected == null) {
+            subtitlesEnabled.set(false)
+            subtitleTrack = null
+            subtitleSecondaryTrack = null
+            subtitleCues = emptyList()
+            subtitleSecondaryCues = emptyList()
+            subtitleTimeline = SubtitleTimeline(emptyList())
+            subtitleSecondaryTimeline = SubtitleTimeline(emptyList())
+            subtitleFetchId.incrementAndGet()
+            return
+        }
+        val secondary = secondaryLanguage?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { wanted -> subtitleTracks.firstOrNull { it.matchesPreference(wanted) } }
+            ?.takeIf { it.url != selected.url }
+        subtitlesEnabled.set(true)
+        if (selected == subtitleTrack && secondary == subtitleSecondaryTrack && subtitleCues.isNotEmpty()) return
+        subtitleTrack = selected
+        subtitleSecondaryTrack = secondary
+        subtitleCues = emptyList()
+        subtitleSecondaryCues = emptyList()
+        subtitleTimeline = SubtitleTimeline(emptyList())
+        subtitleSecondaryTimeline = SubtitleTimeline(emptyList())
+        val requestId = subtitleFetchId.incrementAndGet()
+        INIT_EXECUTOR.submit {
+            val primaryCues = fetchSubtitleCues(selected, requestId)
+            val secondaryCues = secondary?.let { fetchSubtitleCues(it, requestId) }.orEmpty()
+            if (!terminated.get() && subtitleFetchId.get() == requestId) {
+                subtitleCues = primaryCues
+                subtitleSecondaryCues = secondaryCues
+                subtitleTimeline = SubtitleTimeline(primaryCues)
+                subtitleSecondaryTimeline = SubtitleTimeline(secondaryCues)
+            }
+        }
+    }
+
+    /** Current subtitle line for the playback clock, including the optional bilingual line. */
+    fun getCurrentSubtitleText(): String? {
+        if (!subtitlesEnabled.get()) return null
+        val position = getCurrentTime()
+        return listOfNotNull(
+            subtitleTimeline.textAt(position),
+            subtitleSecondaryTimeline.textAt(position),
+        ).distinct().joinToString("\n").takeIf { it.isNotBlank() }
+    }
+
+    private fun fetchSubtitleCues(track: SubtitleTrack, requestId: Int): List<SubtitleCue> = runCatching {
+        SubtitleLoader().load(track.url) { terminated.get() || subtitleFetchId.get() != requestId }
+    }.onFailure { error ->
+        logger.debug("$debugLabel subtitle fetch failed for ${track.language}: ${error.message}")
+    }.getOrDefault(emptyList())
+
     /** Returns the list of available video quality levels (in pixels) for the current stream. */
     fun getAvailableQualities(): List<Int> {
         // Premium members unlock 4K; non-premium tops out at 1080p (Bilibili's platform cap for
@@ -626,25 +744,17 @@ class MediaPlayer(
     fun setQuality(quality: VideoQuality, userInitiated: Boolean = false) =
         safeExecute { changeQuality(quality, userInitiated) }
 
-    /**
-     * Returns selectable audio tracks (deduped by language).
-     */
+    /** Returns every selectable audio rendition, retaining same-language named tracks. */
     fun getAvailableAudioTracks(): List<MediaStream> {
         val audio = streams?.availableAudio?.filter { !it.type.hasVideo } ?: return emptyList()
-        return audio
-            .groupBy { it.audioTrackLang ?: it.audioTrackName }
-            .values
-            .map { group -> group.maxByOrNull { it.bitrate ?: 0 } ?: group.first() }
+        return audio.distinctBy { it.audioSelectionKey }
     }
 
-    /**
-     * URL of currently-playing audio track for UI highlighting (null before stream resolves).
-     */
+    /** URL of the currently-playing audio track for UI highlighting (null before stream resolves). */
     fun getCurrentAudioTrack(): String? {
         val current = streams?.currentAudio ?: return null
-        val key = current.audioTrackLang ?: current.audioTrackName
         return getAvailableAudioTracks()
-            .firstOrNull { (it.audioTrackLang ?: it.audioTrackName) == key }?.url
+            .firstOrNull { it.audioSelectionKey == current.audioSelectionKey || it.url == current.url }?.url
             ?: current.url
     }
 
@@ -796,6 +906,12 @@ class MediaPlayer(
                 seekable = it.isSeekable
                 durationHintNanos = it.durationNanos
                 streams = it.streamSet
+                val previousSubtitle = subtitleTrack?.selectionKey
+                val previousSecondarySubtitle = subtitleSecondaryTrack?.selectionKey
+                subtitleTracks = it.subtitleTracks
+                if (subtitlesEnabled.get() && previousSubtitle != null) {
+                    setSubtitleTracks(previousSubtitle, previousSecondarySubtitle)
+                }
                 lastQuality = MediaStreamSelector.parseQuality(it.streamSet.currentVideo)
                 host.videoContentAspect = it.streamSet.currentVideo.contentAspect()
                 host.videoContentHeight = it.streamSet.currentVideo.height ?: 0
@@ -1052,7 +1168,7 @@ class MediaPlayer(
                 // (it persists settings and may close a fullscreen overlay), and running it on the
                 // executor blocked every later start/stop queued behind it — the reported "switching
                 // video does nothing and the picture stays frozen".
-                host.onPlaybackEnded(durationHintNanos)
+                host.onPlaybackEnded(durationHintNanos, playbackGeneration)
             }
             return
         }
@@ -1190,6 +1306,12 @@ class MediaPlayer(
         stopSession()
         sessionManager.cleanup()
         streams = null
+        subtitleFetchId.incrementAndGet()
+        subtitlesEnabled.set(false)
+        subtitleTrack = null
+        subtitleSecondaryTrack = null
+        subtitleCues = emptyList()
+        subtitleSecondaryCues = emptyList()
     }
 
     /**

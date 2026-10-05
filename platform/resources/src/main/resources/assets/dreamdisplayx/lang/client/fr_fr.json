@@ -73,6 +73,7 @@
   "dreamdisplayx.button.report.tooltip.2": "Signaler un contenu inapproprié",
   "dreamdisplayx.ui.waiting": "En attente de la vidéo...",
   "dreamdisplayx.ui.audio_track_loading": "Chargement de la piste audio...",
+  "dreamdisplayx.ui.subtitles_off": "Sous-titres désactivés",
   "dreamdisplayx.ui.quality_applying": "Application de la qualité...",
   "dreamdisplayx.ui.schedule_play": "Démarre dans %s",
   "dreamdisplayx.ui.schedule_pause": "Se met en pause dans %s",

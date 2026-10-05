@@ -73,6 +73,7 @@
   "dreamdisplayx.button.report.tooltip.2": "Поскаржитися на неприйнятний контент",
   "dreamdisplayx.ui.waiting": "Очікування відео...",
   "dreamdisplayx.ui.audio_track_loading": "Завантаження аудіодоріжки...",
+  "dreamdisplayx.ui.subtitles_off": "Субтитри вимкнено",
   "dreamdisplayx.ui.quality_applying": "Застосування якості...",
   "dreamdisplayx.ui.schedule_play": "Запуск через %s",
   "dreamdisplayx.ui.schedule_pause": "Пауза через %s",

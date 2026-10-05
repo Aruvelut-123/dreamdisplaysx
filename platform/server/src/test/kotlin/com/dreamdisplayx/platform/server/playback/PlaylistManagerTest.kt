@@ -3,6 +3,7 @@ package com.dreamdisplayx.platform.server.playback
 import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
 import com.dreamdisplayx.api.playback.model.PlaylistItemRecord
 import com.dreamdisplayx.api.playback.model.DisplayPlaylist
+import com.dreamdisplayx.core.protocol.common.packets.PlaylistCommand
 import com.dreamdisplayx.core.protocol.common.packets.PlaylistState
 import java.util.UUID
 import kotlin.test.Test
@@ -58,6 +59,31 @@ class PlaylistManagerTest {
         assertTrue(replay.playRevision != queueEdit.playRevision, "starting an item must publish a new generation")
         assertEquals(1L, PlaylistManager.advancePlayRevision(null))
         assertEquals(5L, PlaylistManager.advancePlayRevision(4L))
+    }
+
+    @Test
+    fun staleAutomaticNextCannotAdvanceAnotherItem() {
+        val current = item("A")
+        val next = item("B")
+        val playlist = DisplayPlaylist(
+            displayId = UUID.randomUUID(),
+            items = listOf(current, next),
+            currentIndex = 0,
+        )
+        val accepted = PlaylistCommand(
+            action = PlaylistCommandAction.NEXT.wire,
+            expectedPlayRevision = 4L,
+            expectedItemId = current.itemId,
+        )
+        assertTrue(PlaylistManager.acceptsExpectedNext(playlist, 4L, accepted))
+        assertFalse(PlaylistManager.acceptsExpectedNext(playlist, 5L, accepted))
+        assertFalse(
+            PlaylistManager.acceptsExpectedNext(
+                playlist,
+                4L,
+                accepted.copy(expectedItemId = next.itemId),
+            ),
+        )
     }
 
     @Test
@@ -139,6 +165,44 @@ class PlaylistManagerTest {
         // Nothing playing (index -1): any removal keeps the queue idle.
         val remaining = listOf(item("B"), item("C"))
         assertEquals(-1, PlaylistManager.indexAfterRemoval(remaining, removedIndex = 0, currentIndex = -1, loopCurrent = false))
+    }
+
+    @Test
+    fun nextSkipsPendingEntriesAndDoesNotWrapForContinue() {
+        val items = listOf(item("A"), item("pending", pending = true), item("C"))
+        assertEquals(2, PlaylistManager.nextPlayableIndex(items, currentIndex = 0, loopCurrent = false))
+        assertEquals(null, PlaylistManager.nextPlayableIndex(items, currentIndex = 2, loopCurrent = false))
+    }
+
+    @Test
+    fun nextWrapsToFirstPlayableEntryOnlyForLoop() {
+        val items = listOf(item("A"), item("pending", pending = true), item("C"))
+        assertEquals(0, PlaylistManager.nextPlayableIndex(items, currentIndex = 2, loopCurrent = true))
+        assertEquals(null, PlaylistManager.nextPlayableIndex(listOf(item("pending", pending = true)), currentIndex = 0, loopCurrent = false))
+    }
+
+    @Test
+    fun removingCurrentSkipsPendingSuccessor() {
+        val remaining = listOf(item("pending", pending = true), item("C"))
+        assertEquals(1, PlaylistManager.indexAfterRemoval(remaining, removedIndex = 0, currentIndex = 0, loopCurrent = false))
+    }
+
+    @Test
+    fun approvingPendingDoesNotMoveCurrentItem() {
+        val current = item("current")
+        val pending = item("pending", pending = true)
+        val before = listOf(current, pending)
+        val after = listOf(current, pending.copy(pending = false))
+        assertEquals(0, PlaylistManager.remapCurrentIndex(before, after, currentIndex = 0))
+        assertEquals(-1, PlaylistManager.remapCurrentIndex(before, after, currentIndex = -1))
+    }
+
+    @Test
+    fun movingCurrentUsesStableItemIdentity() {
+        val current = item("current")
+        val before = listOf(item("A"), current, item("pending", pending = true), item("C"))
+        val after = listOf(current, item("A"), item("pending", pending = true), item("C"))
+        assertEquals(0, PlaylistManager.remapCurrentIndex(before, after, currentIndex = 1))
     }
 
     private fun item(title: String, url: String = "https://example.com/$title", pending: Boolean = false): PlaylistItemRecord =

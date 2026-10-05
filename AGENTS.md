@@ -7,7 +7,7 @@
 ## Key Architecture
 
 ### Multi-Version Build
-- Uses **Stonecutter** for multi-version builds (1.21.1, 1.21.11, 26.1.2, 26.2)
+- Uses **Stonecutter** for multi-version builds (1.21.1, 1.21.11, 26.1.2, 26.2, 26.3)
 - Active version in `versions/active.txt`
 - Version gates: `//? if >=1.21.11 {}`, `//? if >=26 {}`, `//? if >=26.2 {}`
 - Chisel generates per-version sources into `build/<ver>/generated/chisel/`
@@ -71,6 +71,12 @@
 - `dreamdisplayx.logout` — Default OP (LuckPerms supported)
 
 ## Changes & Commits
+
+### 2026-10-04 — Per-viewer tracks, native-size direct links, and playlist guards
+- Resolver subtitle renditions are carried through `PreparedMedia`/`MediaPlayer`; the client persists stable audio and subtitle identities per display.
+- Subtitle downloads are bounded by `MediaHostGuard`, byte limits, timeouts, and HLS VOD segment-count limits; the render thread only rasterizes the current cue.
+- Unknown direct-stream heights use the display texture ceiling instead of the `Int.MAX_VALUE` quality sentinel's 4K mapping, avoiding needless decoder upscaling.
+- Playlist EOS and skip paths validate the current URL/language and reject pending queue rows before playback; automatic NEXT carries an item/revision token so duplicate or stale callbacks are idempotent, and client media generations reject retired-player EOS tasks.
 
 ### 2026-10-04 — Linux VOD loop and video-switch lifecycle hardening
 - Normal desktop VOD loops restart an ended libvlc input with a zero-position `play()` path instead of synchronously stopping both video and dedicated audio inputs on every loop. Non-zero seeks retain the stop/play/set-time fallback.

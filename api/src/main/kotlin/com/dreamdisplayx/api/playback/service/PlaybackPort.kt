@@ -38,6 +38,14 @@ interface PlaybackPort {
     /** Sets the active audio track for [displayId], identified by its resolved stream URL. */
     fun setAudioTrack(displayId: DisplayId, trackUrl: String)
 
+    /** Sets the stable subtitle identity for [displayId], or null to turn subtitles off. */
+    fun setSubtitleTrack(displayId: DisplayId, lang: String?)
+
+    /** Sets primary and optional secondary subtitle identities for bilingual rendering. */
+    fun setSubtitleTracks(displayId: DisplayId, primaryLang: String?, secondaryLang: String?) {
+        setSubtitleTrack(displayId, primaryLang)
+    }
+
     /** Sets the brightness multiplier for a display. */
     fun setBrightness(displayId: DisplayId, brightness: Float)
 

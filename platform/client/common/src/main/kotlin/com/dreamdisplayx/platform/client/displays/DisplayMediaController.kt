@@ -249,6 +249,7 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         (screen.videoUrl?.let(MediaSource::from) as? MediaSource.YouTube)?.let { WatchedVideoStore.markWatched(it.videoId) }
         screen.applyEffectiveVolume()
         mp.setStretchMode(screen.stretchMode)
+        screen.restoreTrackPreferences()
         // By now the stream has resolved, so videoContentAspect is known. Re-allocate the GPU texture at
         // the video's native aspect (rather than the block aspect used during the pre-resolve sizing) so
         // the vout thread uploads native-size frames with a direct bulk copy and the GPU does the scaling

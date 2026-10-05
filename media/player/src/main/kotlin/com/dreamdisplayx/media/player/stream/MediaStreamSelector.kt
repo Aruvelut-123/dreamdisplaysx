@@ -57,6 +57,25 @@ object MediaStreamSelector {
     }
 
     /**
+     * Chooses the decoder callback size without treating an unknown source height as 4K.
+     * [textureSize] is the renderer's already-selected quality ceiling for direct files and HLS.
+     */
+    fun targetDimensions(stream: MediaStream?, lastQuality: Int = 0, textureSize: Pair<Int, Int>): Pair<Int, Int> {
+        val quality = when {
+            lastQuality > 0 -> lastQuality
+            stream != null -> parseQuality(stream)
+            else -> 0
+        }
+        if (quality == Int.MAX_VALUE) {
+            val (width, height) = textureSize
+            if (width > 0 && height > 0) return width to height
+            return 1920 to 1080
+        }
+        if (quality <= 0) return 854 to 480
+        return qualityToDims(quality).let { it[0] to it[1] }
+    }
+
+    /**
      * Picks the stream pair closest to [target] height from [streams]' available tracks.
      * @return the updated set, or null when no switch is possible (no candidate, or the best
      *   candidate is already the current video).

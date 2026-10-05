@@ -69,7 +69,8 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Seamless multiplayer playback** — local, synced, and broadcast modes
 - **Powerful media player** — search, Picture-in-Picture & more
 - **Immersive audio** — 3D sound, volume up to 200% & more
-- **Adjustable resolutions** — from 144p up to 4K
+- **Adjustable resolutions** — from 144p up to 4K; unknown direct-stream sizes are never forced to 4K
+- **Multi-track playback** — choose audio and subtitle renditions per viewer, with bilingual subtitle rendering and bounded HLS WebVTT loading
 - **Hardware-accelerated playback** — libvlc hardware decode (d3d11va / vaapi / videotoolbox)
 - **Video-derived dynamic lighting** — display frames light the world when LambDynamicLights is installed
 - **Complementary shader patcher** — patches Complementary r5.8.1 packs into disposable copies, leaving other packs untouched
@@ -92,7 +93,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Experimental ReplayMod & Flashback compatibility** — replay rendering can freeze display media and follow the replay timeline, with pause / seek / video-change / GUI actions using replay markers. Flashback support is optional and reflection-based (works through Sinytra Connector on NeoForge). A global display-audio multiplier lives in Minecraft's Sound Options; display audio is not yet captured into replay exports.
 - **Ultra-low network impact** — minimal impact for your traffic
 - **Persistent displays** — settings survive server restarts and unloading
-- **Per-display playlists** — database-backed queue (SQLite/MySQL) with add/approve/remove/skip, configurable end-of-queue behavior (pause / continue / loop), and add-permission policies (everyone / owner approval / owner only), all persisted in the database
+- **Per-display playlists** — database-backed queue (SQLite/MySQL) with add/approve/remove/skip, configurable end-of-queue behavior (pause / continue / loop), pending items excluded from playback, and add-permission policies (everyone / owner approval / owner only), all persisted in the database
 
 </div>
 
@@ -116,7 +117,7 @@ Compared to the original Dream Displays, this fork adds:
 - **libvlc playback engine** — low-level JNA libvlc binding (no vlcj, no FFmpeg binary, no Rust, no Python).
   Video and audio run on decoupled clocks for full-framerate playback; native runtimes are downloaded automatically
   on first boot.
-- Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, and 26.2**.
+- Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, 26.2, and 26.3**.
 
 # Get started
 
@@ -149,7 +150,7 @@ Grab the `.jar` for your loader and Minecraft version from the
 
 - `dreamdisplayx-fabric-<mc>-<version>.jar` — Fabric / Quilt client or server mod
 - `dreamdisplayx-neoforge-<mc>-<version>.jar` — NeoForge client or server mod
-- `dreamdisplayx-paper-<version>.jar` — Paper plugin (cross-version, 1.21.1 – 26.2)
+- `dreamdisplayx-paper-<version>.jar` — Paper plugin (cross-version, 1.21.1 – 26.3)
 - `dreamdisplayx-velocity-<version>.jar` / `dreamdisplayx-bungeecord-<version>.jar` — proxy plugins
 
 On the **client**, install the mod into your mods folder. On the **server**, install the matching jar (plugin or mod).
@@ -163,6 +164,7 @@ That's it — no extra dependencies required. LambDynamicLights is an optional c
 | 1.21.11   | ✅      | ✅        | ✅     | Upstream default  |
 | 26.1.2    | ✅      | ✅        | ✅     |                   |
 | 26.2      | ✅      | ✅        | ✅     |                   |
+| 26.3      | ✅      | ✅        | ✅     |                   |
 
 ## Android (PojavLauncher / FCL / Zalith)
 

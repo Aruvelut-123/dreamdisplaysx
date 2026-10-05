@@ -85,10 +85,25 @@ object ClientSettingsStore : ClientSettingsStorage {
         save()
     }
 
-    /** Sets the viewer-picked audio track language for [displayUuid] and saves. */
+    /** Sets the viewer-picked stable audio track identity for [displayUuid] and saves. */
     override fun setAudioTrackLang(displayUuid: UUID, lang: String?) {
         val s = getSettings(displayUuid)
         s.audioTrackLang = lang
+        save()
+    }
+
+    /** Sets the viewer-picked subtitle identity; null disables subtitles. */
+    override fun setSubtitleTrackLang(displayUuid: UUID, lang: String?) {
+        val s = getSettings(displayUuid)
+        s.subtitleTrackLang = lang
+        s.subtitlesEnabled = !lang.isNullOrBlank()
+        save()
+    }
+
+    /** Sets the optional secondary subtitle identity for bilingual rendering. */
+    override fun setSubtitleSecondaryLang(displayUuid: UUID, lang: String?) {
+        val s = getSettings(displayUuid)
+        s.subtitleSecondaryLang = lang
         save()
     }
 

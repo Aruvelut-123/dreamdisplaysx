@@ -50,7 +50,8 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 - 无缝多人播放：本地、同步和广播模式
 - 强大的媒体播放器：搜索、画中画等
 - 沉浸式音频：3D 声音，音量最高 200%
-- 可调分辨率：按媒体源提供的档位选择，最高支持 4K
+- 可调分辨率：按媒体源提供的档位选择，最高支持 4K；未知直链尺寸不会强制放大到 4K
+- 多音轨和多字幕：菜单可选择音频 / 字幕轨，支持双语字幕、字幕缓存和 HLS WebVTT 分段
 - 硬件加速：libvlc 支持 d3d11va、vaapi、videotoolbox 等后端
 - 视频动态光照：安装 LambDynamicLights 后，显示器画面可以照亮周围世界
 - Complementary 着色器修补：只为 Complementary r5.8.1 创建临时副本，不修改其他着色器包
@@ -58,7 +59,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 - 服务器支持：Paper、Fabric、NeoForge、Velocity、BungeeCord
 - 权限和领地保护：支持 LuckPerms、WorldGuard 以及可选领地插件
 - 实验性 ReplayMod / Flashback 兼容：回放可以暂停、拖动、切换视频并跟随时间线
-- 数据库播放列表：SQLite/MySQL 持久化队列，支持添加、批准、移除、跳过和队列结束策略
+- 数据库播放列表：SQLite/MySQL 持久化队列，支持添加、批准、移除、跳过和队列结束策略；待批准项目不会被自动播放
 
 # 本分支新增内容
 
@@ -69,7 +70,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 - Bilibili VIP 标识、搜索、简体中文和弹幕
 - RTMP / RTMPS / SRT 推流输入
 - libvlc 播放引擎：通过 JNA 调用原生 libvlc，视频和音频使用独立时钟
-- Minecraft 1.21.1、1.21.11、26.1.2 和 26.2 支持
+- Minecraft 1.21.1、1.21.11、26.1.2、26.2 和 26.3 支持
 
 # 开始使用
 
@@ -90,7 +91,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 
 > **Bilibili 登录提示：** 在游戏中执行 `/dlogin`，使用 Bilibili 手机客户端扫描二维码。成功后，mod 会把 `SESSDATA` 发送到服务器并加密保存，再同步到服务器网络和在线客户端。
 
-搜索框和 `/display video` 都支持直接粘贴完整的 `http(s)` 视频文件地址；链接中的百分号编码路径会原样保留，适合 WebDAV 等直链文件。
+搜索框和 `/display video` 都支持直接粘贴完整的 `http(s)` 视频文件地址；链接中的百分号编码路径会原样保留，适合 WebDAV 等直链文件。解析到多音轨或字幕轨时，可在显示器菜单的音频 / CC 按钮中切换；第二个 CC 按钮会把另一条字幕显示在双语文本的下一行。字幕请求会限制大小和超时，直播字幕播放列表暂不下载。
 
 ## 下载
 
@@ -98,7 +99,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 
 - `dreamdisplayx-fabric-<mc>-<version>.jar`：Fabric / Quilt 客户端或服务器 mod
 - `dreamdisplayx-neoforge-<mc>-<version>.jar`：NeoForge 客户端或服务器 mod
-- `dreamdisplayx-paper-<version>.jar`：Paper 插件（1.21.1 – 26.2）
+- `dreamdisplayx-paper-<version>.jar`：Paper 插件（1.21.1 – 26.3）
 - `dreamdisplayx-velocity-<version>.jar` / `dreamdisplayx-bungeecord-<version>.jar`：代理插件
 
 客户端把 mod 放进 mods 文件夹，服务器安装匹配的 mod 或插件即可。LambDynamicLights 是可选的客户端动态光照集成。
@@ -111,6 +112,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 | 1.21.11 | ✅ | ✅ | ✅ | 上游默认版本 |
 | 26.1.2 | ✅ | ✅ | ✅ | |
 | 26.2 | ✅ | ✅ | ✅ | |
+| 26.3 | ✅ | ✅ | ✅ | |
 
 ## Android（PojavLauncher / FCL / Zalith）
 

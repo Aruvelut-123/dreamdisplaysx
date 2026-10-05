@@ -73,6 +73,7 @@
   "dreamdisplayx.button.report.tooltip.2": "Zgłoś o nieodpowiednie treści",
   "dreamdisplayx.ui.waiting": "Czekanie na wideo...",
   "dreamdisplayx.ui.audio_track_loading": "Ładowanie ścieżki audio...",
+  "dreamdisplayx.ui.subtitles_off": "Napisy wyłączone",
   "dreamdisplayx.ui.quality_applying": "Stosowanie jakości...",
   "dreamdisplayx.ui.schedule_play": "Uruchomi się za %s",
   "dreamdisplayx.ui.schedule_pause": "Wstrzyma się za %s",

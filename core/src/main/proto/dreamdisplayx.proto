@@ -448,6 +448,10 @@ message PlaylistCommand {
   optional int32 enqueuePolicy = 9;
   // WARNING: a default value decoded when value is missing
   optional bool enabled = 10;
+  // WARNING: a default value decoded when value is missing
+  optional int64 expectedPlayRevision = 11;
+  // WARNING: a default value decoded when value is missing
+  optional Uuid expectedItemId = 12;
 }
 
 message Uuid {

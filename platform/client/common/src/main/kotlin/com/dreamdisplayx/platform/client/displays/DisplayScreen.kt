@@ -20,6 +20,7 @@ import com.dreamdisplayx.api.media.audio.model.SourceAcousticState
 import com.dreamdisplayx.api.media.audio.model.SourcePlane
 import com.dreamdisplayx.api.media.audio.service.keys.AudioAcousticsServices
 import com.dreamdisplayx.api.media.stream.model.MediaStream
+import com.dreamdisplayx.api.media.source.model.SubtitleTrack
 import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.api.playback.model.PlaybackAction
@@ -332,12 +333,47 @@ class DisplayScreen(
         }
     }
 
-    /** Requested audio track (stream URL); respawns audio only, not persisted. */
+    private var audioTrackPreference: String? = savedSettings.audioTrackLang
+
+    /** Requested audio track (resolved stream URL); the stable language/name preference is persisted. */
     var audioTrack: String = ""
         set(value) {
             field = value
             mediaPlayer?.setAudioTrack(value)
+            val selected = audioTrackList.firstOrNull { it.url == value }
+            audioTrackPreference = selected?.audioSelectionKey
+            ClientSettingsStore.setAudioTrackLang(uuid, audioTrackPreference)
         }
+
+    private var subtitleTrackPreference: String? = savedSettings.subtitleTrackLang.takeIf { savedSettings.subtitlesEnabled }
+    private var subtitleSecondaryPreference: String? = savedSettings.subtitleSecondaryLang
+
+    /** Subtitle track selection key, or null to turn subtitles off. */
+    var subtitleTrack: String?
+        get() = subtitleTrackPreference
+        set(value) {
+            subtitleTrackPreference = value
+            mediaPlayer?.setSubtitleTracks(value, subtitleSecondaryPreference)
+            ClientSettingsStore.setSubtitleTrackLang(uuid, value)
+        }
+
+    /** Optional secondary subtitle selection key rendered below the primary cue. */
+    var subtitleSecondaryTrack: String?
+        get() = subtitleSecondaryPreference
+        set(value) {
+            subtitleSecondaryPreference = value
+            mediaPlayer?.setSubtitleTracks(subtitleTrackPreference, value)
+            ClientSettingsStore.setSubtitleSecondaryLang(uuid, value)
+        }
+
+    /** Changes both subtitle selections in one generation, avoiding a transient second fetch. */
+    fun setSubtitleTracks(primaryLanguage: String?, secondaryLanguage: String?) {
+        subtitleTrackPreference = primaryLanguage
+        subtitleSecondaryPreference = secondaryLanguage
+        mediaPlayer?.setSubtitleTracks(primaryLanguage, secondaryLanguage)
+        ClientSettingsStore.setSubtitleTrackLang(uuid, primaryLanguage)
+        ClientSettingsStore.setSubtitleSecondaryLang(uuid, secondaryLanguage)
+    }
 
     /** Broadcast pins to cap; otherwise applies distance steps. */
     private fun effectiveQuality(requested: VideoQuality = quality): VideoQuality {
@@ -536,6 +572,32 @@ class DisplayScreen(
     val qualityList: List<Int>
         get() = mediaPlayer?.getAvailableQualities() ?: emptyList()
 
+    /** Subtitle tracks available for the current video. */
+    val subtitleTrackList: List<SubtitleTrack>
+        get() = mediaPlayer?.getAvailableSubtitleTracks() ?: emptyList()
+
+    /** Language of the currently selected subtitle track, or null when subtitles are off. */
+    val currentSubtitleLang: String?
+        get() = mediaPlayer?.getCurrentSubtitleLang()
+            ?: subtitleTrackList.firstOrNull { it.selectionKey == subtitleTrack }?.language
+
+    /** Stable key of the selected subtitle rendition, used to distinguish same-language tracks. */
+    val currentSubtitleSelectionKey: String?
+        get() = mediaPlayer?.getCurrentSubtitleSelectionKey() ?: subtitleTrack
+
+    /** Stable key of the optional secondary subtitle rendition. */
+    val currentSubtitleSecondarySelectionKey: String?
+        get() = mediaPlayer?.getCurrentSubtitleSecondarySelectionKey() ?: subtitleSecondaryTrack
+
+    /** True while this viewer has subtitles enabled. */
+    val subtitlesEnabled: Boolean
+        get() = mediaPlayer?.isSubtitlesEnabled()
+            ?: (subtitleTrack != null && subtitleTrackList.any { it.selectionKey == subtitleTrack })
+
+    /** Subtitle text active at the current playback position, including bilingual text. */
+    val currentSubtitleText: String?
+        get() = mediaPlayer?.getCurrentSubtitleText()
+
     /** Audio tracks available for the current video (more than one only when the provider exposes dubs). */
     val audioTrackList: List<MediaStream>
         get() = mediaPlayer?.getAvailableAudioTracks() ?: emptyList()
@@ -659,6 +721,12 @@ class DisplayScreen(
     /** The display's persistent preview texture, created on first use and released in [unregister]. */
     internal fun previewFrameTexture(): PreviewFrameTexture =
         previewFrameCache ?: PreviewFrameTexture(uuid).also { previewFrameCache = it }
+
+    @Transient
+    private var subtitleOverlayCache: SubtitleOverlayTexture? = null
+
+    internal fun subtitleOverlayTexture(): SubtitleOverlayTexture =
+        subtitleOverlayCache ?: SubtitleOverlayTexture().also { subtitleOverlayCache = it }
 
     @Transient
     private var danmakuControllerCache: ClientDanmakuController? = null
@@ -916,6 +984,19 @@ class DisplayScreen(
         return state == null || !state.enabled
     }
 
+    /** Re-applies stable viewer track preferences after a resolver refresh. */
+    internal fun restoreTrackPreferences() {
+        val preferredAudio = audioTrackPreference
+        if (!preferredAudio.isNullOrBlank()) {
+            audioTrackList.firstOrNull { it.matchesAudioPreference(preferredAudio) }
+                ?.let { if (it.url != currentAudioTrackUrl) audioTrack = it.url }
+        }
+        val preferredSubtitle = subtitleTrack
+        if (!preferredSubtitle.isNullOrBlank() && subtitleTrackList.isNotEmpty()) {
+            mediaPlayer?.setSubtitleTracks(preferredSubtitle, subtitleSecondaryTrack)
+        }
+    }
+
     /** Applies volume, brightness, and paused state to the media player, then seeks to the saved position. */
     fun startVideo() = media.start()
 
@@ -966,7 +1047,11 @@ class DisplayScreen(
     }
 
     /** Marks a local VOD as finished without emitting playback commands upstream; also auto-closes a non-looping fullscreen overlay. */
-    internal fun onPlaybackEnded(positionNanos: Long) {
+    internal fun onPlaybackEnded(positionNanos: Long, playbackGeneration: Long = mediaGeneration) {
+        // The callback is bounced through Minecraft.execute, so a retired player's runnable may run
+        // after a newer video has already replaced the screen state. Reject it before touching
+        // fullscreen, resume, or playlist state.
+        if (playbackGeneration != mediaGeneration) return
         if (isFullscreenActive && !fullscreenLoop) deactivateFullscreen()
 
         if (effectiveMode != PlaybackMode.LOCAL) return
@@ -1002,10 +1087,22 @@ class DisplayScreen(
         val behavior = PlaylistEndBehavior.fromWire(state.endBehavior)
         if (behavior == PlaylistEndBehavior.PAUSE) return false
         val index = state.currentIndex
-        if (index < 0) return false
-        // CONTINUE past the final item is a server-side reject: stay on the ended-pause instead.
-        if (behavior == PlaylistEndBehavior.CONTINUE && index + 1 >= state.items.size) return false
-        PlaylistStateStore.send(uuid, PlaylistCommandAction.NEXT.wire)
+        val currentItem = state.items.getOrNull(index) ?: return false
+        // A delayed EOS callback from an old player must not advance a newer queue item.
+        if (currentItem.pending || currentItem.url != videoUrl || currentItem.lang != lang) return false
+        val hasNextPlayable = when (behavior) {
+            PlaylistEndBehavior.CONTINUE -> state.items.drop(index + 1).any { !it.pending }
+            PlaylistEndBehavior.LOOP_CURRENT -> state.items.any { !it.pending }
+            PlaylistEndBehavior.PAUSE -> false
+        }
+        // Avoid sending a command that the server must reject when every remaining row is pending.
+        if (!hasNextPlayable) return false
+        PlaylistStateStore.send(
+            uuid,
+            PlaylistCommandAction.NEXT.wire,
+            expectedPlayRevision = state.playRevision,
+            expectedItemId = currentItem.itemId,
+        )
         return true
     }
 
@@ -1078,6 +1175,8 @@ class DisplayScreen(
         textureResource.releaseAsync()
         previewFrameCache?.closeAsync()
         previewFrameCache = null
+        subtitleOverlayCache?.dispose()
+        subtitleOverlayCache = null
         danmakuControllerCache?.dispose()
         danmakuControllerCache = null
 

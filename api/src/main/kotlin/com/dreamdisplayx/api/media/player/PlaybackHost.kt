@@ -67,4 +67,14 @@ interface PlaybackHost {
 
     /** Signals that non-looping VOD playback reached its end at [positionNanos]. */
     fun onPlaybackEnded(positionNanos: Long)
+
+    /**
+     * Signals EOS from the player generation that created this callback. The default bridge keeps
+     * older host implementations source-compatible; lifecycle-aware hosts override it to reject
+     * callbacks queued by a retired player.
+     */
+    fun onPlaybackEnded(positionNanos: Long, playbackGeneration: Long) = onPlaybackEnded(positionNanos)
+
+    /** Generation of the player currently owned by this host, captured by [MediaPlayer]. */
+    val playbackGeneration: Long get() = 0L
 }
