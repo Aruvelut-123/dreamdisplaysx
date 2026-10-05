@@ -1,7 +1,6 @@
 package com.dreamdisplayx.platform.client.render
 
 import com.dreamdisplayx.platform.client.Initializer
-import com.dreamdisplayx.util.OsInfo
 import com.mojang.blaze3d.platform.NativeImage
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.rendertype.RenderType
@@ -39,13 +38,18 @@ class SubtitleOverlayTexture {
 
     /** Updates the texture if [text] differs from what's currently baked. Render thread only. */
     fun update(text: String?) {
-        // Android game runtimes do not provide java.desktop/AWT. Keep subtitles a no-op there
-        // instead of allowing an optional visual feature to crash the render thread.
-        if (OsInfo.isAndroid) return
+        // Some Android launchers expose Cacio-backed java.desktop while others do not. Keep the
+        // optional overlay safe on both: FCL/Pojav can render it, and bare runtimes simply skip it.
         val normalized = text?.takeIf { it.isNotBlank() }
         if (normalized == lastText) return
         if (normalized == null) {
             lastText = null
+            releaseTexture()
+            cachedRenderType = null
+            return
+        }
+        if (!OverlayTextSupport.available()) {
+            lastText = normalized
             releaseTexture()
             cachedRenderType = null
             return
@@ -119,7 +123,7 @@ class SubtitleOverlayTexture {
     }
 
     private fun rasterize(text: String): BufferedImage {
-        val font = Font(Font.SANS_SERIF, Font.BOLD, FONT_SIZE_PX)
+        val font = OverlayTextSupport.font(Font.BOLD, FONT_SIZE_PX)
         val probe = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
         val metrics = probe.createGraphics().let { g ->
             g.font = font

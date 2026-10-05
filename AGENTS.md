@@ -78,6 +78,12 @@
 - Direct media, subtitle, selected HLS child-rendition, and scrub-thumbnail URLs pass `MediaHostGuard`; unused master children stay lazy, and a `/cast/` path is not a trust boundary.
 - Playlist initialization clears rows removed from persistence before restoring the current snapshot.
 
+### 2026-10-05 — Android renderer, decoder, and overlay-text hardening
+- Pojav/FCL Android defaults to explicit libvlc `avcodec` software decoding because the desktop JVM cannot provide `android.media.MediaCodecList`; a non-empty `dreamdisplayx.hwDecode` remains an opt-in escape hatch for launchers with a real MediaCodec bridge.
+- MobileGlues is detected from launcher EGL/GL library properties and receives a bounded avcodec thread pool; Android player replacement waits briefly for the old vout to report paused without reintroducing the unsafe stop/release teardown.
+- Android cleanup roots retired session managers process-wide so delayed vmem/JNA callbacks and direct buffers cannot be garbage-collected while libvlc workers still reference them; pre-format drop buffers use the target dimensions.
+- Subtitle and danmaku rasterizers can run on Cacio/AWT Android launchers and load a CJK-capable system font; runtimes without `java.desktop` skip the optional texture safely.
+
 ### 2026-10-04 — Per-viewer tracks, native-size direct links, and playlist guards
 - Resolver subtitle renditions are carried through `PreparedMedia`/`MediaPlayer`; the client persists stable audio and subtitle identities per display.
 - Subtitle downloads are bounded by `MediaHostGuard`, byte limits, timeouts, and HLS VOD segment-count limits; the render thread only rasterizes the current cue.
@@ -174,9 +180,10 @@
   nullable and NOT instantiated there (`systemAudio` flag). Muxed media keeps audio on the video
   player; separate renditions create a dedicated OpenSL ES audio player, while volume goes through
   `libvlc_audio_set_volume`. Desktop keeps the Java Sound callback path.
-- Video/instance: Android passes `--aout=opensles` +
-  `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode); no
-  `--avcodec-hw` (desktop-only concept). **Never pass `--plugin-path` on Android**: the
+- Video/instance: Android passes `--aout=opensles` + `--codec=avcodec` (explicit software
+  decoding by default; a non-empty `dreamdisplayx.hwDecode` can opt into a launcher MediaCodec
+  bridge); MobileGlues also receives a bounded `--avcodec-threads` value. No `--avcodec-hw`
+  (desktop-only concept). **Never pass `--plugin-path` on Android**: the
   monolithic libvlc-all AAR builds VLC with loadplugins
   disabled, so the option is compiled out entirely and `libvlc_new` returns null on an unknown
   option (observed: "vlc: unknown option or missing mandatory argument `--plugin-path=...'"
@@ -289,8 +296,9 @@
   symbol libvlc needs. `NativesDownloader.hasLibVlc()` additionally requires the renamed
   libc++ on Android, so old APK-format caches are invalidated and re-downloaded.
 - AWT guards: `VideoPopoutWindow.isAvailable` returns false on Android and `ModTitleLabel`
-  catches `LinkageError` (no `java.desktop` module); Thumbnails/ScrubPreview decode paths were
-  already `runCatching`-guarded and degrade gracefully
+  catches `LinkageError`; subtitle/danmaku overlays probe optional Cacio/AWT and load a system CJK
+  font when available. Thumbnails/ScrubPreview decode paths remain `runCatching`-guarded and
+  degrade gracefully when a launcher lacks `java.desktop`.
 - Initializer no longer blocks Android startup; AWT headless override skipped on Android
 - Complementary shader patching runs at client startup by scanning every ZIP in `shaderpacks`: only Complementary Reimagined/Unbound r5.8.1 is copied to a checksummed `DreamDisplaysX-*` archive before patching. It must not edit `options.txt` or force a selection; BSL, Bliss, Photon, unknown packs, and original archives must remain untouched. Patching must fail closed and preserve the original shaderpack.
 

@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client.danmaku
 
 import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.render.DisplayUnlitRenderTypes
+import com.dreamdisplayx.platform.client.render.OverlayTextSupport
 import com.mojang.blaze3d.platform.NativeImage
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.texture.DynamicTexture
@@ -64,6 +65,10 @@ object DanmakuTextLayoutCache {
     /** Measures [text] at [scale] in virtual-canvas pixels, using the same AWT metrics as rasterization. */
     fun measure(text: String, scale: Float): DanmakuMetrics {
         val safe = text.takeIf { it.isNotBlank() } ?: return DanmakuMetrics(1f, 1f)
+        if (!OverlayTextSupport.available()) {
+            val (width, height) = OverlayTextSupport.fallbackMetrics(safe, (BASE_FONT_PX * scale).toInt())
+            return DanmakuMetrics(width, height)
+        }
         val metrics = layout(scale).second
         val width = metrics.stringWidth(safe).coerceAtLeast(1)
         val height = metrics.height.coerceAtLeast(1)
@@ -73,6 +78,7 @@ object DanmakuTextLayoutCache {
     /** Returns the cached (or newly rasterized) glyph for [text] at [argb] color and [scale]. Render thread only. */
     fun glyph(text: String, argb: Int, scale: Float): DanmakuGlyph? {
         val safe = text.takeIf { it.isNotBlank() } ?: return null
+        if (!OverlayTextSupport.available()) return null
         val key = Key(safe, argb, scale)
         cache[key]?.let { return it }
         val created = rasterize(safe, argb, scale) ?: return null
@@ -88,7 +94,7 @@ object DanmakuTextLayoutCache {
 
     /** Shared (font, metrics) for both measuring and rasterizing at [scale], so they always agree. */
     private fun layout(scale: Float): Pair<Font, FontMetrics> {
-        val font = Font(Font.SANS_SERIF, Font.BOLD, (BASE_FONT_PX * scale).toInt().coerceAtLeast(6))
+        val font = OverlayTextSupport.font(Font.BOLD, (BASE_FONT_PX * scale).toInt().coerceAtLeast(6))
         val probe = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
         val metrics = probe.createGraphics().let { g ->
             g.font = font

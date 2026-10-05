@@ -289,13 +289,20 @@ object LibVlc {
             // path is needed or accepted here. The OpenSL ES audio output must be forced
             // (`--aout=opensles` — note the module's real name; `opensl` does not exist and the
             // aout bank would fall back to PulseAudio/ALSA probes that abort on Android).
-            // Hardware decode runs through the MediaCodec decoder modules (NOT `--avcodec-hw`,
-            // which has no Android entry): fed a vmem output they cannot use their direct
-            // Surface path, so they decode in ByteBuffer (copy) mode and hand plain frames to
-            // our lock callback — the same copy-back contract as the desktop backends.
-            // mediacodec_ndk covers API 21+, mediacodec_jni is the legacy fallback.
+            // Android vmem playback uses explicit software avcodec by default. The Pojav/FCL JVM
+            // does not expose android.media.MediaCodecList, so probing MediaCodec only emits a JNI
+            // failure before falling back to avcodec and can leave extra native decoder state behind.
+            // A non-empty -Ddreamdisplayx.hwDecode override remains available for a launcher that
+            // supplies a working MediaCodec bridge. MobileGlues also gets a smaller avcodec thread
+            // pool because its GL translation buffers share the same native memory budget.
             if (com.dreamdisplayx.util.OsInfo.isAndroid) {
                 opts.add("--aout=opensles")
+                opts.add("--codec=${androidDecoderModule()}")
+                val decoderThreads = com.dreamdisplayx.media.player.util.AndroidRendererCompat.avcodecThreads()
+                opts.add("--avcodec-threads=$decoderThreads")
+                if (com.dreamdisplayx.media.player.util.AndroidRendererCompat.isMobileGlues()) {
+                    logger.info("MobileGlues detected; using software avcodec with {} decoder thread(s).", decoderThreads)
+                }
                 // No proxy option is passed: this libvlc-all AAR compiled `--http-proxy` out
                 // entirely (it warns "option --http-proxy no longer exists"), and VLC-Android's
                 // http access module unconditionally calls vlc_getProxyUrl() regardless, so the
@@ -306,7 +313,6 @@ object LibVlc {
                 // LibVlcNativesLoader.ensureAndroidEnvironmentStubVisible(). With the bridge fully
                 // initialised, vlc_getProxyUrl reads http.proxyHost via JNI, gets null (unset on
                 // a game JVM) and treats it as "no proxy" → direct connection, no crash.
-                androidDecoderModule()?.let { opts.add("--codec=$it") }
             } else {
                 // Seed the FIRST session's hw backend from the chain head (the instance option is
                 // fixed for the process lifetime; runtime fallback is driven per-media by
@@ -481,25 +487,16 @@ object LibVlc {
     // ── Media decoder info (F3 diagnostics) ─────────────────────────────────
 
     /**
-     * The hardware-decode backend passed to libvlc (instance + media), resolved per-OS unless
-     * overridden with `-Ddreamdisplayx.hwDecode`. Returns null when hw decode is disabled
-     * (config off, or `-Ddreamdisplayx.noHardwareAccel=true`).
+     * The Android decoder module for `--codec`. Pojav/FCL's desktop JVM cannot load Android's
+     * MediaCodec classes, so the default is explicit software avcodec. A non-empty
+     * `dreamdisplayx.hwDecode` override can opt into a launcher-provided MediaCodec bridge.
      */
-    /**
-     * The Android decoder-module chain for `--codec`: MediaCodec NDK (API 21+) first, legacy
-     * JNI entry point as fallback, then software avcodec. Empty override disables hw decode
-     * entirely, a non-blank override forces that chain — same semantics as the desktop
-     * `--avcodec-hw` override.
-     */
-    private fun androidDecoderModule(): String? {
-        if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
-        val override = System.getProperty("dreamdisplayx.hwDecode")
-        if (override != null) {
-            // Empty value disables hw decode; non-blank forces that module chain.
-            return override.takeIf { it.isNotBlank() }
-        }
-        return "mediacodec_ndk,mediacodec_jni,any"
-    }
+    private fun androidDecoderModule(): String =
+        com.dreamdisplayx.media.player.util.AndroidDecoderPolicy.module(
+            useHwAccel = useHwAccel,
+            noHardwareAccel = LibVlcDiagnostics.noHardwareAccel,
+            override = System.getProperty("dreamdisplayx.hwDecode"),
+        )
 
     /**
      * The hw-decode backend for the NEXT session start. Null only when hw decode is globally
@@ -510,6 +507,8 @@ object LibVlc {
      * defaults to `any` and may silently re-pick the very hw backend that just failed.
      */
     fun currentHwBackend(): String? {
+        // Android selects a decoder module with --codec; --avcodec-hw is a desktop-only option.
+        if (com.dreamdisplayx.util.OsInfo.isAndroid) return null
         if (!useHwAccel || LibVlcDiagnostics.noHardwareAccel) return null
         val override = System.getProperty("dreamdisplayx.hwDecode")
         if (override != null) {
@@ -553,7 +552,7 @@ object LibVlc {
         // throws UnsatisfiedLinkError on every F3 refresh (observed twice in hs_err_pid19065.log,
         // threads 0x76d4f93260 / 0x76d5680aa0). Report the configured MediaCodec chain instead.
         if (com.dreamdisplayx.util.OsInfo.isAndroid) {
-            return androidDecoderModule() ?: configuredHwBackend()
+            return androidDecoderModule()
         }
         return try {
             val dec = PointerByReference()

@@ -1,8 +1,21 @@
+# 1.10.0.5 Release
+
+Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplays/commit/42af16c320f962becc184590e93ebbf6dbf6d4d7).
+
+## Client
+
+### Fixes
+
+- Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
+- MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
+- Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.
+
 # 1.10.0.4 Release
 
 Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplays/commit/42af16c320f962becc184590e93ebbf6dbf6d4d7).
 
 ## Client
+
 - Simplified the Chinese README by removing internal troubleshooting details.
 
 ### Features

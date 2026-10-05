@@ -120,10 +120,12 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 
 - 支持 ARM64 和 x86_64 启动器
 - 使用 libvlc OpenSL ES 输出音频；复用音频留在视频播放器，独立音频使用单独播放器；桌面 3D 定位音频（`javax.sound`）在 Android 不可用
-- 使用 MediaCodec 解码，可用 `-Ddreamdisplayx.hwDecode=<module>` 覆盖后端
+- 默认使用 libvlc 软件 avcodec 解码，避免 Pojav/FCL 缺少 `android.media.MediaCodecList` 时反复探测失败；可用 `-Ddreamdisplayx.hwDecode=<module>` 显式启用启动器提供的 MediaCodec 桥接
+- MobileGlues 会自动限制 avcodec 解码线程数，降低 GL 翻译缓冲与视频缓冲争抢原生内存；播放器切换时等待旧 vout 进入暂停态后再创建新会话
 - teardown 时 Android libvlc 播放器只暂停、不 stop 或 release，避免原生 `SIGSEGV`
 - Android SQLite 和独立命名的 `libc++` 会解压到应用内部可执行目录
 - 提供安全的 libvlc JNI 桥接和 `android.os.Environment` stub，不加载 `libvlcjni.so`
+- 字幕和弹幕在提供 Cacio/AWT 的启动器上会优先加载 Android 系统 CJK 字体（如 Noto Sans CJK）；不带 AWT 的运行时安全跳过纹理文字而不崩溃
 
 ## JVM 参数（高级调试）
 
@@ -131,7 +133,8 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 
 | 参数 | 默认值 | 作用 |
 |---|---|---|
-| `-Ddreamdisplayx.hwDecode=<backend>` | Windows `d3d11va` / Linux `vaapi` / Mac `videotoolbox` / Android `mediacodec_ndk,mediacodec_jni,any` | libvlc 硬件解码后端；可用 `dxva2`、`any`，空值表示禁用硬件解码 |
+| `-Ddreamdisplayx.hwDecode=<backend>` | Windows `d3d11va` / Linux `vaapi` / Mac `videotoolbox` / Android `avcodec` | libvlc 解码模块；Android 默认固定软件 `avcodec`，非空值可显式启用启动器的 MediaCodec 桥接，空值仍固定软件解码 |
+| `-Ddreamdisplayx.androidAvcodecThreads=<n>` | MobileGlues `2`，其他 Android `4` | 限制 Android 软件解码线程数，范围 `1..8`；用于降低原生内存峰值 |
 | `-Ddreamdisplayx.audioBufferMs=<ms>` | `100` | Java Sound 音频缓冲区；增大更稳，减小可降低延迟 |
 | `-Ddreamdisplayx.networkCachingMs=<ms>` | `300` | libvlc 网络 / 文件缓存；网络卡顿时可以增大 |
 | `-Ddreamdisplayx.debugFps=true` | 关闭 | 在显示器菜单预览中显示实际视频 FPS |

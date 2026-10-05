@@ -172,8 +172,10 @@ That's it — no extra dependencies required. LambDynamicLights is an optional c
 
 - Runs on **ARM64** and **x86_64** launchers (PojavLauncher / FCL / Zalith).
 - Audio uses libvlc's OpenSL ES output; muxed media stays on the video player while separate DASH renditions (e.g. Bilibili) use a dedicated audio-only player. Desktop 3D positional audio (`javax.sound`) is unavailable.
-- Video decode uses MediaCodec; override with `-Ddreamdisplayx.hwDecode=<module>` or disable with an empty value, same as desktop.
+- Video decode defaults to software avcodec because the Pojav/FCL JVM does not expose `android.media.MediaCodecList`; opt into a launcher-provided MediaCodec bridge with a non-empty `-Ddreamdisplayx.hwDecode=<module>` override.
+- MobileGlues automatically uses a smaller avcodec thread pool to reduce native-memory contention between translated GL buffers and video buffers; player replacement waits briefly for the old vout to report paused.
 - Android libvlc players are paused (never stopped or released) on teardown to avoid native `SIGSEGV` crashes; stale native files are cleaned at startup.
+- Subtitle and danmaku textures load an Android system CJK font (such as Noto Sans CJK) when the launcher provides Cacio/AWT; runtimes without AWT safely skip text textures.
 - Bundles Android SQLite and a uniquely-named `libc++`; all `.so` files load from executable app-internal storage (emulated storage is `noexec`).
 - Ships a safe libvlc JNI bridge and an `android.os.Environment` stub; `libvlcjni.so` and Android-incompatible libvlc options are never used.
 
@@ -184,7 +186,8 @@ optional — defaults work fine.
 
 | Argument | Default | What it does |
 |----------|---------|--------------|
-| `-Ddreamdisplayx.hwDecode=<backend>` | `d3d11va` (Win) / `vaapi` (Linux) / `videotoolbox` (Mac) / `mediacodec_ndk,mediacodec_jni,any` (Android) | Hardware decode backend for libvlc. Other values: `dxva2`, `any`, empty string = disable hardware decode. |
+| `-Ddreamdisplayx.hwDecode=<backend>` | `d3d11va` (Win) / `vaapi` (Linux) / `videotoolbox` (Mac) / `avcodec` (Android) | libvlc decoder module; Android defaults to software `avcodec`, while a non-empty value explicitly opts into a launcher MediaCodec bridge and an empty value remains software. |
+| `-Ddreamdisplayx.androidAvcodecThreads=<n>` | `2` on MobileGlues, `4` on other Android launchers | Bound Android software-decoder threads to `1..8` to reduce native-memory peaks. |
 | `-Ddreamdisplayx.audioBufferMs=<ms>` | `100` | Java Sound line buffer for audio. Larger is safer (45ms crashed historically); lower tightens lip-sync. |
 | `-Ddreamdisplayx.networkCachingMs=<ms>` | `300` | libvlc `--network-caching` / `--file-caching`. Raise if streams stutter on slow networks. |
 | `-Ddreamdisplayx.debugFps=true` | off | Draw the live delivered video FPS on the display-menu preview. |

@@ -643,9 +643,9 @@ internal class LibVlcSessionManager(
         // frame back to system memory before handing it to the vmem lock callback, so vmem and hw
         // coexist and 4K H.264/HEVC decodes on the GPU instead of starving the CPU.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
-        // Media-level hw decode is an avcodec-module concept (desktop backends only); on
-        // Android the decoder module is chosen at instance level (--codec=mediacodec_*) and
-        // avcodec stays the software fallback.
+        // Media-level hw decode is an avcodec-module concept (desktop backends only); Android
+        // selects its decoder at instance level and defaults to explicit software avcodec when
+        // the launcher cannot provide a real MediaCodec bridge.
         if (!systemAudio) {
             // currentHwBackend() may return "none" (explicit software decode after the hw chain
             // was exhausted, or an empty -Ddreamdisplayx.hwDecode= override): keep that option —
@@ -1359,20 +1359,39 @@ internal class LibVlcSessionManager(
     /**
      * Retires Android players without invoking stop, release, or set_media on them.
      * The VLC-Android AAR may tear down native workers from set_media too, so retired players
-     * remain paused and strongly referenced until process exit; the OS then reclaims them.
+     * remain paused and strongly referenced until process exit; the OS then reclaims them. We still
+     * wait briefly for the paused state before creating a replacement, which prevents two vouts from
+     * decoding at full speed during rapid URL/quality switches while preserving the safe no-stop rule.
      */
     private fun retireAndroidPlayers() {
         if (!systemAudio) return
         mediaPlayer?.let { player ->
-            runCatching { LibVlc.lib.libvlc_media_player_set_pause(player, 1) }
+            pauseAndroidPlayerAndAwait(player)
             retiredAndroidPlayers += player
         }
         audioPlayer?.let { player ->
-            runCatching { LibVlc.lib.libvlc_media_player_set_pause(player, 1) }
+            pauseAndroidPlayerAndAwait(player)
             retiredAndroidPlayers += player
         }
         mediaPlayer = null
         audioPlayer = null
+    }
+
+    /** Pauses a VLC-Android player and gives its input/vout threads a bounded chance to quiesce. */
+    private fun pauseAndroidPlayerAndAwait(player: Pointer) {
+        runCatching { LibVlc.lib.libvlc_media_player_set_pause(player, 1) }
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(750)
+        while (System.nanoTime() < deadline) {
+            val state = runCatching { LibVlc.lib.libvlc_media_player_get_state(player) }.getOrDefault(-1)
+            if (state != LibVlc.LIBVLC_STATE_PLAYING) return
+            try {
+                Thread.sleep(10)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+        }
+        logger.debug("$debugLabel Android player did not report PAUSED before replacement; keeping it retired.")
     }
 
     /**
@@ -1399,7 +1418,16 @@ internal class LibVlcSessionManager(
         audioPlayer = null
         // On desktop, stop must run serialised on the control executor and release MUST run only
         // after stop has completed. On Android the players are only paused (never stopped) and
-        // kept alive.
+        // kept alive. Add cleanup players to the same process-lifetime roots as URL-switch players;
+        // otherwise DisplayMediaController can release the owning manager while libvlc still has
+        // delayed callbacks into its direct buffers/JNA trampolines.
+        if (systemAudio) {
+            if (mp != null) retiredAndroidPlayers += mp
+            if (ap != null) retiredAndroidPlayers += ap
+            synchronized(ANDROID_KEEP_ALIVE) {
+                if (!ANDROID_KEEP_ALIVE.contains(this)) ANDROID_KEEP_ALIVE += this
+            }
+        }
         val done = CountDownLatch(1)
         try {
             controlExecutor.execute {
@@ -1933,7 +1961,12 @@ internal class LibVlcSessionManager(
             // persisted after the audio path was isolated. So the drop buffer must ALWAYS be at
             // least a full padded frame. frameWidth/frameHeight survive clear(), so they still hold
             // the last known dimensions here.
-            val size = ((frameWidth * frameHeight * 4) + VIDEO_BUFFER_PADDING).coerceAtLeast(4)
+            // A decoder can race format setup with its first lock callback. Use the target texture
+            // dimensions when the callback has not reported a real frame size yet; returning a tiny
+            // 4K drop buffer would let libvlc memcpy a full decoded frame past the direct allocation.
+            val safeWidth = maxOf(frameWidth, expectedW, 1)
+            val safeHeight = maxOf(frameHeight, expectedH, 1)
+            val size = ((safeWidth * safeHeight * 4) + VIDEO_BUFFER_PADDING).coerceAtLeast(4)
             if (dropBuffer != null && dropPointer != null && dropBuffer!!.capacity() >= size) return
             dropBuffer = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
             dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
@@ -2053,6 +2086,15 @@ internal class LibVlcSessionManager(
     }
 
     companion object {
+        /**
+         * Android libvlc players and their JNA callbacks cannot be released safely after media has
+         * been attached. Keep the owning manager strongly reachable until process exit, including
+         * when a display unloads and its MediaPlayer is otherwise eligible for GC.
+         */
+        private val ANDROID_KEEP_ALIVE = java.util.Collections.synchronizedList(
+            mutableListOf<LibVlcSessionManager>(),
+        )
+
         private const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
         private const val REPLAY_FPS = 30.0
 
