@@ -155,8 +155,11 @@ object ScrubPreview {
             LibVlcFrameExtractor.ScrubSession(url)
         }
         // Open lazily on first use; a failed open is torn down so the next attempt rebuilds.
+        // libvlc extraction uses blocking latches and polling. Run it in an interruptible context so
+        // the coroutine timeout can actually wake a stalled decoder instead of merely cancelling the
+        // caller while the native worker keeps occupying the shared IO dispatcher.
         val ok = withTimeoutOrNull(EXTRACT_TIMEOUT) {
-            session.open()
+            runInterruptible { session.open() }
         } ?: false
         if (!ok) {
             sessions.remove(key, session)
@@ -164,8 +167,15 @@ object ScrubPreview {
             return
         }
         val bytes = withTimeoutOrNull(EXTRACT_TIMEOUT) {
-            session.extractAt(offsetNanos, FRAME_WIDTH, FRAME_HEIGHT)
-        } ?: return
+            runInterruptible { session.extractAt(offsetNanos, FRAME_WIDTH, FRAME_HEIGHT) }
+        }
+        if (bytes == null) {
+            // A CDN can leave a reused player buffering forever. Retire it after a timeout so the
+            // next hover gets a fresh connection instead of replaying the same dead session.
+            sessions.remove(key, session)
+            session.close()
+            return
+        }
         val id = registerFrame(key, offsetNanos, bytes) ?: return
         addFrame(key, Frame(offsetNanos, id))
     }

@@ -52,6 +52,8 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Fixed audio-track switching being a metadata-only update; the selected rendition now replaces the live audio channel without restarting desktop video.
 - Fixed Android muxed media being treated as separate audio after a redirect, which could duplicate playback; muxed and separate renditions now use distinct native paths.
 - Fixed `/cast/`, HLS child, and scrub-thumbnail URLs bypassing public-host validation; selected media fetches remain behind the SSRF guard without probing unused renditions.
+- Added conforming-display projection for danmaku and subtitles, with flat fallback packets for clients that do not advertise mesh support.
+- Scrub-preview extraction now interrupts timed-out decoder waits and retires dead CDN sessions before retrying.
 
 # 1.10.0.3 Release
 

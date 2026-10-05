@@ -31,6 +31,9 @@ object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
     /** Codecs the libvlc decode pipeline accepts regardless of hwaccel availability. */
     override val supportedCodecs: List<SupportedCodec> = SupportedCodec.advertised
 
+    /** This client ships the conforming world-mesh renderer. */
+    override val supportsConforming: Boolean = true
+
     /** Snapshots all probes into an immutable [ClientHello] for the handshake. */
     override fun detect(): ClientHello {
         val memory = ClientMemoryProbe.detected
@@ -61,6 +64,7 @@ object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
             dedicatedVramMb = memory.dedicatedVramMb,
             warmDisplayLimit = WarmParkPolicy.maxFullWarmDisplays,
             timeZoneOffsetMinutes = safeInt { ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60 },
+            supportsConforming = supportsConforming,
             generation = ProtocolGeneration.CURRENT,
         )
     }

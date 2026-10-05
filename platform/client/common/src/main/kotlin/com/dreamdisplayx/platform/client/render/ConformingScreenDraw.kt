@@ -15,7 +15,7 @@ import kotlin.math.sin
 
 /**
  * Draws a wrapped screen: the same picture as the flat quad, cut to the slab and stair faces.
- * The loading bar is clipped to the same surface so it follows the steps.
+ * Loading, subtitle, and danmaku overlays can reuse the same clipped surface projection.
  */
 internal object ConformingScreenDraw {
     private const val OVERLAY_LIFT = 0.002f
@@ -59,6 +59,57 @@ internal object ConformingScreenDraw {
         } else {
             drawPlaceholder(screen, quads, clearance, drawQuad)
         }
+    }
+
+    /** Draws a flat overlay texture clipped to the wrapped display surface. */
+    fun renderTexturedOverlay(
+        screen: DisplayScreen,
+        quads: List<ConformQuad>,
+        renderType: RenderType,
+        u0: Float,
+        v0: Float,
+        u1: Float,
+        v1: Float,
+        textureU0: Float,
+        textureV0: Float,
+        textureU1: Float,
+        textureV1: Float,
+        lift: Float,
+        alpha: Int = 255,
+        drawQuad: (RenderType, (PoseStack.Pose, VertexConsumer) -> Unit) -> Unit,
+    ) {
+        if (quads.isEmpty() || u1 <= u0 || v1 <= v0) return
+        // Conforming mesh UVs are rotated for the display orientation. Convert back to physical
+        // screen coordinates before clipping, then map the clipped pieces to the overlay texture.
+        val physical = quads.map { quad ->
+            quad.mapUv { u, v -> physicalUv(u, v, screen.rotation.quarterTurns) }
+        }
+        val clipped = physical.flatMap { clipToUvRect(it, u0, v0, u1, v1) }
+        if (clipped.isEmpty()) return
+        val mapped = clipped.map { quad ->
+            quad.mapUv { u, v ->
+                val x = ((u - u0) / (u1 - u0)).coerceIn(0f, 1f)
+                val y = ((v - v0) / (v1 - v0)).coerceIn(0f, 1f)
+                textureU0 + x * (textureU1 - textureU0) to
+                    textureV0 + y * (textureV1 - textureV0)
+            }
+        }
+        val clearance = DisplayGeometry.surfaceClearance() + lift
+        drawQuad(renderType) { pose, builder ->
+            for (quad in mapped) {
+                emit(pose, builder, quad.v0, clearance, 255, 255, 255, alpha)
+                emit(pose, builder, quad.v1, clearance, 255, 255, 255, alpha)
+                emit(pose, builder, quad.v2, clearance, 255, 255, 255, alpha)
+                emit(pose, builder, quad.v3, clearance, 255, 255, 255, alpha)
+            }
+        }
+    }
+
+    private fun physicalUv(u: Float, v: Float, quarterTurns: Int): Pair<Float, Float> = when (quarterTurns) {
+        1 -> 1f - v to 1f - u
+        2 -> 1f - u to v
+        3 -> v to u
+        else -> u to 1f - v
     }
 
     private fun drawPlaceholder(
@@ -112,10 +163,10 @@ internal object ConformingScreenDraw {
         if (quads.isEmpty()) return
         drawQuad(type) { pose, builder ->
             for (quad in quads) {
-                emit(pose, builder, quad.v0, clearance, r, g, b)
-                emit(pose, builder, quad.v1, clearance, r, g, b)
-                emit(pose, builder, quad.v2, clearance, r, g, b)
-                emit(pose, builder, quad.v3, clearance, r, g, b)
+                emit(pose, builder, quad.v0, clearance, r, g, b, 255)
+                emit(pose, builder, quad.v1, clearance, r, g, b, 255)
+                emit(pose, builder, quad.v2, clearance, r, g, b, 255)
+                emit(pose, builder, quad.v3, clearance, r, g, b, 255)
             }
         }
     }
@@ -128,6 +179,7 @@ internal object ConformingScreenDraw {
         r: Int,
         g: Int,
         b: Int,
+        alpha: Int,
     ) {
         builder.addVertex(
             pose,
@@ -136,6 +188,6 @@ internal object ConformingScreenDraw {
             vertex.z + vertex.oz * clearance,
         )
             .setUv(vertex.u, vertex.v)
-            .setColor(r, g, b, 255)
+            .setColor(r, g, b, alpha.coerceIn(0, 255))
     }
 }

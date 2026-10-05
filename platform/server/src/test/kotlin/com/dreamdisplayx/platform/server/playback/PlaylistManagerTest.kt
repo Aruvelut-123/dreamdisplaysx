@@ -90,6 +90,14 @@ class PlaylistManagerTest {
     }
 
     @Test
+    fun directPlaybackCannotBeReclaimedByTheOldQueue() {
+        val queued = item("queued", "https://example.com/queued", pending = false)
+        assertTrue(PlaylistManager.queueOwnsMedia(queued, queued.url, queued.lang))
+        assertFalse(PlaylistManager.queueOwnsMedia(queued, "https://example.com/direct", queued.lang))
+        assertFalse(PlaylistManager.queueOwnsMedia(queued, queued.url, "ja"))
+    }
+
+    @Test
     fun setEnabledRequiresOwnerOrAdmin() {
         val action = PlaylistCommandAction.SET_ENABLED
         assertTrue(requiresOwnerOrAdmin(action))

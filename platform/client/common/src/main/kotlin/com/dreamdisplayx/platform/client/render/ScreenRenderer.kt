@@ -10,6 +10,7 @@ package com.dreamdisplayx.platform.client.render
 import net.minecraft.client.renderer.rendertype.RenderType
 //?} else
 /*import net.minecraft.client.renderer.RenderType*/
+import com.dreamdisplayx.api.display.geometry.ConformQuad
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.dreamdisplayx.api.display.model.property.DisplayId
@@ -127,20 +128,30 @@ object ScreenRenderer : ClientRenderService {
         displayScreen: DisplayScreen, stack: PoseStack, replay: Boolean, drawQuad: QuadRenderer,
     ) {
         if (!replay) displayScreen.fitTexture()
+        val facing = displayScreen.facing
+        val w = displayScreen.width
+        val h = displayScreen.height
 
         // A conforming display hugs the selected slabs/stairs: the picture is drawn on the surfaces the
-        // server found instead of one flat quad, so the flat transform and its overlays are skipped.
+        // server found instead of one flat quad, so the flat transform is skipped while overlays follow
+        // the same wrapped mesh.
         if (displayScreen.conforming) {
             val wrapped = ConformingWorldMesh.quads(displayScreen)
             if (wrapped != null) {
-                ConformingScreenDraw.render(displayScreen, wrapped, if (replay) REPLAY_LIFT else 0f, drawQuad)
+                val conformingLift = if (replay) REPLAY_LIFT else 0f
+                ConformingScreenDraw.render(displayScreen, wrapped, conformingLift, drawQuad)
+                renderDanmakuOverlay(
+                    displayScreen, stack, facing, w, h,
+                    lift = conformingLift, drawQuad = drawQuad, conformingQuads = wrapped,
+                )
+                renderSubtitleOverlay(
+                    displayScreen, stack, facing, w, h,
+                    lift = conformingLift, drawQuad = drawQuad, conformingQuads = wrapped,
+                )
                 return
             }
         }
 
-        val facing = displayScreen.facing
-        val w = displayScreen.width
-        val h = displayScreen.height
         // Every flat overlay (video, letterbox backdrop, placeholder, danmaku) sits on this base lift.
         // It must never be 0: [drawLayer] skips `liftTowardViewer` entirely when the lift is 0, which
         // left the quad exactly coplanar with the block face it covers. LETTERBOX masked that behind
@@ -176,7 +187,7 @@ object ScreenRenderer : ClientRenderService {
     /** Renders the selected subtitle cue as a viewer-local textured overlay. */
     private fun renderSubtitleOverlay(
         displayScreen: DisplayScreen, stack: PoseStack, facing: DisplayFacing, w: Int, h: Int,
-        lift: Float, drawQuad: QuadRenderer,
+        lift: Float, drawQuad: QuadRenderer, conformingQuads: List<ConformQuad>? = null,
     ) {
         if (!displayScreen.isVideoStarted || !displayScreen.hasTexture || !displayScreen.subtitlesEnabled) return
         val overlay = displayScreen.subtitleOverlayTexture()
@@ -189,19 +200,30 @@ object ScreenRenderer : ClientRenderService {
         val x1 = x0 + qWidth
         val y0 = (0.065f).coerceAtMost(0.92f - qHeight)
         val y1 = y0 + qHeight
-        drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT * 3f) {
-            drawQuad(type) { pose, vb ->
-                addTexturedVertex(pose, vb, x0, y0, 0f, 255, 255, 255, 0f, 1f, 255f)
-                addTexturedVertex(pose, vb, x1, y0, 0f, 255, 255, 255, 1f, 1f, 255f)
-                addTexturedVertex(pose, vb, x1, y1, 0f, 255, 255, 255, 1f, 0f, 255f)
-                addTexturedVertex(pose, vb, x0, y1, 0f, 255, 255, 255, 0f, 0f, 255f)
+        if (conformingQuads != null) {
+            ConformingScreenDraw.renderTexturedOverlay(
+                displayScreen, conformingQuads, type,
+                x0, y0, x1, y1,
+                0f, 1f, 1f, 0f,
+                lift + OVERLAY_LIFT * 3f,
+                drawQuad = drawQuad,
+            )
+        } else {
+            drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT * 3f) {
+                drawQuad(type) { pose, vb ->
+                    addTexturedVertex(pose, vb, x0, y0, 0f, 255, 255, 255, 0f, 1f, 255f)
+                    addTexturedVertex(pose, vb, x1, y0, 0f, 255, 255, 255, 1f, 1f, 255f)
+                    addTexturedVertex(pose, vb, x1, y1, 0f, 255, 255, 255, 1f, 0f, 255f)
+                    addTexturedVertex(pose, vb, x0, y1, 0f, 255, 255, 255, 0f, 0f, 255f)
+                }
             }
         }
     }
 
     /** Renders each Bilibili danmaku as an independent transparent text glyph; no subtitle-style background. */
     private fun renderDanmakuOverlay(
-        displayScreen: DisplayScreen, stack: PoseStack, facing: DisplayFacing, w: Int, h: Int, lift: Float, drawQuad: QuadRenderer,
+        displayScreen: DisplayScreen, stack: PoseStack, facing: DisplayFacing, w: Int, h: Int,
+        lift: Float, drawQuad: QuadRenderer, conformingQuads: List<ConformQuad>? = null,
     ) {
         // Danmaku only exists on top of a rendered video: before the first frame arrives the screen
         // shows the loading placeholder, and queueing danmaku onto it looks like the text appears
@@ -229,12 +251,24 @@ object ScreenRenderer : ClientRenderService {
             val u1 = ((x1 - rawX0) / (rawX1 - rawX0)).coerceIn(0f, 1f)
             val vTop = (1f - (y0 - rawY0) / (rawY1 - rawY0)).coerceIn(0f, 1f)
             val vBottom = (1f - (y1 - rawY0) / (rawY1 - rawY0)).coerceIn(0f, 1f)
-            drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT * 2f + index * 0.00001f) {
-                drawQuad(glyph.renderType) { pose, vb ->
-                    addTexturedVertex(pose, vb, x0, y0, 0f, 255, 255, 255, u0, vTop, item.opacity)
-                    addTexturedVertex(pose, vb, x1, y0, 0f, 255, 255, 255, u1, vTop, item.opacity)
-                    addTexturedVertex(pose, vb, x1, y1, 0f, 255, 255, 255, u1, vBottom, item.opacity)
-                    addTexturedVertex(pose, vb, x0, y1, 0f, 255, 255, 255, u0, vBottom, item.opacity)
+            val overlayLift = lift + OVERLAY_LIFT * 2f + index * 0.00001f
+            if (conformingQuads != null) {
+                ConformingScreenDraw.renderTexturedOverlay(
+                    displayScreen, conformingQuads, glyph.renderType,
+                    x0, y0, x1, y1,
+                    u0, vTop, u1, vBottom,
+                    overlayLift,
+                    alpha = (item.opacity.coerceIn(0f, 1f) * 255f).toInt(),
+                    drawQuad = drawQuad,
+                )
+            } else {
+                drawLayer(stack, facing, w, h, overlayLift) {
+                    drawQuad(glyph.renderType) { pose, vb ->
+                        addTexturedVertex(pose, vb, x0, y0, 0f, 255, 255, 255, u0, vTop, item.opacity)
+                        addTexturedVertex(pose, vb, x1, y0, 0f, 255, 255, 255, u1, vTop, item.opacity)
+                        addTexturedVertex(pose, vb, x1, y1, 0f, 255, 255, 255, u1, vBottom, item.opacity)
+                        addTexturedVertex(pose, vb, x0, y1, 0f, 255, 255, 255, u0, vBottom, item.opacity)
+                    }
                 }
             }
         }

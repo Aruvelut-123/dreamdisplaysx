@@ -268,6 +268,10 @@ object PlaylistManager {
             playlist.items.getOrNull(playlist.currentIndex)?.itemId == packet.expectedItemId
     }
 
+    /** Returns whether the queue's current item still owns the display's active media identity. */
+    internal fun queueOwnsMedia(item: PlaylistItemRecord, displayUrl: String, displayLang: String): Boolean =
+        item.url == displayUrl && item.lang == displayLang
+
     /**
      * Computes the playing index after removing the item at [removedIndex] from [remaining].
      * Pure function so the bookkeeping rules are unit-testable:
@@ -363,7 +367,7 @@ object PlaylistManager {
             val display = DisplayManager.getDisplayData(displayId) ?: continue
             // A user may play a direct URL while a playlist is still present. Never let the old
             // queue reclaim that unrelated media when its authoritative timeline later reaches EOS.
-            if (display.url != item.url || display.lang != item.lang) continue
+            if (!queueOwnsMedia(item, display.url, display.lang)) continue
             if (display.mode != com.dreamdisplayx.api.playback.model.PlaybackMode.SYNCED &&
                 display.mode != com.dreamdisplayx.api.playback.model.PlaybackMode.BROADCAST
             ) continue

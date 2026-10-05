@@ -48,7 +48,7 @@ Two seek / video-switch robustness guards complete that set: audio-to-video snap
 
 ## Protocol compatibility
 
-Clients negotiate the batch-capable **V3** envelope (`dreamdisplayx:v3`) when available and fall back to the compatible **V2** envelope (`dreamdisplayx:v2`) otherwise. V3 same-content snapshots bind multiple displays to one URL and playback timeline. Legacy **V1** traffic is detected and the affected player is notified in chat, but V1 packets are not processed.
+Clients negotiate the batch-capable **V3** envelope (`dreamdisplayx:v3`) when available and fall back to the compatible **V2** envelope (`dreamdisplayx:v2`) otherwise. V3 same-content snapshots bind multiple displays to one URL and playback timeline. Legacy **V1** traffic is detected and the affected player is notified in chat, but V1 packets are not processed. The V2/V3 client hello advertises conforming-display support; servers send flat geometry to older clients that do not advertise it.
 
 V3, `/display group`, the Paper remote-control stick, and the Flashback / ReplayMod bridges are experimental and may change.
 
@@ -95,6 +95,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Ultra-low network impact** — minimal impact for your traffic
 - **Persistent displays** — settings survive server restarts and unloading
 - **Per-display playlists** — database-backed queue (SQLite/MySQL) with add/approve/remove/skip, configurable end-of-queue behavior (pause / continue / loop), pending items excluded from playback, and add-permission policies (everyone / owner approval / owner only), all persisted in the database
+- **Conforming displays** — stairs, slabs and mixed-shaped surfaces share one fitted mesh for video, subtitles and danmaku; clients without conforming support receive a flat compatibility representation
 
 </div>
 

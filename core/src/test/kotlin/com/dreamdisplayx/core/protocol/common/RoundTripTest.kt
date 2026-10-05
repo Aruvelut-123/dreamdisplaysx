@@ -31,6 +31,7 @@ class RoundTripTest {
             maxTextureSize = 8192,
             supportedCodecs = listOf("h264", "vp9", "av1"),
             supportsAudio = false,
+            supportsConforming = true,
             systemRamMb = 16 * 1024,
             maxJvmMemoryMb = 4 * 1024,
             dedicatedVramMb = 8 * 1024,

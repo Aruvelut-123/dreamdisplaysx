@@ -1,13 +1,11 @@
 # Dream DisplaysX Project Roadmap
 
 - Playlists & Queue (V3 protocol)
-  - [ ] Manually smoke-test local and synced playlist transitions plus seeking on Fabric 26.3, including duplicate EOS and direct-play interruption.
+  - [ ] Manual runtime smoke test still requires a Fabric 26.3 server/client world; JVM coverage now exercises playlist revision tokens, stale EOS rejection, and direct-play ownership, but the launcher reports no installed Minecraft versions or configured worlds.
 - Player Robustness
-  - [ ] Investigate remaining native decoder stalls and CDN-specific scrub-preview timeouts.
-  - [ ] Manually smoke-test per-viewer audio switching (including muxed vs separate Android audio) and bilingual subtitle rendering on desktop and Android; native/AWT/GPU paths are not covered by JVM tests.
-  - [ ] Manually smoke-test large HLS masters with unavailable or orphaned renditions, including quality and audio-track selection.
+  - [ ] Native decoder stalls and CDN-specific scrub-preview timeouts still need a real libvlc/CDN run; scrub extraction now uses interruptible bounded waits and retires timed-out CDN sessions, while generation-aware recovery is covered by code review but not reproducible in this JVM-only checkout.
+  - [ ] Manual desktop/Android smoke test remains required for per-viewer audio switching (muxed vs separate paths) and bilingual subtitle rendering; native/AWT/GPU paths are unavailable in this environment.
+  - [ ] Manual large-HLS smoke test remains required for unavailable/orphaned renditions and quality/audio selection; bounded parsing and referenced-audio filtering have JVM coverage.
 - Curved displays (upstream 42af16c3)
-  - [ ] Danmaku overlay is not drawn on conforming (stairs/slabs) displays; decide whether to project it onto the fitted mesh.
-  - [ ] Smoke-test curved displays in game on 26.3 (Fabric + NeoForge) with slabs, stairs and mixed air/shaped selections.
-  - [ ] Consider filtering `DisplayInfo` recipients by client conforming support (old clients ignore fields 24/25 and draw flat).
-- [ ] Manually smoke-test Linux 1.21.11 Fabric with repeated short-video loops, local/synced playlist advances, rapid URL switches and audio continuity.
+  - [ ] Smoke-test curved displays in game on 26.3 (Fabric + NeoForge) with slabs, stairs and mixed air/shaped selections; the Fabric dev run reached asset setup but no Minecraft window appeared, and the launcher has no installed modded instance/world.
+- [ ] Manually smoke-test Linux 1.21.11 Fabric with repeated short-video loops, local/synced playlist advances, rapid URL switches and audio continuity; this Windows checkout has no Linux game runtime.

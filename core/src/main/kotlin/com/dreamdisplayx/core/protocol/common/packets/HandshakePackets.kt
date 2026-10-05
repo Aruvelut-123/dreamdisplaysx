@@ -42,6 +42,8 @@ data class ClientHello(
     @ProtoNumber(26) val lavUnavailableReason: String = "",
     @ProtoNumber(27) val timeZoneOffsetMinutes: Int = 0,
     @ProtoNumber(28) val generation: Int = ProtocolGeneration.V2,
+    /** Whether this client can render displays wrapped onto stairs/slabs. */
+    @ProtoNumber(29) val supportsConforming: Boolean = false,
 ) : DreamPacket
 
 /** Server -> client capability snapshot (premium, admin, reporting); field 5 retired. */

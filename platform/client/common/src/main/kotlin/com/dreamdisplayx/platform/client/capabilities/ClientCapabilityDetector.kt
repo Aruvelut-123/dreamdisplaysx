@@ -22,4 +22,7 @@ interface ClientCapabilityDetector {
 
     /** Codecs the `FFmpeg` decode pipeline accepts regardless of hwaccel availability. */
     val supportedCodecs: List<SupportedCodec>
+
+    /** True when the client can draw displays conforming to stair/slab surfaces. */
+    val supportsConforming: Boolean
 }

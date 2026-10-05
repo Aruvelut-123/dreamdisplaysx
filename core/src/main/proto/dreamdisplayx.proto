@@ -68,6 +68,8 @@ message ClientHello {
   optional int32 timeZoneOffsetMinutes = 27;
   // WARNING: a default value decoded when value is missing
   optional int32 generation = 28;
+  // WARNING: a default value decoded when value is missing
+  optional bool supportsConforming = 29;
 }
 
 // serial name 'com.dreamdisplayx.core.protocol.common.packets.ServerHello'

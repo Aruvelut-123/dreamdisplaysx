@@ -39,7 +39,7 @@ Dream DisplaysX 是 [Dream Displays](https://github.com/arnodoelinger/dreamdispl
 
 ## 协议兼容性
 
-客户端优先协商支持批量数据的 **V3** 信封（`dreamdisplayx:v3`），不可用时自动回退到 **V2**（`dreamdisplayx:v2`）。V3 的同内容快照可以让多个显示器共享 URL 和播放时间线。旧版 **V1** 流量会被识别并在聊天中提示，但不会被处理。
+客户端优先协商支持批量数据的 **V3** 信封（`dreamdisplayx:v3`），不可用时自动回退到 **V2**（`dreamdisplayx:v2`）。V3 的同内容快照可以让多个显示器共享 URL 和播放时间线。旧版 **V1** 流量会被识别并在聊天中提示，但不会被处理。V2/V3 握手还会声明曲面显示器能力；未声明能力的旧客户端会收到平面兼容表示。
 
 V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接仍属于实验功能，接口可能变化。
 
@@ -61,6 +61,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 - 权限和领地保护：支持 LuckPerms、WorldGuard 以及可选领地插件
 - 实验性 ReplayMod / Flashback 兼容：回放可以暂停、拖动、切换视频并跟随时间线
 - 数据库播放列表：SQLite/MySQL 持久化队列，支持添加、批准、移除、跳过和队列结束策略；待批准项目不会被自动播放
+- 曲面显示器：支持楼梯、台阶和混合形状表面，视频、字幕与弹幕都会投影到同一套贴合网格；不支持曲面的旧客户端会收到平面兼容表示
 
 # 本分支新增内容
 

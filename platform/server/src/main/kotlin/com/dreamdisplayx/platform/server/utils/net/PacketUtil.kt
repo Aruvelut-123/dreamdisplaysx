@@ -44,14 +44,30 @@ object PacketUtil {
             access = access.wire, inRegion = inRegion,
             depth = depth.coerceAtLeast(1), conforming = conforming,
         )
+        val recipients = players.filterNotNull()
         if (access == DisplayAccess.REGION && isRegionMember != null) {
-            players.filterNotNull().forEach { player ->
-                PaperV2Networking.send(listOf(player), info.copy(viewerInRegion = isRegionMember(player)))
+            recipients.forEach { player ->
+                PaperV2Networking.send(
+                    listOf(player),
+                    info.copy(
+                        conforming = DisplayCapabilityPolicy.conformingFor(conforming, V2PlayerTracker.helloOf(player.uniqueId)),
+                        viewerInRegion = isRegionMember(player),
+                    ),
+                )
             }
         } else {
-            PaperV2Networking.send(players, info)
+            recipients.groupBy(::supportsConforming).forEach { (supportsConforming, group) ->
+                PaperV2Networking.send(
+                    group,
+                    info.copy(conforming = DisplayCapabilityPolicy.conformingFor(conforming, supportsConforming)),
+                )
+            }
         }
     }
+
+    /** Unknown or legacy peers receive a flat representation until they advertise field 29. */
+    private fun supportsConforming(player: Player): Boolean =
+        V2PlayerTracker.helloOf(player.uniqueId)?.supportsConforming == true
 
     fun sendSync(players: List<Player?>, syncData: SyncData) {
         val id = syncData.id ?: return

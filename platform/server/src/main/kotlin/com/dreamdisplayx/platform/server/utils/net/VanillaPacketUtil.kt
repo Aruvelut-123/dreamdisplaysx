@@ -15,17 +15,31 @@ import java.util.UUID
 /** Sends protocol-v2 packets for Fabric and NeoForge servers. */
 object VanillaPacketUtil {
     fun sendDisplayInfo(players: List<ServerPlayer>, display: VanillaDisplayData, forced: Boolean = false) {
-        VanillaNetworking.adapter.sendV2(players, toDisplayInfo(display, forced))
+        players.groupBy(::supportsConforming).forEach { (supportsConforming, recipients) ->
+            VanillaNetworking.adapter.sendV2(
+                recipients,
+                toDisplayInfo(display, forced, supportsConforming),
+            )
+        }
     }
 
     /** Sends a chunk of display infos as one v3 batch envelope (v2 fallback per player inside the adapter). */
     fun sendDisplayInfos(players: List<ServerPlayer>, displays: List<VanillaDisplayData>) {
         if (displays.isEmpty()) return
-        VanillaNetworking.adapter.sendV3Batch(players, displays.map { toDisplayInfo(it, forced = false) })
+        players.groupBy(::supportsConforming).forEach { (supportsConforming, recipients) ->
+            VanillaNetworking.adapter.sendV3Batch(
+                recipients,
+                displays.map { toDisplayInfo(it, forced = false, supportsConforming) },
+            )
+        }
     }
 
     /** Builds the wire [DisplayInfo] for [display]; shared by the single and batch send paths. */
-    private fun toDisplayInfo(display: VanillaDisplayData, forced: Boolean) = DisplayInfo(
+    private fun toDisplayInfo(
+        display: VanillaDisplayData,
+        forced: Boolean,
+        supportsConforming: Boolean,
+    ) = DisplayInfo(
         id = display.id, ownerId = display.ownerId, x = display.minX, y = display.minY, z = display.minZ,
         width = display.width, height = display.height, url = display.url,
         facing = directionToFacingUtil(display.facing).toPacket().toInt(), isSync = display.isSync,
@@ -34,8 +48,13 @@ object VanillaPacketUtil {
         virtual = display.virtual, forced = forced,
         scheduledStartEpochMillis = display.scheduledStart?.toEpochMilliseconds() ?: 0,
         scheduledAction = display.scheduledAction?.wire ?: -1, positionNanos = display.seekPositionNanos,
-        depth = display.depth, conforming = display.conforming,
+        depth = display.depth,
+        conforming = DisplayCapabilityPolicy.conformingFor(display.conforming, supportsConforming),
     )
+
+    /** Unknown or legacy peers receive a flat representation until they advertise field 29. */
+    private fun supportsConforming(player: ServerPlayer): Boolean =
+        V2PlayerTracker.helloOf(player.uuid)?.supportsConforming == true
 
     fun sendSync(players: List<ServerPlayer>, syncData: SyncData) {
         val id = syncData.id ?: return
