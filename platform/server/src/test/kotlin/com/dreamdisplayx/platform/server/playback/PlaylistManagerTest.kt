@@ -4,11 +4,14 @@ import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
 import com.dreamdisplayx.api.playback.model.PlaylistItemRecord
 import com.dreamdisplayx.api.playback.model.DisplayPlaylist
 import com.dreamdisplayx.core.protocol.common.packets.PlaylistCommand
+import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
 import com.dreamdisplayx.core.protocol.common.packets.PlaylistState
+import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -205,6 +208,17 @@ class PlaylistManagerTest {
         assertEquals(0, PlaylistManager.remapCurrentIndex(before, after, currentIndex = 1))
     }
 
+    @Test
+    fun reinitializationDropsPlaylistsRemovedFromStorage() {
+        val staleId = UUID.randomUUID()
+        PlaylistManager.init(NoopTransport, listOf(DisplayPlaylist(displayId = staleId)))
+        assertEquals(staleId, PlaylistManager.playlistOf(staleId)?.displayId)
+
+        PlaylistManager.init(NoopTransport, emptyList())
+
+        assertNull(PlaylistManager.playlistOf(staleId))
+    }
+
     private fun item(title: String, url: String = "https://example.com/$title", pending: Boolean = false): PlaylistItemRecord =
         PlaylistItemRecord(
             itemId = UUID.randomUUID(),
@@ -226,5 +240,25 @@ class PlaylistManagerTest {
             PlaylistCommandAction.REJECT -> true
             else -> false
         }
+    }
+
+    private object NoopTransport : PlaybackTransport {
+        override fun nowMs(): Long = 0L
+        override fun broadcast(display: DisplayData, packet: DreamPacket) = Unit
+        override fun sendTo(playerId: UUID, packet: DreamPacket) = Unit
+        override fun nearbyPlayerIds(display: DisplayData): List<UUID> = emptyList()
+        override fun playerName(playerId: UUID): String? = null
+        override fun isAdmin(playerId: UUID): Boolean = false
+        override fun isTerritoryMember(display: DisplayData, playerId: UUID): Boolean = false
+        override fun onlinePlayerIds(): List<UUID> = emptyList()
+        override fun playerDistanceSq(playerId: UUID, world: String, x: Double, y: Double, z: Double): Double? = null
+        override fun sendDisplayInfo(playerId: UUID, display: DisplayData, forced: Boolean) = Unit
+        override fun createVirtualDisplay(id: UUID, ownerId: UUID): DisplayData? = null
+        override fun runOnMainThread(task: () -> Unit) = task()
+        override fun saveDisplay(display: DisplayData) = Unit
+        override fun notifyVideoChanged(display: DisplayData) = Unit
+        override fun loadAllPlaylists(): List<DisplayPlaylist> = emptyList()
+        override fun savePlaylist(playlist: DisplayPlaylist) = Unit
+        override fun deletePlaylist(displayId: UUID) = Unit
     }
 }

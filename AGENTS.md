@@ -72,6 +72,12 @@
 
 ## Changes & Commits
 
+### 2026-10-04 — Playback review hardening
+- Audio-track changes replace the desktop dedicated audio media in place; Android restarts with fresh native players and keeps muxed media on the video player's OpenSL ES path to avoid duplicate output, while delayed events from retired players are ignored.
+- Dynamic subtitle textures release their texture-manager entries on replacement and disposal.
+- Direct media, subtitle, and HLS child-rendition URLs always pass `MediaHostGuard`; a `/cast/` path is not a trust boundary.
+- Playlist initialization clears rows removed from persistence before restoring the current snapshot.
+
 ### 2026-10-04 — Per-viewer tracks, native-size direct links, and playlist guards
 - Resolver subtitle renditions are carried through `PreparedMedia`/`MediaPlayer`; the client persists stable audio and subtitle identities per display.
 - Subtitle downloads are bounded by `MediaHostGuard`, byte limits, timeouts, and HLS VOD segment-count limits; the render thread only rasterizes the current cue.
@@ -165,9 +171,9 @@
 - noexec: `AndroidPaths.nativesCacheRoot()` redirects the cache from the (noexec) game dir into
   app-internal storage (`java.io.tmpdir` → `user.home` → `/data/user/0/<pkg>/cache`)
 - Audio: `javax.sound` does not exist on Android, so `LibVlcSessionManager.audioOutput` is
-  nullable and NOT instantiated there (`systemAudio` flag); `audioPlayer()` returns null; the
-  video player keeps its own audio and libvlc plays it via `--aout=opensles`; volume goes through
-  `libvlc_audio_set_volume`. Desktop path unchanged.
+  nullable and NOT instantiated there (`systemAudio` flag). Muxed media keeps audio on the video
+  player; separate renditions create a dedicated OpenSL ES audio player, while volume goes through
+  `libvlc_audio_set_volume`. Desktop keeps the Java Sound callback path.
 - Video/instance: Android passes `--aout=opensles` +
   `--codec=mediacodec_ndk,mediacodec_jni,any` (MediaCodec, ByteBuffer copy mode); no
   `--avcodec-hw` (desktop-only concept). **Never pass `--plugin-path` on Android**: the

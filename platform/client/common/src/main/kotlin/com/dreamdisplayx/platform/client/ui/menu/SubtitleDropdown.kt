@@ -167,7 +167,6 @@ class SubtitleDropdown(
         matrices.popMatrix()
         //?} else
         /*matrices.popPose()*/
-        /*matrices.popPose()*/
     }
 
     private fun drawScrollbar(g: GuiGraphicsCompat, alpha: Float, right: Int, top: Int, bottom: Int) {

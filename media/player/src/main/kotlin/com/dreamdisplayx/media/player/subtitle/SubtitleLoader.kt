@@ -8,6 +8,7 @@ import java.util.concurrent.CancellationException
 /** Bounded WebVTT/SRT and unencrypted HLS WebVTT VOD loading; never runs on the render thread. */
 internal class SubtitleLoader(
     private val fetch: (String) -> Document = ::fetchDocument,
+    private val resolve: (String) -> String = { target -> MediaHostGuard.resolveSafeUrl(target) },
 ) {
     data class Document(val url: String, val text: String)
     private data class Segment(val url: String, val start: Long)
@@ -42,9 +43,7 @@ internal class SubtitleLoader(
                 require(segments.size < MAX_SEGMENTS) { "Too many subtitle segments" }
                 val resolved = URI(root.url).resolve(line).toString()
                 // Fetch-time validation checks every segment and redirect, including absolute URIs.
-                val safe = if (MediaHostGuard.isCastRelayUrl(resolved)) resolved
-                else MediaHostGuard.resolveSafeUrl(resolved)
-                segments += Segment(safe, cursor)
+                segments += Segment(resolve(resolved), cursor)
                 cursor = Math.addExact(cursor, length)
                 duration = null
             }
@@ -93,7 +92,7 @@ internal class SubtitleLoader(
 
         private fun fetchDocument(url: String): Document {
             require(URI(url).scheme?.lowercase() in setOf("http", "https")) { "Subtitle URLs must use HTTP(S)" }
-            val safe = if (MediaHostGuard.isCastRelayUrl(url)) url else MediaHostGuard.resolveSafeUrl(url)
+            val safe = MediaHostGuard.resolveSafeUrl(url)
             val response = DreamHttpClient.executeLimited(safe, MAX_DOCUMENT_BYTES + 1,
                 DreamHttpClient.RequestOptions(readTimeoutMs = 10_000, callTimeoutMs = 12_000, followRedirects = false))
             check(response.isSuccessful) { "Subtitle HTTP ${response.code}" }

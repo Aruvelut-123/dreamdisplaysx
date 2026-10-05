@@ -41,6 +41,9 @@ object PlaylistManager {
     /** Wires the platform transport and seeds in-memory playlists from persisted rows. */
     fun init(transport: PlaybackTransport, persisted: List<DisplayPlaylist>) {
         this.transport = transport
+        // Reinitialization can happen during a platform reload; remove queues that disappeared from
+        // storage instead of retaining stale displays in the in-memory authority map.
+        playlists.clear()
         playRevisions.clear()
         persisted.forEach { playlists[it.displayId] = it }
     }

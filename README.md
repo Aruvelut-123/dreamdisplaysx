@@ -51,7 +51,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 - 强大的媒体播放器：搜索、画中画等
 - 沉浸式音频：3D 声音，音量最高 200%
 - 可调分辨率：按媒体源提供的档位选择，最高支持 4K；未知直链尺寸不会强制放大到 4K
-- 多音轨和多字幕：菜单可选择音频 / 字幕轨，支持双语字幕、字幕缓存和 HLS WebVTT 分段
+- 多音轨和多字幕：菜单可选择音频 / 字幕轨，支持双语字幕、字幕缓存和 HLS WebVTT 分段；桌面切换音轨不会重启视频画面，Android 会重建原生播放会话，并区分复用与独立音频避免重复播放
 - 硬件加速：libvlc 支持 d3d11va、vaapi、videotoolbox 等后端
 - 视频动态光照：安装 LambDynamicLights 后，显示器画面可以照亮周围世界
 - Complementary 着色器修补：只为 Complementary r5.8.1 创建临时副本，不修改其他着色器包
@@ -117,7 +117,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 ## Android（PojavLauncher / FCL / Zalith）
 
 - 支持 ARM64 和 x86_64 启动器
-- 使用 libvlc OpenSL ES 输出音频；桌面 3D 定位音频（`javax.sound`）在 Android 不可用
+- 使用 libvlc OpenSL ES 输出音频；复用音频留在视频播放器，独立音频使用单独播放器；桌面 3D 定位音频（`javax.sound`）在 Android 不可用
 - 使用 MediaCodec 解码，可用 `-Ddreamdisplayx.hwDecode=<module>` 覆盖后端
 - teardown 时 Android libvlc 播放器只暂停、不 stop 或 release，避免原生 `SIGSEGV`
 - Android SQLite 和独立命名的 `libc++` 会解压到应用内部可执行目录

@@ -32,6 +32,9 @@ object DirectStreamResolver : MediaResolverService {
     /** Cap on a fetched playlist, which is text and never legitimately larger than this. */
     private const val MAX_PLAYLIST_BYTES = 1 * 1024 * 1024
 
+    /** Prevents a hostile master playlist from causing an unbounded redirect-probe fan-out. */
+    private const val MAX_CHILD_RENDITIONS = 128
+
     /** Files and VOD manifests are stable; the cache exists mostly to absorb prefetch -> resolve. */
     private const val CACHE_MINUTES = 10L
 
@@ -84,21 +87,16 @@ object DirectStreamResolver : MediaResolverService {
 
         // Walk the redirect chain through the SSRF guard first, so the probe (which follows no
         // redirects itself) only ever talks to a host the guard has cleared - closing the blind-SSRF
-        // hole where a public URL 302s to an internal address. The mod's own screen-share relay
-        // (http://<server>/cast/<id>) is trusted by design, even on localhost / LAN.
-        val safeUrl = if (MediaHostGuard.isCastRelayUrl(url)) {
-            url
-        } else {
-            runCatching { MediaHostGuard.resolveSafeUrl(url) }.getOrElse { e ->
-                if (declaredKind.isDirect) {
-                    throw DreamMediaException.Network(
-                        "Could not reach this link. Check that it is public and still valid.",
-                        e
-                    )
-                }
-                notDirect.put(url, true)
-                throw DreamMediaException.NotFound("Not a direct media URL: $url.", e)
+        // hole where a public URL 302s to an internal address.
+        val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(url) }.getOrElse { e ->
+            if (declaredKind.isDirect) {
+                throw DreamMediaException.Network(
+                    "Could not reach this link. Check that it is public and still valid.",
+                    e
+                )
             }
+            notDirect.put(url, true)
+            throw DreamMediaException.NotFound("Not a direct media URL: $url.", e)
         }
 
         // A host nobody vouched for has to prove what it serves: its headers are whatever it chose
@@ -297,14 +295,23 @@ object DirectStreamResolver : MediaResolverService {
         ).bodyString()
     }.getOrNull()
 
-    /** * Turns a master playlist into the stream list the selector works on. */
+    /** Turns a master playlist into the stream list the selector works on. */
     private fun masterStreams(parsed: DirectHlsPlaylist.Parsed, seekByDecoding: Boolean): List<MediaStream> {
+        // Resolve every child playlist before handing it to libvlc. The top-level master may be
+        // public while one variant or audio rendition points at a private host (or redirects there).
+        // A single bad child is rejected rather than leaving a later quality/audio click to bypass
+        // the guard in native libvlc networking.
+        val variants = parsed.variants.take(MAX_CHILD_RENDITIONS)
+            .map { it.copy(url = safeChildUrl(it.url)) }
         // Every rendition with its own playlist, not just the group of the variant that survived
         // de-duplication — otherwise a master that lists its languages as separate groups would keep
         // only the first one, and the rest would silently vanish from the audio-track picker.
-        val separateAudio = parsed.audioRenditions.distinctBy { it.url }
-        val videoOnly = separateAudio.isNotEmpty() && parsed.variants.any { it.audioGroupId != null }
-        val video = parsed.variants.map { variant ->
+        val separateAudio = parsed.audioRenditions
+            .take(MAX_CHILD_RENDITIONS)
+            .map { it.copy(url = safeChildUrl(it.url)) }
+            .distinctBy { it.url }
+        val videoOnly = separateAudio.isNotEmpty() && variants.any { it.audioGroupId != null }
+        val video = variants.map { variant ->
             MediaStream(
                 url = variant.url,
                 type = if (videoOnly) MediaStreamType.VIDEO else MediaStreamType.VIDEO_AUDIO,
@@ -337,6 +344,15 @@ object DirectStreamResolver : MediaResolverService {
         logger.debug("Direct HLS master carries {} separate audio rendition(s).", audio.size)
         return video + audio
     }
+
+    /** Resolves and validates a child playlist before native libvlc receives it. */
+    private fun safeChildUrl(url: String): String =
+        runCatching { MediaHostGuard.resolveSafeUrl(url) }.getOrElse { error ->
+            throw DreamMediaException.Network(
+                "Could not reach a safe HLS rendition. Check that the playlist is public.",
+                error,
+            )
+        }
 
     /** One muxed stream for [url]; dimensions stay unknown until the decoder opens it. */
     private fun muxedStream(url: String, seekByDecoding: Boolean = false): MediaStream = MediaStream(

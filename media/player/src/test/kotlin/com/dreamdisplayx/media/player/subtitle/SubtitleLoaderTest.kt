@@ -35,7 +35,10 @@ class SubtitleLoaderTest {
                 World
             """.trimIndent(),
         )
-        val loader = SubtitleLoader { url -> SubtitleLoader.Document(url, documents.getValue(url)) }
+        val loader = SubtitleLoader(
+            fetch = { url -> SubtitleLoader.Document(url, documents.getValue(url)) },
+            resolve = { it },
+        )
         assertEquals(0L to 2_000_000_000L, loader.timestampMap(documents.getValue(first)))
 
         val cues = loader.load(root)
@@ -47,7 +50,10 @@ class SubtitleLoaderTest {
 
     @Test
     fun rejectsLiveAndEncryptedSubtitlePlaylists() {
-        fun loader(text: String) = SubtitleLoader { url -> SubtitleLoader.Document(url, text) }
+        fun loader(text: String) = SubtitleLoader(
+            fetch = { url -> SubtitleLoader.Document(url, text) },
+            resolve = { it },
+        )
         val live = "#EXTM3U\n#EXTINF:2,\none.vtt\n"
         val encrypted = "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key\"\n#EXTINF:2,\none.vtt\n#EXT-X-ENDLIST\n"
 

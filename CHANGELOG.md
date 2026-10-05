@@ -49,6 +49,9 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Fixed stale playlist EOS callbacks advancing the wrong queue item: media generations and item/revision tokens now make automatic NEXT idempotent, and direct playback cannot be reclaimed by an old queue.
 - Fixed server default-volume percentages being halved before reaching clients.
 - Fixed pasted custom media links showing an empty placeholder card: the first video frame is now extracted and used as the search card's thumbnail.
+- Fixed audio-track switching being a metadata-only update; the selected rendition now replaces the live audio channel without restarting desktop video.
+- Fixed Android muxed media being treated as separate audio after a redirect, which could duplicate playback; muxed and separate renditions now use distinct native paths.
+- Fixed `/cast/` and HLS child URLs bypassing public-host validation; direct media and subtitle fetches now remain behind the SSRF guard.
 
 # 1.10.0.3 Release
 

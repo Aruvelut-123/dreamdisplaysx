@@ -70,7 +70,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Powerful media player** — search, Picture-in-Picture & more
 - **Immersive audio** — 3D sound, volume up to 200% & more
 - **Adjustable resolutions** — from 144p up to 4K; unknown direct-stream sizes are never forced to 4K
-- **Multi-track playback** — choose audio and subtitle renditions per viewer, with bilingual subtitle rendering and bounded HLS WebVTT loading
+- **Multi-track playback** — choose audio and subtitle renditions per viewer, with bilingual subtitle rendering and bounded HLS WebVTT loading; desktop audio switches keep video running, while Android rebuilds its native session and avoids duplicate muxed output
 - **Hardware-accelerated playback** — libvlc hardware decode (d3d11va / vaapi / videotoolbox)
 - **Video-derived dynamic lighting** — display frames light the world when LambDynamicLights is installed
 - **Complementary shader patcher** — patches Complementary r5.8.1 packs into disposable copies, leaving other packs untouched
@@ -169,7 +169,7 @@ That's it — no extra dependencies required. LambDynamicLights is an optional c
 ## Android (PojavLauncher / FCL / Zalith)
 
 - Runs on **ARM64** and **x86_64** launchers (PojavLauncher / FCL / Zalith).
-- Audio uses libvlc's OpenSL ES output; desktop 3D positional audio (`javax.sound`) is unavailable. DASH streams (e.g. Bilibili) play through a separate audio-only libvlc player kept in sync by A/V auto-resync.
+- Audio uses libvlc's OpenSL ES output; muxed media stays on the video player while separate DASH renditions (e.g. Bilibili) use a dedicated audio-only player. Desktop 3D positional audio (`javax.sound`) is unavailable.
 - Video decode uses MediaCodec; override with `-Ddreamdisplayx.hwDecode=<module>` or disable with an empty value, same as desktop.
 - Android libvlc players are paused (never stopped or released) on teardown to avoid native `SIGSEGV` crashes; stale native files are cleaned at startup.
 - Bundles Android SQLite and a uniquely-named `libc++`; all `.so` files load from executable app-internal storage (emulated storage is `noexec`).

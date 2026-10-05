@@ -267,7 +267,6 @@ class MediaPlayer(
         getStretchMode = { stretchMode },
         onStreamEnd = ::handleStreamEnd,
         onQualitySwitchAborted = { appliedAnyway -> handleQualitySwitchAborted(appliedAnyway) },
-        onAudioTrackSwitchSettled = { audioTrackSwitching.set(false) },
         renderExecutor = env.renderExecutor,
         uploaderFactory = env.uploaderFactory,
         gpuYuvActive = env.config.gpuYuvActive,
@@ -687,7 +686,7 @@ class MediaPlayer(
         }
         val secondary = secondaryLanguage?.trim()?.takeIf { it.isNotEmpty() }
             ?.let { wanted -> subtitleTracks.firstOrNull { it.matchesPreference(wanted) } }
-            ?.takeIf { it.url != selected.url }
+            ?.takeIf { it.selectionKey != selected.selectionKey }
         subtitlesEnabled.set(true)
         if (selected == subtitleTrack && secondary == subtitleSecondaryTrack && subtitleCues.isNotEmpty()) return
         subtitleTrack = selected
@@ -1417,8 +1416,8 @@ class MediaPlayer(
     }
 
     /**
-     * Swaps only the audio channel to the track identified by [trackUrl], leaving the video, clock, and picture untouched
-     * (audio-only respawn).
+     * Selects the rendition identified by [trackUrl]. Desktop replaces only the audio channel;
+     * Android rebuilds the native session at the current position to avoid unsafe player reuse.
      */
     private fun changeAudioTrack(trackUrl: String) {
         val ss = streams ?: return
@@ -1426,11 +1425,17 @@ class MediaPlayer(
         val newSs = MediaStreamSelector.switchAudioTrack(ss, trackUrl) ?: return
         streams = newSs
         audioTrackSwitching.set(true)
-        val seamless = sessionManager.beginAudioTrackSwitch(newSs)
         refreshWarmAudioTracks()
-        if (seamless) return
-        env.renderExecutor.execute {
-            safeExecute { sessionManager.restartAudio(newSs, getCurrentTime()) }
+        try {
+            val offset = getCurrentTime()
+            if (!sessionManager.restartAudio(newSs, offset, lastQuality)) {
+                // Keep the metadata and UI honest when the native audio channel could not
+                // be restarted (for example, before the first player was created), and try to
+                // restore the previous rendition after a partially applied native replacement.
+                streams = ss
+                sessionManager.restartAudio(ss, offset, lastQuality)
+            }
+        } finally {
             audioTrackSwitching.set(false)
         }
     }

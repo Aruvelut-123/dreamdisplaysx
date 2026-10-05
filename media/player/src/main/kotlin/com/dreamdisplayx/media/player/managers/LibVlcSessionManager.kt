@@ -30,20 +30,19 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * LibVLC session manager rebuilt to mirror the VideoPlayer mod's low-level libvlc model:
  *
- *  - A single libvlc instance and a single media player are created ONCE for the whole
- *    session-manager lifetime and never rebuilt. Switching videos only replaces the media
- *    on the existing player (`set_media` + `play`), so no JNA callback trampoline is ever
- *    dropped while libvlc's async teardown could still touch it ("callback object has been
- *    garbage collected" spam is gone by construction).
+ *  - Desktop keeps one libvlc video player for the whole session and replaces its media
+ *    synchronously (`set_media` + `play`), so no JNA callback trampoline is dropped while
+ *    libvlc's async teardown could still touch it. Android retires media-bearing players and
+ *    creates fresh ones because the VLC-Android TLS teardown path is unsafe to reuse.
  *  - Video is delivered through low-level lock/unlock/display/setup/cleanup callbacks into
  *    a triple-buffered pool (the VideoPlayer `TextureRenderCallback` model). Every callback
  *    is held by a strong field reference for the life of the manager.
  *  - All libvlc control operations run on a single control executor, serialised.
  *  - Playback events (playing/end-reached/error) are delivered through a low-level event
  *    listener, exactly like VideoPlayer.
- *  - Audio is left to libvlc's own default output (the `:input-slave` audio stream is merged
- *    into the same player), which removes the fragile Java PCM pipe that caused "audio fades
- *    after a few seconds". Volume is still controlled via libvlc.
+ *  - Desktop audio is decoded through the Java Sound callback so display acoustics remain available;
+ *    Android uses libvlc's OpenSL ES output because `java.desktop` is unavailable there. Separate
+ *    audio renditions are replaced on the dedicated audio player without rebuilding desktop video.
  */
 internal class LibVlcSessionManager(
     private val debugLabel: String,
@@ -61,9 +60,6 @@ internal class LibVlcSessionManager(
     /** Invoked when quality switch fails before promotion. */
     private val onQualitySwitchAborted: (appliedAnyway: Boolean) -> Unit = {},
 
-    /** Invoked once an in-flight audio track switch settles. */
-    private val onAudioTrackSwitchSettled: () -> Unit = {},
-
     /** Runs render-thread (GL) cleanup work. */
     private val renderExecutor: RenderExecutor,
 
@@ -76,7 +72,7 @@ internal class LibVlcSessionManager(
     /** Whether hardware-accelerated decoding is enabled by config. */
     private val useHwAccel: Boolean,
 
-    /** Per-display acoustics DSP stage (unused with libvlc default audio output). */
+    /** Per-display acoustics DSP stage for the desktop Java Sound callback path. */
     audioStage: AudioDspStage? = null,
 ) {
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcSession")
@@ -84,12 +80,9 @@ internal class LibVlcSessionManager(
     /**
      * Android mode: javax.sound does not exist on Android (no java.desktop), so the
      * Java Sound callback pipeline cannot run there — [LibVlcAudioOutput] is not even
-     * instantiated, because its method signatures reference `SourceDataLine` and would
-     * fail to link. The video player instead keeps its own audio track and libvlc feeds
-     * the OpenSL ES output directly (`--aout=opensl` set in [LibVlc]; 3D positional
-     * audio is unavailable on this platform). Every dedicated audio-player interaction
-     * is gated on this flag, and all those call sites already null-check the player,
-     * so skipping creation is safe.
+     * instantiated because its method signatures reference `SourceDataLine` and would
+     * fail to link. libvlc feeds OpenSL ES directly; muxed media keeps audio on the video
+     * player while separate renditions use a dedicated audio player.
      */
     private val systemAudio: Boolean = com.dreamdisplayx.util.OsInfo.isAndroid
 
@@ -333,7 +326,8 @@ internal class LibVlcSessionManager(
 
     // ── Low-level callbacks (held strongly for life) ───────────────────────
 
-    private val eventCallback = LibVlc.EventCallback { event, _ -> handleEvent(event) }
+    /** Event callbacks are retained because Android keeps retired players alive until process exit. */
+    private val eventCallbacks = java.util.Collections.synchronizedList(mutableListOf<LibVlc.EventCallback>())
 
     /**
      * Every native player gets its own callback object and direct-buffer pool. This is important on
@@ -388,8 +382,10 @@ internal class LibVlcSessionManager(
 
     // ── Event handling ──────────────────────────────────────────────────────
 
-    private fun handleEvent(event: Pointer?) {
-        if (event == null || released.get() || stopped.get()) return
+    private fun handleEvent(event: Pointer?, sourcePlayer: Pointer) {
+        // Android retires old players instead of stopping/releasing them. Their delayed events must
+        // never mutate the state of the replacement player (especially END_REACHED / ERROR).
+        if (event == null || released.get() || stopped.get() || mediaPlayer !== sourcePlayer) return
         val type = event.getInt(0)
         when (type) {
             LibVlc.LIBVLC_MEDIA_PLAYER_PLAYING -> {
@@ -594,14 +590,16 @@ internal class LibVlcSessionManager(
     // ── Session lifecycle ───────────────────────────────────────────────────
 
     /**
-     * Starts (or restarts) playback of [streamSet] on the single, never-rebuilt player.
-     * Video is delivered via the low-level callbacks; audio is left to libvlc's default output.
+     * Starts (or restarts) playback of [streamSet] on the current session players.
+     * Video is delivered via the low-level callbacks; audio uses the dedicated player on desktop
+     * and on Android only when the selected rendition is separate from the video URL.
      */
-    fun start(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int) {
+    fun start(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         val (w, h) = targetDims(streamSet, lastQuality)
+        val started = AtomicBoolean(false)
         val safeUrl = MediaHostGuard.resolveSafeUrl(streamSet.currentVideo.url)
 
-        // A restart replaces the media on the SAME player; never recreate the player.
+        // Desktop replaces media on the same player; Android retires old players before creating fresh ones.
         stopped.set(false)
         eosReached = false
         errorMessage = ""
@@ -623,11 +621,12 @@ internal class LibVlcSessionManager(
         // Reset the audio output for this new session (re-prime the 3D DSP chain, flush the line).
         runCatching { audioOutput?.reset() }
 
-        // Build the media options (UA + referer + optional hw decode). Audio is played by a SEPARATE
-        // libvlc player (see below) so its Java Sound `write()` blocking never throttles the video
-        // vout. The video media gets `:no-audio`: with no audio track the video player's master clock
-        // is the system clock, so the vout delivers at the full source frame rate instead of being
-        // dragged to ~60% by an audio clock that is pulsed by line writes. Hardware decode is enabled
+        // Build the media options (UA + referer + optional hw decode). Desktop audio is played by a
+        // SEPARATE libvlc player (see below) so its Java Sound `write()` blocking never throttles the
+        // video vout. Android only does that for separate renditions; muxed media keeps its audio on
+        // the video player. When the video media gets `:no-audio`, its master clock is the system
+        // clock, so the vout delivers at the full source frame rate instead of being dragged to ~60%
+        // by an audio clock that is pulsed by line writes. Hardware decode is enabled
         // BOTH here (media-level) and at instance-level (--avcodec-hw=any); VLC copies the GPU-decoded
         // frame back to system memory before handing it to the vmem lock callback, so vmem and hw
         // coexist and 4K H.264/HEVC decodes on the GPU instead of starving the CPU.
@@ -643,24 +642,33 @@ internal class LibVlcSessionManager(
             LibVlc.currentHwBackend()?.let { mediaOptions.add(":avcodec-hw=$it") }
         }
         val audioUrl = streamSet.currentAudio.url
-        val separateAudio = audioUrl.isNotBlank() && !audioUrl.equals(safeUrl, ignoreCase = true)
+        // Compare against the resolver's logical video URL, not the redirect target. A muxed direct
+        // link commonly resolves to a signed CDN URL; treating that redirect as a separate rendition
+        // would silence the video and download the same media a second time on Android.
+        val separateAudio = audioUrl.isNotBlank() &&
+            !audioUrl.equals(streamSet.currentVideo.url, ignoreCase = true)
         // Desktop always silences the video player and routes sound through the dedicated audio player —
         // including a single-file source (an mp4 direct link, or any stream whose audio URL equals the
         // video URL), which is fed the SAME url. Letting libvlc's own output play that track proved
         // unreliable on Linux: pulse reported "write index corrupt"/underflow, and the wedged aout kept
         // libvlc's decoder fifo from draining at end of stream, which froze the game. The Java Sound line
         // is the one audio path whose pacing we control. Cost: libvlc downloads that url a second time.
-        if (systemAudio) {
-            // Android: audio stays inside the video player (OpenSL ES); no callback pipeline,
-            // no dedicated audio player.
-            mediaOptions.remove(":no-audio")
-        } else {
+        if (systemAudio && separateAudio) {
+            // A video-only rendition must stay silent while the dedicated Android audio player
+            // feeds OpenSL ES. Muxed URLs keep their audio in the video player and do not need a
+            // second native player.
+            mediaOptions.add(":no-audio")
+        } else if (!systemAudio) {
             mediaOptions.add(":no-audio")
         }
         if (separateAudio) {
             logger.info("$debugLabel audio will be played by the separate audio player.")
         } else if (audioUrl.isNotBlank()) {
-            logger.info("$debugLabel single-file audio: the dedicated audio player plays the same url.")
+            if (systemAudio) {
+                logger.info("$debugLabel muxed audio will remain on the video player.")
+            } else {
+                logger.info("$debugLabel single-file audio: the dedicated audio player plays the same url.")
+            }
         } else {
             logger.warn("$debugLabel no audio track resolved (audioUrl is blank); the display stays silent.")
         }
@@ -699,12 +707,11 @@ internal class LibVlcSessionManager(
                 val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
                 LibVlc.lib.libvlc_media_player_set_media(activeMp, media)
                 LibVlc.lib.libvlc_media_release(media) // the player holds its own reference
-                // Start the DEDICATED audio player (:no-video so no vout is built; audio callbacks on it
-                // feed the Java Sound line). It plays the separate DASH audio URL when there is one, and
-                // otherwise the very same url as the video (single-file media) — that is what keeps every
-                // display's audio on a single, self-paced path. Skipped only when no track resolved.
-                val ap = audioPlayer()
-                if (ap != null && audioUrl.isNotBlank()) {
+                // Desktop always uses a dedicated audio player so Java Sound pacing cannot throttle
+                // the vout. Android only creates one for a separate audio rendition; muxed media stays
+                // on the video player's OpenSL ES output, avoiding duplicate sound.
+                val ap = if (audioUrl.isNotBlank() && (!systemAudio || separateAudio)) audioPlayer() else null
+                if (ap != null) {
                     // Same rule as above: never stop() on Android — set_media replaces the old
                     // input synchronously; an explicit stop would tear worker threads and hit the
                     // VLC-Android TLS destructor UAF (pthread_key_clean_all, libvlc.so+0xef7418).
@@ -718,22 +725,23 @@ internal class LibVlcSessionManager(
                     LibVlc.lib.libvlc_media_player_set_media(ap, audioMedia)
                     LibVlc.lib.libvlc_media_release(audioMedia)
                     LibVlc.lib.libvlc_media_player_play(ap)
-                } else {
+                } else if (audioUrl.isBlank()) {
                     logger.info("$debugLabel audio player skipped (no audio track resolved).")
                 }
                 LibVlc.lib.libvlc_media_player_play(activeMp)
-                // Android keeps its audio inside the video player, so re-assert our volume there: a
-                // fresh play() can reset libvlc's volume.
+                // libvlc volume is per-player. Re-assert it after every fresh play so both the muxed
+                // video path and a separate Android audio player honor the user's pre-start volume.
                 if (systemAudio) {
-                    runCatching {
-                        LibVlc.lib.libvlc_audio_set_volume(activeMp, (lastVolume.coerceIn(0.0, 1.0) * 100).toInt())
-                    }
+                    val volumePercent = (lastVolume.coerceIn(0.0, 1.0) * 100).toInt()
+                    runCatching { LibVlc.lib.libvlc_audio_set_volume(activeMp, volumePercent) }
+                    ap?.let { runCatching { LibVlc.lib.libvlc_audio_set_volume(it, volumePercent) } }
                 }
                 isPlaying = true
                 // Initial A/V sync: both players start independently, so the audio player's clock can
                 // drift from the video's right from the start. Schedule an early correction (~1.5s)
                 // rather than waiting for the 10s auto-resync.
                 scheduleInitialAvSync()
+                started.set(true)
             } catch (t: Throwable) {
                 logger.error("$debugLabel failed to start libvlc media: ${t.message}")
                 errorMessage = t.message ?: "libvlc start failed"
@@ -763,13 +771,14 @@ internal class LibVlcSessionManager(
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
         }
+        return started.get()
     }
 
     /**
-     * Returns the single libvlc media player, creating it on first use and never rebuilding it.
-     * This is the VIDEO player: it only registers video callbacks (audio callbacks live on the
-     * separate [audioPlayer]), and its media gets `:no-audio` so it runs on the system clock —
-     * the audio player's Java Sound `write()` blocking can no longer throttle the vout.
+     * Returns the current libvlc VIDEO player, creating it on first use. Desktop keeps and reuses
+     * this player; Android replaces it after every media-bearing session. Desktop media gets
+     * `:no-audio` because the separate audio player's Java Sound `write()` must not throttle the
+     * vout; Android adds that flag only for video-only renditions.
      */
     private fun player(): Pointer? {
         val existing = mediaPlayer
@@ -791,15 +800,18 @@ internal class LibVlcSessionManager(
                 lib.libvlc_video_set_format_callbacks(mp, callbacks.format, callbacks.cleanup)
                 lib.libvlc_video_set_callbacks(mp, callbacks.lock, callbacks.unlock, callbacks.display, null)
             }
-            // Events (once). The video player drives the session state (playing/end/error).
+            // Events are bound to this concrete player. The video player drives session state;
+            // retired Android players may still emit delayed events that must be ignored.
             val em = lib.libvlc_media_player_event_manager(mp)
             if (em != null) {
+                val callback = LibVlc.EventCallback { event, _ -> handleEvent(event, mp) }
+                eventCallbacks += callback
                 for (e in MEDIA_PLAYER_EVENTS) {
-                    lib.libvlc_event_attach(em, e, eventCallback, null)
+                    lib.libvlc_event_attach(em, e, callback, null)
                 }
             }
             mediaPlayer = mp
-            if (MediaPlayer.DEBUG) logger.debug("$debugLabel created single libvlc video player.")
+            if (MediaPlayer.DEBUG) logger.debug("$debugLabel created libvlc video player.")
             mp
         } catch (t: Throwable) {
             logger.error("$debugLabel failed to create libvlc media player: ${t.message}")
@@ -808,8 +820,9 @@ internal class LibVlcSessionManager(
     }
 
     /**
-     * Returns the dedicated AUDIO-only libvlc media player, creating it on first use and never
-     * rebuilding it. On desktop it only registers the audio callbacks that feed the 3D DSP + Java
+     * Returns the current dedicated AUDIO-only libvlc media player, creating it on first use.
+     * Desktop reuses it; Android replaces it with the video player after each media-bearing session.
+     * On desktop it only registers the audio callbacks that feed the 3D DSP + Java
      * Sound line ([LibVlcAudioOutput]); its media gets `:no-video`. No events are attached: its
      * END_REACHED (Bilibili DASH audio slaves run shorter than the video) must NOT trigger the
      * session EOS. Skipped entirely when [LibVlcDiagnostics.noAudioCallback] is set (bisection).
@@ -1407,7 +1420,7 @@ internal class LibVlcSessionManager(
 
     // ── Quality switch ──────────────────────────────────────────────────────
 
-    /** Hard quality switch: stop current media, start new one on the same player. */
+    /** Hard quality switch: stop current media and start the new rendition. */
     fun beginQualitySwitch(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int) {
         stop()
         start(streamSet, offsetNanos, lastQuality)
@@ -1416,12 +1429,6 @@ internal class LibVlcSessionManager(
     fun promoteIncoming(): Boolean = true // hard switch already promoted
 
     // ── Audio track switch ──────────────────────────────────────────────────
-
-    fun beginAudioTrackSwitch(streamSet: ActiveStreams): Boolean {
-        // libvlc manages audio tracks internally; a restart of the same player re-reads the
-        // stream and picks up the new audio URL. No-op here.
-        return false
-    }
 
     @Suppress("UNUSED_PARAMETER")
     fun setWarmAudioTracks(tracks: List<WarmTrack>) {
@@ -1484,10 +1491,92 @@ internal class LibVlcSessionManager(
         if (parkFlag.get() && nanos >= 0) parkPositionNanos = nanos
     }
 
-    // ── Audio helpers (unused with libvlc default output) ───────────────────
+    // ── Audio helpers ────────────────────────────────────────────────────────
 
-    @Suppress("UNUSED_PARAMETER")
-    fun restartAudio(streamSet: ActiveStreams, offsetNanos: Long): Boolean = false
+    /**
+     * Replaces the selected audio rendition without changing the video on desktop. Android needs a
+     * full session restart because switching between muxed and separate renditions changes whether
+     * the video player itself must carry audio; its native players are never reused after media.
+     */
+    fun restartAudio(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
+        if (released.get()) return false
+        if (streamSet.currentAudio.url.isBlank()) return false
+        // A cold-paused or EOS session has no native channel to replace. Keeping the new stream in
+        // MediaPlayer is still a successful selection; the next start() will attach it.
+        if (stopped.get()) return true
+        if (systemAudio) {
+            val wasPlaying = isPlaying
+            val wasParked = parkFlag.get()
+            return try {
+                if (!start(streamSet, offsetNanos, lastQuality)) {
+                    false
+                } else {
+                    if (!wasPlaying || wasParked) {
+                        suspend(allowExternalProcess = true, retainBuffered = true)
+                    }
+                    true
+                }
+            } catch (t: Throwable) {
+                logger.warn("$debugLabel failed to switch Android audio rendition.", t)
+                false
+            }
+        }
+
+        val result = AtomicBoolean(false)
+        val done = CountDownLatch(1)
+        try {
+            controlExecutor.execute {
+                try {
+                    if (!released.get() && !stopped.get()) {
+                        result.set(restartDesktopAudioOnControl(streamSet, offsetNanos))
+                    }
+                } finally {
+                    done.countDown()
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            return false
+        }
+        return try {
+            if (done.await(15, TimeUnit.SECONDS)) result.get() else false
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+    }
+
+    /** Performs the desktop audio replacement on the serialized libvlc control executor. */
+    private fun restartDesktopAudioOnControl(streamSet: ActiveStreams, offsetNanos: Long): Boolean {
+        val ap = audioPlayer ?: return false
+        val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(streamSet.currentAudio.url) }.getOrNull()
+            ?: return false
+        val media = runCatching {
+            val options = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl), ":no-video")
+            LibVlc.createMedia(safeUrl, options.toTypedArray())
+        }.getOrNull() ?: return false
+        return try {
+            runCatching { audioOutput?.reset() }
+            runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+            LibVlc.lib.libvlc_media_player_set_media(ap, media)
+            if (offsetNanos > 0L) {
+                runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+            }
+            LibVlc.lib.libvlc_media_player_play(ap)
+            if (!isPlaying || parkFlag.get()) {
+                runCatching { LibVlc.lib.libvlc_media_player_set_pause(ap, 1) }
+                audioOutput?.setPaused(true)
+            } else {
+                audioOutput?.setPaused(false)
+            }
+            true
+        } catch (t: Throwable) {
+            logger.warn("$debugLabel failed to switch audio rendition.", t)
+            false
+        } finally {
+            runCatching { LibVlc.lib.libvlc_media_release(media) }
+            scheduleInitialAvSync()
+        }
+    }
 
     fun captureAudioPcm(maxNanos: Long): ByteArray? = null
 

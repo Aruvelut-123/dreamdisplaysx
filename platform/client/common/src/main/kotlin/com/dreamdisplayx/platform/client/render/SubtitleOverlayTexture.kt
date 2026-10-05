@@ -46,31 +46,47 @@ class SubtitleOverlayTexture {
         if (normalized == lastText) return
         if (normalized == null) {
             lastText = null
-            texture?.close()
-            texture = null
+            releaseTexture()
             cachedRenderType = null
             return
         }
 
-        val image = runCatching { rasterize(normalized) }.getOrNull() ?: return
-        lastText = normalized
-        texture?.close()
-        texture = null
-        cachedRenderType = null
-        aspectRatio = image.width.toFloat() / image.height.toFloat()
-        val native = toNativeImage(image)
+        val image = runCatching { rasterize(normalized) }.getOrElse {
+            // Do not retry a permanently unavailable AWT path on every render tick, and never keep
+            // displaying the previous cue after the new one failed to rasterize.
+            lastText = normalized
+            releaseTexture()
+            cachedRenderType = null
+            return
+        }
         val id = identifier ?: Identifier.fromNamespaceAndPath(
             Initializer.MOD_ID,
             "dynamic/subtitle_${INSTANCE_ID.incrementAndGet()}",
         ).also { identifier = it }
+        releaseTexture()
+        cachedRenderType = null
+        aspectRatio = image.width.toFloat() / image.height.toFloat()
 
-        val dynamic =
-            //? if >=1.21.11 {
-            DynamicTexture({ "dreamdisplayx-subtitle" }, native)
-        //?} else
-            /*DynamicTexture(native)*/
-        dynamic.upload()
-        Minecraft.getInstance().textureManager.register(id, dynamic)
+        val dynamic = runCatching {
+            val native = toNativeImage(image)
+            val created =
+                //? if >=1.21.11 {
+                DynamicTexture({ "dreamdisplayx-subtitle" }, native)
+            //?} else
+                /*DynamicTexture(native)*/
+            try {
+                created.upload()
+                Minecraft.getInstance().textureManager.register(id, created)
+                created
+            } catch (error: Throwable) {
+                runCatching { created.close() }
+                throw error
+            }
+        }.getOrElse {
+            lastText = normalized
+            return
+        }
+        lastText = normalized
         texture = dynamic
     }
 
@@ -87,10 +103,19 @@ class SubtitleOverlayTexture {
 
     /** Releases the GPU texture. Call once when the owning display is unregistered. */
     fun dispose() {
-        texture?.close()
-        texture = null
+        releaseTexture()
         cachedRenderType = null
         lastText = null
+    }
+
+    /** Removes the identifier from Minecraft's texture manager as well as closing the GL resource. */
+    private fun releaseTexture() {
+        val old = texture ?: return
+        runCatching { identifier?.let { Minecraft.getInstance().textureManager.release(it) } }
+        // TextureManager.release normally closes the registered texture, but close explicitly as a
+        // fallback for reload paths where the manager has already dropped the identifier entry.
+        runCatching { old.close() }
+        texture = null
     }
 
     private fun rasterize(text: String): BufferedImage {
