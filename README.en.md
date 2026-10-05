@@ -71,6 +71,7 @@ Dream DisplaysX is built to make watching videos in Minecraft feel as natural as
 - **Immersive audio** — 3D sound, volume up to 200% & more
 - **Adjustable resolutions** — from 144p up to 4K; unknown direct-stream sizes are never forced to 4K
 - **Multi-track playback** — choose audio and subtitle renditions per viewer, with bilingual subtitle rendering and bounded HLS WebVTT loading; desktop audio switches keep video running, while Android rebuilds its native session and avoids duplicate muxed output
+- **Bounded HLS master parsing** — unused child renditions are kept lazy, so malformed or oversized masters do not trigger a serial probe storm
 - **Hardware-accelerated playback** — libvlc hardware decode (d3d11va / vaapi / videotoolbox)
 - **Video-derived dynamic lighting** — display frames light the world when LambDynamicLights is installed
 - **Complementary shader patcher** — patches Complementary r5.8.1 packs into disposable copies, leaving other packs untouched

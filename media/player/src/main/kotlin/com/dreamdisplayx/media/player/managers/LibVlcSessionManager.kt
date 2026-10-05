@@ -596,8 +596,20 @@ internal class LibVlcSessionManager(
      */
     fun start(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         val (w, h) = targetDims(streamSet, lastQuality)
-        val started = AtomicBoolean(false)
         val safeUrl = MediaHostGuard.resolveSafeUrl(streamSet.currentVideo.url)
+        val audioUrl = streamSet.currentAudio.url
+        // Compare against the resolver's logical video URL, not the redirect target. A muxed direct
+        // link commonly resolves to a signed CDN URL; treating that redirect as a separate rendition
+        // would silence the video and download the same media a second time on Android.
+        val separateAudio = audioUrl.isNotBlank() &&
+            !audioUrl.equals(streamSet.currentVideo.url, ignoreCase = true)
+        val safeAudioUrl = try {
+            if (separateAudio) MediaHostGuard.resolveSafeUrl(audioUrl) else safeUrl
+        } catch (error: Throwable) {
+            logger.warn("$debugLabel rejected unsafe audio rendition before native playback: ${error.message}")
+            return false
+        }
+        val started = AtomicBoolean(false)
 
         // Desktop replaces media on the same player; Android retires old players before creating fresh ones.
         stopped.set(false)
@@ -641,12 +653,6 @@ internal class LibVlcSessionManager(
             // backend that just failed.
             LibVlc.currentHwBackend()?.let { mediaOptions.add(":avcodec-hw=$it") }
         }
-        val audioUrl = streamSet.currentAudio.url
-        // Compare against the resolver's logical video URL, not the redirect target. A muxed direct
-        // link commonly resolves to a signed CDN URL; treating that redirect as a separate rendition
-        // would silence the video and download the same media a second time on Android.
-        val separateAudio = audioUrl.isNotBlank() &&
-            !audioUrl.equals(streamSet.currentVideo.url, ignoreCase = true)
         // Desktop always silences the video player and routes sound through the dedicated audio player —
         // including a single-file source (an mp4 direct link, or any stream whose audio URL equals the
         // video URL), which is fed the SAME url. Letting libvlc's own output play that track proved
@@ -718,7 +724,7 @@ internal class LibVlcSessionManager(
                     if (!systemAudio) {
                         runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
                     }
-                    val audioUrlToPlay = if (separateAudio) audioUrl else safeUrl
+                    val audioUrlToPlay = if (separateAudio) safeAudioUrl else safeUrl
                     val audioOptions = mutableListOf(*LibVlcMediaOptions.forUrl(audioUrlToPlay))
                     audioOptions.add(":no-video")
                     val audioMedia = LibVlc.createMedia(audioUrlToPlay, audioOptions.toTypedArray())
@@ -909,14 +915,21 @@ internal class LibVlcSessionManager(
                 try {
                     if (systemAudio) {
                         // Android: never stop() or set_media() on an ended player. Both operations can
-                        // tear down VLC-Android workers and hit its unsafe TLS destructor. Retire the
-                        // ended players (pause + retain), then bind fresh players instead.
+                        // tear down VLC-Android workers and hit its unsafe TLS destructor. Validate
+                        // the selected URLs before retiring the old players, then bind fresh players.
+                        val vUrl = streamSet.currentVideo.url
+                        val safeVUrl = MediaHostGuard.resolveSafeUrl(vUrl)
+                        val aUrl = streamSet.currentAudio.url
+                        val safeAUrl = if (aUrl.isNotBlank() && !aUrl.equals(vUrl, ignoreCase = true)) {
+                            MediaHostGuard.resolveSafeUrl(aUrl)
+                        } else {
+                            null
+                        }
                         retireAndroidPlayers()
                         val freshMp = player()
                         if (freshMp == null) throw IllegalStateException("libvlc video player unavailable")
-                        val vUrl = streamSet.currentVideo.url
-                        val vOpts = mutableListOf(*LibVlcMediaOptions.forUrl(vUrl))
-                        val vMedia = runCatching { LibVlc.createMedia(vUrl, vOpts.toTypedArray()) }.getOrNull()
+                        val vOpts = mutableListOf(*LibVlcMediaOptions.forUrl(safeVUrl))
+                        val vMedia = runCatching { LibVlc.createMedia(safeVUrl, vOpts.toTypedArray()) }.getOrNull()
                         if (vMedia != null) {
                             runCatching { LibVlc.lib.libvlc_media_player_set_media(freshMp, vMedia) }
                             runCatching { LibVlc.lib.libvlc_media_release(vMedia) }
@@ -925,11 +938,10 @@ internal class LibVlcSessionManager(
                         }
                         // Audio player: bind the fresh player too, never reuse the ended one.
                         val ap = audioPlayer()
-                        val aUrl = streamSet.currentAudio.url
-                        if (ap != null && aUrl.isNotBlank() && !aUrl.equals(vUrl, ignoreCase = true)) {
-                            val aOpts = mutableListOf(*LibVlcMediaOptions.forUrl(aUrl))
+                        if (ap != null && safeAUrl != null) {
+                            val aOpts = mutableListOf(*LibVlcMediaOptions.forUrl(safeAUrl))
                             aOpts.add(":no-video")
-                            val aMedia = runCatching { LibVlc.createMedia(aUrl, aOpts.toTypedArray()) }.getOrNull()
+                            val aMedia = runCatching { LibVlc.createMedia(safeAUrl, aOpts.toTypedArray()) }.getOrNull()
                             if (aMedia != null) {
                                 runCatching { LibVlc.lib.libvlc_media_player_set_media(ap, aMedia) }
                                 runCatching { LibVlc.lib.libvlc_media_release(aMedia) }

@@ -126,6 +126,7 @@ class DirectHlsPlaylistTest {
 
         assertEquals(1, parsed.variants.size, "The same rendition listed per audio group is one quality.")
         assertEquals("aud1", parsed.variants[0].audioGroupId)
+        assertEquals(setOf("aud1", "aud2"), parsed.variants[0].audioGroupIds)
         assertEquals(2, parsed.audioRenditions.size, "Subtitle renditions are not audio.")
         assertEquals(1, parsed.subtitleRenditions.size)
         assertEquals("https://cdn.example.com/vod/s1/prog.m3u8", parsed.subtitleRenditions.single().url)
@@ -136,6 +137,61 @@ class DirectHlsPlaylistTest {
         assertEquals("https://cdn.example.com/vod/a1/prog.m3u8", paired[0].url)
         assertEquals("en", paired[0].language)
         assertTrue(paired[0].isDefault)
+
+        val selectedAudio = DirectHlsChildSelector.audioRenditions(
+            parsed,
+            DirectHlsChildSelector.variants(parsed),
+        )
+        assertEquals(setOf("aud1", "aud2"), selectedAudio.map { it.groupId }.toSet())
+    }
+
+    @Test
+    fun childSelectorSkipsOrphanAudioAndBoundsUniqueRenditions() {
+        val variants = (0 until DirectHlsChildSelector.MAX_RENDITIONS + 4).map { index ->
+            DirectHlsPlaylist.Variant(
+                url = "https://cdn.example.com/video-$index.m3u8",
+                width = 1280,
+                height = 720,
+                fps = null,
+                bandwidthBps = 1_000_000,
+                codecs = null,
+                audioGroupId = "used",
+            )
+        } + DirectHlsPlaylist.Variant(
+            url = "https://cdn.example.com/video-0.m3u8",
+            width = 1280,
+            height = 720,
+            fps = null,
+            bandwidthBps = 1_000_000,
+            codecs = null,
+            audioGroupId = "used",
+        )
+        val parsed = DirectHlsPlaylist.Parsed(
+            variants = variants,
+            audioRenditions = listOf(
+                DirectHlsPlaylist.AudioRendition(
+                    url = "https://cdn.example.com/used.m3u8",
+                    groupId = "used",
+                    name = "English",
+                    language = "en",
+                    isDefault = true,
+                ),
+                DirectHlsPlaylist.AudioRendition(
+                    url = "https://internal.invalid/orphan.m3u8",
+                    groupId = "orphan",
+                    name = "Unused",
+                    language = "xx",
+                    isDefault = false,
+                ),
+            ),
+            isLive = false,
+        )
+
+        val selectedVariants = DirectHlsChildSelector.variants(parsed)
+        val selectedAudio = DirectHlsChildSelector.audioRenditions(parsed, selectedVariants)
+
+        assertEquals(DirectHlsChildSelector.MAX_RENDITIONS, selectedVariants.size)
+        assertEquals(listOf("https://cdn.example.com/used.m3u8"), selectedAudio.map { it.url })
     }
 
     @Test

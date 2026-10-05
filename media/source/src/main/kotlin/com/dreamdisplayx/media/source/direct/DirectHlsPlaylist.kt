@@ -15,8 +15,10 @@ internal object DirectHlsPlaylist {
         val fps: Double?,
         val bandwidthBps: Int?,
         val codecs: String?,
-        /** The `AUDIO` group this variant takes its sound from, or null when the audio is muxed in. */
+        /** The first `AUDIO` group this variant takes its sound from, or null when audio is muxed in. */
         val audioGroupId: String?,
+        /** All groups referencing this URL, including repeated entries in the quality ladder. */
+        val audioGroupIds: Set<String> = setOfNotNull(audioGroupId),
     )
 
     /**
@@ -72,6 +74,7 @@ internal object DirectHlsPlaylist {
         val audio = ArrayList<AudioRendition>()
         val subtitles = ArrayList<SubtitleRendition>()
         val seenVariantUrls = HashSet<String>()
+        val audioGroupsByUrl = HashMap<String, MutableSet<String>>()
         var pending: Map<String, String>? = null
         var hasSegments = false
         var ended = false
@@ -112,6 +115,10 @@ internal object DirectHlsPlaylist {
                     val attrs = pending ?: continue
                     pending = null
                     val url = resolve(baseUrl, line)
+                    // Retain every audio-group reference before de-duplicating the video URL.
+                    attrs["AUDIO"]?.takeIf { it.isNotBlank() }?.let { group ->
+                        audioGroupsByUrl.getOrPut(url) { LinkedHashSet() }.add(group)
+                    }
                     // The same video rendition is listed once per audio group it can pair with
                     // (Apple's reference master lists every variant three times, for stereo / AC-3 /
                     // Dolby). They are one entry in the quality ladder, not three.
@@ -133,7 +140,8 @@ internal object DirectHlsPlaylist {
         }
 
         return Parsed(
-            variants = variants.sortedByDescending { it.height ?: it.bandwidthBps ?: 0 },
+            variants = variants.map { it.copy(audioGroupIds = audioGroupsByUrl[it.url]?.toSet().orEmpty()) }
+                .sortedByDescending { it.height ?: it.bandwidthBps ?: 0 },
             audioRenditions = audio,
             isLive = variants.isEmpty() && hasSegments && !ended && !vod,
             subtitleRenditions = subtitles,

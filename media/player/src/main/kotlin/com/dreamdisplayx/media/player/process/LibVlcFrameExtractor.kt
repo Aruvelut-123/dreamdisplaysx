@@ -4,6 +4,7 @@ package com.dreamdisplayx.media.player.process
 
 import com.dreamdisplayx.media.player.managers.LibVlc
 import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
+import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import org.slf4j.LoggerFactory
@@ -83,6 +84,10 @@ object LibVlcFrameExtractor {
          */
         fun open(): Boolean {
             if (opened.get()) return true
+            val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(url) }.getOrElse { error ->
+                logger.warn("ScrubSession: rejected unsafe media URL {}: {}", url, error.message)
+                return false
+            }
             if (!LibVlc.ensureLoaded()) return false
             val player = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
                 ?: run { logger.warn("ScrubSession: libvlc_media_player_new failed: ${LibVlc.errmsg()}"); return false }
@@ -104,8 +109,8 @@ object LibVlcFrameExtractor {
                 // latch, so every scrub times out ("frame timeout" every ~4-5s). A 300ms buffer is
                 // plenty for a 360p thumb stream and renders almost immediately after the seek.
                 val media = LibVlc.createMedia(
-                    url,
-                    LibVlcMediaOptions.forUrl(url) + arrayOf(
+                    safeUrl,
+                    LibVlcMediaOptions.forUrl(safeUrl) + arrayOf(
                         ":no-audio",
                         ":avcodec-hw=none",
                         ":network-caching=300"

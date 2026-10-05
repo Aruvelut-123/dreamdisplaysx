@@ -75,7 +75,7 @@
 ### 2026-10-04 — Playback review hardening
 - Audio-track changes replace the desktop dedicated audio media in place; Android restarts with fresh native players and keeps muxed media on the video player's OpenSL ES path to avoid duplicate output, while delayed events from retired players are ignored.
 - Dynamic subtitle textures release their texture-manager entries on replacement and disposal.
-- Direct media, subtitle, and HLS child-rendition URLs always pass `MediaHostGuard`; a `/cast/` path is not a trust boundary.
+- Direct media, subtitle, selected HLS child-rendition, and scrub-thumbnail URLs pass `MediaHostGuard`; unused master children stay lazy, and a `/cast/` path is not a trust boundary.
 - Playlist initialization clears rows removed from persistence before restoring the current snapshot.
 
 ### 2026-10-04 — Per-viewer tracks, native-size direct links, and playlist guards

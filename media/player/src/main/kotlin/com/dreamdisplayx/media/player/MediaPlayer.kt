@@ -1003,11 +1003,20 @@ class MediaPlayer(
         activeVideoUrl = probedStreamSet.currentVideo.url
 
         try {
-            sessionManager.start(
+            val started = sessionManager.start(
                 probedStreamSet,
                 offsetNanos,
                 lastQuality,
             )
+            if (!started) {
+                logger.error("$debugLabel Media session did not start.")
+                state.set(PlaybackState.ERROR)
+                host.mediaError = DreamMediaException.Network(
+                    "Could not start media playback.",
+                    isFatal = true,
+                )
+                return
+            }
         } catch (e: Exception) {
             // startStreams runs on the control executor (via safeExecute), which only guards
             // the submit() itself — an async failure here would otherwise be silently swallowed
