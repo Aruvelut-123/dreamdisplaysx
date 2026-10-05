@@ -3,6 +3,9 @@ package com.dreamdisplayx.platform.client.ui.menu
 import com.dreamdisplayx.api.media.source.model.SubtitleTrack
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
+//? if <1.21.11 {
+import com.dreamdisplayx.platform.client.ui.enableScissorPoseAware
+//?}
 import com.dreamdisplayx.platform.client.ui.kit.*
 //? if >=1.21.11 {
 import com.mojang.blaze3d.platform.cursor.CursorTypes
