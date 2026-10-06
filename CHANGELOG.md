@@ -20,6 +20,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 ### Fixes
 
 - Fabric and NeoForge now render the cyan selection-region particle outline, matching Paper.
+- Refreshed the project icon with a cyan video-display design.
 
 # 1.10.0.4 Release
 

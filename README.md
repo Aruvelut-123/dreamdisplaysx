@@ -2,7 +2,7 @@
 [![许可证](https://img.shields.io/github/license/Aruvelut-123/dreamdisplaysx)](https://github.com/Aruvelut-123/dreamdisplaysx/blob/main/LICENSE)
 
 <div align="center">
-  <img src="https://i.imgur.com/HM4JUdj.png" alt="Dream DisplaysX">
+  <img src="https://raw.githubusercontent.com/Aruvelut-123/dreamdisplaysx/main/platform/resources/src/main/resources/assets/dreamdisplayx/icon.png" alt="Dream DisplaysX" width="180">
 </div>
 
 # 在 Minecraft 中播放视频
