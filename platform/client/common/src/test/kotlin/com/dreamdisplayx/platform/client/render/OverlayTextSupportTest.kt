@@ -6,9 +6,53 @@ import java.awt.image.BufferedImage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class OverlayTextSupportTest {
+    @Test
+    fun `optional backend falls back for ordinary failures but propagates fatal VM errors`() {
+        assertNull(OverlayTextSupport.optionalOrNull("test") { throw IllegalStateException("unavailable") })
+        assertNull(OverlayTextSupport.optionalOrNull("test") { throw NoClassDefFoundError("java/awt/Font") })
+        assertFailsWith<OutOfMemoryError> {
+            OverlayTextSupport.optionalOrNull("test") { throw OutOfMemoryError("synthetic") }
+        }
+        // Use the same operation name: rate-limited diagnostics must not suppress fatal causes.
+        repeat(2) {
+            assertFailsWith<OutOfMemoryError> {
+                OverlayTextSupport.optionalOrNull("test") {
+                    throw java.lang.reflect.InvocationTargetException(OutOfMemoryError("synthetic wrapped"))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `subtitle raster wraps CJK tokens and keeps opaque black background`() {
+        assertTrue(OverlayTextSupport.available())
+        val raster = AwtSubtitleRasterizer.rasterize("中文字幕😀".repeat(40))
+        assertTrue(raster.width <= 936)
+        assertTrue(raster.height > 20)
+        assertEquals(0xFF000000.toInt(), raster.argb.first())
+        assertTrue(raster.argb.any { it and 0xFFFFFF != 0 })
+    }
+
+    @Test
+    fun `danmaku raster matches measurement and preserves transparent background`() {
+        assertTrue(OverlayTextSupport.available())
+        val text = "中文 A😀"
+        val metrics = com.dreamdisplayx.platform.client.danmaku.AwtDanmakuRasterizer.measure(text, 2f)
+        val raster = com.dreamdisplayx.platform.client.danmaku.AwtDanmakuRasterizer.rasterize(text, 0xFFFF0000.toInt(), 2f)
+        assertEquals(metrics.width.toInt(), raster.width)
+        assertEquals(metrics.height.toInt(), raster.height)
+        assertTrue(raster.argb.any { it ushr 24 == 0 })
+        assertTrue(raster.argb.any {
+            val rgb = it and 0xFFFFFF
+            it ushr 24 != 0 && (rgb ushr 16) > ((rgb ushr 8) and 0xFF) && (rgb ushr 16) > (rgb and 0xFF)
+        })
+    }
+
     @Test
     fun `fallback metrics count Unicode code points`() {
         val (width, height) = OverlayTextSupport.fallbackMetrics("中😀", 20)
@@ -22,6 +66,7 @@ class OverlayTextSupportTest {
         val first = OverlayTextSupport.available()
         val second = OverlayTextSupport.available()
 
+        assertTrue(first, "Desktop test JVM must support offscreen AWT; do not silently skip raster tests")
         assertEquals(first, second)
     }
 
@@ -39,7 +84,7 @@ class OverlayTextSupportTest {
 
     @Test
     fun `logical composite remains preferred when it covers the whole Unicode string`() {
-        if (!OverlayTextSupport.available()) return
+        assertTrue(OverlayTextSupport.available())
 
         val logical = Font(Font.SANS_SERIF, Font.BOLD, 24)
         val text = "Latin العربية עברית हिन्दी 中文 😀"
@@ -66,7 +111,7 @@ class OverlayTextSupportTest {
 
     @Test
     fun `font runs never split a surrogate pair and keep mixed scripts covered`() {
-        if (!OverlayTextSupport.available()) return
+        assertTrue(OverlayTextSupport.available())
 
         val logical = Font(Font.SANS_SERIF, Font.PLAIN, 20)
         val text = "A😀中 العربية हिन्दी"
@@ -86,7 +131,7 @@ class OverlayTextSupportTest {
 
     @Test
     fun `shared Unicode layout measures and draws real pixels`() {
-        if (!OverlayTextSupport.available()) return
+        assertTrue(OverlayTextSupport.available())
 
         val image = BufferedImage(512, 96, BufferedImage.TYPE_INT_ARGB)
         val graphics = image.createGraphics()

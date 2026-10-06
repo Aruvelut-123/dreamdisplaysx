@@ -85,7 +85,6 @@ object LibVlcFrameExtractor {
          * Creates the player, registers the low-level vmem callbacks, loads the media, and waits for
          * the first decoded frame. Returns true on success. This is the expensive one-time cost.
          */
-        @Synchronized
         fun open(): Boolean {
             if (opened.get()) return true
             val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(url) }.getOrElse { error ->
@@ -93,14 +92,22 @@ object LibVlcFrameExtractor {
                 return false
             }
             if (!LibVlc.ensureLoaded()) return false
-            val player = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
-                ?: run { logger.warn("ScrubSession: libvlc_media_player_new failed: ${LibVlc.errmsg()}"); return false }
-            mp = player
-            try {
-                // Register the low-level format + video callbacks once for this player.
-                lib.libvlc_video_set_format_callbacks(player, grab.formatCb, grab.cleanupCb)
-                lib.libvlc_video_set_callbacks(player, grab.lockCb, grab.unlockCb, grab.displayCb, null)
-
+            val player = synchronized(this) {
+                if (opened.get() || mp != null || !grab.isActive()) return@synchronized null
+                val created = runCatching { lib.libvlc_media_player_new(LibVlc.libvlcInstance) }
+                    .getOrElse {
+                        logger.warn("ScrubSession: libvlc_media_player_new failed: ${LibVlc.errmsg()}")
+                        return@synchronized null
+                    }
+                mp = created
+                // Register callbacks while the player slot is exclusively owned, but do not hold
+                // this monitor across media setup/latch waits: native format/display callbacks may
+                // arrive on another thread and must acquire the session's FrameGrab monitor.
+                lib.libvlc_video_set_format_callbacks(created, grab.formatCb, grab.cleanupCb)
+                lib.libvlc_video_set_callbacks(created, grab.lockCb, grab.unlockCb, grab.displayCb, null)
+                created
+            } ?: return false
+            return try {
                 // Video-only, and force SOFTWARE decoding: the global instance carries
                 // --avcodec-hw=dxva2, and DXVA2 + vmem copy-back on libvlc 3.0 can hand back a stale
                 // GPU surface after a seek (get_time reaches the target but the pixels are an old
@@ -126,18 +133,23 @@ object LibVlcFrameExtractor {
 
                 if (!grab.setupLatch.await(SETUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                     logger.warn("ScrubSession: no video setup for $url (err=${LibVlc.errmsg()})")
+                    close()
                     return false
                 }
                 if (!grab.firstFrameLatch.await(SETUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                     logger.warn("ScrubSession: no first frame for $url (err=${LibVlc.errmsg()})")
+                    close()
                     return false
                 }
-                opened.set(true)
-                return true
+                synchronized(this) {
+                    if (mp !== player || !grab.isActive()) return false
+                    opened.set(true)
+                    true
+                }
             } catch (t: Throwable) {
                 logger.warn("ScrubSession: open failed for $url: ${t.message}")
                 close()
-                return false
+                false
             }
         }
 
@@ -247,6 +259,7 @@ object LibVlcFrameExtractor {
             grab.deactivate()
             grab.timeProvider = null
             grab.onFrame = {}
+            grab.setupLatch.countDown()
             grab.firstFrameLatch.countDown()
             if (player != null && com.dreamdisplayx.util.OsInfo.isAndroid) {
                 // Android never stops/releases a VLC-Android player. Keep the complete Session,
@@ -423,6 +436,8 @@ object LibVlcFrameExtractor {
         private fun clearFormat() {
             formatReady = false
         }
+
+        fun isActive(): Boolean = active
 
         @Synchronized
         fun deactivate() {

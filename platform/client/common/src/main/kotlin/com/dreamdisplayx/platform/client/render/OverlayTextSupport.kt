@@ -100,6 +100,16 @@ internal object OverlayTextSupport {
 
     /** Records an optional-backend failure at most once per interval for each operation. */
     internal fun reportFailure(operation: String, error: Throwable) {
+        // Reflection wraps failures thrown by constructors/drawString/dispose, including fatal VM
+        // errors. Unwrap before rate limiting so even a repeated OOM is never treated as fallback.
+        var cause = error
+        while (cause is java.lang.reflect.InvocationTargetException || cause is ExceptionInInitializerError) {
+            val nested = cause.cause ?: break
+            if (nested === cause) break
+            cause = nested
+        }
+        if (cause is VirtualMachineError) throw cause
+        if (cause is Error && cause::class.java.name == "java.lang.ThreadDeath") throw cause
         val now = System.nanoTime()
         val marker = lastFailureNanos.computeIfAbsent(operation) { AtomicLong(Long.MIN_VALUE) }
         while (true) {
