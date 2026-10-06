@@ -11,8 +11,33 @@ internal object RenderBackendCompat {
         isFabricModLoaded("vulkanmod") || isNeoForgeModLoaded("vulkanmod")
     }
 
-    /** True when raw OpenGL calls are safe (real GL backend and no Vulkan replacement). */
-    fun canUseDirectOpenGl(): Boolean = isOpenGlBackend() && !isVulkanModLoaded
+    /** True when raw OpenGL calls are safe (real GL backend and no known virtualized GLES bridge). */
+    fun canUseDirectOpenGl(): Boolean = isOpenGlBackend() && !isVulkanModLoaded && !isMobileGlues()
+
+    /**
+     * MobileGlues advertises desktop OpenGL extensions on top of GLES. Its PBO / BGRA upload path can
+     * accept the calls without producing a visible texture, so use Minecraft's command encoder there.
+     * Keep the probe string-based and independent of Android classes: Pojav/FCL exposes the renderer
+     * through launcher and LWJGL properties before the first texture is allocated.
+     */
+    internal fun isMobileGlues(
+        environment: Map<String, String> = System.getenv(),
+        properties: Map<String, String> = systemProperties(),
+    ): Boolean = sequenceOf(
+        environment["POJAVEXEC_EGL"],
+        environment["SDL_OPENGL_LIBRARY"],
+        environment["LIBGL_EGL"],
+        environment["SDL_EGL_LIBRARY"],
+        environment["POJAVEXEC_GL"],
+        environment["POJAVEXEC_RENDERER"],
+        environment["MOBILEGLUES_RENDERER"],
+        properties["org.lwjgl.opengl.libname"],
+        properties["org.lwjgl.egl.libname"],
+        properties["org.lwjgl.opengl.GL_VERSION"],
+        properties["org.lwjgl.opengl.GL_RENDERER"],
+        properties["org.lwjgl.opengl.GL_VENDOR"],
+        properties["gl.renderer"],
+    ).filterNotNull().any { it.contains("mobileglues", ignoreCase = true) }
 
     /** Best-effort typed active render backend. */
     fun backend(): RenderBackend = runCatching {
@@ -62,4 +87,7 @@ internal object RenderBackendCompat {
         val modList = modListClass.getMethod("get").invoke(null)
         modListClass.getMethod("isLoaded", String::class.java).invoke(modList, id) as Boolean
     }.getOrDefault(false)
+
+    private fun systemProperties(): Map<String, String> =
+        System.getProperties().stringPropertyNames().associateWith { System.getProperty(it).orEmpty() }
 }

@@ -176,6 +176,7 @@ That's it — no extra dependencies required. LambDynamicLights is an optional c
 - MobileGlues automatically uses a smaller avcodec thread pool to reduce native-memory contention between translated GL buffers and video buffers; player replacement waits briefly for the old vout to report paused.
 - Android libvlc players are paused (never stopped or released) on teardown to avoid native `SIGSEGV` crashes; stale native files are cleaned at startup.
 - Vmem callbacks use 32-byte-aligned strides, format generations, and leased slots; retired players and scrub sessions retain callback buffers until process exit.
+- MobileGlues bypasses the direct PBO/BGRA upload path, which can produce black frames, and uses Minecraft's command-encoder texture path instead.
 - Subtitle and danmaku textures load an Android system CJK font (such as Noto Sans CJK) when the launcher provides Cacio/AWT; runtimes without AWT safely skip text textures.
 - Bundles Android SQLite and a uniquely-named `libc++`; all `.so` files load from executable app-internal storage (emulated storage is `noexec`).
 - Ships a safe libvlc JNI bridge and an `android.os.Environment` stub; `libvlcjni.so` and Android-incompatible libvlc options are never used.

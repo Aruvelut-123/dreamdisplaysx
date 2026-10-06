@@ -81,6 +81,7 @@
 ### 2026-10-05 — Android renderer, decoder, and overlay-text hardening
 - Pojav/FCL Android defaults to explicit libvlc `avcodec` software decoding because the desktop JVM cannot provide `android.media.MediaCodecList`; a non-empty `dreamdisplayx.hwDecode` remains an opt-in escape hatch for launchers with a real MediaCodec bridge.
 - MobileGlues is detected from launcher EGL/GL library properties and receives a bounded avcodec thread pool; Android player replacement waits briefly for the old vout to report paused without reintroducing the unsafe stop/release teardown.
+- MobileGlues bypasses the direct PBO/BGRA upload path and uses Minecraft's command encoder because the emulated desktop extension path can otherwise yield black textures.
 - Android cleanup roots retired session managers process-wide so delayed vmem/JNA callbacks and direct buffers cannot be garbage-collected while libvlc workers still reference them; vmem uses aligned strides, per-format generations, and leased callback slots, while scrub sessions retain their callback owners after pause-only teardown.
 - Subtitle and danmaku rasterizers use an isolated optional Cacio/AWT backend with real runtime probing and mixed-script logical-font fallback; runtimes without `java.desktop` skip the optional texture safely.
 

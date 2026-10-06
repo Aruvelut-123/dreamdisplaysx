@@ -11,6 +11,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.
 - Isolated optional AWT overlays with mixed-script font fallback and fail-closed probing.
 - Aligned libvlc vmem strides and retained per-generation callback buffers during Android playback.
+- Disabled MobileGlues direct PBO/BGRA uploads in favor of the command-encoder texture path.
 - Kept Android scrub callback sessions rooted after pause-only teardown.
 
 # 1.10.0.4 Release
