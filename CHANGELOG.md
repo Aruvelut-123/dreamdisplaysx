@@ -4,6 +4,10 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ## Client
 
+### Features
+
+- Added an opt-in loading animation with a centered logo, flowing-rainbow waving title, and Windows 11-style spinner.
+
 ### Fixes
 
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.

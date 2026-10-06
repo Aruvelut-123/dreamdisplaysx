@@ -34,6 +34,9 @@ class Config(private val baseDir: File) {
     /** Whether displays are enabled at all. */
     var displaysEnabled: Boolean = true
 
+    /** Whether video loading uses the optional logo intro, rainbow waving title, and spinner. */
+    var animatedLoadingScreen: Boolean = false
+
     /** Whether Dream DisplaysX HUD overlays are rendered during replay/export. */
     var flashbackRenderHud: Boolean = true
 
@@ -118,6 +121,8 @@ class Config(private val baseDir: File) {
      * If neither file exists, a `config.toml` is created with default values.
      */
     private fun load() {
+        // This opt-in must fail closed even when a reload finds a missing or malformed file.
+        animatedLoadingScreen = false
         migrateLegacyYaml()
         if (!file.exists()) {
             save(); return
@@ -165,6 +170,7 @@ class Config(private val baseDir: File) {
         data["default-render-distance"]?.toIntOrNull()?.let { defaultDistance = ((it / 16.0).roundToInt().coerceIn(2, 12)) * 16 }
         data["default-default-display-volume"]?.toDoubleOrNull()?.let { defaultDisplayVolume = it }
         data["displays-enabled"]?.toBooleanStrictOrNull()?.let { displaysEnabled = it }
+        animatedLoadingScreen = data["animated-loading-screen"]?.toBooleanStrictOrNull() ?: false
         data["use-hw-accel"]?.toBooleanStrictOrNull()?.let { useHwAccel = it }
         data["prefer-fps60"]?.toBooleanStrictOrNull()?.let { preferFps60 = it }
         data["audio-acoustics"]?.let { token ->
@@ -185,6 +191,7 @@ class Config(private val baseDir: File) {
         }
         t?.getDouble("default-display-volume")?.let { defaultDisplayVolume = it }
         displaysEnabled = t?.getBoolean("displays-enabled") ?: displaysEnabled
+        animatedLoadingScreen = t?.get("animated-loading-screen") as? Boolean ?: false
         flashbackRenderHud = t?.getBoolean("flashback-render-hud") ?: flashbackRenderHud
         flashbackRenderDisplays = t?.getBoolean("flashback-render-displays") ?: flashbackRenderDisplays
         t?.getDouble("global-audio-multiplier")?.let { globalAudioMultiplier = it.coerceIn(0.0, 2.0) }
@@ -226,6 +233,13 @@ class Config(private val baseDir: File) {
             ConfigEntryType.BOOLEAN,
             get = { displaysEnabled },
             apply = { displaysEnabled = it; save() },
+        ),
+        ConfigEntry(
+            "animated-loading-screen", "Animated loading screen",
+            "Show a logo intro, rainbow waving title, and spinner while a video is loading.",
+            ConfigEntryType.BOOLEAN,
+            get = { animatedLoadingScreen },
+            apply = { animatedLoadingScreen = it; save() },
         ),
         ConfigEntry(
             "flashback-render-hud", "Flashback HUD rendering",
@@ -382,6 +396,7 @@ class Config(private val baseDir: File) {
             appendLine("default-render-distance = $defaultDistance")
             appendLine("default-display-volume = $defaultDisplayVolume")
             appendLine("displays-enabled = $displaysEnabled")
+            appendLine("animated-loading-screen = $animatedLoadingScreen")
             appendLine("flashback-render-hud = $flashbackRenderHud")
             appendLine("flashback-render-displays = $flashbackRenderDisplays")
             appendLine("global-audio-multiplier = $globalAudioMultiplier")

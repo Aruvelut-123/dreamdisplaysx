@@ -39,7 +39,7 @@
 
 ### Series Configuration
 - Server config: `config.toml` (TOML format)
-- Client config: `config.yml` (key: value format)
+- Client config: `config/dreamdisplayx/config.toml` (legacy `config.yml` migrates once)
 - Client display settings: `client-display-settings.json` (per-display JSON)
 - Permissions: LuckPerms support with `VanillaPermissions.Fallback` (EVERYONE/OP/NOBODY)
 
@@ -71,6 +71,12 @@
 - `dreamdisplayx.logout` — Default OP (LuckPerms supported)
 
 ## Changes & Commits
+
+### Optional animated video-loading screen
+- `animated-loading-screen` is a client-only TOML/Cloth toggle, default false; missing or invalid values must not opt existing users in.
+- `LoadingScreenAnimation` and `LoadingScreenClock` own JVM-only timing/layout, while `LoadingScreenRenderer` batches static icon/glyph/round-brush textures on both flat and conforming world displays. Keep the real first frame and legacy error/disabled paths higher priority than the intro.
+- The per-display clock uses media generations and monotonic time; no loading animation may delay playback, invoke native players, or rasterize fonts at runtime. Static PNG assets can be regenerated on Windows with `scripts/generate_loading_assets.ps1`; atlas metrics are validated by the common-module tests.
+- Fabric and NeoForge Cloth settings are hand-built; adding a `configEntries()` descriptor alone does not expose a setting. Both platform screens must wire the toggle.
 
 ### 2026-10-04 — Playback review hardening
 - Audio-track changes replace the desktop dedicated audio media in place; Android restarts with fresh native players and keeps muxed media on the video player's OpenSL ES path to avoid duplicate output, while delayed events from retired players are ignored.

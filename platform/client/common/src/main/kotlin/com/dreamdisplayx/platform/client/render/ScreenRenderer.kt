@@ -131,6 +131,7 @@ object ScreenRenderer : ClientRenderService {
         val facing = displayScreen.facing
         val w = displayScreen.width
         val h = displayScreen.height
+        val loadingFrame = LoadingScreenRenderer.frame(displayScreen, replay)
 
         // A conforming display hugs the selected slabs/stairs: the picture is drawn on the surfaces the
         // server found instead of one flat quad, so the flat transform is skipped while overlays follow
@@ -139,7 +140,11 @@ object ScreenRenderer : ClientRenderService {
             val wrapped = ConformingWorldMesh.quads(displayScreen)
             if (wrapped != null) {
                 val conformingLift = if (replay) REPLAY_LIFT else 0f
-                ConformingScreenDraw.render(displayScreen, wrapped, conformingLift, drawQuad)
+                if (loadingFrame != null) {
+                    LoadingScreenRenderer.renderConforming(displayScreen, wrapped, loadingFrame, conformingLift, replay, drawQuad)
+                } else {
+                    ConformingScreenDraw.render(displayScreen, wrapped, conformingLift, drawQuad)
+                }
                 renderDanmakuOverlay(
                     displayScreen, stack, facing, w, h,
                     lift = conformingLift, drawQuad = drawQuad, conformingQuads = wrapped,
@@ -167,6 +172,8 @@ object ScreenRenderer : ClientRenderService {
             // The replay lift is added on top so the UnshadedDisplayPass repaint sits just in front of
             // the level-pass draw it repeats (water/glass fix).
             renderVideo(stack, displayScreen, drawQuad, lift)
+        } else if (loadingFrame != null) {
+            LoadingScreenRenderer.renderFlat(displayScreen, stack, loadingFrame, lift, replay, drawQuad)
         } else {
             renderPlaceholder(
                 stack,

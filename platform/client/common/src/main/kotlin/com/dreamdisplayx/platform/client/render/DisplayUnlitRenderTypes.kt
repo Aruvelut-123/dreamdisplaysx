@@ -48,8 +48,8 @@ object DisplayUnlitRenderTypes {
         pipeline
     }
 
-    /** Creates an unlit [RenderType] named [name] that samples texture [id]. */
-    fun create(name: String, id: Identifier): RenderType = RenderType.create(
+    /** Creates an unlit [RenderType]; [translucent] opts overlays into blending on legacy clients. */
+    fun create(name: String, id: Identifier, translucent: Boolean = false): RenderType = RenderType.create(
         name,
         RenderSetup.builder(texturedPipeline)
             .withTexture(SAMPLER_TEXTURE, id)
@@ -69,13 +69,13 @@ object DisplayUnlitRenderTypes {
         }
     }
     //?} else
-    /*fun create(name: String, id: Identifier): RenderType {
+    /*fun create(name: String, id: Identifier, translucent: Boolean = false): RenderType {
         val state = RenderType.CompositeState.builder()
             .setShaderState(RenderStateShard.ShaderStateShard(java.util.function.Supplier {
                 GameRenderer.getPositionTexColorShader()
             }))
             .setTextureState(RenderStateShard.TextureStateShard(id, false, false))
-            .setTransparencyState(RenderStateShard.NO_TRANSPARENCY)
+            .setTransparencyState(if (translucent) RenderStateShard.TRANSLUCENT_TRANSPARENCY else RenderStateShard.NO_TRANSPARENCY)
             .setCullState(RenderStateShard.NO_CULL)
             .setDepthTestState(RenderStateShard.LEQUAL_DEPTH_TEST)
             .setLayeringState(RenderStateShard.POLYGON_OFFSET_LAYERING)

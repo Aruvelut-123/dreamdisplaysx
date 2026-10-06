@@ -47,6 +47,18 @@ internal object NeoForgeClothConfigScreen {
                 .build(),
         )
 
+        val animatedLoadingEntry = config.configEntries().single { it.key == "animated-loading-screen" }
+        general.addEntry(
+            entryBuilder.startBooleanToggle(
+                ConfigScreenText.entryLabel(animatedLoadingEntry),
+                config.animatedLoadingScreen,
+            )
+                .setDefaultValue(false)
+                .setTooltip(ConfigScreenText.entryTooltip(animatedLoadingEntry))
+                .setSaveConsumer { v: Boolean -> config.animatedLoadingScreen = v }
+                .build(),
+        )
+
         general.addEntry(
             entryBuilder.startBooleanToggle(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_HUD), config.flashbackRenderHud)
                 .setDefaultValue(true)

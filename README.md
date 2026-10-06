@@ -78,6 +78,12 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 
 使用黑色混凝土搭建显示器，用钻石斧选中区域并输入 `/display create`。选点过程中 Paper、Fabric 和 NeoForge 都会显示青色粒子轮廓，帮助确认选区大小；可在 `config.toml` 中设置 `display.particles = false` 关闭。创建完成后注视显示器，输入 `/display video <link> [language]`。按住 Shift 右键可以打开显示器设置菜单。
 
+## 可选加载动画
+
+客户端设置 **Mods → Dream DisplaysX → Configure / Config → General → Animated loading screen** 可启用新的显示器视频加载画面，**默认关闭**，关闭时仍使用原来的加载条。设置界面需要 Cloth Config，Fabric 还需要 ModMenu；也可在游戏目录的 `config/dreamdisplayx/config.toml` 中设置 `animated-loading-screen = true` 后重启客户端。
+
+启用后图标先居中淡入，再左移并让名称向上滑入，图标与名称整体居中。名称带持续从左向右流动、无缝循环的彩虹渐变与逐字上下波浪，入场结束后在名称正下方显示 Windows 11 风格的旋转圆弧。效果适用于平面和曲面显示器；视频首帧就绪即切换播放，不会为了动画额外等待，加载错误仍使用原错误画面。
+
 ## 命令参考
 
 | 命令 | 位置 | 作用 |

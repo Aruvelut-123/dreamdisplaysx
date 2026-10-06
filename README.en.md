@@ -147,6 +147,12 @@ display, look at it and press `Shift + RMB`.
 > On success the mod sends your `SESSDATA` to the server, which stores it encrypted, syncs it across
 > the server network, and broadcasts it to all online players — everyone gets the unlocked streams.
 
+## Optional loading animation
+
+Enable **Mods → Dream DisplaysX → Configure / Config → General → Animated loading screen** to replace the in-world video-loading placeholder. It is **off by default**; disabling it preserves the original loading bar. The settings UI needs Cloth Config (and ModMenu on Fabric). Alternatively set `animated-loading-screen = true` in the game's `config/dreamdisplayx/config.toml` and restart the client.
+
+The icon fades in at the center, then moves left as the name slides up into a centered icon/name lockup. The name has a seamlessly looping rainbow gradient flowing from left to right and a gentle per-letter vertical wave. A Windows 11-style rotating arc appears directly below the name after the entrance finishes. Flat and curved displays share the animation; the first video frame replaces it immediately without an artificial delay, and errors retain the existing error placeholder.
+
 ## Download
 
 Grab the `.jar` for your loader and Minecraft version from the

@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.config
 
+import com.dreamdisplayx.platform.client.ConfigEntry
 import net.minecraft.network.chat.Component
 
 /**
@@ -48,6 +49,14 @@ object ConfigScreenText {
         const val CDN_MIRROR = "dreamdisplayx.config.cdn_mirror"
         const val CDN_MIRROR_TOOLTIP = "dreamdisplayx.config.cdn_mirror.tooltip"
     }
+
+    /** Uses a declarative entry's English label until a translation or resource-pack override exists. */
+    fun entryLabel(entry: ConfigEntry<*>): Component =
+        Component.translatableWithFallback("dreamdisplayx.config.${entry.key.replace('-', '_')}", entry.label)
+
+    /** Keeps new entry tooltips readable without requiring every language file to define the key. */
+    fun entryTooltip(entry: ConfigEntry<*>): Component =
+        Component.translatableWithFallback("dreamdisplayx.config.${entry.key.replace('-', '_')}.tooltip", entry.comment)
 
     /** Localized component for the decoder dropdown label. Falls back to the raw [value] when the key is unknown. */
     fun decoderLabel(value: String): Component =
