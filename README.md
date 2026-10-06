@@ -76,7 +76,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 
 # 开始使用
 
-使用黑色混凝土搭建显示器，用钻石斧选中区域并输入 `/display create`。创建完成后注视显示器，输入 `/display video <link> [language]`。按住 Shift 右键可以打开显示器设置菜单。
+使用黑色混凝土搭建显示器，用钻石斧选中区域并输入 `/display create`。选点过程中 Paper、Fabric 和 NeoForge 都会显示青色粒子轮廓，帮助确认选区大小；可在 `config.toml` 中设置 `display.particles = false` 关闭。创建完成后注视显示器，输入 `/display video <link> [language]`。按住 Shift 右键可以打开显示器设置菜单。
 
 ## 命令参考
 
@@ -122,7 +122,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 - 使用 libvlc OpenSL ES 输出音频；复用音频留在视频播放器，独立音频使用单独播放器；桌面 3D 定位音频（`javax.sound`）在 Android 不可用
 - 默认使用 libvlc 软件 avcodec 解码，避免 Pojav/FCL 缺少 `android.media.MediaCodecList` 时反复探测失败；可用 `-Ddreamdisplayx.hwDecode=<module>` 显式启用启动器提供的 MediaCodec 桥接
 - MobileGlues 会自动限制 avcodec 解码线程数，降低 GL 翻译缓冲与视频缓冲争抢原生内存；播放器切换时等待旧 vout 进入暂停态后再创建新会话
-- teardown 时 Android libvlc 播放器只暂停、不 stop 或 release，避免原生 `SIGSEGV`
+- teardown 时 Android libvlc 播放器只暂停、不 stop 或 release；libvlc 会在 JNA 之前完成 JNI 初始化并保持回调线程附着，降低自然 EOF 线程退出时的 TLS `SIGSEGV` 风险
 - vmem 回调使用 32 字节对齐 stride、格式代际和槽位租约，旧播放器与 scrub 会话的回调/缓冲区在进程结束前保持可达
 - MobileGlues 绕过可能产生黑帧的直接 PBO/BGRA 上传，改用 Minecraft command encoder 纹理路径
 - Android SQLite 和独立命名的 `libc++` 会解压到应用内部可执行目录

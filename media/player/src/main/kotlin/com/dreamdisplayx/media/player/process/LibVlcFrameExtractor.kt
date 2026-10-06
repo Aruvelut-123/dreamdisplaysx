@@ -249,8 +249,9 @@ object LibVlcFrameExtractor {
          * `libvlc_media_player_stop` force-tears input/vout/aout so VLC worker threads detach while
          * exiting and their TLS destructor (`jni_detach_thread` in modules/video_output/android/
          * utils.c) dereferences freed state -> SIGSEGV in pthread_key_clean_all (libvlc.so+0xef7418),
-         * even when the player is never released. Pausing keeps every VLC thread alive, so the
-         * destructor never runs with stale state, and the OS reclaims the player on process exit.
+         * even when the player is never released. Pausing protects active teardown only; natural
+         * EOF can still exit a worker, so Android JNI loading establishes VLC's TLS key before
+         * JNA's callback key and keeps callback threads attached. The OS reclaims the player on exit.
          */
         @Synchronized
         fun close() {
@@ -360,6 +361,15 @@ object LibVlcFrameExtractor {
         val lockCb = LibVlc.VideoLockCallback { _opaque, planes -> lock(planes) }
         val unlockCb = LibVlc.VideoUnlockCallback { _, _, _ -> }
         val displayCb = LibVlc.VideoDisplayCallback { _opaque, picture -> display(picture) }
+
+        init {
+            // Scrub callbacks can run on a VLC worker that exits after the media reaches EOF too.
+            LibVlc.configureCallbackThread(formatCb)
+            LibVlc.configureCallbackThread(cleanupCb)
+            LibVlc.configureCallbackThread(lockCb)
+            LibVlc.configureCallbackThread(unlockCb)
+            LibVlc.configureCallbackThread(displayCb)
+        }
 
         @Volatile var frameW = 0
         @Volatile var frameH = 0

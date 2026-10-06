@@ -350,6 +350,16 @@ internal class LibVlcSessionManager(
         }
         val display = LibVlc.VideoDisplayCallback { opaque, picture -> frames.display(opaque, picture) }
 
+        init {
+            // Keep JNA callback threads attached until VLC's native owner exits. The Android
+            // loader also creates VLC's JNI TLS key before JNA, so this is a defensive second line.
+            LibVlc.configureCallbackThread(format)
+            LibVlc.configureCallbackThread(cleanup)
+            LibVlc.configureCallbackThread(lock)
+            LibVlc.configureCallbackThread(unlock)
+            LibVlc.configureCallbackThread(display)
+        }
+
         fun deactivate() = frames.deactivate()
     }
 
@@ -853,6 +863,7 @@ internal class LibVlcSessionManager(
             val em = lib.libvlc_media_player_event_manager(mp)
             if (em != null) {
                 val callback = LibVlc.EventCallback { event, _ -> handleEvent(event, mp) }
+                LibVlc.configureCallbackThread(callback)
                 eventCallbacks += callback
                 for (e in MEDIA_PLAYER_EVENTS) {
                     lib.libvlc_event_attach(em, e, callback, null)
@@ -895,6 +906,13 @@ internal class LibVlcSessionManager(
                 // Desktop only: audio callbacks feed the 3D DSP + Java Sound line. The line is
                 // pre-opened here so the first PCM block has a destination (also primes the default format).
                 openAudioLine()
+                LibVlc.configureCallbackThread(audioFormatSetupCallback)
+                LibVlc.configureCallbackThread(audioFormatCleanupCallback)
+                LibVlc.configureCallbackThread(audioPlayCallback)
+                LibVlc.configureCallbackThread(audioPauseCallback)
+                LibVlc.configureCallbackThread(audioResumeCallback)
+                LibVlc.configureCallbackThread(audioFlushCallback)
+                LibVlc.configureCallbackThread(audioDrainCallback)
                 lib.libvlc_audio_set_format_callbacks(ap, audioFormatSetupCallback, audioFormatCleanupCallback)
                 lib.libvlc_audio_set_callbacks(ap, audioPlayCallback, audioPauseCallback,
                     audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
@@ -1487,11 +1505,12 @@ internal class LibVlcSessionManager(
      * decoder, vout display threads can still be winding down when stop returns) — a worker
      * thread exiting at ANY later moment dereferences freed state and dies with SIGSEGV at
      * `libvlc.so+0xef7418` inside `pthread_key_clean_all` (observed on plain world exit AND on
-     * DASH audio stream end, even with stop serialised and never released). On Android the only
-     * safe teardown is to PAUSE the players instead of stopping them, so every worker thread
-     * stays alive for the JVM's lifetime and the TLS destructor never runs with stale state; the
-     * OS reclaims everything on process exit. Desktop has no such TLS destructor and keeps
-     * serialised stop -> release.
+     * DASH audio stream end, even with stop serialised and never released). On Android active teardown
+     * must PAUSE the players instead of stopping them, but this cannot prevent workers from exiting at
+     * natural EOF. The Android loader establishes VLC's JNI TLS key before JNA's callback key, and
+     * callback threads are explicitly kept attached, so EOF teardown observes the JVM attachment in
+     * the safe order; the OS reclaims paused players at process exit. Desktop has no such TLS
+     * destructor and keeps serialised stop -> release.
      */
     fun cleanup() {
         markStopped(parked = false, releasing = true)

@@ -42,6 +42,10 @@ object LibVlcNativesLoader {
     @Volatile
     private var extractedDir: File? = null
 
+    /** True when Android's System.load already ran libvlc.so's JNI_OnLoad before JNA. */
+    @Volatile
+    private var androidJniLibraryLoaded = false
+
     /**
      * The library name (desktop) or absolute .so path (Android) that JNA should load for libvlc.
      *
@@ -64,6 +68,38 @@ object LibVlcNativesLoader {
             }
         }
         return null
+    }
+
+    /**
+     * Loads Android's `libvlc.so` through the JVM before JNA touches a callback trampoline.
+     *
+     * `System.load` invokes the library's exported `JNI_OnLoad`, which creates VLC-Android's JNI
+     * pthread key while the JNA callback TLS key does not exist yet. JNA can then resolve the
+     * already-loaded handle, leaving the VLC destructor ahead of JNA's destructor on AOSP/Bionic.
+     * That ordering prevents natural EOF from dereferencing a JNIEnv that JNA detached first.
+     *
+     * Returns false on launchers where the direct load cannot be completed; the caller then falls
+     * back to the explicit JavaVM injection path for compatibility.
+     */
+    @JvmStatic
+    fun loadAndroidLibraryBeforeJna(): Boolean {
+        if (!com.dreamdisplayx.util.OsInfo.isAndroid) return false
+        if (androidJniLibraryLoaded) return true
+        return try {
+            ensureAndroidEnvironmentStubVisible()
+            // Reuse jnaLoadTarget() so the renamed libc++ companion is RTLD_GLOBAL before
+            // System.load resolves libvlc.so's DT_NEEDED entries.
+            val path = jnaLoadTarget()
+                ?: throw IllegalStateException("downloaded libvlc.so path is unavailable")
+            System.load(path)
+            androidJniLibraryLoaded = true
+            cacheVersionFromLoadedAndroid(path)
+            logger.info("Loaded Android libvlc through System.load before JNA (JNI_OnLoad ran first).")
+            true
+        } catch (t: Throwable) {
+            logger.warn("Could not preload Android libvlc before JNA; using explicit JNI bridge: {}", t.message)
+            false
+        }
     }
 
     /**
@@ -106,7 +142,7 @@ object LibVlcNativesLoader {
         //    pc in the unmapped gap right after an "Unloaded shared library" event).
         val companions = (dir.listFiles() ?: return).asSequence()
             .filter { it.isFile && it.name.endsWith(".so") }
-            .filter { it.name == "libc++_dreamdisplayx.so" || it.name == "libc++_shared.so" }
+            .filter { it.name == "libc++_dreamdisplayx.so" }
             .sortedBy { it.name }
             .toList()
         // Single pass is enough: only the C++ runtime is preloaded, and libvlc.so is opened
@@ -184,7 +220,7 @@ object LibVlcNativesLoader {
      */
     @JvmStatic
     fun injectAndroidJniOnLoad() {
-        if (!com.dreamdisplayx.util.OsInfo.isAndroid) return
+        if (!com.dreamdisplayx.util.OsInfo.isAndroid || androidJniLibraryLoaded) return
         try {
             ensureAndroidEnvironmentStubVisible()
 
@@ -453,11 +489,33 @@ object LibVlcNativesLoader {
         return extracted
     }
 
+    /** Queries the version after Android's JNI-safe System.load has completed. */
+    private fun cacheVersionFromLoadedAndroid(path: String) {
+        runCatching {
+            val api = com.sun.jna.Native.load(path, com.dreamdisplayx.media.player.managers.LibVlc.LibVlcNative::class.java)
+            val verPtr = api.libvlc_get_version()
+            val ver = verPtr.getString(0)
+            if (!ver.isNullOrBlank()) {
+                libvlcVersion = ver
+                logger.info("LibVLC version: {}", ver)
+            }
+        }.onFailure {
+            logger.debug("Could not query Android libvlc version after loading: {}", it.message)
+        }
+    }
+
     /**
      * Queries the libvlc version through the low-level binding (no vlcj) after the download
      * cache / extraction is in place. Fails silently if the native library isn't loadable.
      */
     private fun cacheVersionFromExtracted() {
+        // Do not let this diagnostic query dlopen Android libvlc through JNA before
+        // LibVlc.ensureLoaded() can run System.load and JNI_OnLoad in the intended order.
+        // loadAndroidLibraryBeforeJna() performs the version query after System.load succeeds.
+        if (com.dreamdisplayx.util.OsInfo.isAndroid) {
+            logger.debug("Deferring Android libvlc version query until the JNI-safe load path.")
+            return
+        }
         try {
             val api = com.sun.jna.Native.load(
                 jnaLoadTarget() ?: "libvlc",

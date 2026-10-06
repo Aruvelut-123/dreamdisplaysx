@@ -6,6 +6,7 @@ import com.dreamdisplayx.platform.server.listeners.NeoForgeProtectionListener
 import com.dreamdisplayx.platform.server.listeners.NeoForgeSelectionListener
 import com.dreamdisplayx.platform.server.managers.StorageManager
 import com.dreamdisplayx.platform.server.registrar.NeoForgeBareTokenArgumentType
+import com.dreamdisplayx.platform.server.managers.VanillaSelectionVisualizer
 import com.dreamdisplayx.platform.server.registrar.NeoForgeCommandRegistrar
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeNetworkingAdapter
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeProxyNetworking
@@ -85,12 +86,15 @@ class NeoForgeServer(modEventBus: IEventBus) {
         VanillaServerState.server = server
         VanillaBootstrap.onServerStarted(server, dataDir)
 
+        VanillaSelectionVisualizer.startParticleTask(server)
+
         logger.info("Server started. Storage connected.")
     }
 
     /** Persists state and tears down resources. */
     @SubscribeEvent
     fun onServerStopping(event: ServerStoppingEvent) {
+        VanillaSelectionVisualizer.stopParticleTask()
         logger.info("Server stopping. Saving displays...")
         VanillaBootstrap.onServerStopping()
     }

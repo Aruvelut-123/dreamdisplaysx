@@ -125,8 +125,10 @@ Compared to the original Dream Displays, this fork adds:
 
 Build your first display, invite your friends, and make displays a part of your world.
 
-Set up a display using black concrete, select it with a diamond axe, and type `/display create`. After the display is
-created, type `/display video <link> [language]`. Done! To customize the display, look at it and press `Shift + RMB`.
+Set up a display using black concrete, select it with a diamond axe, and type `/display create`. During selection,
+Paper, Fabric, and NeoForge show a cyan particle outline so you can confirm the region size; set `display.particles = false`
+in `config.toml` to disable it. After the display is created, type `/display video <link> [language]`. Done! To customize the
+display, look at it and press `Shift + RMB`.
 
 ## Command reference
 
@@ -174,7 +176,7 @@ That's it — no extra dependencies required. LambDynamicLights is an optional c
 - Audio uses libvlc's OpenSL ES output; muxed media stays on the video player while separate DASH renditions (e.g. Bilibili) use a dedicated audio-only player. Desktop 3D positional audio (`javax.sound`) is unavailable.
 - Video decode defaults to software avcodec because the Pojav/FCL JVM does not expose `android.media.MediaCodecList`; opt into a launcher-provided MediaCodec bridge with a non-empty `-Ddreamdisplayx.hwDecode=<module>` override.
 - MobileGlues automatically uses a smaller avcodec thread pool to reduce native-memory contention between translated GL buffers and video buffers; player replacement waits briefly for the old vout to report paused.
-- Android libvlc players are paused (never stopped or released) on teardown to avoid native `SIGSEGV` crashes; stale native files are cleaned at startup.
+- Android libvlc players are paused (never stopped or released) during active teardown; libvlc initializes JNI before JNA and keeps callback threads attached to reduce TLS `SIGSEGV` risk when natural EOF workers exit.
 - Vmem callbacks use 32-byte-aligned strides, format generations, and leased slots; retired players and scrub sessions retain callback buffers until process exit.
 - MobileGlues bypasses the direct PBO/BGRA upload path, which can produce black frames, and uses Minecraft's command-encoder texture path instead.
 - Subtitle and danmaku textures load an Android system CJK font (such as Noto Sans CJK) when the launcher provides Cacio/AWT; runtimes without AWT safely skip text textures.

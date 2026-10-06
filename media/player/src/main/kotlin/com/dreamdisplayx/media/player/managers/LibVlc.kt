@@ -2,6 +2,7 @@ package com.dreamdisplayx.media.player.managers
 
 import com.dreamdisplayx.media.player.util.LibVlcLogRotation
 import com.sun.jna.Callback
+import com.sun.jna.CallbackThreadInitializer
 import com.sun.jna.Function
 import com.sun.jna.Library
 import com.sun.jna.Memory
@@ -29,6 +30,26 @@ import java.util.concurrent.ConcurrentLinkedDeque
 object LibVlc {
 
     private val logger = org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
+
+    /**
+     * JNA's default callback policy detaches a thread it attached after the first callback. VLC's
+     * Android bridge caches that thread's JNIEnv in its own pthread TLS, so make callback threads stay
+     * attached until their native owner exits. This is a mitigation for the JNA/VLC TLS ordering
+     * hazard; Android loading order below is the stronger protection because it creates VLC's JNI TLS
+     * key before JNA can create its callback TLS key.
+     */
+    private val androidCallbackThreadInitializer =
+        CallbackThreadInitializer(true, false, "DreamDisplaysX-libvlc")
+
+    /** Applies the Android callback-thread policy before libvlc can invoke [callback]. */
+    fun configureCallbackThread(callback: Callback) {
+        if (!com.dreamdisplayx.util.OsInfo.isAndroid) return
+        runCatching {
+            Native.setCallbackThreadInitializer(callback, androidCallbackThreadInitializer)
+        }.onFailure {
+            logger.debug("Could not configure JNA callback thread policy: {}", it.message)
+        }
+    }
 
     // ── Event constants ──────────────────────────────────────────────────────
 
@@ -256,11 +277,18 @@ object LibVlc {
             // pass the plugin path explicitly to libvlc_new (vlcj does this internally; libvlc does
             // NOT read the Java system property).
             com.dreamdisplayx.media.player.util.LibVlcNativesLoader.load()
+            // Android must run libvlc.so's JNI_OnLoad through System.load BEFORE JNA creates its
+            // callback TLS key. VLC stores JNIEnv* in its own pthread key; creating that key first
+            // makes AOSP's key-destructor order detach the JVM from under VLC at natural EOF. JNA
+            // then resolves the already-loaded handle below. If System.load is unavailable on an
+            // unusual launcher, retain the older explicit bridge as a best-effort fallback.
+            val androidJniLoaded =
+                com.dreamdisplayx.util.OsInfo.isAndroid &&
+                    com.dreamdisplayx.media.player.util.LibVlcNativesLoader.loadAndroidLibraryBeforeJna()
             Native.load(libVlcLoadTarget(), LibVlcNative::class.java)
-            // On Android, plain dlopen (JNA) never triggers libvlc.so's JNI_OnLoad, which is
-            // how VLC-Android's AndroidBridge learns the JavaVM. Without it libvlc_new fails
-            // (or VLC worker threads crash with SIGSEGV in __pthread_start). Inject it now.
-            com.dreamdisplayx.media.player.util.LibVlcNativesLoader.injectAndroidJniOnLoad()
+            if (com.dreamdisplayx.util.OsInfo.isAndroid && !androidJniLoaded) {
+                com.dreamdisplayx.media.player.util.LibVlcNativesLoader.injectAndroidJniOnLoad()
+            }
             val opts = mutableListOf("--no-video-title-show", "--no-snapshot-preview", "--verbose=1",
                 "--no-keyboard-events", "--no-mouse-events",
                 "--network-caching=${networkCachingMs()}",
@@ -370,6 +398,7 @@ object LibVlc {
         val inst = instance ?: return
         try {
             // The field reference below keeps the JNA trampoline strongly reachable for GC.
+            configureCallbackThread(logCallback)
             lib.libvlc_log_set(inst, logCallback, null)
             logSinkInstalled = true
         } catch (t: Throwable) {

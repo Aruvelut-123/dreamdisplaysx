@@ -13,6 +13,13 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Aligned libvlc vmem strides and retained per-generation callback buffers during Android playback.
 - Disabled MobileGlues direct PBO/BGRA uploads in favor of the command-encoder texture path.
 - Kept Android scrub callback sessions rooted after pause-only teardown.
+- Hardened Android libvlc EOF teardown by loading JNI before JNA and retaining callback-thread attachment.
+
+## Server
+
+### Fixes
+
+- Fabric and NeoForge now render the cyan selection-region particle outline, matching Paper.
 
 # 1.10.0.4 Release
 

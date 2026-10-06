@@ -7,6 +7,7 @@ import com.dreamdisplayx.platform.server.listeners.FabricPlayerListener
 import com.dreamdisplayx.platform.server.listeners.FabricProtectionListener
 import com.dreamdisplayx.platform.server.listeners.FabricSelectionListener
 import com.dreamdisplayx.platform.server.managers.StorageManager
+import com.dreamdisplayx.platform.server.managers.VanillaSelectionVisualizer
 import com.dreamdisplayx.platform.server.registrar.FabricBareTokenArgumentType
 import com.dreamdisplayx.platform.server.registrar.FabricCommandRegistrar
 import com.dreamdisplayx.platform.server.storage.StorageBackend
@@ -67,10 +68,12 @@ class Server : ModInitializer {
                 migrateGlobalDb(dataDir)
             }
             VanillaBootstrap.onServerStarted(server, dataDir)
+            VanillaSelectionVisualizer.startParticleTask(server)
             logger.info("Server started. Storage connected.")
         }
 
         ServerLifecycleEvents.SERVER_STOPPING.register { _ ->
+            VanillaSelectionVisualizer.stopParticleTask()
             logger.info("Server stopping. Saving displays...")
             VanillaBootstrap.onServerStopping()
         }

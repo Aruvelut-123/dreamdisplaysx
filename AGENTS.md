@@ -235,11 +235,13 @@
   android/os/Build$VERSION` → `Unloaded shared library` → `SIGSEGV` sequence); the double-libc++
   mixing was only the extra corruption visible in the first log. squi2rel/VideoPlayer never
   loads libvlcjni.so either.
-- Android JNI bridge: plain JNA `Native.load` only `dlopen`s `libvlc.so` and never triggers
+- Android JNI bridge: plain JNA `Native.load` only `dlopen`s `libvlc.so` and does not reliably run
   its `JNI_OnLoad`, so VLC-Android's AndroidBridge never learns the JavaVM and `libvlc_new`
-  returns null. `LibVlcNativesLoader.injectAndroidJniOnLoad()` (called from `LibVlc.ensureLoaded`
-  right after the JNA load) obtains the live JavaVM via `JNI_GetCreatedJavaVMs` from `libjvm.so`
-  (`java.home`) and invokes `libvlc.so`'s exported `JNI_OnLoad(JavaVM*, NULL)` through JNA
+  returns null. `LibVlc.ensureLoaded()` first calls
+  `LibVlcNativesLoader.loadAndroidLibraryBeforeJna()` so `System.load` runs `JNI_OnLoad` before
+  JNA creates its callback TLS key; `injectAndroidJniOnLoad()` remains the direct-load fallback.
+  The fallback obtains the live JavaVM via `JNI_GetCreatedJavaVMs` from `libjvm.so` (`java.home`)
+  and invokes `libvlc.so`'s exported `JNI_OnLoad(JavaVM*, NULL)` through JNA
   `NativeLibrary` — the same bridge step squi2rel/VideoPlayer performs with its
   `libvlc_jvm_bridge.so` shim, done in pure JNA. libvlc.so's JNI_OnLoad stores the JavaVM in a
   global on entry; it does NOT gracefully skip when a class is missing — its very first
@@ -265,22 +267,20 @@
   does `(*env)->GetJavaVM(env, &jvm)` — dereferencing `env->functions` (offset 0). On this build
   the value sometimes points at freed-and-zeroed scudo heap memory (`[R0]=0`, crash at
   `ldr x8,[x8,#0x6d8]` = `libvlc.so+0xef7418`, `si_addr=0x6d8`), so the JNIEnv becomes invalid
-  while the thread is still alive. CRITICAL: this AAR's `libvlc_media_player_stop` itself
-  force-tears input/vout/aout and its worker threads detach while winding down — therefore
-  `SIGSEGV at libvlc.so+0xef7418` happens even with players NEVER released (observed on video
-  switch: game log "Saving and pausing game..." at 09:36:03, crash 09:36:05; also earlier on
-  world exit and after first frame). `libvlc_media_player_release` is NOT the culprit; `stop` IS.
-  Audio stopping after ~1 min was the same event: switching the video stopped the old player and
-  took its audio down with it. Therefore on Android EVERY teardown path MUST avoid
+  while the thread is still alive. Active Android teardown still avoids `libvlc_media_player_stop` and
+  `libvlc_media_player_release` because they force-tear input/vout/aout while worker threads wind
+  down, but the supplied natural-EOF crash evidence does not prove that stop caused that crash.
+  The EOF path can exit workers even when players are never released; the observed
+  `SIGSEGV at libvlc.so+0xef7418` therefore requires JNI TLS ordering protection as well.
+  Therefore on Android EVERY teardown path MUST avoid
   `libvlc_media_player_stop`, `libvlc_media_player_release`, and reusing a player after media has
   been attached: `LibVlcSessionManager.stop()`/`cleanup()` pause the players instead
   (`libvlc_media_player_set_pause(p,1)`), while `start()` and the ENDED restart in `beginSeek`
   retire the old players and bind fresh ones. `LibVlcFrameExtractor`'s scrub-session `close()`
-  pauses too. Pausing keeps
-  every VLC thread alive, so the TLS destructor never runs with stale state, and the OS reclaims
-  the players on process exit (players accumulate per session — acceptable; same keep-alive idea
-  as squi2rel/VideoPlayer but WITHOUT their stop+release teardown, which is unverified on Android
-  and equally exposes the destructor). Desktop has no Android TLS destructor and keeps the
+  pauses too. Pausing protects active teardown only; natural EOF can still exit workers. The
+  System.load-before-JNA ordering plus explicit `CallbackThreadInitializer(true, false)` coverage
+  is the JNI TLS mitigation, while paused players are still retained until process exit (players
+  accumulate per session — acceptable). Desktop has no Android TLS destructor and keeps the
   serialised stop→release ordering. Also: `libvlc_media_player_get_video_decoder_info`
   / `libvlc_media_decoder_info_release` are NOT exported by the libvlc-all AAR's monolithic
   `libvlc.so` (desktop-only 3.0.7+ API) — `LibVlc.videoDecoderName()` must not call them on
