@@ -13,11 +13,6 @@ import net.minecraft.client.renderer.texture.DynamicTexture
 import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
-import java.awt.Color
-import java.awt.Font
-import java.awt.FontMetrics
-import java.awt.RenderingHints
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -55,7 +50,9 @@ class SubtitleOverlayTexture {
             return
         }
 
-        val image = runCatching { rasterize(normalized) }.getOrElse {
+        val raster = OverlayTextSupport.optionalOrNull("subtitle rasterization") {
+            AwtSubtitleRasterizer.rasterize(normalized)
+        } ?: run {
             // Do not retry a permanently unavailable AWT path on every render tick, and never keep
             // displaying the previous cue after the new one failed to rasterize.
             lastText = normalized
@@ -69,10 +66,10 @@ class SubtitleOverlayTexture {
         ).also { identifier = it }
         releaseTexture()
         cachedRenderType = null
-        aspectRatio = image.width.toFloat() / image.height.toFloat()
+        aspectRatio = raster.width.toFloat() / raster.height.toFloat()
 
-        val dynamic = runCatching {
-            val native = toNativeImage(image)
+        val dynamic = OverlayTextSupport.optionalOrNull("subtitle texture upload") {
+            val native = toNativeImage(raster)
             val created =
                 //? if >=1.21.11 {
                 DynamicTexture({ "dreamdisplayx-subtitle" }, native)
@@ -82,11 +79,14 @@ class SubtitleOverlayTexture {
                 created.upload()
                 Minecraft.getInstance().textureManager.register(id, created)
                 created
-            } catch (error: Throwable) {
-                runCatching { created.close() }
+            } catch (error: Exception) {
+                closeTextureAfterFailure(created)
+                throw error
+            } catch (error: LinkageError) {
+                closeTextureAfterFailure(created)
                 throw error
             }
-        }.getOrElse {
+        } ?: run {
             lastText = normalized
             return
         }
@@ -115,89 +115,26 @@ class SubtitleOverlayTexture {
     /** Removes the identifier from Minecraft's texture manager as well as closing the GL resource. */
     private fun releaseTexture() {
         val old = texture ?: return
-        runCatching { identifier?.let { Minecraft.getInstance().textureManager.release(it) } }
+        OverlayTextSupport.optionalOrNull("subtitle texture release") {
+            identifier?.let { Minecraft.getInstance().textureManager.release(it) }
+        }
         // TextureManager.release normally closes the registered texture, but close explicitly as a
         // fallback for reload paths where the manager has already dropped the identifier entry.
-        runCatching { old.close() }
+        OverlayTextSupport.optionalOrNull("subtitle texture close") { old.close() }
         texture = null
     }
 
-    private fun rasterize(text: String): BufferedImage {
-        val font = OverlayTextSupport.font(Font.BOLD, FONT_SIZE_PX)
-        val probe = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-        val metrics = probe.createGraphics().let { g ->
-            g.font = font
-            g.fontMetrics.also { g.dispose() }
-        }
-
-        val lines = wrap(text, metrics)
-        val lineHeight = metrics.height
-        val textWidth = lines.maxOf { metrics.stringWidth(it) }
-        val width = (textWidth + PADDING_X * 2).coerceAtLeast(1)
-        val height = (lineHeight * lines.size + PADDING_Y * 2).coerceAtLeast(1)
-
-        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-        val g = image.createGraphics()
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-        g.color = BACKGROUND_COLOR
-        g.fillRect(0, 0, width, height)
-        g.font = font
-        g.color = Color.WHITE
-        var y = PADDING_Y + metrics.ascent
-        for (line in lines) {
-            val lineWidth = metrics.stringWidth(line)
-            g.drawString(line, (width - lineWidth) / 2, y)
-            y += lineHeight
-        }
-        g.dispose()
-        return image
+    private fun closeTextureAfterFailure(texture: DynamicTexture) {
+        OverlayTextSupport.optionalOrNull("subtitle texture cleanup") { texture.close() }
     }
 
-    private fun wrap(text: String, metrics: FontMetrics): List<String> {
-        val out = ArrayList<String>()
-        for (rawLine in text.split('\n')) {
-            var current = StringBuilder()
-            val words = rawLine.split(Regex("\\s+")).filter { it.isNotEmpty() }
-            for (word in words) {
-                // Split URLs/CJK/emoji runs that contain no whitespace; otherwise one unbroken token
-                // could create an arbitrarily wide NativeImage and overflow the display quad.
-                val chunks = splitLongWord(word, metrics)
-                for (chunk in chunks) {
-                    val candidate = if (current.isEmpty()) chunk else "$current $chunk"
-                    if (metrics.stringWidth(candidate) > MAX_TEXT_WIDTH_PX && current.isNotEmpty()) {
-                        out.add(current.toString())
-                        current = StringBuilder(chunk)
-                    } else {
-                        current = StringBuilder(candidate)
-                    }
-                }
-            }
-            if (current.isNotEmpty()) out.add(current.toString())
-        }
-        return out.ifEmpty { listOf("") }.take(MAX_LINES)
-    }
-
-    private fun splitLongWord(word: String, metrics: FontMetrics): List<String> {
-        if (metrics.stringWidth(word) <= MAX_TEXT_WIDTH_PX) return listOf(word)
-        val chunks = ArrayList<String>()
-        var start = 0
-        while (start < word.length) {
-            var end = word.length
-            while (end > start + 1 && metrics.stringWidth(word.substring(start, end)) > MAX_TEXT_WIDTH_PX) end--
-            chunks += word.substring(start, end)
-            start = end
-        }
-        return chunks
-    }
-
-    private fun toNativeImage(image: BufferedImage): NativeImage {
-        val w = image.width
-        val h = image.height
+    private fun toNativeImage(raster: SubtitleRaster): NativeImage {
+        val w = raster.width
+        val h = raster.height
         val native = NativeImage(NativeImage.Format.RGBA, w, h, false)
         for (y in 0 until h) {
             for (x in 0 until w) {
-                val argb = image.getRGB(x, y)
+                val argb = raster.argb[y * w + x]
                 //? if >=1.21.11 {
                 native.setPixel(x, y, argb)
                 //?} else
@@ -213,11 +150,5 @@ class SubtitleOverlayTexture {
 
     companion object {
         private val INSTANCE_ID = AtomicInteger(0)
-        private const val FONT_SIZE_PX = 34
-        private const val PADDING_X = 18
-        private const val PADDING_Y = 10
-        private const val MAX_TEXT_WIDTH_PX = 900
-        private const val MAX_LINES = 3
-        private val BACKGROUND_COLOR = Color(0, 0, 0)
     }
 }

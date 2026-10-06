@@ -29,6 +29,7 @@ dependencies {
     api(libs.semver4j)
     api(libs.kotlinxCoroutinesCore)
     api(libs.zxingCore)
+    testImplementation(libs.slf4jApi)
     api(libs.okhttp)
     api(libs.okio)
     api(libs.tomlj)

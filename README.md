@@ -123,6 +123,7 @@ V3、`/display group`、Paper 远程控制棒以及 Flashback / ReplayMod 桥接
 - 默认使用 libvlc 软件 avcodec 解码，避免 Pojav/FCL 缺少 `android.media.MediaCodecList` 时反复探测失败；可用 `-Ddreamdisplayx.hwDecode=<module>` 显式启用启动器提供的 MediaCodec 桥接
 - MobileGlues 会自动限制 avcodec 解码线程数，降低 GL 翻译缓冲与视频缓冲争抢原生内存；播放器切换时等待旧 vout 进入暂停态后再创建新会话
 - teardown 时 Android libvlc 播放器只暂停、不 stop 或 release，避免原生 `SIGSEGV`
+- vmem 回调使用 32 字节对齐 stride、格式代际和槽位租约，旧播放器与 scrub 会话的回调/缓冲区在进程结束前保持可达
 - Android SQLite 和独立命名的 `libc++` 会解压到应用内部可执行目录
 - 提供安全的 libvlc JNI 桥接和 `android.os.Environment` stub，不加载 `libvlcjni.so`
 - 字幕和弹幕在提供 Cacio/AWT 的启动器上会优先加载 Android 系统 CJK 字体（如 Noto Sans CJK）；不带 AWT 的运行时安全跳过纹理文字而不崩溃

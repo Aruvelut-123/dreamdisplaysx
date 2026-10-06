@@ -259,6 +259,7 @@ internal class LibVlcSessionManager(
     private val released = AtomicBoolean(false)
     private val stopped = AtomicBoolean(false)
     private val lifecycleLock = Any()
+    private val lifecycleGeneration = AtomicLong(0L)
 
     /** Serialises every libvlc control call, mirroring VideoPlayer's control executor. */
     private val controlExecutor: ExecutorService =
@@ -335,6 +336,7 @@ internal class LibVlcSessionManager(
      * pointers while libvlc is copying a picture.
      */
     private val videoCallbackSets = java.util.Collections.synchronizedList(mutableListOf<VideoCallbackSet>())
+    private val videoCallbacksByPlayer = java.util.Collections.synchronizedMap(mutableMapOf<Long, VideoCallbackSet>())
 
     private inner class VideoCallbackSet {
         val frames = TextureRenderCallback()
@@ -347,6 +349,13 @@ internal class LibVlcSessionManager(
             frames.unlock(opaque, picture, planes)
         }
         val display = LibVlc.VideoDisplayCallback { opaque, picture -> frames.display(opaque, picture) }
+
+        fun deactivate() = frames.deactivate()
+    }
+
+    private fun deactivateVideoCallbacks(player: Pointer?) {
+        if (player == null) return
+        videoCallbacksByPlayer[Pointer.nativeValue(player)]?.deactivate()
     }
 
     // ── Audio callbacks (held strongly; feed the 3D DSP + Java Sound line) ───
@@ -612,7 +621,12 @@ internal class LibVlcSessionManager(
         val started = AtomicBoolean(false)
 
         // Desktop replaces media on the same player; Android retires old players before creating fresh ones.
-        stopped.set(false)
+        val lifecycleToken = synchronized(lifecycleLock) {
+            if (released.get()) return false
+            stopped.set(false)
+            lifecycleGeneration.incrementAndGet()
+            lifecycleGeneration.get()
+        }
         eosReached = false
         errorMessage = ""
         eosFired.set(false)
@@ -683,10 +697,11 @@ internal class LibVlcSessionManager(
             // A stop() / stopNow() that landed between this task's submission and its run must win:
             // running the attach would resurrect a player the stop already tore down (and stack it
             // under the replacement player the caller went on to create).
-            if (stopped.get()) return@submit
+            if (!lifecycleIsCurrent(lifecycleToken)) return@submit
             // Android never reuses a player that has already carried media: even set_media() may
             // tear down its old input/vout/aout and trigger VLC-Android's unsafe TLS destructor.
             if (systemAudio) retireAndroidPlayers()
+            if (!lifecycleIsCurrent(lifecycleToken)) return@submit
             val mp = player()
             if (mp == null) {
                 errorMessage = "libvlc player unavailable"
@@ -708,14 +723,23 @@ internal class LibVlcSessionManager(
                 }
                 // Re-check after the (potentially long) old-media stop: a stop() that arrived while
                 // this task was draining the previous input must still win over the new attach.
-                if (stopped.get()) return@submit
+                if (!lifecycleIsCurrent(lifecycleToken)) return@submit
                 val activeMp = mp
                 val media = LibVlc.createMedia(safeUrl, mediaOptions.toTypedArray())
-                LibVlc.lib.libvlc_media_player_set_media(activeMp, media)
-                LibVlc.lib.libvlc_media_release(media) // the player holds its own reference
+                val attachVideo = synchronized(lifecycleLock) {
+                    if (lifecycleGeneration.get() == lifecycleToken && !stopped.get() && !released.get()) {
+                        LibVlc.lib.libvlc_media_player_set_media(activeMp, media)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                LibVlc.lib.libvlc_media_release(media)
+                if (!attachVideo) return@submit // the player holds its own reference
                 // Desktop always uses a dedicated audio player so Java Sound pacing cannot throttle
                 // the vout. Android only creates one for a separate audio rendition; muxed media stays
                 // on the video player's OpenSL ES output, avoiding duplicate sound.
+                if (!lifecycleIsCurrent(lifecycleToken)) return@submit
                 val ap = if (audioUrl.isNotBlank() && (!systemAudio || separateAudio)) audioPlayer() else null
                 if (ap != null) {
                     // Same rule as above: never stop() on Android — set_media replaces the old
@@ -728,13 +752,27 @@ internal class LibVlcSessionManager(
                     val audioOptions = mutableListOf(*LibVlcMediaOptions.forUrl(audioUrlToPlay))
                     audioOptions.add(":no-video")
                     val audioMedia = LibVlc.createMedia(audioUrlToPlay, audioOptions.toTypedArray())
-                    LibVlc.lib.libvlc_media_player_set_media(ap, audioMedia)
+                    val attachAudio = synchronized(lifecycleLock) {
+                        if (lifecycleGeneration.get() == lifecycleToken && !stopped.get() && !released.get()) {
+                            LibVlc.lib.libvlc_media_player_set_media(ap, audioMedia)
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     LibVlc.lib.libvlc_media_release(audioMedia)
-                    LibVlc.lib.libvlc_media_player_play(ap)
+                    if (!attachAudio) return@submit
+                    synchronized(lifecycleLock) {
+                        if (lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get()) return@submit
+                        LibVlc.lib.libvlc_media_player_play(ap)
+                    }
                 } else if (audioUrl.isBlank()) {
                     logger.info("$debugLabel audio player skipped (no audio track resolved).")
                 }
-                LibVlc.lib.libvlc_media_player_play(activeMp)
+                synchronized(lifecycleLock) {
+                    if (lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get()) return@submit
+                    LibVlc.lib.libvlc_media_player_play(activeMp)
+                }
                 // libvlc volume is per-player. Re-assert it after every fresh play so both the muxed
                 // video path and a separate Android audio player honor the user's pre-start volume.
                 if (systemAudio) {
@@ -742,6 +780,7 @@ internal class LibVlcSessionManager(
                     runCatching { LibVlc.lib.libvlc_audio_set_volume(activeMp, volumePercent) }
                     ap?.let { runCatching { LibVlc.lib.libvlc_audio_set_volume(it, volumePercent) } }
                 }
+                if (!lifecycleIsCurrent(lifecycleToken)) return@submit
                 isPlaying = true
                 // Initial A/V sync: both players start independently, so the audio player's clock can
                 // drift from the video's right from the start. Schedule an early correction (~1.5s)
@@ -759,11 +798,12 @@ internal class LibVlcSessionManager(
         // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
         if (offsetNanos > 0) {
             submit {
-                val mp = mediaPlayer ?: return@submit
-                runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
-                val ap = audioPlayer
-                if (ap != null) {
-                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                synchronized(lifecycleLock) {
+                    if (!lifecycleIsCurrent(lifecycleToken)) return@submit
+                    val mp = mediaPlayer ?: return@submit
+                    runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, offsetNanos / 1_000_000L) }
+                    val ap = audioPlayer
+                    if (ap != null) runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
                 }
             }
         }
@@ -786,10 +826,11 @@ internal class LibVlcSessionManager(
      * `:no-audio` because the separate audio player's Java Sound `write()` must not throttle the
      * vout; Android adds that flag only for video-only renditions.
      */
-    private fun player(): Pointer? {
+    private fun player(): Pointer? = synchronized(lifecycleLock) {
+        if (stopped.get() || released.get()) return@synchronized null
         val existing = mediaPlayer
-        if (existing != null) return existing
-        return try {
+        if (existing != null) return@synchronized existing
+        try {
             LibVlc.ensureLoaded()
             val lib = LibVlc.lib
             val mp = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
@@ -803,6 +844,7 @@ internal class LibVlcSessionManager(
             if (!LibVlcDiagnostics.noVideoCallback) {
                 val callbacks = VideoCallbackSet()
                 videoCallbackSets += callbacks
+                videoCallbacksByPlayer[Pointer.nativeValue(mp)] = callbacks
                 lib.libvlc_video_set_format_callbacks(mp, callbacks.format, callbacks.cleanup)
                 lib.libvlc_video_set_callbacks(mp, callbacks.lock, callbacks.unlock, callbacks.display, null)
             }
@@ -837,11 +879,11 @@ internal class LibVlcSessionManager(
      * the DASH audio m4s directly — without it the separate audio URL on a video-only Bilibili
      * DASH m4s is never played and there is no sound at all.
      */
-    private fun audioPlayer(): Pointer? {
-        if (LibVlcDiagnostics.noAudioCallback) return null
+    private fun audioPlayer(): Pointer? = synchronized(lifecycleLock) {
+        if (LibVlcDiagnostics.noAudioCallback || stopped.get() || released.get()) return@synchronized null
         val existing = audioPlayer
-        if (existing != null) return existing
-        return try {
+        if (existing != null) return@synchronized existing
+        try {
             LibVlc.ensureLoaded()
             val lib = LibVlc.lib
             val ap = lib.libvlc_media_player_new(LibVlc.libvlcInstance)
@@ -895,6 +937,7 @@ internal class LibVlcSessionManager(
         firstFrameFired = false
         // Retire verification from an older seek before publishing this seek's target.
         val seekId = seekGeneration.incrementAndGet()
+        val lifecycleToken = synchronized(lifecycleLock) { lifecycleGeneration.get() }
         val targetMs = offsetNanos / 1_000_000L
         // Hold the last displayed picture while the video demuxer flushes onto the target. This
         // prevents pre-seek frames from visibly continuing while the audio player has already moved.
@@ -906,7 +949,7 @@ internal class LibVlcSessionManager(
         // to the video's stale clock would rewind the whole playback to the pre-seek position.
         armSeekSettleWindow()
         submit {
-            if (seekId != seekGeneration.get() || stopped.get() || released.get()) return@submit
+            if (seekId != seekGeneration.get() || !lifecycleIsCurrent(lifecycleToken)) return@submit
             val mp = mediaPlayer ?: return@submit
             // ENDED state ignores set_time and a bare play() is not guaranteed to restart in libvlc
             // 3.0 — stop() first, then play() restarts from the beginning (loop/replay path).
@@ -926,15 +969,27 @@ internal class LibVlcSessionManager(
                             null
                         }
                         retireAndroidPlayers()
+                        if (!lifecycleIsCurrent(lifecycleToken) || seekId != seekGeneration.get()) return@submit
                         val freshMp = player()
                         if (freshMp == null) throw IllegalStateException("libvlc video player unavailable")
                         val vOpts = mutableListOf(*LibVlcMediaOptions.forUrl(safeVUrl))
                         val vMedia = runCatching { LibVlc.createMedia(safeVUrl, vOpts.toTypedArray()) }.getOrNull()
                         if (vMedia != null) {
-                            runCatching { LibVlc.lib.libvlc_media_player_set_media(freshMp, vMedia) }
+                            val attach = synchronized(lifecycleLock) {
+                                if (lifecycleGeneration.get() == lifecycleToken && !stopped.get() && !released.get() && seekId == seekGeneration.get()) {
+                                    runCatching { LibVlc.lib.libvlc_media_player_set_media(freshMp, vMedia) }
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
                             runCatching { LibVlc.lib.libvlc_media_release(vMedia) }
-                            runCatching { LibVlc.lib.libvlc_media_player_play(freshMp) }
-                            runCatching { LibVlc.lib.libvlc_media_player_set_time(freshMp, offsetNanos / 1_000_000L) }
+                            if (!attach) return@submit
+                            synchronized(lifecycleLock) {
+                                if (lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get() || seekId != seekGeneration.get()) return@submit
+                                runCatching { LibVlc.lib.libvlc_media_player_play(freshMp) }
+                                runCatching { LibVlc.lib.libvlc_media_player_set_time(freshMp, offsetNanos / 1_000_000L) }
+                            }
                         }
                         // Audio player: bind the fresh player too, never reuse the ended one.
                         val ap = audioPlayer()
@@ -943,10 +998,21 @@ internal class LibVlcSessionManager(
                             aOpts.add(":no-video")
                             val aMedia = runCatching { LibVlc.createMedia(safeAUrl, aOpts.toTypedArray()) }.getOrNull()
                             if (aMedia != null) {
-                                runCatching { LibVlc.lib.libvlc_media_player_set_media(ap, aMedia) }
+                                val attach = synchronized(lifecycleLock) {
+                                    if (lifecycleGeneration.get() == lifecycleToken && !stopped.get() && !released.get() && seekId == seekGeneration.get()) {
+                                        runCatching { LibVlc.lib.libvlc_media_player_set_media(ap, aMedia) }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
                                 runCatching { LibVlc.lib.libvlc_media_release(aMedia) }
-                                runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
-                                runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                                if (!attach) return@submit
+                                synchronized(lifecycleLock) {
+                                    if (lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get() || seekId != seekGeneration.get()) return@submit
+                                    runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
+                                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, offsetNanos / 1_000_000L) }
+                                }
                             }
                         }
                     } else {
@@ -994,11 +1060,12 @@ internal class LibVlcSessionManager(
                 } catch (_: Throwable) { }
             } else {
                 // libvlc_media_player_set_time takes MILLISECONDS; convert ns -> ms.
-                runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, targetMs) }
-                // Seek the audio player to the same position (non-ENDED path).
-                val ap = audioPlayer
-                if (ap != null) {
-                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, targetMs) }
+                synchronized(lifecycleLock) {
+                    if (lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get() || seekId != seekGeneration.get()) return@submit
+                    runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, targetMs) }
+                    // Seek the audio player to the same position (non-ENDED path).
+                    val ap = audioPlayer
+                    if (ap != null) runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, targetMs) }
                 }
                 scheduleSeekLandingVerification(targetMs)
                 // Re-arm the EOS gate after every in-place seek, matching the ENDED restart path;
@@ -1010,22 +1077,27 @@ internal class LibVlcSessionManager(
                 // (~1.5s) the cold-start path uses. Skipped while parked by scheduleInitialAvSync.
                 scheduleInitialAvSync()
             }
-            if (seekId != seekGeneration.get() || stopped.get() || released.get()) return@submit
+            if (seekId != seekGeneration.get() || !lifecycleIsCurrent(lifecycleToken)) return@submit
             // If a seek left the player in a dead state (stopped/ended — e.g. a backwards seek
             // into an already-released region dropping it out of PLAYING), resume it. Buffering(2)
             // is a normal transient after a backwards seek and MUST NOT be play()ed — that would
             // interrupt the seek and freeze the picture (the "backwards seek sometimes sticks" bug).
             try {
                 // Android may have retired the player in the ENDED branch above; never query or
-                // resume that stale pointer after rotation. Use only the current active player.
-                val currentMp = mediaPlayer ?: return@submit
-                val after = LibVlc.lib.libvlc_media_player_get_state(currentMp)
-                if (after == LibVlc.LIBVLC_STATE_STOPPED || after == LibVlc.LIBVLC_STATE_ENDED) {
-                    // `play()` is asynchronous, so an immediate state sample can still read ENDED
-                    // even when the input is already leaving EOF. Do not stop here: that would
-                    // reintroduce the decoder-fifo teardown that froze repeated loops. A delayed,
-                    // generation-aware fallback below handles a genuinely latched ENDED state.
-                    LibVlc.lib.libvlc_media_player_play(currentMp)
+                // resume that stale pointer after rotation. Use only the current active player, while
+                // holding the lifecycle lock so cleanup cannot release it between the check and call.
+                val after = synchronized(lifecycleLock) {
+                    if (lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get() || seekId != seekGeneration.get()) return@submit
+                    val currentMp = mediaPlayer ?: return@submit
+                    val sampled = LibVlc.lib.libvlc_media_player_get_state(currentMp)
+                    if (sampled == LibVlc.LIBVLC_STATE_STOPPED || sampled == LibVlc.LIBVLC_STATE_ENDED) {
+                        // `play()` is asynchronous, so an immediate state sample can still read ENDED
+                        // even when the input is already leaving EOF. Do not stop here: that would
+                        // reintroduce the decoder-fifo teardown that froze repeated loops. A delayed,
+                        // generation-aware fallback below handles a genuinely latched ENDED state.
+                        LibVlc.lib.libvlc_media_player_play(currentMp)
+                    }
+                    sampled
                 }
                 // A successful loop is logically playing immediately; the asynchronous PLAYING
                 // callback will confirm it later. Updating this flag here prevents playlist/sync
@@ -1037,7 +1109,7 @@ internal class LibVlcSessionManager(
                     if (!reviveIfCurrentSeek(seekId)) return@submit
                 }
                 if (!systemAudio && targetMs == 0L) {
-                    scheduleEndedRestartFallback(seekId)
+                    scheduleEndedRestartFallback(seekId, lifecycleToken)
                 }
             } catch (_: Throwable) { }
         }
@@ -1046,7 +1118,7 @@ internal class LibVlcSessionManager(
     }
 
     /** Re-checks an ended desktop replay after libvlc has had time to leave ENDED asynchronously. */
-    private fun scheduleEndedRestartFallback(seekId: Long) {
+    private fun scheduleEndedRestartFallback(seekId: Long, lifecycleToken: Long) {
         Thread({
             // libvlc transitions out of ENDED asynchronously. Give the normal play()+set_time
             // path a short window before using the conservative desktop stop/play fallback.
@@ -1057,33 +1129,40 @@ internal class LibVlcSessionManager(
                 return@Thread
             }
             submit {
-                if (seekId != seekGeneration.get() || stopped.get() || released.get()) return@submit
-                val mp = mediaPlayer ?: return@submit
-                val videoState = runCatching { LibVlc.lib.libvlc_media_player_get_state(mp) }.getOrDefault(-1)
-                val videoDead = videoState == LibVlc.LIBVLC_STATE_STOPPED || videoState == LibVlc.LIBVLC_STATE_ENDED
-                val ap = audioPlayer
-                val audioState = ap?.let {
-                    runCatching { LibVlc.lib.libvlc_media_player_get_state(it) }.getOrDefault(-1)
+                val restarted = synchronized(lifecycleLock) {
+                    if (seekId != seekGeneration.get() || lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get()) return@submit
+                    val mp = mediaPlayer ?: return@submit
+                    val videoState = runCatching { LibVlc.lib.libvlc_media_player_get_state(mp) }.getOrDefault(-1)
+                    val videoDead = videoState == LibVlc.LIBVLC_STATE_STOPPED || videoState == LibVlc.LIBVLC_STATE_ENDED
+                    val ap = audioPlayer
+                    val audioState = ap?.let {
+                        runCatching { LibVlc.lib.libvlc_media_player_get_state(it) }.getOrDefault(-1)
+                    }
+                    val audioDead = audioState == LibVlc.LIBVLC_STATE_STOPPED || audioState == LibVlc.LIBVLC_STATE_ENDED
+                    if (!videoDead && !audioDead) return@submit
+                    logger.warn(
+                        "$debugLabel ended replay remained in native state (video={}, audio={}); retrying dead channel(s) with stop/play.",
+                        videoState, audioState,
+                    )
+                    if (videoDead) {
+                        runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
+                        runCatching { LibVlc.lib.libvlc_media_player_play(mp) }
+                        runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, 0L) }
+                    }
+                    if (audioDead && ap != null) {
+                        runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
+                        runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
+                        runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, 0L) }
+                    }
+                    true
                 }
-                val audioDead = audioState == LibVlc.LIBVLC_STATE_STOPPED || audioState == LibVlc.LIBVLC_STATE_ENDED
-                if (!videoDead && !audioDead) return@submit
-                logger.warn(
-                    "$debugLabel ended replay remained in native state (video={}, audio={}); retrying dead channel(s) with stop/play.",
-                    videoState, audioState,
-                )
-                if (videoDead) {
-                    runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
-                    runCatching { LibVlc.lib.libvlc_media_player_play(mp) }
-                    runCatching { LibVlc.lib.libvlc_media_player_set_time(mp, 0L) }
-                }
-                if (audioDead && ap != null) {
-                    runCatching { LibVlc.lib.libvlc_media_player_stop(ap) }
-                    runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
-                    runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, 0L) }
-                }
-                reviveIfCurrentSeek(seekId)
+                if (restarted) reviveIfCurrentSeek(seekId)
             }
         }, "$debugLabel-loop-recovery").also { it.isDaemon = true }.start()
+    }
+
+    private fun lifecycleIsCurrent(token: Long): Boolean = synchronized(lifecycleLock) {
+        lifecycleGeneration.get() == token && !stopped.get() && !released.get()
     }
 
     /** Reopens a seek only if no newer seek or stop won the lifecycle race. */
@@ -1102,6 +1181,7 @@ internal class LibVlcSessionManager(
             parkFlag.set(parked)
             eosReached = true
             stopped.set(true)
+            lifecycleGeneration.incrementAndGet()
             if (releasing) released.set(true)
             seekSettleUntilNanos = 0L
             seekFrozen = false
@@ -1364,17 +1444,20 @@ internal class LibVlcSessionManager(
      * decoding at full speed during rapid URL/quality switches while preserving the safe no-stop rule.
      */
     private fun retireAndroidPlayers() {
-        if (!systemAudio) return
-        mediaPlayer?.let { player ->
-            pauseAndroidPlayerAndAwait(player)
-            retiredAndroidPlayers += player
+        synchronized(lifecycleLock) {
+            if (!systemAudio) return
+            mediaPlayer?.let { player ->
+                deactivateVideoCallbacks(player)
+                pauseAndroidPlayerAndAwait(player)
+                retiredAndroidPlayers += player
+            }
+            audioPlayer?.let { player ->
+                pauseAndroidPlayerAndAwait(player)
+                retiredAndroidPlayers += player
+            }
+            mediaPlayer = null
+            audioPlayer = null
         }
-        audioPlayer?.let { player ->
-            pauseAndroidPlayerAndAwait(player)
-            retiredAndroidPlayers += player
-        }
-        mediaPlayer = null
-        audioPlayer = null
     }
 
     /** Pauses a VLC-Android player and gives its input/vout threads a bounded chance to quiesce. */
@@ -1412,16 +1495,21 @@ internal class LibVlcSessionManager(
      */
     fun cleanup() {
         markStopped(parked = false, releasing = true)
-        val mp = mediaPlayer
-        mediaPlayer = null
-        val ap = audioPlayer
-        audioPlayer = null
+        val (mp, ap) = synchronized(lifecycleLock) {
+            val oldVideo = mediaPlayer
+            val oldAudio = audioPlayer
+            deactivateVideoCallbacks(oldVideo)
+            mediaPlayer = null
+            audioPlayer = null
+            oldVideo to oldAudio
+        }
         // On desktop, stop must run serialised on the control executor and release MUST run only
         // after stop has completed. On Android the players are only paused (never stopped) and
         // kept alive. Add cleanup players to the same process-lifetime roots as URL-switch players;
         // otherwise DisplayMediaController can release the owning manager while libvlc still has
         // delayed callbacks into its direct buffers/JNA trampolines.
         if (systemAudio) {
+            deactivateVideoCallbacks(mp)
             if (mp != null) retiredAndroidPlayers += mp
             if (ap != null) retiredAndroidPlayers += ap
             synchronized(ANDROID_KEEP_ALIVE) {
@@ -1727,33 +1815,47 @@ internal class LibVlcSessionManager(
         private val buffers = arrayOfNulls<ByteBuffer>(BUFFER_COUNT)
         private val pointers = arrayOfNulls<Pointer>(BUFFER_COUNT)
         private val inUse = BooleanArray(BUFFER_COUNT)
+        private val retiredBuffers = ArrayList<ByteBuffer>()
 
         private var dropBuffer: ByteBuffer? = null
         private var dropPointer: Pointer? = null
         private var frameWidth = 1
         private var frameHeight = 1
+        private var framePitch = 32
+        private var frameLines = 32
         private var bufferSize = 4
+        @Volatile
+        private var active = true
+        private var formatReady = false
+        private var formatGeneration = 0L
         private var nextWrite = 0
         private var writing = -1
-        private var latest = -1
 
         @Synchronized
         fun setup(opaque: com.sun.jna.ptr.PointerByReference?, chroma: Pointer?, width: Pointer?, height: Pointer?,
                   pitches: Pointer?, lines: Pointer?): Int {
-            if (width == null || height == null || chroma == null || pitches == null || lines == null) return 0
+            if (!active || width == null || height == null || chroma == null || pitches == null || lines == null) return 0
             val w = width.getInt(0)
             val h = height.getInt(0)
             if (w <= 0 || h <= 0 || w > 16384 || h > 16384) {
                 logger.warn("$debugLabel rejected libvlc frame dimensions ${w}x$h")
                 return 0
             }
-            logger.info("$debugLabel libvlc video setup: {}x{} (expected {}x{})", w, h, expectedW, expectedH)
-            // RV32 chroma (VideoPlayer model): single RGBA8888 plane, 4 bytes/px.
+            val pitch = align32(w * 4)
+            val lineCount = align32(h)
+            logger.info("$debugLabel libvlc video setup: {}x{} pitch={} lines={} (expected {}x{})", w, h, pitch, lineCount, expectedW, expectedH)
+            // RV32 chroma (VideoPlayer model): single RGBA8888 plane, 32-byte aligned stride.
             chroma.write(0, RV32, 0, RV32.size)
-            pitches.setInt(0, w * 4)
-            lines.setInt(0, h)
-            if (frameWidth != w || frameHeight != h) resize(w, h)
+            pitches.setInt(0, pitch)
+            lines.setInt(0, lineCount)
+            resize(w, h, pitch, lineCount)
+            formatReady = true
             return 1
+        }
+
+        @Synchronized
+        fun deactivate() {
+            active = false
         }
 
         @Synchronized
@@ -1763,7 +1865,11 @@ internal class LibVlcSessionManager(
 
         @Synchronized
         fun lock(opaque: Pointer?, planes: Pointer?): Pointer? {
-            if (planes == null) return DROP_TOKEN
+            if (planes == null || !active || !formatReady) {
+                ensureDropBuffer()
+                if (planes != null) planes.setPointer(0, dropPointer!!)
+                return DROP_TOKEN
+            }
             if (buffers[0] == null || bufferSize <= 0) {
                 ensureDropBuffer()
                 planes.setPointer(0, dropPointer!!)
@@ -1775,10 +1881,11 @@ internal class LibVlcSessionManager(
                 planes.setPointer(0, dropPointer!!)
                 return DROP_TOKEN
             }
+            inUse[index] = true
             writing = index
-            // RV32: single RGBA8888 plane.
+            // RV32: single RGBA8888 plane with the pitch supplied by setup().
             planes.setPointer(0, pointers[index]!!)
-            return Pointer.createConstant((index + 1).toLong())
+            return Pointer.createConstant(formatGeneration * BUFFER_COUNT + index + 1L)
         }
 
         @Synchronized
@@ -1790,13 +1897,30 @@ internal class LibVlcSessionManager(
             if (picture == null) return
             val token = Pointer.nativeValue(picture)
             if (token == DROP_TOKEN_VALUE) return
-            val index = (token - 1).toInt()
-            if (index < 0 || index >= BUFFER_COUNT) return
+            val encoded = token - 1L
+            val generation = encoded / BUFFER_COUNT
+            val index = (encoded % BUFFER_COUNT).toInt()
+            if (generation != formatGeneration || index < 0 || index >= BUFFER_COUNT) return
             if (writing == index) writing = -1
-            if (released.get() || stopped.get() || buffers[index] == null) return
-            latest = index
-            // Publish the newest frame into the surface for the render thread.
-            publishFrame(index)
+            try {
+                if (!active || !formatReady || released.get() || stopped.get() || buffers[index] == null) return
+                // Publish the newest frame into the surface for the render thread.
+                publishFrame(index)
+            } finally {
+                // libvlc has finished reading the picture after display returns. Never leave a slot
+                // leased: a missing release would fill the three-slot pool and force permanent drops.
+                inUse[index] = false
+            }
+        }
+
+        private fun copyVisibleRows(sourceBuffer: ByteBuffer, target: ByteBuffer) {
+            val source = sourceBuffer.duplicate().order(ByteOrder.nativeOrder())
+            val rowBytes = frameWidth * 4
+            for (row in 0 until frameHeight) {
+                val start = row * framePitch
+                source.clear().position(start).limit(start + rowBytes)
+                target.put(source)
+            }
         }
 
         private fun publishFrame(index: Int) {
@@ -1834,24 +1958,20 @@ internal class LibVlcSessionManager(
                 fpsWindowStartNanos = now
             }
             try {
-                val rgba = buf.duplicate().order(ByteOrder.nativeOrder()); rgba.rewind()
-                val total = frameWidth * frameHeight * 4
+                val packedSourceSize = frameWidth * frameHeight * 4
                 val frameSize = ew * eh * 4
+                val scratch = rgbScratch?.takeIf { it.capacity() >= packedSourceSize }?.also { it.clear() }
+                    ?: ByteBuffer.allocateDirect(packedSourceSize).also { rgbScratch = it }
+                copyVisibleRows(buf, scratch)
+                scratch.flip()
 
-                var spare = surface.takeOrAllocate(frameSize)
+                val spare = surface.takeOrAllocate(frameSize)
                 spare.clear()
-
                 if (frameWidth == ew && frameHeight == eh) {
-                    // Direct copy: libvlc already produced RV32 (RGBA8888) — no colour conversion.
-                    // Bulk copy: one range PUT instead of per-byte loops (up to 33MB on 4K).
-                    rgba.limit(rgba.position() + total)
-                    spare.put(rgba)
+                    // libvlc writes each row at the negotiated aligned pitch; the render surface is
+                    // tightly packed, so copy visible rows rather than the stride-padded allocation.
+                    spare.put(scratch)
                 } else {
-                    val scratch = rgbScratch?.takeIf { it.capacity() >= frameWidth * frameHeight * 4 }?.also { it.clear() }
-                        ?: ByteBuffer.allocateDirect(frameWidth * frameHeight * 4).also { rgbScratch = it }
-                    rgba.limit(rgba.position() + frameWidth * frameHeight * 4)
-                    scratch.put(rgba)
-                    scratch.flip()
                     fitFrame(scratch, frameWidth, frameHeight, spare, ew, eh)
                 }
                 spare.flip()
@@ -1891,38 +2011,29 @@ internal class LibVlcSessionManager(
             }
         }
 
-        private fun matches(w: Int, h: Int) = buffers[0] != null && frameWidth == w && frameHeight == h
-
-        private fun resize(w: Int, h: Int) {
-            // Reuse the pool when the size is unchanged: the pool is registered with libvlc via
-            // vmem callbacks and the previous media's frame callbacks may still be in flight during
-            // a reload — replacing the direct buffers under them is exactly the native
-            // ACCESS_VIOLATION (0xC0000005) crash seen when reloading a video. Only reallocate when
-            // this frame needs more room than the pool already has (grow-only, never shrink).
-            if (buffers[0] != null && frameWidth == w && frameHeight == h) return
+        private fun resize(w: Int, h: Int, pitch: Int, lines: Int) {
+            // A new libvlc format gets a fresh generation. Retain the previous direct slices so a
+            // delayed native callback cannot write into freed memory or collide with the new pool.
+            for (old in buffers) old?.let { retiredBuffers += it }
+            dropBuffer?.let { retiredBuffers += it }
+            val size = Math.addExact(Math.multiplyExact(pitch, lines), VIDEO_BUFFER_PADDING)
             frameWidth = w
             frameHeight = h
-            // RV32 is a single RGBA8888 plane at 4 B/px. Add a generous tail of padding so a slightly
-            // oversized libvlc write (alignment drift, a transient odd row count right after a seek,
-            // or libvlc feeding pitch beyond our declared w*4) lands inside slack rather than writing
-            // past the end of this direct buffer and corrupting adjacent heap memory — the heap- /
-            // native-corruption crash (0xC0000374/ntdll, often reported on an unrelated JIT thread)
-            // that followed a seek. The reader only ever copies the exact w*h*4 span, so the slack is
-            // purely defensive.
-            bufferSize = w * h * 4
-            val padded = bufferSize + VIDEO_BUFFER_PADDING
-            if (buffers[0] == null || buffers[0]!!.capacity() < padded) {
-                for (i in 0 until BUFFER_COUNT) {
-                    buffers[i] = ByteBuffer.allocateDirect(padded).order(ByteOrder.nativeOrder())
-                    pointers[i] = com.sun.jna.Native.getDirectBufferPointer(buffers[i]!!)
-                    inUse[i] = false
-                }
-                dropBuffer = ByteBuffer.allocateDirect(padded.coerceAtLeast(4)).order(ByteOrder.nativeOrder())
-                dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
+            framePitch = pitch
+            frameLines = lines
+            bufferSize = size
+            formatGeneration = (formatGeneration + 1L).coerceAtLeast(1L)
+            for (i in 0 until BUFFER_COUNT) {
+                val (buffer, pointer) = alignedDirectBuffer(size)
+                buffers[i] = buffer
+                pointers[i] = pointer
+                inUse[i] = false
             }
+            val (drop, pointer) = alignedDirectBuffer(size.coerceAtLeast(4))
+            dropBuffer = drop
+            dropPointer = pointer
             nextWrite = 0
             writing = -1
-            latest = -1
         }
 
         @Synchronized
@@ -1932,14 +2043,10 @@ internal class LibVlcSessionManager(
             // SAME dimensions) would NOT re-run setup()/resize() — libvlc skips setup when the size
             // is unchanged — so every subsequent lock() would take the DROP_TOKEN path and every
             // display() would early-return, freezing the video on the last frame while audio plays
-            // on. We only reset the internal ring state; the next setup() still reallocates grow-only
-            // if a larger frame needs it.
-            for (i in 0 until BUFFER_COUNT) {
-                inUse[i] = false
-            }
+            // on. The next setup() creates a fresh format generation and retains the old slices.
+            formatReady = false
             nextWrite = 0
             writing = -1
-            latest = -1
         }
 
         private fun acquireWriteBuffer(): Int {
@@ -1953,6 +2060,21 @@ internal class LibVlcSessionManager(
             return -1
         }
 
+        private fun alignedDirectBuffer(size: Int): Pair<ByteBuffer, Pointer> {
+            val owner = ByteBuffer.allocateDirect(Math.addExact(size, 31)).order(ByteOrder.nativeOrder())
+            val raw = Native.getDirectBufferPointer(owner)
+            val address = Pointer.nativeValue(raw)
+            require(address != 0L) { "libvlc vmem direct buffer has no native address" }
+            val aligned = (address + 31L) and -32L
+            val offset = (aligned - address).toInt()
+            val view = owner.duplicate().order(ByteOrder.nativeOrder())
+            view.position(offset).limit(offset + size)
+            val slice = view.slice().order(ByteOrder.nativeOrder())
+            val pointer = Native.getDirectBufferPointer(slice)
+            require(Pointer.nativeValue(pointer) % 32L == 0L) { "libvlc vmem buffer is not 32-byte aligned" }
+            return slice to pointer
+        }
+
         private fun ensureDropBuffer() {
             // libvlc can call lock() after a cleanup (pause/seek/resume) has nulled the buffers; it
             // then hands the decoded frame to the pointer we return here. If we hand back a tiny
@@ -1963,13 +2085,17 @@ internal class LibVlcSessionManager(
             // the last known dimensions here.
             // A decoder can race format setup with its first lock callback. Use the target texture
             // dimensions when the callback has not reported a real frame size yet; returning a tiny
-            // 4K drop buffer would let libvlc memcpy a full decoded frame past the direct allocation.
+            // drop buffer would let libvlc memcpy a full decoded frame past the direct allocation.
             val safeWidth = maxOf(frameWidth, expectedW, 1)
             val safeHeight = maxOf(frameHeight, expectedH, 1)
-            val size = ((safeWidth * safeHeight * 4) + VIDEO_BUFFER_PADDING).coerceAtLeast(4)
+            val pitch = align32(safeWidth * 4)
+            val lines = align32(safeHeight)
+            val size = (pitch * lines + VIDEO_BUFFER_PADDING).coerceAtLeast(4)
             if (dropBuffer != null && dropPointer != null && dropBuffer!!.capacity() >= size) return
-            dropBuffer = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
-            dropPointer = com.sun.jna.Native.getDirectBufferPointer(dropBuffer!!)
+            dropBuffer?.let { retiredBuffers += it }
+            val (drop, pointer) = alignedDirectBuffer(size)
+            dropBuffer = drop
+            dropPointer = pointer
         }
     }
 
@@ -2108,6 +2234,7 @@ internal class LibVlcSessionManager(
          * oversized libvlc write (alignment drift / transient seek frame) lands in slack instead of
          * corrupting adjacent heap memory. The reader only copies the exact w*h*4 span. */
         private const val VIDEO_BUFFER_PADDING = 4096
+        private fun align32(value: Int): Int = (value + 31) and -32
         private val RV32 = byteArrayOf('R'.code.toByte(), 'V'.code.toByte(), '3'.code.toByte(), '2'.code.toByte())
         private val DROP_TOKEN = Pointer.createConstant(0x7FFFFFFFL)
         private val DROP_TOKEN_VALUE = 0x7FFFFFFFL

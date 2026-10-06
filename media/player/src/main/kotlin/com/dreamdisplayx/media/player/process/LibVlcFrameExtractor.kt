@@ -38,6 +38,9 @@ object LibVlcFrameExtractor {
 
     private const val SETUP_TIMEOUT_MS = 15_000L
 
+    /** Android pause-only scrub sessions and their callback/buffer owners live until process exit. */
+    private val ANDROID_KEEP_ALIVE = java.util.Collections.synchronizedList(mutableListOf<ScrubSession>())
+
     /**
      * How far past the seek target the player must advance before the frame is grabbed. Waiting for
      * position >= target + this value is the reliable signal that the decoder has decoded into the
@@ -69,8 +72,8 @@ object LibVlcFrameExtractor {
 
     /**
      * A long-lived, video-only libvlc player used to extract many scrub frames of one video.
-     * [open] must succeed before any [extractAt]; [close] releases the native player. Not thread-safe:
-     * callers must serialize access (ScrubPreview already runs one extraction coroutine per key).
+     * [open] must succeed before any [extractAt]; [close] retires the native player. Public operations are synchronized:
+     * a close cannot race a seek or a native callback.
      */
     class ScrubSession(private val url: String) {
         private val lib: LibVlc.LibVlcNative = LibVlc.lib
@@ -82,6 +85,7 @@ object LibVlcFrameExtractor {
          * Creates the player, registers the low-level vmem callbacks, loads the media, and waits for
          * the first decoded frame. Returns true on success. This is the expensive one-time cost.
          */
+        @Synchronized
         fun open(): Boolean {
             if (opened.get()) return true
             val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(url) }.getOrElse { error ->
@@ -142,6 +146,7 @@ object LibVlcFrameExtractor {
          * null on any failure. Fast: paused seek → brief play (renders the target frame) → pause →
          * grab.
          */
+        @Synchronized
         fun extractAt(offsetNanos: Long, w: Int, h: Int): ByteArray? {
             val player = mp ?: return null
             if (!opened.get()) return null
@@ -235,26 +240,23 @@ object LibVlcFrameExtractor {
          * even when the player is never released. Pausing keeps every VLC thread alive, so the
          * destructor never runs with stale state, and the OS reclaims the player on process exit.
          */
+        @Synchronized
         fun close() {
-            if (!opened.compareAndSet(true, false)) {
-                // Even if never fully opened, release a partially created player. On Android this
-                // is a pause instead of stop+release: this libvlc-all AAR's `libvlc_media_player_stop`
-                // force-tears worker threads whose TLS destructor (jni_detach_thread) then reads
-                // freed state (SIGSEGV in pthread_key_clean_all, libvlc.so+0xef7418) even without
-                // release. Pausing keeps every thread alive; the OS reclaims on process exit.
-                mp?.let { if (com.dreamdisplayx.util.OsInfo.isAndroid) {
-                    runCatching { lib.libvlc_media_player_set_pause(it, 1) }
-                } else runCatching { lib.libvlc_media_player_stop(it) } }
-                if (!com.dreamdisplayx.util.OsInfo.isAndroid) {
-                    mp?.let { runCatching { lib.libvlc_media_player_release(it) } }
+            val player = mp
+            opened.set(false)
+            grab.deactivate()
+            grab.timeProvider = null
+            grab.onFrame = {}
+            grab.firstFrameLatch.countDown()
+            if (player != null && com.dreamdisplayx.util.OsInfo.isAndroid) {
+                // Android never stops/releases a VLC-Android player. Keep the complete Session,
+                // callback trampolines and aligned plane owners rooted until process exit.
+                runCatching { lib.libvlc_media_player_set_pause(player, 1) }
+                synchronized(ANDROID_KEEP_ALIVE) {
+                    if (!ANDROID_KEEP_ALIVE.contains(this)) ANDROID_KEEP_ALIVE += this
                 }
-                mp = null
-                return
-            }
-            mp?.let {
-                if (com.dreamdisplayx.util.OsInfo.isAndroid) {
-                    runCatching { lib.libvlc_media_player_set_pause(it, 1) }
-                } else {
+            } else {
+                player?.let {
                     runCatching { lib.libvlc_media_player_stop(it) }
                     runCatching { lib.libvlc_media_player_release(it) }
                 }
@@ -341,7 +343,7 @@ object LibVlcFrameExtractor {
         val formatCb = LibVlc.VideoFormatCallback { _opaque, chroma, width, height, pitches, lines ->
             setup(chroma, width, height, pitches, lines)
         }
-        val cleanupCb = LibVlc.VideoCleanupCallback { }
+        val cleanupCb = LibVlc.VideoCleanupCallback { clearFormat() }
         val lockCb = LibVlc.VideoLockCallback { _opaque, planes -> lock(planes) }
         val unlockCb = LibVlc.VideoUnlockCallback { _, _, _ -> }
         val displayCb = LibVlc.VideoDisplayCallback { _opaque, picture -> display(picture) }
@@ -349,8 +351,19 @@ object LibVlcFrameExtractor {
         @Volatile var frameW = 0
         @Volatile var frameH = 0
         private val yPlanes = arrayOfNulls<ByteBuffer>(POOL_SIZE)
+        private val retiredPlanes = ArrayList<ByteBuffer>()
+        private val inUse = BooleanArray(POOL_SIZE)
         private var nextBuffer = 0
-        private var captured: ByteBuffer? = null
+        private var formatGeneration = 0L
+        private var yPitch = 0
+        private var uvPitch = 0
+        private var yLines = 0
+        private var uvLines = 0
+        private var formatReady = false
+        private var dropPlane: ByteBuffer? = null
+        private var dropPointer: Pointer? = null
+        @Volatile private var active = true
+        @Volatile private var captured: ByteBuffer? = null
 
         val setupLatch = CountDownLatch(1)
         val firstFrameLatch = CountDownLatch(1)
@@ -370,86 +383,130 @@ object LibVlcFrameExtractor {
         /** Reports the current media position (ms) — used by [display] to gate [acceptAfterMs]. */
         @Volatile var timeProvider: (() -> Long)? = null
 
+        @Synchronized
         private fun setup(chroma: Pointer?, width: Pointer?, height: Pointer?, pitches: Pointer?, lines: Pointer?): Int {
-            if (width == null || height == null || chroma == null || pitches == null || lines == null) return 0
+            if (!active || width == null || height == null || chroma == null || pitches == null || lines == null) return 0
             val w = width.getInt(0)
             val h = height.getInt(0)
             if (w <= 0 || h <= 0 || w > 16384 || h > 16384) return 0
             frameW = w
             frameH = h
-            // I420 chroma.
+            yPitch = align32(w)
+            uvPitch = align32((w + 1) / 2)
+            yLines = align32(h)
+            uvLines = align32((h + 1) / 2)
+            // I420 chroma with 32-byte aligned pitches and plane addresses.
             val i420 = byteArrayOf('I'.code.toByte(), '4'.code.toByte(), '2'.code.toByte(), '0'.code.toByte())
             chroma.write(0, i420, 0, i420.size)
-            pitches.setInt(0, w)
-            pitches.setInt(4, (w + 1) / 2)
-            pitches.setInt(8, (w + 1) / 2)
-            lines.setInt(0, h)
-            lines.setInt(4, (h + 1) / 2)
-            lines.setInt(8, (h + 1) / 2)
+            pitches.setInt(0, yPitch)
+            pitches.setInt(4, uvPitch)
+            pitches.setInt(8, uvPitch)
+            lines.setInt(0, yLines)
+            lines.setInt(4, uvLines)
+            lines.setInt(8, uvLines)
+            for (old in yPlanes) old?.let { retiredPlanes += it }
+            dropPlane?.let { retiredPlanes += it }
+            formatGeneration = (formatGeneration + 1L).coerceAtLeast(1L)
+            for (i in 0 until POOL_SIZE) {
+                yPlanes[i] = alignedBuffer(bufferBytes())
+                inUse[i] = false
+            }
+            dropPlane = alignedBuffer(bufferBytes())
+            dropPointer = Native.getDirectBufferPointer(dropPlane!!)
+            nextBuffer = 0
+            formatReady = true
             setupLatch.countDown()
             return 1
         }
 
-        private fun lock(planes: Pointer?): Pointer? {
-            if (planes == null) return LibVlc.dropToken()
-            val w = frameW
-            val h = frameH
-            if (w <= 0 || h <= 0) return LibVlc.dropToken()
-            val ySize = w * h
-            val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
-            val total = ySize + 2 * uvSize
-            val index = nextBuffer
-            nextBuffer = (nextBuffer + 1) % POOL_SIZE
-            val buf = yPlanes[index]
-                ?: ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder()).also { yPlanes[index] = it }
-            // Reallocate if a later format changed the frame size larger.
-            if (buf.capacity() < total) {
-                val bigger = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
-                yPlanes[index] = bigger
-                val ptr = Native.getDirectBufferPointer(bigger)
-                planes.setPointer(0, ptr)
-                planes.setPointer(Native.POINTER_SIZE.toLong(), ptr.share(ySize.toLong()))
-                planes.setPointer((2 * Native.POINTER_SIZE).toLong(), ptr.share((ySize + uvSize).toLong()))
-                return Pointer.createConstant((index + 1).toLong())
-            }
-            val ptr = Native.getDirectBufferPointer(buf)
-            planes.setPointer(0, ptr)
-            planes.setPointer(Native.POINTER_SIZE.toLong(), ptr.share(ySize.toLong()))
-            planes.setPointer((2 * Native.POINTER_SIZE).toLong(), ptr.share((ySize + uvSize).toLong()))
-            return Pointer.createConstant((index + 1).toLong())
+        @Synchronized
+        private fun clearFormat() {
+            formatReady = false
         }
 
+        @Synchronized
+        fun deactivate() {
+            active = false
+            formatReady = false
+        }
+
+        @Synchronized
+        private fun lock(planes: Pointer?): Pointer? {
+            if (planes == null) return LibVlc.dropToken()
+            if (!active || !formatReady) {
+                dropPointer?.let { setPlanes(planes, it) }
+                return LibVlc.dropToken()
+            }
+            val index = (0 until POOL_SIZE)
+                .map { (nextBuffer + it) % POOL_SIZE }
+                .firstOrNull { !inUse[it] }
+                ?: run {
+                    dropPointer?.let { setPlanes(planes, it) }
+                    return LibVlc.dropToken()
+                }
+            nextBuffer = (index + 1) % POOL_SIZE
+            val buf = yPlanes[index] ?: run {
+                dropPointer?.let { setPlanes(planes, it) }
+                return LibVlc.dropToken()
+            }
+            val ptr = Native.getDirectBufferPointer(buf)
+            setPlanes(planes, ptr)
+            inUse[index] = true
+            return Pointer.createConstant(formatGeneration * POOL_SIZE + index + 1L)
+        }
+
+        private fun setPlanes(planes: Pointer, ptr: Pointer) {
+            val uOffset = yPitch.toLong() * yLines
+            val vOffset = uOffset + uvPitch.toLong() * uvLines
+            planes.setPointer(0, ptr)
+            planes.setPointer(Native.POINTER_SIZE.toLong(), ptr.share(uOffset))
+            planes.setPointer((2 * Native.POINTER_SIZE).toLong(), ptr.share(vOffset))
+        }
+
+        @Synchronized
         private fun display(picture: Pointer?) {
             if (picture == null) return
             val token = Pointer.nativeValue(picture)
-            if (token <= 0 || token > POOL_SIZE) return
-            val index = (token - 1).toInt()
-            val w = frameW
-            val h = frameH
-            if (w <= 0 || h <= 0) return
-            displaysSinceClear++
-            val ySize = w * h
-            val uvSize = ((w + 1) / 2) * ((h + 1) / 2)
-            val total = ySize + 2 * uvSize
-            val base = yPlanes[index] ?: return
-            if (base.capacity() < total) return
-            val copy = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
-            base.duplicate().rewind().let { src -> for (i in 0 until total) copy.put(src.get()) }
-            copy.flip()
-            // Drop frames that are still before the seek target (a stale pre-seek picture queued in
-            // the vout would otherwise satisfy the seek latch with the opening frame). Only accept
-            // once the reported position is at/after the target.
-            val gate = acceptAfterMs
-            if (gate >= 0) {
-                val now = timeProvider?.invoke() ?: gate
-                if (now < gate) return
+            if (token <= 0L) return
+            val encoded = token - 1L
+            val generation = encoded / POOL_SIZE
+            val index = (encoded % POOL_SIZE).toInt()
+            if (generation != formatGeneration || index !in 0 until POOL_SIZE) return
+            try {
+                if (!active || !formatReady) return
+                val w = frameW
+                val h = frameH
+                if (w <= 0 || h <= 0) return
+                displaysSinceClear++
+                val uvW = (w + 1) / 2
+                val uvH = (h + 1) / 2
+                val total = w * h + 2 * uvW * uvH
+                val base = yPlanes[index] ?: return
+                val source = base.duplicate().order(ByteOrder.nativeOrder())
+                val copy = ByteBuffer.allocateDirect(total).order(ByteOrder.nativeOrder())
+                copyRows(source, copy, 0, yPitch, w, h)
+                val uOffset = yPitch * yLines
+                copyRows(source, copy, uOffset, uvPitch, uvW, uvH)
+                val vOffset = uOffset + uvPitch * uvLines
+                copyRows(source, copy, vOffset, uvPitch, uvW, uvH)
+                copy.flip()
+                // Drop frames that are still before the seek target (a stale pre-seek picture queued in
+                // the vout would otherwise satisfy the seek latch with the opening frame).
+                val gate = acceptAfterMs
+                if (gate >= 0) {
+                    val now = timeProvider?.invoke() ?: gate
+                    if (now < gate) return
+                }
+                captured = copy
+                frameSeen = true
+                onFrame()
+                firstFrameLatch.countDown()
+            } finally {
+                inUse[index] = false
             }
-            captured = copy
-            frameSeen = true
-            onFrame()
-            firstFrameLatch.countDown()
         }
 
+        @Synchronized
         fun consumeFrame(): ByteBuffer? {
             val f = captured ?: return null
             captured = null
@@ -457,11 +514,37 @@ object LibVlcFrameExtractor {
         }
 
         /** Discards any frame captured so far (used right after a seek). */
+        @Synchronized
         fun clearCaptured() {
             captured = null
             frameSeen = false
             displaysSinceClear = 0L
         }
+
+        private fun bufferBytes(): Int = yPitch * yLines + 2 * uvPitch * uvLines + 31
+
+        private fun alignedBuffer(size: Int): ByteBuffer {
+            val owner = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
+            val raw = Native.getDirectBufferPointer(owner)
+            val address = Pointer.nativeValue(raw)
+            require(address != 0L) { "scrub vmem buffer has no native address" }
+            val aligned = (address + 31L) and -32L
+            val offset = (aligned - address).toInt()
+            val view = owner.duplicate().order(ByteOrder.nativeOrder())
+            view.position(offset).limit(offset + size - 31)
+            val slice = view.slice().order(ByteOrder.nativeOrder())
+            require(Pointer.nativeValue(Native.getDirectBufferPointer(slice)) % 32L == 0L)
+            return slice
+        }
+
+        private fun copyRows(source: ByteBuffer, target: ByteBuffer, offset: Int, pitch: Int, rowBytes: Int, rows: Int) {
+            for (row in 0 until rows) {
+                source.clear().position(offset + row * pitch).limit(offset + row * pitch + rowBytes)
+                target.put(source)
+            }
+        }
+
+        private fun align32(value: Int): Int = (value + 31) and -32
     }
 
     /** Converts packed I420 buffer to a BufferedImage (RGB). */

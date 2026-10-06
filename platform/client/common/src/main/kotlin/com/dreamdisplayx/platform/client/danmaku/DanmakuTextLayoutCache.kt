@@ -15,12 +15,6 @@ import net.minecraft.util.FastColor*/
 import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
-import org.slf4j.LoggerFactory
-import java.awt.Color
-import java.awt.Font
-import java.awt.FontMetrics
-import java.awt.RenderingHints
-import java.awt.image.BufferedImage
 import java.util.LinkedHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -46,8 +40,6 @@ class DanmakuGlyph(
  * entries so a busy video cannot grow the cache without bound.
  */
 object DanmakuTextLayoutCache {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DanmakuTextLayoutCache")
-
     private const val MAX_ENTRIES = 2048
     private const val BASE_FONT_PX = 12
 
@@ -56,8 +48,9 @@ object DanmakuTextLayoutCache {
     private val cache = object : LinkedHashMap<Key, DanmakuGlyph>(MAX_ENTRIES, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, DanmakuGlyph>): Boolean {
             val evict = size > MAX_ENTRIES
-            if (evict) runCatching { eldest.value.texture.close() }
-                .onFailure { logger.debug("Failed to close evicted danmaku texture: {}.", it.message) }
+            if (evict) OverlayTextSupport.optionalOrNull("evicted danmaku texture close") {
+                eldest.value.texture.close()
+            }
             return evict
         }
     }
@@ -69,10 +62,12 @@ object DanmakuTextLayoutCache {
             val (width, height) = OverlayTextSupport.fallbackMetrics(safe, (BASE_FONT_PX * scale).toInt())
             return DanmakuMetrics(width, height)
         }
-        val metrics = layout(scale).second
-        val width = metrics.stringWidth(safe).coerceAtLeast(1)
-        val height = metrics.height.coerceAtLeast(1)
-        return DanmakuMetrics(width.toFloat(), height.toFloat())
+        return OverlayTextSupport.optionalOrNull("danmaku measurement") {
+            AwtDanmakuRasterizer.measure(safe, scale)
+        } ?: run {
+            val (width, height) = OverlayTextSupport.fallbackMetrics(safe, (BASE_FONT_PX * scale).toInt())
+            DanmakuMetrics(width, height)
+        }
     }
 
     /** Returns the cached (or newly rasterized) glyph for [text] at [argb] color and [scale]. Render thread only. */
@@ -88,57 +83,49 @@ object DanmakuTextLayoutCache {
 
     /** Releases every cached glyph texture. Call when the owning display is unregistered. */
     fun clear() {
-        cache.values.forEach { runCatching { it.texture.close() }.onFailure { } }
+        cache.values.forEach { glyph ->
+            OverlayTextSupport.optionalOrNull("danmaku texture close") { glyph.texture.close() }
+        }
         cache.clear()
     }
 
-    /** Shared (font, metrics) for both measuring and rasterizing at [scale], so they always agree. */
-    private fun layout(scale: Float): Pair<Font, FontMetrics> {
-        val font = OverlayTextSupport.font(Font.BOLD, (BASE_FONT_PX * scale).toInt().coerceAtLeast(6))
-        val probe = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-        val metrics = probe.createGraphics().let { g ->
-            g.font = font
-            g.fontMetrics.also { g.dispose() }
+    private fun rasterize(text: String, argb: Int, scale: Float): DanmakuGlyph? =
+        OverlayTextSupport.optionalOrNull("danmaku rasterization") {
+            val raster = AwtDanmakuRasterizer.rasterize(text, argb, scale)
+            val native = toNativeImage(raster)
+            val id = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "dynamic/danmaku_${INSTANCE_ID.incrementAndGet()}")
+            var dynamic: DynamicTexture? = null
+            try {
+                val created =
+                    //? if >=1.21.11 {
+                    DynamicTexture({ "dreamdisplays-danmaku" }, native)
+                //?} else
+                /*DynamicTexture(native)*/
+                dynamic = created
+                created.upload()
+                Minecraft.getInstance().textureManager.register(id, created)
+                val renderType = DisplayUnlitRenderTypes.create("dream-displays-danmaku", id)
+                DanmakuGlyph(id, created, renderType, raster.width.toFloat(), raster.height.toFloat())
+            } catch (error: Exception) {
+                dynamic?.let { texture ->
+                    OverlayTextSupport.optionalOrNull("danmaku texture cleanup") { texture.close() }
+                }
+                throw error
+            } catch (error: LinkageError) {
+                dynamic?.let { texture ->
+                    OverlayTextSupport.optionalOrNull("danmaku texture cleanup") { texture.close() }
+                }
+                throw error
+            }
         }
-        return font to metrics
-    }
 
-    private fun rasterize(text: String, argb: Int, scale: Float): DanmakuGlyph? = runCatching {
-        val (font, metrics) = layout(scale)
-        val width = metrics.stringWidth(text).coerceAtLeast(1)
-        val height = metrics.height.coerceAtLeast(1)
-
-        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-        val g = image.createGraphics()
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-        g.font = font
-        g.color = Color(argb, true)
-        g.drawString(text, 0, metrics.ascent)
-        g.dispose()
-
-        val native = toNativeImage(image)
-        val id = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "dynamic/danmaku_${INSTANCE_ID.incrementAndGet()}")
-        val dynamic =
-            //? if >=1.21.11 {
-            DynamicTexture({ "dreamdisplays-danmaku" }, native)
-        //?} else
-        /*DynamicTexture(native)*/
-        dynamic.upload()
-        Minecraft.getInstance().textureManager.register(id, dynamic)
-        val renderType = DisplayUnlitRenderTypes.create("dream-displays-danmaku", id)
-        DanmakuGlyph(id, dynamic, renderType, width.toFloat(), height.toFloat())
-    }.onFailure { e ->
-        logger.debug("Failed to rasterize danmaku text: {}.", e.message)
-    }.getOrNull()
-
-    private fun toNativeImage(image: BufferedImage): NativeImage {
-        val w = image.width
-        val h = image.height
+    private fun toNativeImage(raster: DanmakuRaster): NativeImage {
+        val w = raster.width
+        val h = raster.height
         val native = NativeImage(NativeImage.Format.RGBA, w, h, false)
         for (y in 0 until h) {
             for (x in 0 until w) {
-                val argb = image.getRGB(x, y)
+                val argb = raster.argb[y * w + x]
                 //? if >=1.21.11 {
                 native.setPixel(x, y, argb)
                 //?} else

@@ -1,104 +1,119 @@
 package com.dreamdisplayx.platform.client.render
 
 import org.slf4j.LoggerFactory
-import java.awt.Font
-import java.awt.GraphicsEnvironment
-import java.io.File
-import java.io.FileInputStream
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Runtime-safe AWT text support for subtitle and danmaku textures.
+ * Runtime-safe probe and fallback metrics for optional subtitle/danmaku text rendering.
  *
- * Pojav/FCL exposes a Cacio-backed `java.desktop` module, while some Android launchers do not. The
- * caller checks [available] before touching the AWT classes so the optional overlay never becomes a
- * hard Android startup dependency.
+ * This class deliberately contains no `java.awt` types in imports, fields, or method signatures. A
+ * few Android launchers do not expose `java.desktop` at all; the AWT implementation lives in the
+ * separate optional backend files and is loaded only after [available] succeeds.
  */
 internal object OverlayTextSupport {
+    private const val FONT_CLASS = "java.awt.Font"
+    private const val IMAGE_CLASS = "java.awt.image.BufferedImage"
+    private const val GRAPHICS_CLASS = "java.awt.Graphics2D"
+    private const val METRICS_CLASS = "java.awt.FontMetrics"
+    private const val FAILURE_INTERVAL_NANOS = 60_000_000_000L
+
     private val logger = LoggerFactory.getLogger("DreamDisplaysX/OverlayTextSupport")
+    private val lastFailureNanos = ConcurrentHashMap<String, AtomicLong>()
 
-    private const val CJK_PROBE = '\u4E2D'
-    private const val BUNDLED_FONT_RESOURCE = "/assets/dreamdisplayx/fonts/NotoSansCJK-Regular.ttc"
-
-    /** True when the current launcher exposes the AWT classes required by the rasterizer. */
+    /** True when AWT classes can construct a font, image, graphics context, metrics, and glyphs. */
     fun available(): Boolean = awtAvailable
 
     private val awtAvailable: Boolean by lazy {
-        runCatching {
-            Class.forName("java.awt.Font", false, OverlayTextSupport::class.java.classLoader)
-            Class.forName("java.awt.image.BufferedImage", false, OverlayTextSupport::class.java.classLoader)
+        probe(OverlayTextSupport::class.java.classLoader)
+    }
+
+    /**
+     * Performs a real AWT operation rather than merely checking whether classes exist.
+     *
+     * The class-loader parameter is intentionally package-visible for tests: it lets the JVM test
+     * the same fail-closed path with a loader that hides `java.awt`, without modifying the host JVM.
+     */
+    internal fun probe(classLoader: ClassLoader?): Boolean {
+        var graphics: Any? = null
+        var disposeMethod: java.lang.reflect.Method? = null
+        return try {
+            val fontClass = Class.forName(FONT_CLASS, true, classLoader)
+            val imageClass = Class.forName(IMAGE_CLASS, true, classLoader)
+            val graphicsClass = Class.forName(GRAPHICS_CLASS, true, classLoader)
+            val metricsClass = Class.forName(METRICS_CLASS, true, classLoader)
+            val intType = Int::class.javaPrimitiveType
+            val imageType = imageClass.getField("TYPE_INT_ARGB").getInt(null)
+            val image = imageClass.getConstructor(intType, intType, intType)
+                .newInstance(8, 8, imageType)
+            val font = fontClass.getConstructor(String::class.java, intType, intType)
+                .newInstance("SansSerif", 0, 12)
+            disposeMethod = graphicsClass.getMethod("dispose")
+            graphics = imageClass.getMethod("createGraphics").invoke(image)
+            graphicsClass.getMethod("setFont", fontClass).invoke(graphics, font)
+            val metrics = graphicsClass.getMethod("getFontMetrics").invoke(graphics)
+                ?: error("AWT returned no font metrics")
+            val ascent = metricsClass.getMethod("getAscent").invoke(metrics) as? Int
+                ?: error("AWT returned invalid font metrics")
+            graphicsClass.getMethod(
+                "drawString",
+                String::class.java,
+                intType,
+                intType,
+            ).invoke(graphics, "probe", 0, ascent.coerceAtLeast(1))
             true
-        }.getOrDefault(false)
-    }
-
-    /** Returns a size/style-adjusted font with a real CJK-capable face when one is installed. */
-    fun font(style: Int, sizePx: Int): Font = baseFont.deriveFont(style, sizePx.coerceAtLeast(1).toFloat())
-
-    /** Approximate metrics used only when AWT is unavailable and the overlay must stay disabled. */
-    fun fallbackMetrics(text: String, sizePx: Int): Pair<Float, Float> {
-        val width = text.codePointCount(0, text.length) * sizePx.coerceAtLeast(1) * 0.9f
-        return width.coerceAtLeast(1f) to sizePx.coerceAtLeast(1).toFloat()
-    }
-
-    private val baseFont: Font by lazy {
-        runCatching { loadCjkFont() }.getOrElse {
-            logger.warn("CJK overlay font initialization failed; using logical SansSerif.", it)
-            Font(Font.SANS_SERIF, Font.PLAIN, 12)
-        }
-    }
-
-    private fun loadCjkFont(): Font {
-        val candidates = linkedSetOf<String>()
-        System.getProperty("dreamdisplayx.fontFile")?.trim()?.takeIf { it.isNotEmpty() }?.let(candidates::add)
-        candidates += listOf(
-            "/system/fonts/NotoSansCJK-Regular.ttc",
-            "/system/fonts/NotoSansSC-Regular.otf",
-            "/system/fonts/NotoSansCJK-Regular.otf",
-            "/system/fonts/NotoSansCJKsc-VF.ttf",
-            "/system/fonts/DroidSansFallback.ttf",
-            "/data/fonts/NotoSansCJK-Regular.ttc",
-        )
-        val javaHome = System.getProperty("java.home")?.takeIf { it.isNotBlank() }
-        if (javaHome != null) {
-            candidates += "$javaHome/lib/fonts/NotoSansCJK-Regular.ttc"
-            candidates += "$javaHome/lib/fonts/NotoSansSC-Regular.otf"
-            candidates += "$javaHome/lib/fonts/DroidSansFallback.ttf"
-        }
-
-        for (path in candidates) {
-            loadFont(File(path))?.let { font ->
-                if (font.canDisplay(CJK_PROBE)) {
-                    logger.info("Using CJK overlay font {}.", path)
-                    return font
+        } catch (error: Exception) {
+            reportFailure("runtime probe", error)
+            false
+        } catch (error: LinkageError) {
+            reportFailure("runtime probe", error)
+            false
+        } finally {
+            if (graphics != null && disposeMethod != null) {
+                try {
+                    disposeMethod.invoke(graphics)
+                } catch (error: Exception) {
+                    reportFailure("runtime probe disposal", error)
+                } catch (error: LinkageError) {
+                    reportFailure("runtime probe disposal", error)
                 }
             }
         }
-
-        runCatching {
-            OverlayTextSupport::class.java.getResourceAsStream(BUNDLED_FONT_RESOURCE)?.use { input ->
-                Font.createFonts(input).firstOrNull { it.canDisplay(CJK_PROBE) }
-            }
-        }.getOrNull()?.let { font ->
-            logger.info("Using bundled CJK overlay font {}.", BUNDLED_FONT_RESOURCE)
-            return font
-        }
-
-        runCatching {
-            GraphicsEnvironment.getLocalGraphicsEnvironment().allFonts.firstOrNull { it.canDisplay(CJK_PROBE) }
-        }.getOrNull()?.let { font ->
-            logger.info("Using registered CJK overlay font {}.", font.family)
-            return font
-        }
-
-        logger.warn("No CJK-capable overlay font found; falling back to the logical SansSerif font.")
-        return Font(Font.SANS_SERIF, Font.PLAIN, 12)
     }
 
-    private fun loadFont(file: File): Font? {
-        if (!file.isFile || !file.canRead()) return null
-        return runCatching {
-            FileInputStream(file).use { input ->
-                Font.createFonts(input).firstOrNull { it.canDisplay(CJK_PROBE) }
-            }
-        }.getOrNull()
+    /**
+     * Executes optional rendering code and returns null for ordinary runtime/linkage failures.
+     * Fatal VM errors are intentionally not caught so a broken optional backend cannot disguise an
+     * out-of-memory, stack-overflow, or similar process-level failure.
+     */
+    internal inline fun <T> optionalOrNull(operation: String, block: () -> T): T? {
+        return try {
+            block()
+        } catch (error: Exception) {
+            reportFailure(operation, error)
+            null
+        } catch (error: LinkageError) {
+            reportFailure(operation, error)
+            null
+        }
+    }
+
+    /** Records an optional-backend failure at most once per interval for each operation. */
+    internal fun reportFailure(operation: String, error: Throwable) {
+        val now = System.nanoTime()
+        val marker = lastFailureNanos.computeIfAbsent(operation) { AtomicLong(Long.MIN_VALUE) }
+        while (true) {
+            val previous = marker.get()
+            if (previous != Long.MIN_VALUE && now - previous < FAILURE_INTERVAL_NANOS) return
+            if (marker.compareAndSet(previous, now)) break
+        }
+        logger.warn("Optional AWT {} failed; the overlay will use its fallback path.", operation, error)
+    }
+
+    /** Approximate metrics used only when the optional AWT backend is unavailable. */
+    fun fallbackMetrics(text: String, sizePx: Int): Pair<Float, Float> {
+        val size = sizePx.coerceAtLeast(1)
+        val width = text.codePointCount(0, text.length) * size * 0.9f
+        return width.coerceAtLeast(1f) to size.toFloat()
     }
 }
