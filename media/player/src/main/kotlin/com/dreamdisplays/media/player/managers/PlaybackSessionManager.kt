@@ -387,17 +387,17 @@ internal class PlaybackSessionManager(
         val channel = VideoChannel()
         try {
             val firstVideoFrame = CountDownLatch(1)
-            channel.launch(ffmpeg, streamSet, w, h, offsetNanos, hwAccel, onFirstFrame = {
-                clock.markFirstFrame()
-                firstVideoFrame.countDown()
-                onFirstFrame()
-            }, onEos = onStreamEnd, parkFlag = parkFlag)
             val aStop = AtomicBoolean()
-            val ap = try {
-                buildAudioProcess(ffmpeg, streamSet, offsetNanos, aStop)
-            } catch (e: IOException) {
-                // The video side is already running; tear it down before propagating
-                channel.teardownProcess()
+            val ap = buildAudioProcess(ffmpeg, streamSet, offsetNanos, aStop)
+            try {
+                channel.launch(ffmpeg, streamSet, w, h, offsetNanos, hwAccel, onFirstFrame = {
+                    clock.markFirstFrame()
+                    firstVideoFrame.countDown()
+                    onFirstFrame()
+                }, onEos = onStreamEnd, parkFlag = parkFlag)
+            } catch (e: Exception) {
+                aStop.set(true)
+                MediaProcess.gracefulDestroy(ap)
                 throw e
             }
             active = channel
@@ -495,16 +495,16 @@ internal class PlaybackSessionManager(
         val channel = VideoChannel()
         try {
             val firstVideoFrame = CountDownLatch(1)
-            channel.launch(ffmpeg, streamSet, w, h, offsetNanos, hwAccel, onFirstFrame = {
-                clock.markFirstFrame()
-                firstVideoFrame.countDown()
-            }, onEos = onStreamEnd, parkFlag = parkFlag)
             val aStop = AtomicBoolean()
-            val ap = try {
-                buildAudioProcess(ffmpeg, streamSet, offsetNanos, aStop)
-            } catch (e: IOException) {
-                channel.teardownProcess()
-                renderExecutor.execute { channel.pipe.cleanup() }
+            val ap = buildAudioProcess(ffmpeg, streamSet, offsetNanos, aStop)
+            try {
+                channel.launch(ffmpeg, streamSet, w, h, offsetNanos, hwAccel, onFirstFrame = {
+                    clock.markFirstFrame()
+                    firstVideoFrame.countDown()
+                }, onEos = onStreamEnd, parkFlag = parkFlag)
+            } catch (e: Exception) {
+                aStop.set(true)
+                MediaProcess.gracefulDestroy(ap)
                 throw e
             }
             synchronized(switchLock) { active = channel }
