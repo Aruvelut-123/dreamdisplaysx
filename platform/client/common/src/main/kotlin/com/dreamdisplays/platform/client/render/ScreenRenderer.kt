@@ -26,7 +26,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer
 import com.mojang.blaze3d.vertex.VertexFormat
 //?}
 import net.minecraft.client.Camera
-import net.minecraft.world.phys.Vec3
 import kotlin.math.sin
 
 /** Renders screens in the world. Better not to touch this shit. */
@@ -83,27 +82,25 @@ object ScreenRenderer : ClientRenderService {
             camera.position()
         //?} else
         /*camera.getPosition()*/
+        DisplayCulling.begin(camera, cameraPos)
         for (displayScreen in DisplayRegistry.getScreens()) {
             if (displayScreen.isDormant || !displayScreen.hasTexture) continue
-
-            stack.pushPose()
-        DisplayCulling.begin(camera, cameraPos)
-
-            val pos = displayScreen.pos
             if (!DisplayCulling.isVisible(displayScreen)) {
                 if (!replay) displayScreen.fitTextureWhileHidden()
                 continue
             }
-            val screenCenter = Vec3.atLowerCornerOf(pos)
-            val relativePos = screenCenter.subtract(cameraPos)
-            stack.translate(relativePos.x, relativePos.y, relativePos.z)
+
+            stack.pushPose()
+
+            val pos = displayScreen.pos
+            stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z)
 
             renderScreenTexture(displayScreen, stack, replay, drawQuad)
 
-        ImmediateRenderCompat.flushBatch()
-
             stack.popPose()
         }
+
+        ImmediateRenderCompat.flushBatch()
 
         // The registered RenderHook extends the world pass after the mod's own screens.
         // ClientRenderModule installs the default hook for API-registered surfaces.
@@ -279,8 +276,8 @@ object ScreenRenderer : ClientRenderService {
         addVertex(pose, builder, x0, y1, 0f, r, g, b, 0f, 0f)
     }
 
-    /** Texture corners in vertex order; rotating the list by [rotation] spins the image. */
-    private val baseUv = arrayOf(0f to 1f, 1f to 1f, 1f to 0f, 0f to 0f)
+    private val baseU = floatArrayOf(0f, 1f, 1f, 0f)
+    private val baseV = floatArrayOf(1f, 1f, 0f, 0f)
 
     /** Appends a quad with the given [rotation] and color [[r], [g], [b] (0..255). */
     private fun appendQuad(
@@ -292,11 +289,10 @@ object ScreenRenderer : ClientRenderService {
         rotation: DisplayRotation,
     ) {
         val rot = rotation.quarterTurns
-        val uv = Array(4) { baseUv[(it + rot) % 4] }
-        addVertex(pose, builder, 0f, 0f, 0f, r, g, b, uv[0].first, uv[0].second)
-        addVertex(pose, builder, 1f, 0f, 0f, r, g, b, uv[1].first, uv[1].second)
-        addVertex(pose, builder, 1f, 1f, 0f, r, g, b, uv[2].first, uv[2].second)
-        addVertex(pose, builder, 0f, 1f, 0f, r, g, b, uv[3].first, uv[3].second)
+        addVertex(pose, builder, 0f, 0f, 0f, r, g, b, baseU[rot % 4], baseV[rot % 4])
+        addVertex(pose, builder, 1f, 0f, 0f, r, g, b, baseU[(1 + rot) % 4], baseV[(1 + rot) % 4])
+        addVertex(pose, builder, 1f, 1f, 0f, r, g, b, baseU[(2 + rot) % 4], baseV[(2 + rot) % 4])
+        addVertex(pose, builder, 0f, 1f, 0f, r, g, b, baseU[(3 + rot) % 4], baseV[(3 + rot) % 4])
     }
 
     /** Adds a vertex with the given [r,g,b] (0..255) and [u,v] (0..1) coordinates. */
@@ -318,6 +314,10 @@ object ScreenRenderer : ClientRenderService {
     /** Draws a quad using the given [type] and [appendVertices] function. A bit of a hack. */
     private fun drawImmediate(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
         ImmediateRenderCompat.draw(stack, type, appendVertices)
+    }
+
+    /** Compatibility layer for the new immediate mode API. */
+    private object ImmediateRenderCompat {
         fun beginBatch() {
             //? if >=26.2 {
             batching = true
@@ -330,10 +330,6 @@ object ScreenRenderer : ClientRenderService {
             //?}
         }
 
-    }
-
-    /** Compatibility layer for the new immediate mode API. */
-    private object ImmediateRenderCompat {
         fun draw(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
             //? if >=26.2 {
             draw262(stack, type, appendVertices)
@@ -364,6 +360,10 @@ object ScreenRenderer : ClientRenderService {
         /** Per-class method cache so the staged draw resolves each method once, not per quad per frame. */
         private val methodCache = java.util.concurrent.ConcurrentHashMap<String, java.lang.reflect.Method>()
 
+        /** Looks up a public method on [owner] through the cache. */
+        private fun method(owner: Class<*>, name: String, vararg params: Class<*>): java.lang.reflect.Method =
+            methodCache.computeIfAbsent("${owner.name}#$name") { owner.getMethod(name, *params) }
+
         private var staged: Any? = null
         private var batching = false
         private val batchTypes = ArrayList<RenderType>()
@@ -372,10 +372,6 @@ object ScreenRenderer : ClientRenderService {
         private fun stagedBuffer(): Any =
             staged ?: stagedCtor.newInstance(java.util.function.Supplier { "dream-displays-immediate" }, 16_384)
                 .also { staged = it }
-
-        /** Looks up a public method on [owner] through the cache. */
-        private fun method(owner: Class<*>, name: String, vararg params: Class<*>): java.lang.reflect.Method =
-            methodCache.computeIfAbsent("${owner.name}#$name") { owner.getMethod(name, *params) }
 
         private fun draw262(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
             val buffer = stagedBuffer()
