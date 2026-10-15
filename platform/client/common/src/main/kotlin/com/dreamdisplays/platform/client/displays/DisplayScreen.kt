@@ -883,6 +883,28 @@ class DisplayScreen(
         forced: Boolean = false,
         sessionId: String? = null,
         loop: Boolean = false,
+    /** [sourcePlane]'s last result and the geometry it was built from (displays rarely move). */
+    private var cachedPlane: SourcePlane? = null
+    private var planeX = 0
+    private var planeY = 0
+    private var planeZ = 0
+    private var planeWidth = 0
+    private var planeHeight = 0
+    private var planeDepth = 0
+    private var planeFacing: DisplayFacing? = null
+
+    /** The planar sound source for the current geometry, rebuilt (and the room reverb re-probed) only when it moved. */
+    private fun sourcePlane(): SourcePlane {
+        val cached = cachedPlane
+        if (cached != null && planeX == x && planeY == y && planeZ == z && planeWidth == width &&
+            planeHeight == height && planeDepth == depth && planeFacing == facing
+        ) return cached
+        planeX = x; planeY = y; planeZ = z
+        planeWidth = width; planeHeight = height; planeDepth = depth; planeFacing = facing
+        cachedReverb = null
+        return toSourcePlane().also { cachedPlane = it }
+    }
+
     ) {
         if (!canPopoutHere && !forced) return
         val mp = mediaPlayer ?: return
@@ -1164,7 +1186,7 @@ class DisplayScreen(
         restoreAudioTrackIfPending()
         restoreSubtitleTrackIfPending()
         if (isPopoutActive) {
-            if (distanceQualitySteps != 0) {
+            if (distanceQualitySteps != 0 || sizeLodHeight != 0) {
                 distanceQualitySteps = 0
                 reloadQuality()
             }
@@ -1181,24 +1203,26 @@ class DisplayScreen(
                 muted = muted || focusMuted,
                 bypassSpatial = isPopoutActive,
                 acousticsEnabled = acousticsEnabled,
-                environment = probeEnvironment(plane),
+                environment = probeEnvironment(plane, distance),
             ),
         )
     }
 
-    /** Acoustic environment (voxel raytrace cached every [ENV_PROBE_INTERVAL_TICKS] ticks). */
-    private fun probeEnvironment(plane: SourcePlane): AcousticEnvironment {
+    /**
+     * Acoustic environment: occlusion re-traced every [ENV_PROBE_INTERVAL_TICKS] ticks (less often for far
+     * displays), room reverb every [REVERB_PROBE_INTERVAL_TICKS]; a silent display keeps its last result.
+     */
+    private fun probeEnvironment(plane: SourcePlane, distance: Double): AcousticEnvironment {
         val tier = ClientStateManager.config.audioAcoustics
         if (isPopoutActive || !acousticsEnabled || (tier != AcousticQuality.ADVANCED && tier != AcousticQuality.ULTRA)) {
             cachedEnvironment = AcousticEnvironment.OPEN_AIR
             envProbeCountdown = 0
             return cachedEnvironment
         }
-        if (envProbeCountdown <= 0) {
-            cachedEnvironment =
-                VoxelAcousticsProbe.probe(plane, ListenerPoseTracker.currentPose(Minecraft.getInstance()))
-            envProbeCountdown = ENV_PROBE_INTERVAL_TICKS
-        } else {
+        // Nothing to hear, nothing to trace: the raycasts run on the game thread, once per display
+        if (muted || focusMuted || volume <= 0f) return cachedEnvironment
+        reverbProbeCountdown--
+        if (envProbeCountdown > 0) {
             envProbeCountdown--
         }
         return cachedEnvironment
@@ -1257,6 +1281,9 @@ class DisplayScreen(
          */
         internal fun clientRenderDistanceBlocks(): Int {
             val minecraft = Minecraft.getInstance()
+    /** Ticks remaining before the room reverb is re-probed; jittered like [envProbeCountdown]. */
+    private var reverbProbeCountdown: Int = uuid.hashCode().mod(REVERB_PROBE_INTERVAL_TICKS)
+
             val render = minecraft.options.renderDistance().get()
             val simulation = minecraft.level?.serverSimulationDistance?.takeIf { it > 0 } ?: render
             val own = ClientStateManager.config.displayDistanceChunks.takeIf { it > 0 } ?: render
@@ -1264,3 +1291,56 @@ class DisplayScreen(
         }
     }
 }
+            cachedReverb = null
+            return cachedEnvironment
+        }
+        val reverb = cachedReverb?.takeIf { reverbProbeCountdown > 0 }
+            ?: VoxelAcousticsProbe.probeReverb(plane).also {
+                cachedReverb = it
+                reverbProbeCountdown = REVERB_PROBE_INTERVAL_TICKS
+            }
+        val listener = ListenerPoseTracker.currentPose(Minecraft.getInstance())
+        cachedEnvironment = reverb.copy(occlusion = VoxelAcousticsProbe.probeOcclusion(plane, listener))
+        envProbeCountdown = when {
+            distance < NEAR_PROBE_DISTANCE -> ENV_PROBE_INTERVAL_TICKS
+            distance < MID_PROBE_DISTANCE -> ENV_PROBE_INTERVAL_TICKS * 2
+            else -> ENV_PROBE_INTERVAL_TICKS * 4
+        /** Ticks between room-reverb re-probes (24 rays each); it only changes when blocks near the display do. */
+        private const val REVERB_PROBE_INTERVAL_TICKS = 40
+
+        /** Within this many blocks occlusion is re-traced at the full [ENV_PROBE_INTERVAL_TICKS] cadence. */
+        private const val NEAR_PROBE_DISTANCE = 16.0
+
+        /** Up to this many blocks occlusion is re-traced at half that cadence; further away at a quarter. */
+        private const val MID_PROBE_DISTANCE = 48.0
+
+        /** Kill switch: `-Ddreamdisplays.lod.size=false` keeps every display at its requested quality regardless of on-screen size. */
+        private val SIZE_LOD_ENABLED: Boolean =
+            System.getProperty("dreamdisplays.lod.size")?.toBooleanStrictOrNull() ?: true
+
+        /** Rows decoded per on-screen row; above 1 so the picture stays crisp under bilinear minification. */
+        private const val SIZE_LOD_OVERSAMPLE = 1.5
+
+        /** The size LOD never steps below this height (the ladder itself goes lower for the far-distance steps). */
+        private const val SIZE_LOD_MIN_HEIGHT = 360
+
+        /** Sharpening needs this much more on-screen size than softening did, so a boundary doesn't flip-flop. */
+        private const val SIZE_LOD_UP_HYSTERESIS = 1.3
+
+        /** How long the size LOD must keep asking for a lower rung (or, live, a higher one) before switching. */
+        private const val SIZE_LOD_DWELL_NANOS = 3_000_000_000L
+
+        /** Minimum spacing between two size-LOD stream switches across all displays (main thread only). */
+        private const val LOD_SWITCH_SPACING_NANOS = 250_000_000L
+
+        /** Earliest [System.nanoTime] the next size-LOD switch may start; spreads a burst over several ticks. */
+        private var nextLodSwitchNanos = 0L
+
+        /** Claims the global size-LOD switch slot, so many displays never re-open their streams in the same tick. */
+        private fun tryAcquireLodSwitch(): Boolean {
+            val now = System.nanoTime()
+            if (now < nextLodSwitchNanos) return false
+            nextLodSwitchNanos = now + LOD_SWITCH_SPACING_NANOS
+            return true
+        }
+

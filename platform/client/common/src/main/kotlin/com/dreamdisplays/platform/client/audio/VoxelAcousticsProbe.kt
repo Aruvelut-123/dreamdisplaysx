@@ -73,17 +73,24 @@ object VoxelAcousticsProbe {
      * Raytraces the space between [plane] and [listener] into an [AcousticEnvironment]. Returns
      * [AcousticEnvironment.OPEN_AIR] if no world / player is available or anything throws.
      */
-    fun probe(plane: SourcePlane, listener: ListenerPose): AcousticEnvironment = runCatching {
+    fun probe(plane: SourcePlane, listener: ListenerPose): AcousticEnvironment =
+        probeReverb(plane).copy(occlusion = probeOcclusion(plane, listener))
+
+    fun probeOcclusion(plane: SourcePlane, listener: ListenerPose): Float = runCatching {
+        val mc = Minecraft.getInstance()
+        val level = mc.level ?: return 0f
+        val entity = mc.player ?: return 0f
+        val center = Vec3(plane.centerX, plane.centerY, plane.centerZ)
+        val ear = Vec3(listener.x, listener.y, listener.z)
+        traceOcclusion(level, entity, ear, plane, center)
+    }.getOrDefault(0f)
+
+    fun probeReverb(plane: SourcePlane): AcousticEnvironment = runCatching {
         val mc = Minecraft.getInstance()
         val level = mc.level ?: return AcousticEnvironment.OPEN_AIR
         val entity = mc.player ?: return AcousticEnvironment.OPEN_AIR
-
-        val center = Vec3(plane.centerX, plane.centerY, plane.centerZ)
-        val ear = Vec3(listener.x, listener.y, listener.z)
-
-        val occlusion = traceOcclusion(level, entity, ear, plane, center)
-        val (decay, wet, damping) = traceReverb(level, entity, center)
-        AcousticEnvironment(occlusion, decay, wet, damping)
+        val (decay, wet, damping) = traceReverb(level, entity, Vec3(plane.centerX, plane.centerY, plane.centerZ))
+        AcousticEnvironment(0f, decay, wet, damping)
     }.getOrDefault(AcousticEnvironment.OPEN_AIR)
 
     /** Averages occlusion of rays fanned from listener ear to spread of points across screen. */
