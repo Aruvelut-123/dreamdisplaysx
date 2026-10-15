@@ -1,3 +1,36 @@
+# 1.10.1
+
+## Highlights
+
+- Much better performance with many displays at once
+- YouTube videos start and seek up to 5x faster
+- `Youer` server crash fix
+
+## Client
+
+### Improvements
+
+- YouTube videos start up to 5x faster: the picture no longer freezes on its first frame while the sound loads
+- Seeking in YouTube videos resumes up to 5x faster
+- Videos from every source start a bit faster: sound and picture now load at the same time
+- Displays you are not looking at are no longer drawn or uploaded to the GPU
+- Far and small displays now play at a lower resolution automaiccally
+- Up to 9x less memory per far display, plus a shared memory limit for all displays
+- Up to 30% less CPU for software video decoding when several displays play at once
+- 4–10x fewer raycasts for 3D sound, and none at all for muted displays
+- On 26.2 and newer, displays no longer create new GPU buffers every frame
+
+### Fixes
+
+- Fixed displays with `Auto` quality staying at a lower resolution after you walked away and came back
+- Fixed the sound of some YouTube videos failing with a 403 error, which made the whole video reload
+
+## Server
+
+### Fixes
+
+- Fixed `Youer` server crash ([#257](https://github.com/arnodoelinger/dreamdisplays/issues/257))
+
 # 1.10.0 Release
 
 ## Highlights
