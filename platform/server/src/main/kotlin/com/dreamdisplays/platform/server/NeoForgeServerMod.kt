@@ -1,7 +1,7 @@
 package com.dreamdisplays.platform.server
 
 import com.dreamdisplays.platform.client.Initializer
-import com.dreamdisplays.platform.server.listeners.NeoForgePlayerListener
+import com.dreamdisplays.platform.server.listeners.NeoForgePlayerConnectionListener
 import com.dreamdisplays.platform.server.listeners.NeoForgeProtectionListener
 import com.dreamdisplays.platform.server.listeners.NeoForgeSelectionListener
 import com.dreamdisplays.platform.server.managers.StorageManager
@@ -41,7 +41,7 @@ class NeoForgeServer(modEventBus: IEventBus) {
 
         modEventBus.addListener(::registerPayloads)
         NeoForge.EVENT_BUS.register(this)
-        NeoForge.EVENT_BUS.register(NeoForgePlayerListener)
+        NeoForge.EVENT_BUS.register(NeoForgePlayerConnectionListener)
         NeoForge.EVENT_BUS.register(NeoForgeProtectionListener)
         NeoForge.EVENT_BUS.register(NeoForgeSelectionListener)
         NeoForge.EVENT_BUS.addListener(NeoForgeCommandRegistrar::register)

@@ -78,7 +78,7 @@ class PlayerListener : Listener {
 
 /**
  * Shared `Fabric` / `NeoForge` player join / leave handling. [FabricPlayerListener] and
- * [NeoForgePlayerListener] only adapt their loader's event-subscription API and hand off here.
+ * [NeoForgePlayerConnectionListener] only adapt their loader's event-subscription API and hand off here.
  */
 @ModLoaderOnly
 object VanillaPlayerListener {
@@ -132,8 +132,9 @@ object FabricPlayerListener {
 }
 
 /** `NeoForge` event-subscription adapter for [VanillaPlayerListener]. */
+// Never name it NeoForgePlayerListener
 @NeoForgeOnly
-object NeoForgePlayerListener {
+object NeoForgePlayerConnectionListener {
     @SubscribeEvent
     fun onLogin(event: PlayerEvent.PlayerLoggedInEvent) {
         val player = event.entity as? ServerPlayer ?: return
