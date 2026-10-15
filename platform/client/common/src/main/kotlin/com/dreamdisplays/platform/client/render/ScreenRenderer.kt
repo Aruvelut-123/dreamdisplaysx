@@ -39,8 +39,13 @@ object ScreenRenderer : ClientRenderService {
      * for [UnshadedDisplayPass]'s second draw of a frame already on screen.
      */
     fun render(stack: PoseStack, camera: Camera, replay: Boolean = false) {
-        render(stack, camera, replay) { type, appendVertices ->
-            drawImmediate(stack, type, appendVertices)
+        ImmediateRenderCompat.beginBatch()
+        try {
+            render(stack, camera, replay) { type, appendVertices ->
+                drawImmediate(stack, type, appendVertices)
+            }
+        } finally {
+            ImmediateRenderCompat.flushBatch()
         }
     }
 
@@ -94,6 +99,8 @@ object ScreenRenderer : ClientRenderService {
             stack.translate(relativePos.x, relativePos.y, relativePos.z)
 
             renderScreenTexture(displayScreen, stack, replay, drawQuad)
+
+        ImmediateRenderCompat.flushBatch()
 
             stack.popPose()
         }
@@ -311,6 +318,18 @@ object ScreenRenderer : ClientRenderService {
     /** Draws a quad using the given [type] and [appendVertices] function. A bit of a hack. */
     private fun drawImmediate(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
         ImmediateRenderCompat.draw(stack, type, appendVertices)
+        fun beginBatch() {
+            //? if >=26.2 {
+            batching = true
+            //?}
+        }
+
+        fun flushBatch() {
+            //? if >=26.2 {
+            flush262()
+            //?}
+        }
+
     }
 
     /** Compatibility layer for the new immediate mode API. */
@@ -345,25 +364,52 @@ object ScreenRenderer : ClientRenderService {
         /** Per-class method cache so the staged draw resolves each method once, not per quad per frame. */
         private val methodCache = java.util.concurrent.ConcurrentHashMap<String, java.lang.reflect.Method>()
 
+        private var staged: Any? = null
+        private var batching = false
+        private val batchTypes = ArrayList<RenderType>()
+        private val batchDraws = ArrayList<Any>()
+
+        private fun stagedBuffer(): Any =
+            staged ?: stagedCtor.newInstance(java.util.function.Supplier { "dream-displays-immediate" }, 16_384)
+                .also { staged = it }
+
         /** Looks up a public method on [owner] through the cache. */
         private fun method(owner: Class<*>, name: String, vararg params: Class<*>): java.lang.reflect.Method =
             methodCache.computeIfAbsent("${owner.name}#$name") { owner.getMethod(name, *params) }
 
         private fun draw262(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
-            val staged = stagedCtor.newInstance(java.util.function.Supplier { "dream-displays-immediate" }, 1536)
+            val buffer = stagedBuffer()
+            val primitiveTopology = method(type.javaClass, "primitiveTopology").invoke(type)
+            val draw = method(stagedClass, "appendDraw", VertexFormat::class.java, primitiveTopology.javaClass)
+                .invoke(buffer, type.format(), primitiveTopology)
+            batchTypes += type
+            batchDraws += draw
+            val builder = method(stagedClass, "getVertexBuilder", draw.javaClass)
+                .invoke(buffer, draw) as VertexConsumer
+            appendVertices(stack.last(), builder)
+            if (!batching) flush262()
+        }
+
+        private fun flush262() {
+            batching = false
+            val buffer = staged ?: return
+            if (batchDraws.isEmpty()) return
             try {
-                val primitiveTopology = method(type.javaClass, "primitiveTopology").invoke(type)
-                val draw = method(stagedClass, "appendDraw", VertexFormat::class.java, primitiveTopology.javaClass)
-                    .invoke(staged, type.format(), primitiveTopology)
-                val builder = method(stagedClass, "getVertexBuilder", draw.javaClass)
-                    .invoke(staged, draw) as VertexConsumer
-                appendVertices(stack.last(), builder)
-                method(stagedClass, "upload").invoke(staged)
-                val executeInfo = method(stagedClass, "getExecuteInfo", draw.javaClass).invoke(staged, draw) ?: return
-                val prepared = method(type.javaClass, "prepare").invoke(type)
-                method(prepared.javaClass, "drawFromBuffer", executeInfo.javaClass).invoke(prepared, executeInfo)
+                method(stagedClass, "upload").invoke(buffer)
+                for (i in batchDraws.indices) {
+                    val draw = batchDraws[i]
+                    val executeInfo = method(stagedClass, "getExecuteInfo", draw.javaClass).invoke(buffer, draw) ?: continue
+                    val type = batchTypes[i]
+                    val prepared = method(type.javaClass, "prepare").invoke(type)
+                    method(prepared.javaClass, "drawFromBuffer", executeInfo.javaClass).invoke(prepared, executeInfo)
+                }
             } finally {
-                (staged as AutoCloseable).close()
+                batchTypes.clear()
+                batchDraws.clear()
+                runCatching { method(stagedClass, "endFrame").invoke(buffer) }.onFailure {
+                    runCatching { (buffer as AutoCloseable).close() }
+                    staged = null
+                }
             }
         }
         //?}
