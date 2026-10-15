@@ -809,7 +809,28 @@ class DisplayScreen(
     /** Uploads the latest decoded frame to the GPU texture(s). Called on the render thread once per frame. */
     fun fitTexture() {
         val mp = mediaPlayer ?: return
-        frameUploader.upload(mp, textureResource, ::markRendered)
+        frameUploader.upload(mp, textureResource, onRendered)
+    }
+
+    /** [markRendered] as a stable function object, so the per-frame upload call allocates nothing. */
+    private val onRendered: () -> Unit = ::markRendered
+
+    /**
+     * Render-thread stand-in for [fitTexture] while the display is culled from view. Frames are not uploaded
+     * (the decoder keeps running and the newest one goes up as soon as the display is back in view), except
+     * while a quality handoff is staged: that one only completes once its first frame lands.
+     */
+    fun fitTextureWhileHidden() {
+        if (textureResource.hasPending) fitTexture()
+    }
+
+    /** Scratch for [boundingSphere]; render thread only. */
+    private val sphereScratch = DoubleArray(4)
+
+    /** World-space bounding sphere of the display's blocks as center x / y / z and radius, refreshed per call. */
+    internal fun boundingSphere(): DoubleArray {
+        DisplayGeometry.boundingSphere(x, y, z, width, height, facing, depth, sphereScratch)
+        return sphereScratch
     }
 
     /** Renders frame to popout; call after all Minecraft / mod rendering to avoid GL-context corruption. */

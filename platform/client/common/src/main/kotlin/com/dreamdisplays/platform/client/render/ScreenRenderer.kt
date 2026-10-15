@@ -82,8 +82,13 @@ object ScreenRenderer : ClientRenderService {
             if (displayScreen.isDormant || !displayScreen.hasTexture) continue
 
             stack.pushPose()
+        DisplayCulling.begin(camera, cameraPos)
 
             val pos = displayScreen.pos
+            if (!DisplayCulling.isVisible(displayScreen)) {
+                if (!replay) displayScreen.fitTextureWhileHidden()
+                continue
+            }
             val screenCenter = Vec3.atLowerCornerOf(pos)
             val relativePos = screenCenter.subtract(cameraPos)
             stack.translate(relativePos.x, relativePos.y, relativePos.z)
