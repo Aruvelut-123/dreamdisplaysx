@@ -15,8 +15,8 @@ class DisplayPlaybackHost(private val screen: DisplayScreen) : PlaybackHost {
     /** The display's unique id. */
     override val uuid: UUID get() = screen.uuid
 
-    /** The display's requested video quality. */
-    override val quality: VideoQuality get() = screen.quality
+    /** The quality a new video opens at: requested, capped, and stepped for distance / on-screen size. */
+    override val quality: VideoQuality get() = screen.playbackQuality
 
     /** Current target texture width (pending texture during a quality handoff). */
     override val textureWidth: Int get() = screen.textureWidth

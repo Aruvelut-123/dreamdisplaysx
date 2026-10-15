@@ -6,7 +6,7 @@ use anyhow::{Context as AnyhowContext, Result, anyhow, bail};
 use log::{LevelFilter, debug, error, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_int, c_void};
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Once};
 use std::{mem, ptr};
 
@@ -76,6 +76,10 @@ const STATS_WINDOW_SECS: u64 = 5;
 const WIRE_READ_NANOS: u128 = 1_000_000;
 const MAX_DECODED_PIXELS: i64 = 16_384 * 16_384;
 const MAX_INPUT_STREAMS: &str = "64";
+
+static LIVE_SESSIONS: AtomicUsize = AtomicUsize::new(0);
+
+const AUTO_THREAD_SESSIONS: usize = 2;
 
 /// Limited-range black for the padding borders.
 const BLACK_Y: u8 = 16;
@@ -554,6 +558,7 @@ impl LavSessions {
         session.id.store(handle, Ordering::Relaxed);
         if let Ok(mut map) = self.map.lock() {
             map.insert(handle, Arc::new(session));
+            LIVE_SESSIONS.fetch_add(1, Ordering::Relaxed);
             handle
         } else {
             0
@@ -706,6 +711,7 @@ impl LavSessions {
         if let Ok(mut map) = self.map.lock()
             && map.remove(&handle).is_some()
         {
+            LIVE_SESSIONS.fetch_sub(1, Ordering::Relaxed);
             debug!("Closed LAV session #{handle}.");
         }
     }
@@ -1569,15 +1575,28 @@ fn new_decoder_context(
     parameters: &codec::Parameters,
 ) -> Result<codec::context::Context, ffmpeg::Error> {
     let mut context = codec::context::Context::from_parameters(parameters.clone())?;
+    let pixels =
+        unsafe { (*parameters.as_ptr()).width as usize * (*parameters.as_ptr()).height as usize };
+    let threads = decoder_thread_count(LIVE_SESSIONS.load(Ordering::Relaxed) + 1, pixels);
     unsafe {
-        // Auto thread count; the default AVCodecContext is single-threaded
-        (*context.as_mut_ptr()).thread_count = 0;
+        (*context.as_mut_ptr()).thread_count = threads;
         // The source picks the frame size, and a player can point a display at any file: a header
         // claiming 32768 x 32768 would have libav allocate gigabytes per frame before anything of
         // ours got a say. Well above 8K, far below what hurts.
         (*context.as_mut_ptr()).max_pixels = MAX_DECODED_PIXELS;
     }
     Ok(context)
+}
+
+fn decoder_thread_count(sessions: usize, pixels: usize) -> c_int {
+    if sessions <= AUTO_THREAD_SESSIONS {
+        return 0;
+    }
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let floor = if pixels > 2560 * 1440 { 4 } else { 2 };
+    (cores / sessions).max(floor).min(cores.max(1)) as c_int
 }
 
 fn create_hw_selection(codec: *const ffi::AVCodec, backend: HwBackend) -> Option<Box<HwSelection>> {
@@ -1688,6 +1707,32 @@ mod tests {
         let rc = sessions.read_frame_with_pts(handle, dst, pts);
         assert_ne!(rc, READ_PREVIEW, "At most one preview per seek.");
         rc
+    }
+
+    #[test]
+    fn decoder_threads_share_cores_between_many_sessions() {
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+        let hd = 1920 * 1080;
+        let uhd = 3840 * 2160;
+        assert_eq!(
+            decoder_thread_count(1, hd),
+            0,
+            "One display keeps libav's auto threads."
+        );
+        assert_eq!(decoder_thread_count(AUTO_THREAD_SESSIONS, uhd), 0);
+        assert_eq!(
+            decoder_thread_count(64, hd),
+            2.min(cores) as c_int,
+            "Many displays fall to the floor."
+        );
+        assert_eq!(
+            decoder_thread_count(64, uhd),
+            4.min(cores) as c_int,
+            "4K keeps a higher floor."
+        );
+        assert!(decoder_thread_count(3, hd) as usize <= cores.max(2));
     }
 
     #[test]

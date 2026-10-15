@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
  * graceful shutdown.
  */
 object MediaProcess {
-    private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    internal const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     /** Kill switch for GPU-side scaling (`-Ddreamdisplays.hwscale=false` falls back to software scale). */
@@ -195,7 +195,8 @@ object MediaProcess {
         // playlist that already starts at the target ([HlsSeekPlaylist]).
         val trimmed =
             if (seekByDecoding && offsetNanos > 0) HlsSeekPlaylist.trim(safeUrl, offsetNanos) else null
-        return inputCommand(ffmpeg, safeUrl, offsetNanos, hwAccel, seekByDecoding, trimmed)
+        val input = if (trimmed == null) GoogleVideoRangeProxy.wrap(safeUrl) else safeUrl
+        return inputCommand(ffmpeg, input, offsetNanos, hwAccel, seekByDecoding, trimmed)
     }
 
     /** Input half of `FFmpeg` invocation with playlist trim already decided. */

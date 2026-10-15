@@ -64,6 +64,26 @@ internal object DisplayGeometry {
         }
 
     /**
+     * Writes the world-space center and radius of the sphere enclosing the
+     * described screen's blocks into [out], without allocating.
+     *
+     * Used for per-frame view culling.
+     */
+    fun boundingSphere(
+        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int, out: DoubleArray,
+    ) {
+        withBounds(x, y, z, width, height, facing, depth) { maxX, maxY, maxZ ->
+            val sx = (maxX + 1 - x).toDouble()
+            val sy = (maxY + 1 - y).toDouble()
+            val sz = (maxZ + 1 - z).toDouble()
+            out[0] = x + sx * 0.5
+            out[1] = y + sy * 0.5
+            out[2] = z + sz * 0.5
+            out[3] = 0.5 * sqrt(sx * sx + sy * sy + sz * sz)
+        }
+    }
+
+    /**
      * World-space center and orientation basis for a screen anchored at ([x], [y], [z]) with the given
      * [width] / [height] / [facing]. Approximate (block-center precision, no surface offset): good
      * enough for placing acoustic emitters, not for rendering.

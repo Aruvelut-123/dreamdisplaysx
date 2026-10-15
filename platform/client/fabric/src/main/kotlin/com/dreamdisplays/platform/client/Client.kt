@@ -231,15 +231,23 @@ class Client : ClientModInitializer, Mod {
         hasBufferSourceCache
             ?: runCatching { context.javaClass.getMethod("bufferSource") }.isSuccess.also { hasBufferSourceCache = it }
 
+    private var bufferSourceMethod: java.lang.reflect.Method? = null
+    private var getBufferMethod: java.lang.reflect.Method? = null
+    private var endBatchMethod: java.lang.reflect.Method? = null
+
     /** Renders the screen using the `BufferSource` API. */
     private fun renderWithBufferSource(context: LevelRenderContext, camera: Camera) {
         val bufferSource = runCatching {
-            context.javaClass.getMethod("bufferSource").invoke(context)
+            val method = bufferSourceMethod?.takeIf { it.declaringClass.isAssignableFrom(context.javaClass) }
+                ?: context.javaClass.getMethod("bufferSource").also { bufferSourceMethod = it }
+            method.invoke(context)
         }.getOrNull() ?: return
-        val getBuffer = runCatching { bufferSource.javaClass.getMethod("getBuffer", RenderType::class.java) }
-            .getOrNull() ?: return
-        val endBatch = runCatching { bufferSource.javaClass.getMethod("endBatch") }
-            .getOrNull() ?: return
+        val getBuffer = getBufferMethod?.takeIf { it.declaringClass.isAssignableFrom(bufferSource.javaClass) }
+            ?: runCatching { bufferSource.javaClass.getMethod("getBuffer", RenderType::class.java) }
+                .getOrNull()?.also { getBufferMethod = it } ?: return
+        val endBatch = endBatchMethod?.takeIf { it.declaringClass.isAssignableFrom(bufferSource.javaClass) }
+            ?: runCatching { bufferSource.javaClass.getMethod("endBatch") }
+                .getOrNull()?.also { endBatchMethod = it } ?: return
 
         ScreenRenderer.render(context.poseStack(), camera) { type, appendVertices ->
             appendVertices(context.poseStack().last(), getBuffer.invoke(bufferSource, type) as VertexConsumer)

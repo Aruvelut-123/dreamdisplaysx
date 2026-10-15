@@ -179,7 +179,7 @@ internal class NativeVideoFramePipe(
         val frameNs = (1_000_000_000.0 / MediaProcess.outputFps(sourceFps)).toLong()
         val prebuffer = FramePrebuffer.createIfEnabled(
             surface, frameNs, getAudioClock, onFirstFrame, terminated, stopFlag, debugLabel, presentPreview,
-            tolerateLateness, parkFlag,
+            tolerateLateness, parkFlag, frameBytes = frameBytesFor(w, h),
         ).also { activePrebuffer = it }
         return daemon(
             {
@@ -244,7 +244,7 @@ internal class NativeVideoFramePipe(
         val frameNs = (1_000_000_000.0 / MediaProcess.outputFps(sourceFps)).toLong()
         val prebuffer = FramePrebuffer.createIfEnabled(
             surface, frameNs, getAudioClock, onFirstFrame, terminated, stopFlag, debugLabel, presentPreview,
-            tolerateLateness, parkFlag,
+            tolerateLateness, parkFlag, frameBytes = frameBytesFor(w, h),
         ).also { activePrebuffer = it }
         return daemon(
             {
@@ -293,6 +293,7 @@ internal class NativeVideoFramePipe(
         val frameNs = (1_000_000_000.0 / MediaProcess.outputFps(sourceFps)).toLong()
         val prebuffer = FramePrebuffer.createIfEnabled(
             surface, frameNs, getAudioClock, onFirstFrame, terminated, stopFlag, debugLabel,
+            frameBytes = frameBytesFor(w, h),
         ).also { activePrebuffer = it }
         return daemon(
             {
@@ -349,6 +350,14 @@ internal class NativeVideoFramePipe(
         return true
     }
 
+    /** Bytes of one output frame at [w] x [h]: packed I420 planes in planar mode, else [outputFormat] pixels. */
+    private fun frameBytesFor(w: Int, h: Int): Int = if (planarOutput) {
+        val c = ((w + 1) / 2) * ((h + 1) / 2)
+        w * h + 2 * c
+    } else {
+        w * h * outputFormat.bytesPerPixel
+    }
+
     /**
      * Main loop of the reader thread: blocks in the native library until a converted frame lands
      * in the spare buffer, then paces and publishes it exactly like the JVM pipe.
@@ -359,12 +368,7 @@ internal class NativeVideoFramePipe(
         onEos: (stderr: String, normalEos: Boolean) -> Unit, prebuffer: FramePrebuffer?,
         presentPreview: Boolean = true,
     ) {
-        val frameSize = if (planarOutput) {
-            val c = ((w + 1) / 2) * ((h + 1) / 2)
-            w * h + 2 * c
-        } else {
-            w * h * outputFormat.bytesPerPixel
-        }
+        val frameSize = frameBytesFor(w, h)
         var spare = surface.takeOrAllocate(frameSize)
         surface.recycleFrameBuffer(surface.allocateFrameBuffer(frameSize))
 
@@ -665,11 +669,12 @@ internal class NativeVideoFramePipe(
     /** Enables the native encoded-packet ring for a live LAV session when configured. */
     private fun enableLavCache(handle: Long) {
         if (cacheWindowMs <= 0 || cacheMaxBytes <= 0) return
-        val ok = NativeMedia.lavEnableCache(handle, cacheWindowMs, cacheMaxBytes)
+        val maxBytes = FrameMemoryBudget.packetCacheBytesFor(cacheMaxBytes)
+        val ok = NativeMedia.lavEnableCache(handle, cacheWindowMs, maxBytes)
         if (MediaPlayer.DEBUG) {
             logger.debug(
                 "$debugLabel LAV packet cache ${if (ok) "enabled" else "unavailable"} " +
-                        "(windowMs=$cacheWindowMs maxBytes=$cacheMaxBytes).",
+                        "(windowMs=$cacheWindowMs maxBytes=$maxBytes).",
             )
         }
     }

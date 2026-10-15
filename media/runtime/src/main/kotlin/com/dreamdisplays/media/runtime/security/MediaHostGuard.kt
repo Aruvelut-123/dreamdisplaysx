@@ -123,6 +123,7 @@ object MediaHostGuard {
             requireAllowed(cached.url)
             return cached.url
         }
+        if (isYouTubeCdn(url)) return url
 
         var current = url
         var hops = 0
@@ -166,6 +167,10 @@ object MediaHostGuard {
             logger.debug("Redirect probe failed for ${url.take(120)}: ${e.message}.")
         }.getOrNull()
     }
+
+    private fun isYouTubeCdn(url: String): Boolean =
+        url.trim().startsWith("https://", ignoreCase = true) &&
+                hostOf(url)?.lowercase()?.endsWith(".googlevideo.com") == true
 
     /** Extracts the host from [url] (stripping IPv6 literal brackets), or null when it cannot be parsed. */
     private fun hostOf(url: String): String? =

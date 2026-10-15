@@ -58,6 +58,9 @@ import java.util.*
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.tan
 
 /** Represents a video display screen in the game world. */
 class DisplayScreen(
@@ -363,31 +366,114 @@ class DisplayScreen(
         if (match != null) subtitleTrack = match.lang
     }
 
-    /** Broadcast pins to cap; otherwise applies distance steps. */
+    /** Broadcast pins to cap; otherwise applies distance steps, then the on-screen size cap. */
     private fun effectiveQuality(requested: VideoQuality = quality): VideoQuality {
         val base = if (qualityCap > 0) VideoQuality.Fixed(qualityCap) else requested
-        return applyDistanceSteps(base)
+        val stepped = applyDistanceSteps(base)
+        val lod = sizeLodHeight
+        if (lod <= 0 || lod >= (stepped.targetHeight ?: DEFAULT_QUALITY)) return stepped
+        return VideoQuality.Fixed(lod)
     }
+
+    /**
+     * The quality the player opens a new video at: the requested quality, capped and stepped down for
+     * distance / on-screen size like every later switch, so a far display never starts at full resolution.
+     */
+    internal val playbackQuality: VideoQuality get() = effectiveQuality()
 
     /** How many rungs down [QUALITY_LADDER] the current distance has pushed the effective quality; 0 when close. */
     private var distanceQualitySteps = 0
 
-    /** Re-derives distance quality steps and re-pushes if changed. */
-    private fun updateDistanceQuality(fraction: Float) {
+    /**
+     * Highest quality (pixel height) the display's on-screen size warrants, capping the effective quality;
+     * never below [SIZE_LOD_MIN_HEIGHT], and 0 while no cap applies. Independent of the requested quality,
+     * so a viewer picking another quality is never stepped twice.
+     */
+    private var sizeLodHeight = 0
+
+    /** [System.nanoTime] since the size LOD has wanted a switch it is still waiting out, or 0 while it doesn't. */
+    private var sizeLodSinceNanos = 0L
+
+    /** Re-derives the distance steps and the on-screen size cap, and re-pushes the quality if either changed. */
+    private fun updateDistanceQuality(fraction: Float, distance: Double) {
         var steps = distanceQualitySteps
         while (steps < DISTANCE_STEP_THRESHOLDS.size && fraction >= DISTANCE_STEP_THRESHOLDS[steps]) steps++
         while (steps > 0 && fraction < DISTANCE_STEP_THRESHOLDS[steps - 1] - DISTANCE_STEP_HYSTERESIS) steps--
-        if (steps == distanceQualitySteps) return
+        val lod = nextSizeLodHeight(distance)
+        if (steps == distanceQualitySteps && lod == sizeLodHeight) return
         distanceQualitySteps = steps
+        sizeLodHeight = lod
         reloadQuality()
+    }
+
+    /**
+     * Size LOD: the display's projected height on screen decides how many pixels are worth decoding,
+     * converting and uploading. Sharpening happens right away (with a hysteresis band); softening waits out
+     * [SIZE_LOD_DWELL_NANOS] so walking past doesn't churn streams. Once playing, a paused picture holds its
+     * resolution (a switch would blank it) and a live stream only ever sharpens, after the same dwell, since
+     * each live switch restarts it.
+     */
+    private fun nextSizeLodHeight(distance: Double): Int {
+        // A fullscreen broadcast's synthetic display has no meaningful world position to size by
+        if (!SIZE_LOD_ENABLED || virtual) return 0
+        val started = videoStarted
+        if (started && paused) return sizeLodHeight
+        val live = started && isLive
+
+        val base = (if (qualityCap > 0) qualityCap else quality.targetHeight) ?: DEFAULT_QUALITY
+        val current = if (sizeLodHeight <= 0) base else min(sizeLodHeight, base)
+        val neededPx = height * focalLengthPx() / max(distance, 1.0) * SIZE_LOD_OVERSAMPLE
+        val strict = min(base, lodRungFor(neededPx))
+        val relaxed = min(base, lodRungFor(neededPx * SIZE_LOD_UP_HYSTERESIS))
+
+        val wanted = when {
+            relaxed > current -> relaxed
+            strict < current && !live -> strict
+            else -> {
+                sizeLodSinceNanos = 0L
+                return sizeLodHeight
+            }
+        }
+        // Before playback starts there is no stream to switch yet: just pick the starting quality
+        if (!started) {
+            sizeLodSinceNanos = 0L
+            return wanted
+        }
+        if (wanted < current || live) {
+            val now = System.nanoTime()
+            if (sizeLodSinceNanos == 0L) sizeLodSinceNanos = now
+            if (now - sizeLodSinceNanos < SIZE_LOD_DWELL_NANOS) return sizeLodHeight
+        }
+        if (!tryAcquireLodSwitch()) return sizeLodHeight
+        sizeLodSinceNanos = 0L
+        return wanted
+    }
+
+    /** Works out the size cap before a new player resolves its first stream, so a far display starts small. */
+    internal fun primeSizeLod() {
+        if (isPopoutActive) return
+        val player = Minecraft.getInstance().player ?: return
+        sizeLodHeight = nextSizeLodHeight(getDistanceToScreen(player.blockPosition()))
+    }
+
+    /** Smallest [QUALITY_LADDER] rung (at least [SIZE_LOD_MIN_HEIGHT]) that delivers [neededPx] rows. */
+    private fun lodRungFor(neededPx: Double): Int {
+        var i = QUALITY_LADDER.lastIndex
+        while (i >= 0) {
+            val rung = QUALITY_LADDER[i]
+            if (rung >= SIZE_LOD_MIN_HEIGHT && rung >= neededPx) return rung
+            i--
+        }
+        return QUALITY_LADDER[0]
     }
 
     /** Moves [base] down [distanceQualitySteps] rungs in [QUALITY_LADDER]; a no-op at 0 steps. */
     private fun applyDistanceSteps(base: VideoQuality): VideoQuality {
-        if (distanceQualitySteps <= 0) return base
+        val stepsDown = distanceQualitySteps
+        if (stepsDown <= 0) return base
         val baseHeight = base.targetHeight ?: DEFAULT_QUALITY
         val idx = QUALITY_LADDER.indexOfFirst { it <= baseHeight }.let { if (it < 0) QUALITY_LADDER.lastIndex else it }
-        val target = QUALITY_LADDER[(idx + distanceQualitySteps).coerceAtMost(QUALITY_LADDER.lastIndex)]
+        val target = QUALITY_LADDER[(idx + stepsDown).coerceAtMost(QUALITY_LADDER.lastIndex)]
         return VideoQuality.Fixed(target)
     }
 
@@ -781,9 +867,12 @@ class DisplayScreen(
     /** Recreates the GPU texture (e.g. after a resolution change). */
     fun reloadTexture() = createTexture()
 
-    /** Pushes the current quality setting to the media player (clamped to [qualityCap]). */
+    /**
+     * Pushes the current quality setting to the media player (clamped to [qualityCap], stepped for distance /
+     * size). `Auto` is pinned to the height it opens at, or stepping back up from a lower rung would be a no-op.
+     */
     fun reloadQuality() {
-        mediaPlayer?.setQuality(effectiveQuality())
+        mediaPlayer?.setQuality(VideoQuality.Fixed(effectiveQuality().targetHeight ?: DEFAULT_QUALITY))
     }
 
     /** Returns true if [pos] falls within the screen's block bounding box. */
@@ -793,6 +882,28 @@ class DisplayScreen(
     /** Returns the shortest Euclidean distance from [pos] to any block in the screen's bounding box. */
     fun getDistanceToScreen(pos: BlockPos): Double =
         DisplayGeometry.distanceTo(pos, x, y, z, width, height, facing, depth)
+
+    /** [sourcePlane]'s last result and the geometry it was built from (displays rarely move). */
+    private var cachedPlane: SourcePlane? = null
+    private var planeX = 0
+    private var planeY = 0
+    private var planeZ = 0
+    private var planeWidth = 0
+    private var planeHeight = 0
+    private var planeDepth = 0
+    private var planeFacing: DisplayFacing? = null
+
+    /** The planar sound source for the current geometry, rebuilt (and the room reverb re-probed) only when it moved. */
+    private fun sourcePlane(): SourcePlane {
+        val cached = cachedPlane
+        if (cached != null && planeX == x && planeY == y && planeZ == z && planeWidth == width &&
+            planeHeight == height && planeDepth == depth && planeFacing == facing
+        ) return cached
+        planeX = x; planeY = y; planeZ = z
+        planeWidth = width; planeHeight = height; planeDepth = depth; planeFacing = facing
+        cachedReverb = null
+        return toSourcePlane().also { cachedPlane = it }
+    }
 
     /** Builds the world-space planar sound source fed to the acoustics engine (see [tick]). */
     private fun toSourcePlane(): SourcePlane {
@@ -809,7 +920,28 @@ class DisplayScreen(
     /** Uploads the latest decoded frame to the GPU texture(s). Called on the render thread once per frame. */
     fun fitTexture() {
         val mp = mediaPlayer ?: return
-        frameUploader.upload(mp, textureResource, ::markRendered)
+        frameUploader.upload(mp, textureResource, onRendered)
+    }
+
+    /** [markRendered] as a stable function object, so the per-frame upload call allocates nothing. */
+    private val onRendered: () -> Unit = ::markRendered
+
+    /**
+     * Render-thread stand-in for [fitTexture] while the display is culled from view. Frames are not uploaded
+     * (the decoder keeps running and the newest one goes up as soon as the display is back in view), except
+     * while a quality handoff is staged: that one only completes once its first frame lands.
+     */
+    fun fitTextureWhileHidden() {
+        if (textureResource.hasPending) fitTexture()
+    }
+
+    /** Scratch for [boundingSphere]; render thread only. */
+    private val sphereScratch = DoubleArray(4)
+
+    /** World-space bounding sphere of the display's blocks as center x / y / z and radius, refreshed per call. */
+    internal fun boundingSphere(): DoubleArray {
+        DisplayGeometry.boundingSphere(x, y, z, width, height, facing, depth, sphereScratch)
+        return sphereScratch
     }
 
     /** Renders frame to popout; call after all Minecraft / mod rendering to avoid GL-context corruption. */
@@ -1123,17 +1255,32 @@ class DisplayScreen(
     /**
      * Resolves the current quality to a target pixel height, clamped to [qualityCap] when set
      * ([VideoQuality.Auto] falls back to [DEFAULT_QUALITY]). Broadcast caps every client at 720p.
+     * Includes the distance / size steps, so a far display's texture, frame buffers and uploads shrink with
+     * the stream instead of staying at the requested resolution.
      */
-    private fun parseQualityOrDefault(): Int {
-        if (qualityCap > 0) return qualityCap
-        return quality.targetHeight ?: DEFAULT_QUALITY
+    private fun parseQualityOrDefault(): Int = effectiveQuality().targetHeight ?: DEFAULT_QUALITY
+
+    /** Vertical focal length of the game camera in pixels: on-screen rows covered by one block one block away. */
+    private fun focalLengthPx(): Double {
+        val mc = Minecraft.getInstance()
+        val fov = mc.options.fov().get().toDouble().coerceIn(1.0, 179.0)
+        return mc.window.height.coerceAtLeast(1) / (2.0 * tan(Math.toRadians(fov) / 2.0))
     }
 
     /** Last raytraced acoustic environment, refreshed on the [ENV_PROBE_INTERVAL_TICKS] cadence. */
     private var cachedEnvironment: AcousticEnvironment = AcousticEnvironment.OPEN_AIR
 
+    /**
+     * Last room-reverb probe (occlusion 0). The blocks around a display rarely change, so its 24 rays run on
+     * the slow [REVERB_PROBE_INTERVAL_TICKS] cadence instead of with every occlusion probe; null = re-probe.
+     */
+    private var cachedReverb: AcousticEnvironment? = null
+
     /** Ticks remaining before the next voxel-acoustics re-probe; jittered per-display to avoid synchronized spikes. */
     private var envProbeCountdown: Int = uuid.hashCode().mod(ENV_PROBE_INTERVAL_TICKS)
+
+    /** Ticks remaining before the room reverb is re-probed; jittered like [envProbeCountdown]. */
+    private var reverbProbeCountdown: Int = uuid.hashCode().mod(REVERB_PROBE_INTERVAL_TICKS)
 
     /** Called every game tick to update distance-based volume attenuation from [pos]. */
     fun tick(pos: BlockPos) {
@@ -1143,15 +1290,17 @@ class DisplayScreen(
         restoreAudioTrackIfPending()
         restoreSubtitleTrackIfPending()
         if (isPopoutActive) {
-            if (distanceQualitySteps != 0) {
+            if (distanceQualitySteps != 0 || sizeLodHeight != 0) {
                 distanceQualitySteps = 0
+                sizeLodHeight = 0
+                sizeLodSinceNanos = 0L
                 reloadQuality()
             }
         } else {
-            updateDistanceQuality((distance / renderDistance.coerceAtLeast(1)).toFloat())
+            updateDistanceQuality((distance / renderDistance.coerceAtLeast(1)).toFloat(), distance)
         }
         if (ClientStateManager.config.audioAcoustics == AcousticQuality.OFF) return
-        val plane = toSourcePlane()
+        val plane = sourcePlane()
         DreamServices.registry.getOrNull(AudioAcousticsServices.ACOUSTICS)?.updateSource(
             uuid,
             SourceAcousticState(
@@ -1160,25 +1309,41 @@ class DisplayScreen(
                 muted = muted || focusMuted,
                 bypassSpatial = isPopoutActive,
                 acousticsEnabled = acousticsEnabled,
-                environment = probeEnvironment(plane),
+                environment = probeEnvironment(plane, distance),
             ),
         )
     }
 
-    /** Acoustic environment (voxel raytrace cached every [ENV_PROBE_INTERVAL_TICKS] ticks). */
-    private fun probeEnvironment(plane: SourcePlane): AcousticEnvironment {
+    /**
+     * Acoustic environment: occlusion re-traced every [ENV_PROBE_INTERVAL_TICKS] ticks (less often for far
+     * displays), room reverb every [REVERB_PROBE_INTERVAL_TICKS]; a silent display keeps its last result.
+     */
+    private fun probeEnvironment(plane: SourcePlane, distance: Double): AcousticEnvironment {
         val tier = ClientStateManager.config.audioAcoustics
         if (isPopoutActive || !acousticsEnabled || (tier != AcousticQuality.ADVANCED && tier != AcousticQuality.ULTRA)) {
             cachedEnvironment = AcousticEnvironment.OPEN_AIR
+            cachedReverb = null
             envProbeCountdown = 0
             return cachedEnvironment
         }
-        if (envProbeCountdown <= 0) {
-            cachedEnvironment =
-                VoxelAcousticsProbe.probe(plane, ListenerPoseTracker.currentPose(Minecraft.getInstance()))
-            envProbeCountdown = ENV_PROBE_INTERVAL_TICKS
-        } else {
+        // Nothing to hear, nothing to trace: the raycasts run on the game thread, once per display
+        if (muted || focusMuted || volume <= 0f) return cachedEnvironment
+        reverbProbeCountdown--
+        if (envProbeCountdown > 0) {
             envProbeCountdown--
+            return cachedEnvironment
+        }
+        val reverb = cachedReverb?.takeIf { reverbProbeCountdown > 0 }
+            ?: VoxelAcousticsProbe.probeReverb(plane).also {
+                cachedReverb = it
+                reverbProbeCountdown = REVERB_PROBE_INTERVAL_TICKS
+            }
+        val listener = ListenerPoseTracker.currentPose(Minecraft.getInstance())
+        cachedEnvironment = reverb.copy(occlusion = VoxelAcousticsProbe.probeOcclusion(plane, listener))
+        envProbeCountdown = when {
+            distance < NEAR_PROBE_DISTANCE -> ENV_PROBE_INTERVAL_TICKS
+            distance < MID_PROBE_DISTANCE -> ENV_PROBE_INTERVAL_TICKS * 2
+            else -> ENV_PROBE_INTERVAL_TICKS * 4
         }
         return cachedEnvironment
     }
@@ -1195,6 +1360,15 @@ class DisplayScreen(
 
         /** Ticks between voxel-acoustics re-probes; the DSP chain smooths across this gap. */
         private const val ENV_PROBE_INTERVAL_TICKS = 2
+
+        /** Ticks between room-reverb re-probes (24 rays each); it only changes when blocks near the display do. */
+        private const val REVERB_PROBE_INTERVAL_TICKS = 40
+
+        /** Within this many blocks occlusion is re-traced at the full [ENV_PROBE_INTERVAL_TICKS] cadence. */
+        private const val NEAR_PROBE_DISTANCE = 16.0
+
+        /** Up to this many blocks occlusion is re-traced at half that cadence; further away at a quarter. */
+        private const val MID_PROBE_DISTANCE = 48.0
 
         /** Grace window after a manual retry during which new media errors are swallowed rather than shown. */
         private val ERROR_RETRY_COOLDOWN = 15.seconds
@@ -1217,6 +1391,36 @@ class DisplayScreen(
 
         /** Hysteresis to prevent quality flip-flop at step boundaries. */
         private const val DISTANCE_STEP_HYSTERESIS = 0.05f
+
+        /** Kill switch: `-Ddreamdisplays.lod.size=false` keeps every display at its requested quality regardless of on-screen size. */
+        private val SIZE_LOD_ENABLED: Boolean =
+            System.getProperty("dreamdisplays.lod.size")?.toBooleanStrictOrNull() ?: true
+
+        /** Rows decoded per on-screen row; above 1 so the picture stays crisp under bilinear minification. */
+        private const val SIZE_LOD_OVERSAMPLE = 1.5
+
+        /** The size LOD never steps below this height (the ladder itself goes lower for the far-distance steps). */
+        private const val SIZE_LOD_MIN_HEIGHT = 360
+
+        /** Sharpening needs this much more on-screen size than softening did, so a boundary doesn't flip-flop. */
+        private const val SIZE_LOD_UP_HYSTERESIS = 1.3
+
+        /** How long the size LOD must keep asking for a lower rung (or, live, a higher one) before switching. */
+        private const val SIZE_LOD_DWELL_NANOS = 3_000_000_000L
+
+        /** Minimum spacing between two size-LOD stream switches across all displays (main thread only). */
+        private const val LOD_SWITCH_SPACING_NANOS = 250_000_000L
+
+        /** Earliest [System.nanoTime] the next size-LOD switch may start; spreads a burst over several ticks. */
+        private var nextLodSwitchNanos = 0L
+
+        /** Claims the global size-LOD switch slot, so many displays never re-open their streams in the same tick. */
+        private fun tryAcquireLodSwitch(): Boolean {
+            val now = System.nanoTime()
+            if (now < nextLodSwitchNanos) return false
+            nextLodSwitchNanos = now + LOD_SWITCH_SPACING_NANOS
+            return true
+        }
 
         /** Skip the restore seek when already within this tolerance of the saved position. */
         private const val RESTORE_SEEK_TOLERANCE_NS = 250_000_000L

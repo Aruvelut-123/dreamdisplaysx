@@ -145,43 +145,39 @@ object TextureUploadUtil {
         }
     }
 
+    private class WriteMethod(val method: Method, val takesFormat: Boolean)
+
+    private val writeMethods = java.util.concurrent.ConcurrentHashMap<Class<*>, WriteMethod>()
+
+    private fun resolveWriteMethod(encoderClass: Class<*>): WriteMethod {
+        val int = Int::class.javaPrimitiveType
+        return try {
+            WriteMethod(
+                encoderClass.getMethod(
+                    "writeToTexture", GpuTexture::class.java, ByteBuffer::class.java, NativeImage.Format::class.java,
+                    int, int, int, int, int, int,
+                ),
+                takesFormat = true,
+            )
+        } catch (_: NoSuchMethodException) {
+            WriteMethod(
+                encoderClass.getMethod(
+                    "writeToTexture", GpuTexture::class.java, ByteBuffer::class.java, int, int, int, int, int, int,
+                ),
+                takesFormat = false,
+            )
+        }
+    }
+
     /** Write to a Minecraft texture using the `writeToTexture` method. */
     private fun writeToTexture(texture: GpuTexture, pixels: ByteBuffer, w: Int, h: Int, format: NativeImage.Format) {
         val encoder = RenderSystem.getDevice().createCommandEncoder()
-        val encoderClass = encoder.javaClass
-
-        try {
-            encoderClass
-                .getMethod(
-                    "writeToTexture",
-                    GpuTexture::class.java,
-                    ByteBuffer::class.java,
-                    NativeImage.Format::class.java,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                )
-                .invokeOrThrowTarget(encoder, texture, pixels, format, 0, 0, 0, 0, w, h)
-            return
-        } catch (_: NoSuchMethodException) {
+        val write = writeMethods.getOrPut(encoder.javaClass) { resolveWriteMethod(encoder.javaClass) }
+        if (write.takesFormat) {
+            write.method.invokeOrThrowTarget(encoder, texture, pixels, format, 0, 0, 0, 0, w, h)
+        } else {
+            write.method.invokeOrThrowTarget(encoder, texture, pixels, 0, 0, 0, 0, w, h)
         }
-
-        encoderClass
-            .getMethod(
-                "writeToTexture",
-                GpuTexture::class.java,
-                ByteBuffer::class.java,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-            )
-            .invokeOrThrowTarget(encoder, texture, pixels, 0, 0, 0, 0, w, h)
     }
 
     /** Invokes the given method on the given target. Throws the target exception if any. */

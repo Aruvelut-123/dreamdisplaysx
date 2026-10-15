@@ -81,7 +81,16 @@ internal class FramePrebuffer(
 
     /** Starts the consumer thread. Call once, before the first [submit]. */
     fun start() {
-        consumer = daemon(::consume, "MediaPlayer-prebuffer-$debugLabel").also { it.start() }
+        FrameMemoryBudget.acquire()
+        consumer = daemon(::consumeCounted, "MediaPlayer-prebuffer-$debugLabel").also { it.start() }
+    }
+
+    private fun consumeCounted() {
+        try {
+            consume()
+        } finally {
+            FrameMemoryBudget.release()
+        }
     }
 
     /**
@@ -171,6 +180,13 @@ internal class FramePrebuffer(
     }
 
     private val displayLeadNs = frameNs.coerceIn(MIN_DISPLAY_LEAD_NS, MAX_DISPLAY_LEAD_NS)
+    private var pacingAbortedByPark = false
+
+    private val pacingAbort: () -> Boolean = {
+        flushRequested || !alive() || parked().also { if (it) pacingAbortedByPark = true }
+    }
+
+    private val pacingDropWhenBehind: () -> Boolean = { !tolerateLateness || queue.isNotEmpty() }
 
     private fun alive(): Boolean = !aborted && !terminated.get() && !stopFlag.get()
 
@@ -269,17 +285,16 @@ internal class FramePrebuffer(
                 // until a seek reset the audio clock (the picture reads as frozen indefinitely).
                 val clockAtHead = getAudioClock()
                 val lateNs = if (clockAtHead >= 0L) clockAtHead - tf.pts else 0L
-                var abortedByPark = false
+                pacingAbortedByPark = false
                 val dropped = FramePacing.pace(
                     tf.pts,
                     getAudioClock,
-                    { flushRequested || !alive() || parked().also { if (it) abortedByPark = true } },
+                    pacingAbort,
                     dropStaleTimeline = false,
-                    // Only worth skipping a late frame while a fresher one is already decoded behind it
-                    dropWhenBehind = { !tolerateLateness || queue.isNotEmpty() },
+                    dropWhenBehind = pacingDropWhenBehind,
                     leadNs = displayLeadNs,
                 )
-                if (abortedByPark && !flushRequested && alive()) {
+                if (pacingAbortedByPark && !flushRequested && alive()) {
                     pending.set(tf)
                     continue
                 }
@@ -396,22 +411,35 @@ internal class FramePrebuffer(
         /** True when the prebuffer is enabled and the pipes should route frames through it. */
         val enabled: Boolean get() = prebufferMs > 0
 
+        private const val OUTSIDE_QUEUE_FRAMES = 2 + FrameSurface.MAX_DISPLAY_QUEUE
+        private const val MIN_BUDGET_CAPACITY = 6
+
         /**
          * Builds a started prebuffer sized for [frameNs] (one frame's duration), or null when disabled.
          * Capacity is the prefill plus headroom so the producer keeps a little slack above the prefill mark.
+         * With [frameBytes] known, the queue is also held to this playback's share of [FrameMemoryBudget].
          */
         fun createIfEnabled(
             surface: FrameSurface, frameNs: Long,
             getAudioClock: () -> Long, onFirstFrame: () -> Unit,
             terminated: AtomicBoolean, stopFlag: AtomicBoolean, debugLabel: String,
             presentPreview: Boolean = true, tolerateLateness: Boolean = true,
-            parkFlag: AtomicBoolean? = null,
+            parkFlag: AtomicBoolean? = null, frameBytes: Int = 0,
         ): FramePrebuffer? {
             if (!enabled || frameNs <= 0) return null
-            val prefill = ((prebufferMs * 1_000_000L) / frameNs).toInt().coerceIn(2, 240)
+            val wantedPrefill = ((prebufferMs * 1_000_000L) / frameNs).toInt().coerceIn(2, 240)
             // A little slack above the prefill mark so the producer can run slightly ahead of playout.
             // Memory cost is capacity * frameSize, so keep it tight — raw frames are large at high-res.
-            val capacity = prefill + 4
+            val capacity = FrameMemoryBudget.framesFor(
+                frameBytes, wantedPrefill + 4, MIN_BUDGET_CAPACITY, OUTSIDE_QUEUE_FRAMES,
+            )
+            val prefill = minOf(wantedPrefill, capacity - 2).coerceAtLeast(2)
+            if (capacity < wantedPrefill + 4) {
+                LoggerFactory.getLogger(FramePrebuffer::class.java).debug(
+                    "$debugLabel Prebuffer held to $capacity frames (prefill $prefill of $wantedPrefill) " +
+                            "by the shared frame memory budget.",
+                )
+            }
             // Let the surface pool retain every in-flight buffer (queue + ready + spare) so steady-state
             // playout reuses buffers instead of churning large direct allocations (which would GC-stutter).
             surface.setMaxReusableBuffers(capacity + 2 + FrameSurface.MAX_DISPLAY_QUEUE)

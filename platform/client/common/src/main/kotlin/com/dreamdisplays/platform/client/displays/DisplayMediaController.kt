@@ -55,6 +55,7 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         DisplayRegistry.recordScreen(screen)
         val shouldBePaused = preservePausedState && screen.paused
         val audioStage = DreamServices.registry.getOrNull(AudioAcousticsServices.ACOUSTICS)?.registerSource(screen.uuid)
+        screen.primeSizeLod()
         val newPlayer = MediaPlayer(
             videoUrl, lang, DisplayPlaybackHost(screen), DreamPlaybackEnvironment,
             screen.takeReplayBootstrap(videoUrl), audioStage,
@@ -87,6 +88,8 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         (screen.videoUrl?.let(MediaSource::from) as? MediaSource.YouTube)?.let { WatchedVideoStore.markWatched(it.videoId) }
         screen.applyEffectiveVolume()
         mp.setBrightness(screen.brightness)
+        // The distance / size steps may have moved while the stream resolved; a no-op when they didn't.
+        screen.reloadQuality()
         if (screen.paused) mp.pause() else {
             mp.play()
             screen.paused = false
