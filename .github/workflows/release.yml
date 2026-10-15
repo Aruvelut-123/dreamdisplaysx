@@ -425,6 +425,8 @@ jobs:
           dependencies: |
             fabric-api(required){modrinth:P7dR8mSH}
             luckperms(optional){modrinth:Vebnzrzj}
+            modmenu(optional){modrinth:mOgUt4GM}
+            cloth-config(optional){modrinth:9s6osm5g}
 
       - name: Publish Fabric to CurseForge
         if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'fabric' && steps.versions.outputs.curseforge_publishable == 'true'
@@ -444,6 +446,8 @@ jobs:
           dependencies: |
             fabric-api(required){curseforge:306612}
             luckperms(optional){curseforge:431733}
+            modmenu(optional){curseforge:308702}
+            cloth-config(optional){curseforge:348521}
 
       - name: Publish NeoForge to Modrinth
         if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'neoforge'
@@ -461,6 +465,7 @@ jobs:
           game-version-filter: none
           dependencies: |
             luckperms(optional){modrinth:Vebnzrzj}
+            cloth-config(optional){modrinth:9s6osm5g}
 
       - name: Publish NeoForge to CurseForge
         if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'neoforge' && steps.versions.outputs.curseforge_publishable == 'true'
@@ -477,6 +482,7 @@ jobs:
           game-versions: ${{ steps.versions.outputs.mc_versions }}
           dependencies: |
             luckperms(optional){curseforge:431733}
+            cloth-config(optional){curseforge:348521}
 
   discord-announce:
     name: Announce release on Discord
