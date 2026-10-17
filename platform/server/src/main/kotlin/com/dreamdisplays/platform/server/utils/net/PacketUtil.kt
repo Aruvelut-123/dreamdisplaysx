@@ -78,6 +78,7 @@ object PacketUtil {
         isRegionMember: ((Player) -> Boolean)? = null,
         depth: Int = 1,
         conforming: Boolean = false,
+        customData: Map<String, ByteArray> = emptyMap(),
     ) {
         val isVertical = facing == BlockFace.UP || facing == BlockFace.DOWN
         val recipients = v2Players(players).filter { canReceive(it.uniqueId, isVertical, conforming) }
@@ -93,6 +94,7 @@ object PacketUtil {
             scheduledStartEpochMillis = scheduledStartEpochMillis, scheduledAction = scheduledAction,
             access = access.wire, inRegion = inRegion,
             depth = depth.coerceAtLeast(1), conforming = conforming,
+            customData = customData,
         )
         if (access == DisplayAccess.REGION && isRegionMember != null) {
             recipients.forEach { player ->

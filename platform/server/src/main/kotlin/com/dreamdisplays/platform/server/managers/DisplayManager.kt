@@ -6,7 +6,7 @@ import com.dreamdisplays.platform.server.PaperServer.Companion.getInstance
 import com.dreamdisplays.platform.server.PaperSurfaces
 import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.VanillaSurfaces
-import com.dreamdisplays.platform.server.api.PaperServerApi
+import com.dreamdisplays.platform.server.api.ServerApiHost
 import com.dreamdisplays.platform.server.baseMaterial
 import com.dreamdisplays.platform.server.baseMaterialId
 import com.dreamdisplays.platform.server.datatypes.display.DisplayData
@@ -128,6 +128,7 @@ object DisplayManager {
             PipPinManager.onDisplayRemoved(display.id)
             ScheduledPlaybackManager.onDisplayRemoved(display.id)
             delete(display)
+            ServerApiHost.current?.removed(display)
             display.id
         }
     }
@@ -162,7 +163,7 @@ object DisplayManager {
         displays[data.id] = data
         runAsync { getInstance().storage.saveDisplay(data) }
         broadcastUpdate(data)
-        PaperServerApi.created(data)
+        ServerApiHost.current?.created(data)
     }
 
     /** Returns the players currently in range of [display] in its world. */
@@ -216,7 +217,14 @@ object DisplayManager {
             inRegion = WorldGuardRegions.isProtectedTerritory(display.pos1),
             isRegionMember = { WorldGuardRegions.isRegionMember(it, display.pos1) },
             depth = display.depth, conforming = display.conforming,
+            customData = display.customData.toMap(),
         )
+    }
+
+    /** Forgets what the proximity index knew about [display]: it is somewhere else now. */
+    @PaperOnly
+    fun onMoved(display: PaperDisplayData) {
+        proximityIndex.forgetDisplay(display.id)
     }
 
     /** Broadcasts [display]'s current info through the appropriate `Paper` / `Folia` player scheduler path. */
@@ -290,7 +298,7 @@ object DisplayManager {
         PipPinManager.onDisplayRemoved(displayData.id)
         displays.remove(displayData.id)
         proximityIndex.forgetDisplay(displayData.id)
-        PaperServerApi.removed(displayData)
+        ServerApiHost.current?.removed(displayData)
     }
 
     /**
@@ -396,6 +404,7 @@ object DisplayManager {
     /** Registers a new display. Caller is responsible for broadcasting. */
     fun register(data: VanillaDisplayData) {
         displays[data.id] = data
+        ServerApiHost.current?.created(data)
     }
 
     /** Returns the players currently in range of [display] in its world. */
@@ -442,6 +451,7 @@ object DisplayManager {
         PipPinManager.onDisplayRemoved(data.id)
         ServerCoroutines.io.launch { VanillaServerState.storage?.deleteDisplay(data) }
         if (receivers.isNotEmpty()) VanillaPacketUtil.sendDelete(receivers, data.id)
+        ServerApiHost.current?.removed(data)
     }
 
     /**

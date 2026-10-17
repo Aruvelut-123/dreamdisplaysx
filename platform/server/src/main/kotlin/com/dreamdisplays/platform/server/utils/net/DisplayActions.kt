@@ -7,7 +7,7 @@ import com.dreamdisplays.shared.playback.PlaybackPermissions
 import com.dreamdisplays.api.playback.model.WatchPartyAction
 import com.dreamdisplays.shared.policy.MediaUrlPolicy
 import com.dreamdisplays.platform.server.PaperServer
-import com.dreamdisplays.platform.server.api.PaperServerApi
+import com.dreamdisplays.platform.server.api.ServerApiHost
 import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.managers.ActionThrottle
 import com.dreamdisplays.platform.server.managers.DisplayManager
@@ -92,7 +92,7 @@ object DisplayActions {
         runAsync { PaperServer.getInstance().storage.saveDisplay(displayData) }
         DisplayManager.broadcastUpdate(displayData)
         TimelineManager.onVideoChanged(displayData)
-        PaperServerApi.urlChanged(displayData)
+        ServerApiHost.current?.urlChanged(displayData)
     }
 
     /** Sets who may use a display owned by [player] and rebroadcasts. */
@@ -259,6 +259,7 @@ object DisplayActions {
                 inRegion = WorldGuardRegions.isProtectedTerritory(display.pos1),
                 isRegionMember = { WorldGuardRegions.isRegionMember(it, display.pos1) },
                 depth = display.depth, conforming = display.conforming,
+                customData = display.customData.toMap(),
             )
         }
     }

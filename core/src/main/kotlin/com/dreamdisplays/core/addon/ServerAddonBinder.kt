@@ -27,6 +27,7 @@ class ServerAddonBinder(private val events: (Consumer<ServerDisplayEvent>) -> Au
                 is ServerDisplayEvent.Created -> created.forEach { safely(it) { it.call(event.display) } }
                 is ServerDisplayEvent.Removed -> removed.forEach { safely(it) { it.call(event.display) } }
                 is ServerDisplayEvent.UrlChanged -> urlChanged.forEach { safely(it) { it.call(event.display, event.url) } }
+                is ServerDisplayEvent.Moved, is ServerDisplayEvent.DataChanged -> Unit
             }
         }))
     }

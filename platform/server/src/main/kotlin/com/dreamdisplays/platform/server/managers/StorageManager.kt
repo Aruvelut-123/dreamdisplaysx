@@ -7,6 +7,7 @@ import com.dreamdisplays.shared.policy.MediaUrlPolicy
 import com.dreamdisplays.platform.server.datatypes.display.DisplayData
 import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
+import com.dreamdisplays.platform.server.storage.CustomDataCodec
 import com.dreamdisplays.platform.server.storage.IsolatedSqliteDataSource
 import com.dreamdisplays.platform.server.storage.StorageBackend
 import com.dreamdisplays.platform.server.utils.StoragePackingUtil.DIRECTION_TO_ORDINAL
@@ -101,6 +102,9 @@ class DisplaysTable(prefix: String = "") : Table("${prefix}displays") {
 
     /** Optional, space-free alias usable anywhere a display id is accepted; unique across displays. */
     val name = varchar("name", 32).nullable()
+
+    /** Data addons keep on the display. */
+    val customData = text("customData").nullable()
 
     /** Epoch millis of a pending scheduled-playback start, or null when no schedule is set. */
     val scheduledStart = long("scheduledStart").nullable()
@@ -275,6 +279,7 @@ class StorageManager(
                 it[name] = data.name
                 it[scheduledStart] = data.scheduledStart?.toEpochMilliseconds()
                 it[scheduledAction] = data.scheduledAction?.wire
+                it[customData] = CustomDataCodec.encode(data.customData)
             }
         }
     }
@@ -298,5 +303,6 @@ class StorageManager(
         name = row[table.name]
         scheduledStart = row[table.scheduledStart]?.let(Instant::fromEpochMilliseconds)
         scheduledAction = row[table.scheduledAction]?.let(PlaybackAction::fromWire)
+        customData.putAll(CustomDataCodec.decode(row[table.customData]))
     }
 }

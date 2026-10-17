@@ -2,6 +2,8 @@ package com.dreamdisplays.api.server
 
 import com.dreamdisplays.api.CommandResult
 import com.dreamdisplays.api.Unstable
+import com.dreamdisplays.api.display.data.MutableDisplayCustomData
+import com.dreamdisplays.api.display.model.property.DisplayFacing
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.playback.model.PlaybackMode
 import java.util.UUID
@@ -55,6 +57,23 @@ interface ServerDisplay {
 
     /** Who may change this display. */
     val access: DisplayAccess
+
+    /** Data addons keep on this display: saved with it and sent to every client that sees it. */
+    val customData: MutableDisplayCustomData
+
+    /**
+     * Moves the display (and resizes it to fit) to the area between two opposite corner blocks in [world], facing
+     * [facing].
+     *
+     * The area must be free of other displays ([CommandResult.REFUSED] when it overlaps one or the world is
+     * unknown).
+     *
+     * Nearby players are told.
+     */
+    fun moveTo(world: String, x1: Int, y1: Int, z1: Int, x2: Int, y2: Int, z2: Int, facing: DisplayFacing): CommandResult
+
+    /** Same as the world version, staying in this display's [world]. */
+    fun moveTo(x1: Int, y1: Int, z1: Int, x2: Int, y2: Int, z2: Int, facing: DisplayFacing): CommandResult
 
     /**
      * Changes the video.
