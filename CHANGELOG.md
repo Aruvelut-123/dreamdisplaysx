@@ -1,3 +1,43 @@
+# 1.10.2 Release
+
+## Highlights
+
+- Experimental addons: you can build your own `Fabric` / `NeoForge` mod or `Paper` addon
+- A much simpler experimental developer API
+
+## Client
+
+### Features
+
+- Experimental addons:
+  - Mark a class with `@Addon` and register it with `DreamDisplays.register(...)`
+  - Works on the client, the server, or both
+  - Everything an addon subscribes to is cleaned up automatically when it is disabled
+
+### Improvements
+
+- Much simpler developer API:
+  - One entry point, `DreamDisplays`, instead of a set of service keys
+  - A display is now a live object: `display.volume = 0.5f`, `display.play()`, `display.seek(30_000)`
+  - Act on many displays at once: `DreamDisplays.displays.near(x, y, z, 32.0).pause()`
+  - Subscriptions are grouped in a session and closed together; per-display ones end when the display is removed
+  - Commands return a clear result, and a removed display never crashes your code
+  - `onReady { }` lets your code wait until `Dream Displays` has loaded
+- API for moving displays: `DreamDisplays.placements` tells `Dream Displays` where a display really is, and it is drawn, heard, clicked and culled there
+- API for addon data on displays (`display.customData`) and public display position math
+- The API is published as a separate artifact with sources, and now contains only what integrations can use
+
+### Fixes
+
+- API methods no longer have unreadable names in some cases
+
+## Server
+
+### Features
+
+- Server API for `Paper`, `Fabric` and `NeoForge`
+- Support experimental addons
+
 # 1.10.1 Release
 
 ## Highlights
