@@ -32,6 +32,6 @@ enum class RenderBackend(override val wire: String) : WireEnum {
 
     companion object {
         /** Returns the enum value corresponding to the given wire value, or [UNKNOWN] if not found. */
-        fun fromWire(raw: String?): RenderBackend = wireEnumValueOf(raw, UNKNOWN)
+        fun fromWire(raw: String?): RenderBackend = wireEnumValueOf(raw, UNKNOWN, entries)
     }
 }

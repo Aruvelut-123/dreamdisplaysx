@@ -13,23 +13,23 @@ interface WireEnum {
 }
 
 /**
- * Finds a wire enum value by token, returning [default] when [raw] is blank or unknown.
+ * Finds a wire enum value among [entries] by token, returning [default] when [raw] is blank or unknown.
  *
  * @since 1.8.x
  */
 @Unstable
-inline fun <reified E> wireEnumValueOf(raw: String?, default: E): E
+fun <E> wireEnumValueOf(raw: String?, default: E, entries: Collection<E>): E
         where E : Enum<E>, E : WireEnum =
-    wireEnumValueOfOrNull<E>(raw) ?: default
+    wireEnumValueOfOrNull(raw, entries) ?: default
 
 /**
- * Finds a wire enum value by token, or `null` when [raw] is blank or unknown.
+ * Finds a wire enum value among [entries] by token, or `null` when [raw] is blank or unknown.
  *
  * @since 1.8.x
  */
 @Unstable
-inline fun <reified E> wireEnumValueOfOrNull(raw: String?): E?
+fun <E> wireEnumValueOfOrNull(raw: String?, entries: Collection<E>): E?
         where E : Enum<E>, E : WireEnum {
     val token = raw?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
-    return enumValues<E>().firstOrNull { it.wire == token }
+    return entries.firstOrNull { it.wire == token }
 }

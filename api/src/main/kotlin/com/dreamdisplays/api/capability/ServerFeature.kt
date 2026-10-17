@@ -34,7 +34,7 @@ enum class ServerFeature(override val wire: String) : WireEnum {
         val playbackFeatureWires: List<String> = playbackFeatures.toWire()
 
         /** Decodes a feature token, or returns `null` when unknown. */
-        fun fromWire(raw: String): ServerFeature? = wireEnumValueOfOrNull(raw)
+        fun fromWire(raw: String): ServerFeature? = wireEnumValueOfOrNull(raw, entries)
     }
 }
 

@@ -22,6 +22,6 @@ enum class TextureUploadPath(override val wire: String) : WireEnum {
 
     companion object {
         /** Returns the enum value corresponding to the given wire value, or [UNKNOWN] if not found. */
-        fun fromWire(raw: String?): TextureUploadPath = wireEnumValueOf(raw, UNKNOWN)
+        fun fromWire(raw: String?): TextureUploadPath = wireEnumValueOf(raw, UNKNOWN, entries)
     }
 }
