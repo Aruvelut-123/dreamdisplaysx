@@ -4,6 +4,7 @@ import com.dreamdisplays.api.media.stream.SubtitleTrack
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplays.platform.client.ui.drawText
 //? if <1.21.11 {
+import com.dreamdisplays.platform.client.ui.enableScissorPoseAware
 //?}
 import com.dreamdisplays.platform.client.ui.kit.*
 //? if >=1.21.11 {

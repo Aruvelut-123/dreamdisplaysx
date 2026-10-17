@@ -4,6 +4,7 @@ package com.dreamdisplays.platform.client.render
 import com.mojang.blaze3d.opengl.GlStateManager
 //?}
 //? if <1.21.11 {
+import com.mojang.blaze3d.platform.GlStateManager
 //?}
 import com.dreamdisplays.api.media.sink.DecodedVideoFrame
 import com.dreamdisplays.core.render.TextureHandle
