@@ -41,6 +41,7 @@ import com.dreamdisplays.platform.client.displays.DisplayScreen.Companion.ENV_PR
 import com.dreamdisplays.platform.client.managers.ClientPacketManager
 import com.dreamdisplays.platform.client.managers.ClientStateManager
 import com.dreamdisplays.platform.client.managers.DisplayPopoutManager
+import com.dreamdisplays.api.display.geometry.DisplayGeometry
 import com.dreamdisplays.platform.client.render.*
 import com.dreamdisplays.platform.client.storage.ClientSettingsStore
 import com.dreamdisplays.platform.client.ui.DisplayMenu
@@ -876,11 +877,13 @@ class DisplayScreen(
 
     /** Returns true if [pos] falls within the screen's block bounding box. */
     fun isInScreen(pos: BlockPos): Boolean =
-        DisplayGeometry.isInBounds(pos, x, y, z, width, height, facing, depth)
+        PlacedDisplays.contains(uuid, width, height, depth, facing, pos)
+            ?: DisplayGeometry.isInBounds(pos.x, pos.y, pos.z, x, y, z, width, height, facing, depth)
 
     /** Returns the shortest Euclidean distance from [pos] to any block in the screen's bounding box. */
     fun getDistanceToScreen(pos: BlockPos): Double =
-        DisplayGeometry.distanceTo(pos, x, y, z, width, height, facing, depth)
+        PlacedDisplays.distance(uuid, width, height, depth, facing, pos)
+            ?: DisplayGeometry.distanceTo(pos.x, pos.y, pos.z, x, y, z, width, height, facing, depth)
 
     /** [sourcePlane]'s last result and the geometry it was built from (displays rarely move). */
     private var cachedPlane: SourcePlane? = null
@@ -894,6 +897,8 @@ class DisplayScreen(
 
     /** The planar sound source for the current geometry, rebuilt (and the room reverb re-probed) only when it moved. */
     private fun sourcePlane(): SourcePlane {
+        // A display an addon has moved cannot use the cache: its plane changes every tick.
+        PlacedDisplays.sourcePlane(uuid, width, height, depth, facing)?.let { return it }
         val cached = cachedPlane
         if (cached != null && planeX == x && planeY == y && planeZ == z && planeWidth == width &&
             planeHeight == height && planeDepth == depth && planeFacing == facing
@@ -906,7 +911,7 @@ class DisplayScreen(
 
     /** Builds the world-space planar sound source fed to the acoustics engine (see [tick]). */
     private fun toSourcePlane(): SourcePlane {
-        val pose = DisplayGeometry.worldPose(x, y, z, width, height, facing, depth)
+        val pose = DisplayGeometry.pose(x, y, z, width, height, facing, depth)
         return SourcePlane(
             pose.centerX, pose.centerY, pose.centerZ,
             pose.normalX, pose.normalY, pose.normalZ,
@@ -939,6 +944,7 @@ class DisplayScreen(
 
     /** World-space bounding sphere of the display's blocks as center x / y / z and radius, refreshed per call. */
     internal fun boundingSphere(): DoubleArray {
+        if (PlacedDisplays.boundingSphere(uuid, width, height, depth, facing, sphereScratch)) return sphereScratch
         DisplayGeometry.boundingSphere(x, y, z, width, height, facing, depth, sphereScratch)
         return sphereScratch
     }
@@ -1332,13 +1338,17 @@ class DisplayScreen(
             envProbeCountdown--
             return cachedEnvironment
         }
+        val listener = ListenerPoseTracker.currentPose(Minecraft.getInstance())
+        // A display an addon has moved holds its blocks in local space, so the sound is traced there.
+        val local = PlacedDisplays.localProbe(uuid, width, height, depth, facing, listener)
+        val probePlane = local?.plane ?: plane
+        val probeListener = local?.listener ?: listener
         val reverb = cachedReverb?.takeIf { reverbProbeCountdown > 0 }
-            ?: VoxelAcousticsProbe.probeReverb(plane).also {
+            ?: VoxelAcousticsProbe.probeReverb(probePlane).also {
                 cachedReverb = it
                 reverbProbeCountdown = REVERB_PROBE_INTERVAL_TICKS
             }
-        val listener = ListenerPoseTracker.currentPose(Minecraft.getInstance())
-        cachedEnvironment = reverb.copy(occlusion = VoxelAcousticsProbe.probeOcclusion(plane, listener))
+        cachedEnvironment = reverb.copy(occlusion = VoxelAcousticsProbe.probeOcclusion(probePlane, probeListener))
         envProbeCountdown = when {
             distance < NEAR_PROBE_DISTANCE -> ENV_PROBE_INTERVAL_TICKS
             distance < MID_PROBE_DISTANCE -> ENV_PROBE_INTERVAL_TICKS * 2

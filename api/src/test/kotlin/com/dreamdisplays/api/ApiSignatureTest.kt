@@ -2,6 +2,11 @@ package com.dreamdisplays.api
 
 import com.dreamdisplays.api.addon.AddonContext
 import com.dreamdisplays.api.addon.DreamDisplaysAddon
+import com.dreamdisplays.api.display.geometry.DisplayGeometry
+import com.dreamdisplays.api.display.placement.DisplayPlacement
+import com.dreamdisplays.api.display.placement.DisplayPlacementProvider
+import com.dreamdisplays.api.display.placement.DisplayPlacements
+import com.dreamdisplays.api.display.placement.PlacementTransform
 import com.dreamdisplays.api.server.DreamDisplaysServer
 import com.dreamdisplays.api.server.ServerDisplay
 import com.dreamdisplays.api.server.ServerDisplayEvent
@@ -18,6 +23,11 @@ class ApiSignatureTest {
         AddonContext::class.java, DreamDisplaysAddon::class.java,
         DreamDisplaysServer::class.java, ServerDisplay::class.java, ServerDisplays::class.java,
         ServerDisplayEvent::class.java,
+        DisplayGeometry::class.java,
+        DisplayPlacement::class.java,
+        DisplayPlacementProvider::class.java,
+        DisplayPlacements::class.java,
+        PlacementTransform::class.java,
     )
 
     @Test

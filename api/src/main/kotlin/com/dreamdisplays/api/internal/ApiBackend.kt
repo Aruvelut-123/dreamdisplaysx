@@ -3,6 +3,7 @@ package com.dreamdisplays.api.internal
 import com.dreamdisplays.api.Display
 import com.dreamdisplays.api.DisplayBudget
 import com.dreamdisplays.api.Displays
+import com.dreamdisplays.api.display.placement.DisplayPlacements
 import com.dreamdisplays.api.Session
 import com.dreamdisplays.api.Unstable
 
@@ -13,7 +14,7 @@ import com.dreamdisplays.api.platform.identity.Platform
 import com.dreamdisplays.api.watchparty.WatchPartyService
 
 /**
- * What Dream Displays plugs in behind itself. Implemented by the mod itself;
+ * What `Dream Displays` plugs in behind itself. Implemented by the mod itself;
  * integrations never use this, they call `DreamDisplays` directly.
  *
  * @since 1.10.x
@@ -31,6 +32,9 @@ interface ApiBackend {
 
     /** Starts a session that owns everything you subscribe to; close it when you are done. */
     fun session(name: String): Session
+
+    /** Where displays that are not at their stored coordinates are described. */
+    val placements: DisplayPlacements
 
     /** Limits for how many displays play at once. */
     val budget: DisplayBudget

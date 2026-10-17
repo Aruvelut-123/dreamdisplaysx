@@ -7,6 +7,7 @@ import com.dreamdisplays.shared.geometry.blockSpans
 import com.dreamdisplays.shared.geometry.buildConformingMesh
 import com.dreamdisplays.api.display.model.property.DisplayFacing
 import com.dreamdisplays.platform.client.displays.DisplayScreen
+import com.dreamdisplays.platform.client.displays.PlacedDisplays
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.Level
@@ -50,7 +51,7 @@ internal object ConformingWorldMesh {
     fun quads(screen: DisplayScreen): List<ConformQuad>? {
         if (!screen.conforming) return null
         val level = Minecraft.getInstance().level ?: return null
-        val origin = screen.pos
+        val origin = PlacedDisplays.blockOrigin(screen.uuid, screen.pos)
         val key = Key(
             origin.x, origin.y, origin.z, screen.width, screen.height, screen.depth,
             screen.facing, screen.rotation.quarterTurns,

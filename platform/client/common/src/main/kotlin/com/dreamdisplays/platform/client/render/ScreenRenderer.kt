@@ -14,6 +14,8 @@ import com.dreamdisplays.api.display.model.property.DisplayRotation
 import com.dreamdisplays.api.display.model.property.DisplayFacing
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
 import com.dreamdisplays.platform.client.displays.DisplayScreen
+import com.dreamdisplays.platform.client.displays.PlacedDisplays
+import org.joml.Quaternionf
 import com.dreamdisplays.platform.client.render.ScreenRenderer.drawLayer
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
@@ -60,8 +62,18 @@ object ScreenRenderer {
 
             stack.pushPose()
 
-            val pos = displayScreen.pos
-            stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z)
+            val placement = PlacedDisplays.placementOf(displayScreen.uuid)
+            if (placement != null) {
+                val t = placement.transform(PlacedDisplays.partialTick())
+                stack.translate(t.originX - cameraPos.x, t.originY - cameraPos.y, t.originZ - cameraPos.z)
+                DisplayPoseStack.rotate(
+                    stack, Quaternionf(t.rotationX.toFloat(), t.rotationY.toFloat(), t.rotationZ.toFloat(), t.rotationW.toFloat()),
+                )
+                stack.scale(t.scaleX.toFloat(), t.scaleY.toFloat(), t.scaleZ.toFloat())
+            } else {
+                val pos = displayScreen.pos
+                stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z)
+            }
 
             renderScreenTexture(displayScreen, stack, replay, drawQuad)
 
@@ -217,8 +229,8 @@ object ScreenRenderer {
         stack: PoseStack, facing: DisplayFacing, w: Int, h: Int, lift: Float, body: () -> Unit,
     ) {
         stack.pushPose()
-        if (lift != 0f) DisplayGeometry.liftTowardViewer(stack, facing, lift)
-        DisplayGeometry.applyScreenTransform(stack, facing, w, h)
+        if (lift != 0f) DisplayPoseStack.liftTowardViewer(stack, facing, lift)
+        DisplayPoseStack.applyScreenTransform(stack, facing, w, h)
         body()
         stack.popPose()
     }

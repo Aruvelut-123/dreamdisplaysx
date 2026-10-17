@@ -12,7 +12,9 @@ import com.dreamdisplays.api.media.source.MediaResolverRegistry
 import com.dreamdisplays.api.platform.identity.Platform
 import com.dreamdisplays.core.services.PlaybackService
 import com.dreamdisplays.api.watchparty.WatchPartyService
+import com.dreamdisplays.api.display.placement.DisplayPlacements
 import com.dreamdisplays.core.addon.AddonManager
+import com.dreamdisplays.core.display.PlacementHub
 import com.dreamdisplays.core.api.DefaultDisplays
 import com.dreamdisplays.core.api.DefaultSession
 import com.dreamdisplays.core.api.LiveDisplay
@@ -32,6 +34,8 @@ class DefaultApiBackend(
     private val playbackService: PlaybackService get() = registry.get(PlaybackServices.PLAYBACK)
 
     override fun registerAddon(addon: Any) = addons.register(addon)
+
+    override val placements: DisplayPlacements get() = PlacementHub
 
     override fun display(id: DisplayId): Display? =
         displayService.getDisplay(id)?.let { LiveDisplay(id, displayService, playbackService) }

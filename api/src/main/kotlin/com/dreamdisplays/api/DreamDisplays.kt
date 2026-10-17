@@ -1,6 +1,7 @@
 package com.dreamdisplays.api
 
 import com.dreamdisplays.api.display.model.property.DisplayId
+import com.dreamdisplays.api.display.placement.DisplayPlacements
 import com.dreamdisplays.api.internal.ApiBackend
 import com.dreamdisplays.api.internal.ApiHolder
 import com.dreamdisplays.api.media.search.MediaSearchService
@@ -64,6 +65,10 @@ object DreamDisplays {
 
     /** Runs [block] inside a session and closes it afterwards. */
     inline fun <T> session(name: String, block: Session.() -> T): T = session(name).use(block)
+
+    /** Tell `Dream Displays` where a display really is when it moves. */
+    @JvmStatic
+    val placements: DisplayPlacements get() = backend.placements
 
     /** Limits for how many displays play at once. */
     @JvmStatic

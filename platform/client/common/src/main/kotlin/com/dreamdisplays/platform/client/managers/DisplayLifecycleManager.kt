@@ -13,7 +13,8 @@ import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
 import com.dreamdisplays.platform.client.displays.DisplayScreen
 import com.dreamdisplays.platform.client.managers.DisplayLifecycleManager.MAX_DISPLAY_BLOCKS
-import com.dreamdisplays.platform.client.render.DisplayGeometry
+import com.dreamdisplays.api.display.geometry.DisplayGeometry
+import com.dreamdisplays.platform.client.displays.PlacedDisplays
 import com.dreamdisplays.platform.client.storage.ClientSettingsStore
 import com.dreamdisplays.util.FacingUtil
 import net.minecraft.client.Minecraft
@@ -58,7 +59,7 @@ object DisplayLifecycleManager {
         if (!packet.forced && !packet.virtual) {
             Minecraft.getInstance().player?.let { player ->
                 val dist = distanceToScreen(
-                    packet.x, packet.y, packet.z,
+                    packet.id, packet.x, packet.y, packet.z,
                     packet.width, packet.height, facing.toDisplayFacing(),
                     player.blockPosition(), packet.depth,
                 )
@@ -212,12 +213,17 @@ object DisplayLifecycleManager {
 
     /** Distance from [playerPos] to the persisted display [data]'s bounding box. */
     private fun distanceToData(data: DisplayData, playerPos: BlockPos) =
-        distanceToScreen(data.x, data.y, data.z, data.width, data.height, data.facing, playerPos, data.depth)
+        distanceToScreen(data.uuid, data.x, data.y, data.z, data.width, data.height, data.facing, playerPos, data.depth)
 
     /** Shortest distance from [playerPos] to the screen's block bounding box (facing-aware). */
     private fun distanceToScreen(
-        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, playerPos: BlockPos, depth: Int = 1,
-    ): Double = DisplayGeometry.distanceTo(playerPos, x, y, z, width, height, facing, depth.coerceAtLeast(1))
+        id: UUID, x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, playerPos: BlockPos,
+        depth: Int = 1,
+    ): Double =
+        PlacedDisplays.distance(id, width, height, depth, facing, playerPos)
+            ?: DisplayGeometry.distanceTo(
+                playerPos.x, playerPos.y, playerPos.z, x, y, z, width, height, facing, depth.coerceAtLeast(1),
+            )
 
     /** True if every dimension is within `1..`[MAX_DISPLAY_BLOCKS]. */
     private fun isValidDisplaySize(width: Int, height: Int, depth: Int = 1): Boolean =

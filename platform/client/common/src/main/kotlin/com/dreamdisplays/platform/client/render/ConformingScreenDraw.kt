@@ -50,7 +50,7 @@ internal object ConformingScreenDraw {
         drawQuad: (RenderType, (PoseStack.Pose, VertexConsumer) -> Unit) -> Unit,
     ) {
         if (quads.isEmpty()) return
-        val clearance = DisplayGeometry.surfaceClearance() + lift
+        val clearance = DisplayPoseStack.surfaceClearance() + lift
         if (screen.isVideoStarted && screen.hasTexture && screen.renderType != null) {
             val appear = screen.appearProgress()
             val base = if (screen.isYuvTexture) screen.brightness.coerceIn(0f, 1f) * 255f else 255f
