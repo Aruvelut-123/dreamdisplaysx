@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.server.metrics
 
-import com.dreamdisplays.api.protocol.ProtocolVersion
+import com.dreamdisplays.shared.protocol.ProtocolVersion
 import com.dreamdisplays.core.protocol.common.packets.ClientHello
 import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.managers.DisplayManager

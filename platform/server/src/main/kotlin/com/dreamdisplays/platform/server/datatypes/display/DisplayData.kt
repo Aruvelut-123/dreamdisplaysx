@@ -4,8 +4,9 @@ import com.dreamdisplays.api.display.model.property.DisplayRotation
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.playback.policy.PlaybackPermissions
+import com.dreamdisplays.shared.playback.PlaybackPermissions
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Instant
 
 /**
@@ -45,10 +46,13 @@ interface DisplayData {
     /** The display's URL. */
     var url: String
 
+    /** Data addons keep on this display. */
+    val customData: MutableMap<String, ByteArray>
+
     /** Video's language code. */
     var lang: String
 
-    /** Optional, space-free alias usable anywhere a display id is accepted (see [com.dreamdisplays.platform.server.managers.DisplayManager.resolveByIdOrPrefix]). */
+    /** Optional, space-free alias usable anywhere a display ID is accepted. */
     var name: String?
 
     /** The persistent base playback mode. Source of truth; never [PlaybackMode.WATCH_PARTY]. */
@@ -97,6 +101,9 @@ val DisplayData.shortLabel: String get() = name ?: id.toString().take(8)
 abstract class BaseDisplayData(override val virtual: Boolean = false) : DisplayData {
     /** The display's URL. */
     override var url: String = ""
+
+    /** Data addons keep on this display. */
+    override val customData: MutableMap<String, ByteArray> = ConcurrentHashMap()
 
     /** Video's language code. */
     override var lang: String = ""

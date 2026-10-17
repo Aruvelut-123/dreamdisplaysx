@@ -5,19 +5,19 @@ import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 //?}
 import com.dreamdisplays.api.display.model.property.DisplayId
-import com.dreamdisplays.api.display.service.keys.DisplayServices
-import com.dreamdisplays.api.media.service.keys.MediaServices
+import com.dreamdisplays.core.services.keys.DisplayServices
+import com.dreamdisplays.core.services.keys.MediaServices
 import com.dreamdisplays.api.media.model.VideoQuality
-import com.dreamdisplays.api.media.audio.model.AcousticQuality
-import com.dreamdisplays.api.media.audio.service.keys.AudioAcousticsServices
-import com.dreamdisplays.api.media.search.model.MediaSearchResult
-import com.dreamdisplays.api.playback.model.FullscreenMode
+import com.dreamdisplays.api.media.audio.AcousticQuality
+import com.dreamdisplays.core.services.keys.AudioAcousticsServices
+import com.dreamdisplays.api.media.search.MediaSearchResult
+import com.dreamdisplays.shared.playback.FullscreenMode
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.playback.service.keys.PlaybackServices
-import com.dreamdisplays.api.runtime.registry.service.get
-import com.dreamdisplays.api.watchparty.service.keys.WatchPartyServices
+import com.dreamdisplays.core.services.keys.PlaybackServices
+import com.dreamdisplays.core.runtime.get
+import com.dreamdisplays.core.services.keys.WatchPartyServices
 import com.dreamdisplays.media.source.youtube.cache.VideoMetadataCache
 import com.dreamdisplays.media.source.youtube.cache.VideoTitleCache
 import com.dreamdisplays.platform.client.core.DreamServices
@@ -43,7 +43,6 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * The display configuration screen: video preview with playback controls, the settings rows, and
@@ -293,7 +292,7 @@ class DisplayMenu private constructor(
                 chapters = { DisplayChapters.of(ds) },
             ) { nanos ->
                 if (ds.canSeek() && !ds.isLive && ds.canSeekHere) {
-                    playback.seek(displayId, (nanos / 1_000_000L).milliseconds)
+                    playback.seek(displayId, nanos / 1_000_000L)
                 }
             })
         progress.enabledWhen = { videoReady() && ds.canSeek() && !ds.isLive && ds.canSeekHere }
@@ -596,7 +595,7 @@ class DisplayMenu private constructor(
         val canSeek = videoReady && ds.canSeek() && !ds.isLive && ds.canSeekHere
         fun seekTo(nanos: Long) {
             val target = nanos.coerceIn(0L, ds.mediaPlayerDurationNanos.coerceAtLeast(0L))
-            playback.seek(displayId, (target / 1_000_000L).milliseconds)
+            playback.seek(displayId, target / 1_000_000L)
         }
         fun nudgeVolume(delta: Double) {
             val next = (((volume.value + delta) / VOLUME_STEP).roundToInt() * VOLUME_STEP).coerceIn(0.0, 1.0)

@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     api(project(":api"))
+    api(project(":shared"))
     api(libs.kotlinxSerializationProtobuf)
     compileOnly(libs.slf4jApi)
     testImplementation(libs.slf4jApi)

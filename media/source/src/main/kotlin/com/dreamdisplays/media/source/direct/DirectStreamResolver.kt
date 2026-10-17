@@ -1,22 +1,21 @@
 package com.dreamdisplays.media.source.direct
 
 import com.dreamdisplays.api.media.model.DreamMediaException
-import com.dreamdisplays.api.media.source.model.CustomMediaKind
-import com.dreamdisplays.api.media.source.model.MediaMetadata
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.source.model.ResolvedMedia
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.url.CustomMediaUrls
-import com.dreamdisplays.api.media.stream.model.MediaStream
-import com.dreamdisplays.api.media.stream.model.MediaStreamType
-import com.dreamdisplays.api.security.policy.MediaHosts
+import com.dreamdisplays.api.media.source.CustomMediaKind
+import com.dreamdisplays.api.media.source.MediaMetadata
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.source.ResolvedMedia
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.CustomMediaUrls
+import com.dreamdisplays.api.media.stream.MediaStream
+import com.dreamdisplays.api.media.stream.MediaStreamType
+import com.dreamdisplays.shared.policy.MediaHosts
 import com.dreamdisplays.media.runtime.security.MediaHostGuard
 import com.dreamdisplays.util.net.DreamHttpClient
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
-import kotlin.time.Duration.Companion.nanoseconds
 
 /**
  * Plays a URL that already is the media: a video file, an HLS playlist, or a DASH manifest.
@@ -346,6 +345,6 @@ object DirectStreamResolver : MediaResolverService {
             title = fileName?.let(CustomMediaUrls::cleanFileName)?.takeIf { it.isNotBlank() }
                 ?: CustomMediaUrls.displayName(url),
             uploader = CustomMediaUrls.hostOf(url),
-            duration = durationNanos?.takeIf { it > 0L }?.nanoseconds,
+            durationMs = durationNanos?.takeIf { it > 0L }?.div(1_000_000L),
         )
 }

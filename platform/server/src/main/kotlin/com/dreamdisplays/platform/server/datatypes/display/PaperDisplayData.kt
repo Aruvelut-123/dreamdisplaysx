@@ -22,19 +22,19 @@ class PaperDisplayData(
     override val ownerId: UUID,
 
     /** One corner of the display area. */
-    val pos1: Location,
+    pos1: Location,
 
     /** Opposite corner of the display area. */
-    val pos2: Location,
+    pos2: Location,
 
     /** Width of the display in blocks. */
-    override val width: Int,
+    width: Int,
 
     /** Height of the display in blocks. */
-    override val height: Int,
+    height: Int,
 
     /** Direction the display is facing. Default is `NORTH`. */
-    val facing: BlockFace = BlockFace.NORTH,
+    facing: BlockFace = BlockFace.NORTH,
 
     /** Content rotation; only meaningful for floor / ceiling (`UP` / `DOWN`) facings. */
     override val rotation: DisplayRotation = DisplayRotation.NONE,
@@ -45,8 +45,24 @@ class PaperDisplayData(
     /** True when the screen wraps slabs and stairs inside the box. */
     override val conforming: Boolean = false,
 ) : BaseDisplayData(virtual) {
+    /** One corner of the display area. */
+    var pos1: Location = pos1; private set
+
+    /** Opposite corner of the display area. */
+    var pos2: Location = pos2; private set
+
+    /** Width of the display in blocks. */
+    override var width: Int = width; private set
+
+    /** Height of the display in blocks. */
+    override var height: Int = height; private set
+
+    /** Direction the display is facing. */
+    var facing: BlockFace = facing
+        private set
+
     /** Bounding box of the display area. */
-    private val region = RegionUtil.calculateRegion(pos1, pos2)
+    private var region = RegionUtil.calculateRegion(pos1, pos2)
 
     /** Blocks the screen extends away from [facing]. Derived from the saved corners, so old rows stay one block deep. */
     override val depth: Int
@@ -57,8 +73,23 @@ class PaperDisplayData(
         }.coerceAtLeast(1)
 
     /** Bounding box of the display area, calculated from the two corner positions. */
-    val box: BoundingBox = BoundingBox(
-        region.minX.toDouble(), region.minY.toDouble(), region.minZ.toDouble(),
-        (region.maxX + 1).toDouble(), (region.maxY + 1).toDouble(), (region.maxZ + 1).toDouble(),
-    )
+    var box: BoundingBox = boxOf(region); private set
+
+    /** Moves and resizes the display to the area between [pos1] and [pos2] facing [facing]. */
+    fun relocate(pos1: Location, pos2: Location, facing: BlockFace, width: Int, height: Int) {
+        this.pos1 = pos1
+        this.pos2 = pos2
+        this.facing = facing
+        this.width = width
+        this.height = height
+        region = RegionUtil.calculateRegion(pos1, pos2)
+        box = boxOf(region)
+    }
+
+    private companion object {
+        fun boxOf(region: RegionUtil.RegionData) = BoundingBox(
+            region.minX.toDouble(), region.minY.toDouble(), region.minZ.toDouble(),
+            (region.maxX + 1).toDouble(), (region.maxY + 1).toDouble(), (region.maxZ + 1).toDouble(),
+        )
+    }
 }

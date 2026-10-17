@@ -1,9 +1,9 @@
 package com.dreamdisplays.media.source.kick
 
 import com.dreamdisplays.api.media.model.DreamMediaException
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.source.model.ResolvedMedia
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.source.ResolvedMedia
 import com.dreamdisplays.media.source.platform.LiveAwareResolvedMediaCache
 import org.slf4j.LoggerFactory
 

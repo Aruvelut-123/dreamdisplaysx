@@ -2,7 +2,7 @@
 
 package com.dreamdisplays.core.protocol.common.packets
 
-import com.dreamdisplays.api.protocol.ProtocolVersion
+import com.dreamdisplays.shared.protocol.ProtocolVersion
 import com.dreamdisplays.core.protocol.common.UuidSerializer
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi

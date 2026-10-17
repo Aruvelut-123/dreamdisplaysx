@@ -2,21 +2,14 @@ package com.dreamdisplays.core.services
 
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.display.event.DisplayEvent
-import com.dreamdisplays.api.display.model.Display
+import com.dreamdisplays.api.display.model.DisplayInfo
 import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.display.model.property.DisplayState
 import com.dreamdisplays.api.display.model.settings.DisplaySettings
-import com.dreamdisplays.api.display.service.DisplayLookup
-import com.dreamdisplays.api.display.service.DisplayMutationPort
-import com.dreamdisplays.api.display.service.DisplayService
 import com.dreamdisplays.api.media.model.VideoQuality
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.playback.service.PlaybackPort
-import com.dreamdisplays.api.playback.service.PlaybackService
-import com.dreamdisplays.api.watchparty.service.WatchPartyPort
-import com.dreamdisplays.api.watchparty.service.WatchPartyService
-import com.dreamdisplays.api.watchparty.model.WatchPartySession
-import kotlin.time.Duration
+import com.dreamdisplays.api.watchparty.WatchPartyService
+import com.dreamdisplays.api.watchparty.WatchPartySession
 
 /**
  * Default core implementation of [DisplayService].
@@ -25,8 +18,8 @@ class DefaultDisplayService(
     private val lookup: DisplayLookup,
     private val mutations: DisplayMutationPort,
 ) : DisplayService {
-    override fun getDisplay(id: DisplayId): Display? = lookup.getDisplay(id)
-    override fun listDisplays(): List<Display> = lookup.listDisplays()
+    override fun getDisplay(id: DisplayId): DisplayInfo? = lookup.getDisplay(id)
+    override fun listDisplays(): List<DisplayInfo> = lookup.listDisplays()
     override fun updateSettings(id: DisplayId, settings: DisplaySettings) = mutations.updateSettings(id, settings)
     override fun setUrl(id: DisplayId, url: String?, lang: String?) = mutations.setUrl(id, url, lang)
     override fun setAccess(id: DisplayId, access: DisplayAccess) = mutations.setAccess(id, access)
@@ -42,8 +35,8 @@ class DefaultPlaybackService(
     override fun play(displayId: DisplayId) = playback.play(displayId)
     override fun pause(displayId: DisplayId) = playback.pause(displayId)
     override fun stop(displayId: DisplayId) = playback.stop(displayId)
-    override fun seek(displayId: DisplayId, position: Duration) = playback.seek(displayId, position)
-    override fun seekRelative(displayId: DisplayId, delta: Duration) = playback.seekRelative(displayId, delta)
+    override fun seek(displayId: DisplayId, positionMs: Long) = playback.seek(displayId, positionMs)
+    override fun seekRelative(displayId: DisplayId, deltaMs: Long) = playback.seekRelative(displayId, deltaMs)
     override fun setVolume(displayId: DisplayId, volume: Float) = playback.setVolume(displayId, volume)
     override fun setQuality(displayId: DisplayId, quality: VideoQuality) = playback.setQuality(displayId, quality)
     override fun setAudioTrack(displayId: DisplayId, trackUrl: String) = playback.setAudioTrack(displayId, trackUrl)

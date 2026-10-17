@@ -1,9 +1,9 @@
 package com.dreamdisplays.platform.client.audio
 
-import com.dreamdisplays.api.media.audio.model.AcousticEnvironment
-import com.dreamdisplays.api.media.audio.model.AcousticMaterial
-import com.dreamdisplays.api.media.audio.model.ListenerPose
-import com.dreamdisplays.api.media.audio.model.SourcePlane
+import com.dreamdisplays.api.media.audio.AcousticEnvironment
+import com.dreamdisplays.api.media.audio.AcousticMaterial
+import com.dreamdisplays.api.media.audio.ListenerPose
+import com.dreamdisplays.api.media.audio.SourcePlane
 import com.dreamdisplays.platform.client.audio.VoxelAcousticsProbe.MAX_OCCLUSION
 import com.dreamdisplays.platform.client.audio.VoxelAcousticsProbe.REVERB_RAYS
 import com.dreamdisplays.platform.client.audio.VoxelAcousticsProbe.TRANSPARENT_TAGS
@@ -25,37 +25,19 @@ import kotlin.math.sqrt
 
 /** Platform-side voxel raytracer that turns blocks around a display into an AcousticEnvironment with occlusion and reverb. */
 object VoxelAcousticsProbe {
-    /** Number of Fibonacci-sphere rays used to sample the enclosing space for reverb. */
     private const val REVERB_RAYS = 24
-
-    /** How far (blocks) a reverb ray travels before it counts as "escaped to open air". */
     private const val REVERB_MAX_DISTANCE = 24.0
-
-    /** How far past a wall the occlusion walk steps before re-casting, to clear the block it just hit. */
     private const val OCCLUSION_STEP_EPSILON = 0.15
-
-    /** Cap on how many walls the occlusion walk pierces before giving up. */
     private const val MAX_OCCLUSION_STEPS = 5
-
-    /** Fraction of the screen's half-size each fanned occlusion sample point is inset from the centre. */
     private const val OCCLUSION_SAMPLE_INSET = 0.35
-
-    /** Accumulated material occlusion that maps to a fully muffled path (≈ three solid stone walls). */
     private const val MAX_OCCLUSION = 3.0f
-
-    /** Reflectivity that counts as "fully reflective" when normalizing (hard stone / metal). */
     private const val MAX_REFLECTIVITY = 1.5f
-
-    /** Cap on how many transparent blocks a single reverb ray pierces before giving up on that ray. */
     private const val MAX_REVERB_PIERCE_STEPS = 6
 
-    /** Blocks tagged under these are ignored by raytracer — treated as open air for occlusion and reverb. */
     private val TRANSPARENT_TAGS: Set<TagKey<Block>> = setOf(BlockTags.LEAVES)
 
-    /** True if [state] is tagged as acoustically transparent (see [TRANSPARENT_TAGS]). */
     private fun isTransparent(state: BlockState): Boolean = TRANSPARENT_TAGS.any { state.`is`(it) }
 
-    /** Unit ray directions, evenly spread over the sphere via the golden-angle spiral. */
     private val RAY_DIRECTIONS: Array<Vec3> = run {
         val golden = PI * (3.0 - sqrt(5.0)) // = 2.399963... rad
         Array(REVERB_RAYS) { i ->
@@ -66,13 +48,8 @@ object VoxelAcousticsProbe {
         }
     }
 
-    /** SoundType -> material coefficients, seeded from `Sound Physics Remastered`'s default tables. */
     private val MATERIALS: Map<SoundType, AcousticMaterial> = buildMaterialTable()
 
-    /**
-     * Raytraces the space between [plane] and [listener] into an [AcousticEnvironment]. Returns
-     * [AcousticEnvironment.OPEN_AIR] if no world / player is available or anything throws.
-     */
     fun probe(plane: SourcePlane, listener: ListenerPose): AcousticEnvironment =
         probeReverb(plane).copy(occlusion = probeOcclusion(plane, listener))
 
@@ -93,7 +70,6 @@ object VoxelAcousticsProbe {
         AcousticEnvironment(0f, decay, wet, damping)
     }.getOrDefault(AcousticEnvironment.OPEN_AIR)
 
-    /** Averages occlusion of rays fanned from listener ear to spread of points across screen. */
     private fun traceOcclusion(level: Level, entity: Entity, ear: Vec3, plane: SourcePlane, center: Vec3): Float {
         val u = Vec3(plane.uAxisX, plane.uAxisY, plane.uAxisZ).scale(plane.width * OCCLUSION_SAMPLE_INSET)
         val v = Vec3(plane.vAxisX, plane.vAxisY, plane.vAxisZ).scale(plane.height * OCCLUSION_SAMPLE_INSET)
@@ -103,10 +79,6 @@ object VoxelAcousticsProbe {
         return (sum / targets.size / MAX_OCCLUSION).coerceIn(0f, 1f)
     }
 
-    /**
-     * Walks the direct segment from [ear] to [target], summing the (material-weighted) occlusion of every
-     * wall it pierces, capped at [MAX_OCCLUSION]. Returns the raw accumulated weight (not normalized).
-     */
     private fun occlusionAlong(level: Level, entity: Entity, ear: Vec3, target: Vec3): Float {
         var start = ear
         var accum = 0f
@@ -126,10 +98,6 @@ object VoxelAcousticsProbe {
         return accum
     }
 
-    /**
-     * Sprays [REVERB_RAYS] rays off [center], measures how enclosed and reflective the surroundings are,
-     * and collapses that into `(reverbDecaySeconds, reverbWetGain, reverbDamping)`.
-     */
     private fun traceReverb(level: Level, entity: Entity, center: Vec3): Triple<Float, Float, Float> {
         var hits = 0
         var pathSum = 0.0
@@ -141,7 +109,7 @@ object VoxelAcousticsProbe {
                 pathSum += result.first
                 reflSum += result.second
             } else {
-                pathSum += REVERB_MAX_DISTANCE // energy escaped to open air along this direction
+                pathSum += REVERB_MAX_DISTANCE
             }
         }
         if (hits == 0) return Triple(0f, 0f, 0f)
@@ -157,7 +125,6 @@ object VoxelAcousticsProbe {
         return Triple(decay, wet, damping)
     }
 
-    /** Casts one reverb ray from origin, passing straight through acoustically transparent blocks. */
     private fun castReverbRay(level: Level, entity: Entity, origin: Vec3, dir: Vec3): Pair<Double, Float>? {
         var start = origin
         var traveled = 0.0
@@ -179,14 +146,12 @@ object VoxelAcousticsProbe {
         return null
     }
 
-    /** Looks up the [AcousticMaterial] for [state], defaulting when the sound type is unknown. */
     @Suppress("DEPRECATION")
     private fun materialFor(state: BlockState): AcousticMaterial {
         val soundType = runCatching { state.soundType }.getOrNull() ?: return AcousticMaterial.DEFAULT // TODO: replace soundType in future
         return MATERIALS[soundType] ?: AcousticMaterial.DEFAULT
     }
 
-    /** Builds the `SoundType` -> material map from `Sound Physics Remastered`'s reflectivity / occlusion values. */
     private fun buildMaterialTable(): Map<SoundType, AcousticMaterial> {
         fun m(reflectivity: Float, occlusion: Float = 1.0f) = AcousticMaterial(reflectivity, occlusion)
         val map = HashMap<SoundType, AcousticMaterial>()

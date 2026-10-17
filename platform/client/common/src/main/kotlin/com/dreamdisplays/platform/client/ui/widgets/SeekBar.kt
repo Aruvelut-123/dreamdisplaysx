@@ -1,13 +1,11 @@
 package com.dreamdisplays.platform.client.ui.widgets
 
-import com.dreamdisplays.api.media.search.model.MediaChapter
+import com.dreamdisplays.api.media.search.MediaChapter
 import com.dreamdisplays.platform.client.render.ScrubPreview
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplays.platform.client.ui.drawText
 import com.dreamdisplays.platform.client.ui.kit.UiText
 import com.dreamdisplays.platform.client.ui.kit.UiWidget
-import com.dreamdisplays.platform.client.ui.widgets.SeekBar.Companion.DISPLAY_HEIGHT
-import com.dreamdisplays.platform.client.ui.widgets.SeekBar.Companion.DISPLAY_WIDTH
 //? if >=1.21.11 {
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 //?}

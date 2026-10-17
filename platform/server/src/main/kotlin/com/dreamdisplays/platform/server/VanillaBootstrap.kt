@@ -7,6 +7,7 @@ import com.dreamdisplays.platform.server.meta.ServerCoroutines
 import com.dreamdisplays.platform.server.meta.Updater
 import com.dreamdisplays.platform.server.playback.*
 import com.dreamdisplays.platform.server.proxy.VanillaProxyBridge
+import com.dreamdisplays.platform.server.api.VanillaServerApi
 import com.dreamdisplays.platform.server.storage.StorageBackend
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -46,10 +47,12 @@ object VanillaBootstrap {
             VanillaServerState.config.proxy.clock_sync_interval
         )
         startRepeatingTasks(server)
+        VanillaServerApi.start()
     }
 
     /** Persists all displays and disconnects storage. */
     fun onServerStopping() {
+        VanillaServerApi.stop()
         DisplayManager.save { VanillaServerState.storage?.saveDisplay(it) }
         ServerCoroutines.shutdown()
         VanillaServerState.storage?.disconnect()

@@ -3,12 +3,12 @@ package com.dreamdisplays.media.player
 import com.dreamdisplays.api.media.model.DreamMediaException
 import com.dreamdisplays.api.media.model.FramePixelFormat
 import com.dreamdisplays.api.media.model.VideoQuality
-import com.dreamdisplays.api.media.audio.service.AudioDspStage
+import com.dreamdisplays.api.media.audio.AudioDspStage
 import com.dreamdisplays.api.media.player.GpuTextureRef
 import com.dreamdisplays.api.media.player.PlaybackEnvironment
 import com.dreamdisplays.api.media.player.PlaybackHost
-import com.dreamdisplays.api.media.stream.model.MediaStream
-import com.dreamdisplays.api.media.stream.model.SubtitleTrack
+import com.dreamdisplays.api.media.stream.MediaStream
+import com.dreamdisplays.api.media.stream.SubtitleTrack
 import com.dreamdisplays.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplays.media.player.subtitle.SubtitleCue
 import com.dreamdisplays.media.player.subtitle.WebVttParser

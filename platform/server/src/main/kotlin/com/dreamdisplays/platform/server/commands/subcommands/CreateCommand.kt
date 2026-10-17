@@ -1,7 +1,7 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
-import com.dreamdisplays.api.display.geometry.SurfaceCensus
-import com.dreamdisplays.api.display.geometry.SurfaceRole
+import com.dreamdisplays.shared.geometry.SurfaceCensus
+import com.dreamdisplays.shared.geometry.SurfaceRole
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.platform.server.*
 import com.dreamdisplays.platform.server.datatypes.selection.PaperSelectionData

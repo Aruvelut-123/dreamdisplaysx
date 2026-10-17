@@ -12,13 +12,10 @@ import net.minecraft.client.renderer.rendertype.RenderType
 /*import net.minecraft.client.renderer.RenderType*/
 import com.dreamdisplays.api.display.model.property.DisplayRotation
 import com.dreamdisplays.api.display.model.property.DisplayFacing
-import com.dreamdisplays.api.display.model.property.DisplayId
-import com.dreamdisplays.api.render.backend.service.RenderContext
-import com.dreamdisplays.api.render.texture.model.TextureHandle
-import com.dreamdisplays.api.runtime.registry.service.getOrNull
-import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
 import com.dreamdisplays.platform.client.displays.DisplayScreen
+import com.dreamdisplays.platform.client.displays.PlacedDisplays
+import org.joml.Quaternionf
 import com.dreamdisplays.platform.client.render.ScreenRenderer.drawLayer
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
@@ -29,7 +26,7 @@ import net.minecraft.client.Camera
 import kotlin.math.sin
 
 /** Renders screens in the world. Better not to touch this shit. */
-object ScreenRenderer : ClientRenderService {
+object ScreenRenderer {
     private typealias QuadAppender = (PoseStack.Pose, VertexConsumer) -> Unit
     private typealias QuadRenderer = (RenderType, QuadAppender) -> Unit
 
@@ -48,33 +45,6 @@ object ScreenRenderer : ClientRenderService {
         }
     }
 
-    /**
-     * [ClientRenderService] render entry point. Unwraps a [MinecraftRenderContext] and delegates to
-     * [render]; any other [RenderContext] type is a no-op (this renderer can only draw through a live
-     * [PoseStack] / [Camera]).
-     */
-    override fun renderAll(context: RenderContext) {
-        val ctx = context as? MinecraftRenderContext ?: return
-        render(ctx.stack, ctx.camera)
-    }
-
-    /** No-op: live screens are created by [DisplayRegistry] from network packets, not flat entries. */
-    override fun registerDisplay(entry: DisplayRenderEntry) = Unit
-
-    /** Unregisters the live screen matching [displayId], delegating to [DisplayRegistry]. */
-    override fun unregisterDisplay(displayId: DisplayId) {
-        ConformingWorldMesh.forget(displayId.uuid)
-        DisplayRegistry.getScreens()
-            .firstOrNull { it.uuid == displayId.uuid }
-            ?.let { DisplayRegistry.unregisterScreen(it) }
-    }
-
-    /** No-op: each [DisplayScreen] owns its own GPU texture lifecycle in the current model. */
-    override fun updateTexture(displayId: DisplayId, handle: TextureHandle) = Unit
-
-    /** Number of live screens with an uploaded texture. Those this renderer will actually draw. */
-    override val registeredCount: Int; get() = DisplayRegistry.getScreens().count { it.hasTexture }
-
     /** Iterates all registered screens and lets the caller submit quads through the active renderer. */
     fun render(stack: PoseStack, camera: Camera, replay: Boolean = false, drawQuad: QuadRenderer) {
         val cameraPos =
@@ -92,8 +62,18 @@ object ScreenRenderer : ClientRenderService {
 
             stack.pushPose()
 
-            val pos = displayScreen.pos
-            stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z)
+            val placement = PlacedDisplays.placementOf(displayScreen.uuid)
+            if (placement != null) {
+                val t = placement.transform(PlacedDisplays.partialTick())
+                stack.translate(t.originX - cameraPos.x, t.originY - cameraPos.y, t.originZ - cameraPos.z)
+                DisplayPoseStack.rotate(
+                    stack, Quaternionf(t.rotationX.toFloat(), t.rotationY.toFloat(), t.rotationZ.toFloat(), t.rotationW.toFloat()),
+                )
+                stack.scale(t.scaleX.toFloat(), t.scaleY.toFloat(), t.scaleZ.toFloat())
+            } else {
+                val pos = displayScreen.pos
+                stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z)
+            }
 
             renderScreenTexture(displayScreen, stack, replay, drawQuad)
 
@@ -101,13 +81,6 @@ object ScreenRenderer : ClientRenderService {
         }
 
         ImmediateRenderCompat.flushBatch()
-
-        // The registered RenderHook extends the world pass after the mod's own screens.
-        // ClientRenderModule installs the default hook for API-registered surfaces.
-        // The world render hooks do not surface a partial tick, hence the 0f tickDelta.
-        // Only on the level-pass draw: the replay would run every surface a second time.
-        if (!replay) DreamServices.registry.getOrNull<RenderHook>()
-            ?.onRender(MinecraftRenderContext(stack, camera, 0f))
     }
 
     /** Distance the [UnshadedDisplayPass] replay is lifted off the level-pass quad it repeats, in blocks. */
@@ -256,8 +229,8 @@ object ScreenRenderer : ClientRenderService {
         stack: PoseStack, facing: DisplayFacing, w: Int, h: Int, lift: Float, body: () -> Unit,
     ) {
         stack.pushPose()
-        if (lift != 0f) DisplayGeometry.liftTowardViewer(stack, facing, lift)
-        DisplayGeometry.applyScreenTransform(stack, facing, w, h)
+        if (lift != 0f) DisplayPoseStack.liftTowardViewer(stack, facing, lift)
+        DisplayPoseStack.applyScreenTransform(stack, facing, w, h)
         body()
         stack.popPose()
     }

@@ -2,7 +2,7 @@ package com.dreamdisplays.platform.server.commands.subcommands
 
 import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.api.media.model.VideoQuality
-import com.dreamdisplays.api.playback.model.FullscreenMode
+import com.dreamdisplays.shared.playback.FullscreenMode
 import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.PaperSurfaces
 import com.dreamdisplays.platform.server.baseMaterial

@@ -1,6 +1,6 @@
 package com.dreamdisplays.core.protocol.common
 
-import com.dreamdisplays.api.capability.ServerFeature
+import com.dreamdisplays.shared.capability.ServerFeature
 import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplays.api.playback.model.Timeline
 import com.dreamdisplays.core.protocol.common.packets.DisplaySync

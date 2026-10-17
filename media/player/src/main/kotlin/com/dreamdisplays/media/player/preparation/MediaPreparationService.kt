@@ -3,10 +3,10 @@ package com.dreamdisplays.media.player.preparation
 import com.dreamdisplays.api.media.model.DreamMediaException
 import com.dreamdisplays.api.media.model.VideoQuality
 import com.dreamdisplays.api.media.player.PlaybackEnvironment
-import com.dreamdisplays.api.media.source.service.MediaResolverRegistry
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.stream.model.StreamPreferences
-import com.dreamdisplays.api.media.stream.service.StreamSelector
+import com.dreamdisplays.api.media.source.MediaResolverRegistry
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.stream.StreamPreferences
+import com.dreamdisplays.api.media.stream.StreamSelector
 import com.dreamdisplays.media.player.stream.ActiveStreams
 
 /**
@@ -42,7 +42,7 @@ internal object MediaPreparationService {
         val audio = selected.audioStream
             ?: throw DreamMediaException.NotFound("No usable audio stream for $url.")
 
-        val durationNanos = resolved.metadata.duration?.inWholeNanoseconds ?: 0L
+        val durationNanos = resolved.metadata.durationMs?.times(1_000_000L) ?: 0L
 
         return PreparedMedia(
             streamSet = ActiveStreams(

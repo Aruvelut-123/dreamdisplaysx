@@ -1,8 +1,7 @@
-@file:OptIn(Unstable::class)
-
 package com.dreamdisplays.api.media.source.url
 
 import com.dreamdisplays.api.Unstable
+import com.dreamdisplays.api.media.source.YouTubeUrls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

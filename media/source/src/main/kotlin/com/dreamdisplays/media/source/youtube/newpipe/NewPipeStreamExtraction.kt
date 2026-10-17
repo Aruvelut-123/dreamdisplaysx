@@ -1,6 +1,6 @@
 package com.dreamdisplays.media.source.youtube.newpipe
 
-import com.dreamdisplays.api.media.stream.model.SubtitleTrack
+import com.dreamdisplays.api.media.stream.SubtitleTrack
 import com.dreamdisplays.media.source.youtube.model.Durations
 import com.dreamdisplays.media.source.youtube.model.YtStream
 import org.schabi.newpipe.extractor.MediaFormat
@@ -30,7 +30,7 @@ class NewPipeResolved(
 
 /**
  * Drives `NewPipeExtractor`'s [StreamExtractor] directly and maps its output to [YtStream]s. Pure
- * extraction logic, with no caching or [com.dreamdisplays.api.media.source.service.MediaResolverService] contract
+ * extraction logic, with no caching or [com.dreamdisplays.api.media.source.MediaResolverService] contract
  * of its own — those live in [com.dreamdisplays.media.source.youtube.NewPipeResolver].
  */
 object NewPipeStreamExtraction {

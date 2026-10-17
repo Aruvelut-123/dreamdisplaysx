@@ -39,6 +39,7 @@ data class DisplayInfo(
     @ProtoNumber(22) val viewerInRegion: Boolean = false,
     @ProtoNumber(23) val depth: Int = 1,
     @ProtoNumber(24) val conforming: Boolean = false,
+    @ProtoNumber(25) val customData: Map<String, ByteArray> = emptyMap(),
 ) : DreamPacket
 
 /** Removes a display (server broadcast) or requests its deletion (client action). */

@@ -1,11 +1,11 @@
 package com.dreamdisplays.platform.client.popout
 
 import com.dreamdisplays.api.display.model.property.DisplayId
-import com.dreamdisplays.api.media.sink.service.VideoFrameSink
-import com.dreamdisplays.api.playback.model.FullscreenMode
+import com.dreamdisplays.api.media.sink.VideoFrameSink
+import com.dreamdisplays.shared.playback.FullscreenMode
 
 /**
- * Manages popout windows and picture-in-picture (PiP) for displays. Allows opening and closing popout windows and PiP,
+ * Manages popout windows and `Picture-in-Picture` (PiP) for displays. Allows opening and closing popout windows and PiP,
  * checking their status, and subscribing to events related to them.
  */
 interface PopoutManager {

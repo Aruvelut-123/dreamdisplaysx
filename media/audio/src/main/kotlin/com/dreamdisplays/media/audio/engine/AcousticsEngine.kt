@@ -1,10 +1,10 @@
 package com.dreamdisplays.media.audio.engine
 
-import com.dreamdisplays.api.media.audio.model.AcousticQuality
-import com.dreamdisplays.api.media.audio.model.ListenerPose
-import com.dreamdisplays.api.media.audio.model.SourceAcousticState
-import com.dreamdisplays.api.media.audio.service.AudioAcousticsService
-import com.dreamdisplays.api.media.audio.service.AudioDspStage
+import com.dreamdisplays.api.media.audio.AcousticQuality
+import com.dreamdisplays.api.media.audio.ListenerPose
+import com.dreamdisplays.api.media.audio.SourceAcousticState
+import com.dreamdisplays.api.media.audio.AudioAcousticsService
+import com.dreamdisplays.api.media.audio.AudioDspStage
 import kotlinx.atomicfu.atomic
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap

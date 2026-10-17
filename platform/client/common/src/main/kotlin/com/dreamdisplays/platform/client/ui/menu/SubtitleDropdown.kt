@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.client.ui.menu
 
-import com.dreamdisplays.api.media.stream.model.SubtitleTrack
+import com.dreamdisplays.api.media.stream.SubtitleTrack
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplays.platform.client.ui.drawText
 //? if <1.21.11 {

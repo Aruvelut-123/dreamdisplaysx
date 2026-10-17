@@ -4,7 +4,7 @@ package com.dreamdisplays.platform.client.render
 import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
-import com.dreamdisplays.api.media.source.url.YouTubeUrls
+import com.dreamdisplays.api.media.source.YouTubeUrls
 import com.dreamdisplays.platform.client.Initializer
 import com.dreamdisplays.util.AsyncMemo
 import com.dreamdisplays.util.DreamCoroutines
@@ -34,46 +34,35 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /** Downloads, caches, and registers video thumbnails from YouTube and other sources as Minecraft textures. */
 object Thumbnails {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** The Minecraft texture [Identifier] for each video ID, or null if not yet loaded. */
     private val READY: Cache<String, Identifier> = Caffeine.newBuilder()
         .maximumSize(1_024)
         .expireAfterAccess(6, TimeUnit.HOURS)
         .removalListener<String, Identifier> { _, id, _ -> releaseTexture(id) }
         .build()
 
-    /** Average ARGB color of each decoded thumbnail, used for small flat accents (e.g. card hover tint). */
     private val AVG_COLOR: Cache<String, Int> = Caffeine.newBuilder()
         .maximumSize(1_024)
         .expireAfterAccess(6, TimeUnit.HOURS)
         .build()
 
-    /**
-     * The Minecraft texture [Identifier] of a tiny, heavily downsampled copy of each decoded
-     * thumbnail — a YouTube-style blurred "ambient" backdrop rendered by stretching it across the
-     * preview's letterbox area with bilinear filtering, instead of a flat average-color fill.
-     */
     private val AMBIENT_TEX: Cache<String, Identifier> = Caffeine.newBuilder()
         .maximumSize(1_024)
         .expireAfterAccess(6, TimeUnit.HOURS)
         .removalListener<String, Identifier> { _, id, _ -> releaseTexture(id) }
         .build()
 
-    /** Tracks which video IDs are currently in flight (downloading or decoding). */
     private val IN_FLIGHT: Cache<String, Boolean> = Caffeine.newBuilder()
         .maximumSize(512)
         .expireAfterWrite(2, TimeUnit.MINUTES)
         .build()
 
-    /** Keys whose most recent fetch failed (bad CDN response, decode error, etc). Rechecked every 5 minutes. */
     private val FAILED: Cache<String, Boolean> = Caffeine.newBuilder()
         .maximumSize(1_024)
         .expireAfterWrite(5, TimeUnit.MINUTES)
         .build()
 
-    /** Deduplicates thumbnail byte loads and keeps recently used compressed bytes warm. */
     private val BYTES = AsyncMemo<String, ByteArray>(
         maxSize = 512,
         ttlMs = 30L * 60L * 1_000L,
@@ -81,29 +70,20 @@ object Thumbnails {
         tag = "thumbnail",
     )
 
-    /** Directory for cached thumbnails. */
     private val THUMB_CACHE_DIR: Path = Path.of("config", "dreamdisplays", "thumb-cache")
 
-    /** TTL for cached thumbnails, in milliseconds. */
     private const val THUMB_CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1_000L
 
-    /**
-     * Frees the GPU texture behind [id] when its cache entry is evicted (by [READY] / [AMBIENT_TEX]'s
-     * size cap or 6h idle TTL.
-     */
     private fun releaseTexture(id: Identifier?) {
         if (id == null) return
         Minecraft.getInstance().execute { Minecraft.getInstance().textureManager.release(id) }
     }
 
-    /**
-     * A missing max-res thumbnail comes back as `HTTP 200` with a tiny grey placeholder rather than
-     * a `404`, so it's told apart from a real one by size; real thumbnails (even hqdefault) are
-     * always well above this.
-     */
     private const val MAXRES_PLACEHOLDER_MAX_BYTES = 4_096
 
-    /** Initializes the thumbnail manager and scans for image plugins. */
+    private fun key(videoId: String, quality: Quality): String =
+        if (quality == Quality.HIGH) videoId else "$videoId@lq"
+
     init {
         try {
             ImageIO.scanForPlugins()
@@ -114,10 +94,6 @@ object Thumbnails {
 
     /** Requested thumbnail resolution tier: [HIGH] for the big preview, [LOW] for the small cards. */
     enum class Quality { HIGH, LOW }
-
-    /** Composite cache key so [Quality.HIGH] (preview) and [Quality.LOW] (cards) never overwrite each other. */
-    private fun key(videoId: String, quality: Quality): String =
-        if (quality == Quality.HIGH) videoId else "$videoId@lq"
 
     /** Returns the registered Minecraft texture [Identifier] for [videoId] at [quality], or null if not loaded. */
     fun get(videoId: String, quality: Quality = Quality.HIGH): Identifier? = READY.getIfPresent(key(videoId, quality))
@@ -153,11 +129,9 @@ object Thumbnails {
         DreamCoroutines.clientIo.launch { download(key, key, loadBytesAsync(key) { fetch(directUrl) }) }
     }
 
-    /** Starts or joins the thumbnail byte load under [key], fetching via [fetchBytes] on a cache miss. */
     private fun loadBytesAsync(key: String, fetchBytes: () -> ByteArray?): Deferred<ByteArray> =
         BYTES.load(key) { loadBytes(key, fetchBytes) }
 
-    /** Fetches the thumbnail bytes for [key] from memory, disk, or network (via [fetchBytes]). */
     private fun loadBytes(key: String, fetchBytes: () -> ByteArray?): ByteArray {
         readDiskCache(key)?.let { return it }
         val bytes = fetchBytes() ?: throw IOException("thumbnail HTTP fetch failed")
@@ -165,7 +139,6 @@ object Thumbnails {
         return bytes
     }
 
-    /** Fetches bytes for requested tier: [Quality.LOW] is 320 x 180 mqdefault, [Quality.HIGH] tries maxres then falls back. */
     private fun fetchForQuality(videoId: String, quality: Quality): ByteArray? = when (quality) {
         Quality.LOW -> fetch(YouTubeUrls.mqThumbnailUrl(videoId))
         Quality.HIGH -> {
@@ -175,7 +148,6 @@ object Thumbnails {
         }
     }
 
-    /** Awaits the thumbnail bytes and registers them on the render thread. */
     private suspend fun download(avgColorKey: String, cacheKey: String, bytesDeferred: Deferred<ByteArray>) {
         runCatching { bytesDeferred.await() }
             .onSuccess { bytes ->
@@ -191,7 +163,6 @@ object Thumbnails {
             }
     }
 
-    /** Reads the cached thumbnail bytes for [cacheKey] from disk; returns null if absent or expired. */
     private fun readDiskCache(cacheKey: String): ByteArray? = try {
         val f = thumbFile(cacheKey)
         when {
@@ -206,7 +177,6 @@ object Thumbnails {
         null
     }
 
-    /** Atomically writes [bytes] to the disk cache for [cacheKey] via a temp-file rename in the background. */
     private fun writeDiskCacheAsync(cacheKey: String, bytes: ByteArray) {
         DreamCoroutines.clientIo.launch {
             try {
@@ -223,11 +193,9 @@ object Thumbnails {
         }
     }
 
-    /** Returns the cache file for [cacheKey], hashing it so different keys never collide. */
     private fun thumbFile(cacheKey: String): File =
         File(THUMB_CACHE_DIR.toFile(), hash(cacheKey) + ".jpg")
 
-    /** Returns a SHA-1 hex digest of [s], falling back to `hashCode` if SHA-1 is unavailable. */
     private fun hash(s: String): String = try {
         val md = MessageDigest.getInstance("SHA-1")
         HexFormat.of().formatHex(md.digest(s.toByteArray(StandardCharsets.UTF_8)))
@@ -235,14 +203,8 @@ object Thumbnails {
         Integer.toHexString(s.hashCode())
     }
 
-    /** A decoded thumbnail: the full-res GPU image, its average color, and a tiny blurred copy for the ambient backdrop. */
     private class Decoded(val image: NativeImage, val avgColor: Int, val ambientImage: NativeImage)
 
-    /**
-     * Decodes [bytes] into a [NativeImage] and registers it under [key] (the composite videoId +
-     * quality key, or a direct-URL request's own key). The average color and ambient-backdrop
-     * texture are stored per [avgColorKey] so a YouTube video's LOW/HIGH tiers share the one pair.
-     */
     private fun register(avgColorKey: String, key: String, bytes: ByteArray) {
         var image: NativeImage? = null
         var tex: DynamicTexture? = null
@@ -290,11 +252,6 @@ object Thumbnails {
         }
     }
 
-    /**
-     * Decodes [bytes] as a JPEG / PNG image into a GPU-ready RGBA [NativeImage], its average color,
-     * and a tiny blurred [AmbientGrid]-derived copy used as the ambient backdrop — the same technique
-     * YouTube uses for its loading / ambient thumbnail glow, rather than a single flat color.
-     */
     @Throws(IOException::class)
     private fun decode(bytes: ByteArray): Decoded = ByteArrayInputStream(bytes).use { input ->
         val src: BufferedImage = ImageIO.read(input) ?: run {
@@ -334,11 +291,6 @@ object Thumbnails {
         Decoded(image, avg, ambientImage)
     }
 
-    /**
-     * The site whose thumbnail CDN sits behind Cloudflare / hotlink protection needs its own site
-     * as the `Referer`, or the image request 403s even though the URL itself is correct (seen on
-     * `stream.kick.com`). YouTube's `i.ytimg.com` and Twitch's `static-cdn.jtvnw.net` don't check it.
-     */
     private fun refererFor(url: String): String? {
         val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase(Locale.ROOT) ?: return null
         return when {
@@ -349,7 +301,6 @@ object Thumbnails {
         }
     }
 
-    /** Downloads raw image bytes from [url]; returns null on any HTTP or network error. */
     private fun fetch(url: String): ByteArray? {
         return try {
             val response = DreamHttpClient.execute(

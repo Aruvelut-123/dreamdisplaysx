@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.client.core
 
-import com.dreamdisplays.api.runtime.module.DreamDisplaysRuntime
+import com.dreamdisplays.core.runtime.DreamDisplaysRuntime
 
 /**
  * Represents the main application for the client.

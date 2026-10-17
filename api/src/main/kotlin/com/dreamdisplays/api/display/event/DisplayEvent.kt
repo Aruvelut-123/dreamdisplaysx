@@ -1,7 +1,7 @@
 package com.dreamdisplays.api.display.event
 
 import com.dreamdisplays.api.Unstable
-import com.dreamdisplays.api.display.model.Display
+import com.dreamdisplays.api.display.model.DisplayInfo
 import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.display.model.property.DisplayState
 import com.dreamdisplays.api.display.model.settings.DisplaySettings
@@ -18,7 +18,7 @@ sealed interface DisplayEvent {
     val displayId: DisplayId
 
     /** Created when a display is created. */
-    data class Created(override val displayId: DisplayId, val display: Display) : DisplayEvent
+    data class Created(override val displayId: DisplayId, val display: DisplayInfo) : DisplayEvent
 
     /** Created when a display is removed. */
     data class Removed(override val displayId: DisplayId) : DisplayEvent
@@ -39,6 +39,13 @@ sealed interface DisplayEvent {
 
     /** Signifies that the display's URL has changed. */
     data class UrlChanged(override val displayId: DisplayId, val url: String?) : DisplayEvent
+
+    /**
+     * Signifies that addon data on the display changed;
+     *
+     * [keys] are the keys that were added, changed or removed.
+     */
+    data class CustomDataChanged(override val displayId: DisplayId, val keys: Set<String>) : DisplayEvent
 
     /** Signifies that the display's media has encountered an error. */
     data class MediaError(override val displayId: DisplayId, val cause: DreamMediaException) : DisplayEvent

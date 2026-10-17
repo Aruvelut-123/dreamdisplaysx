@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.server.proxy
 
-import com.dreamdisplays.api.playback.model.FullscreenMode
+import com.dreamdisplays.shared.playback.FullscreenMode
 import com.dreamdisplays.api.playback.model.WatchPartySessionState
 import com.dreamdisplays.core.protocol.common.packets.DisplayDelete
 import com.dreamdisplays.core.protocol.common.packets.WatchPartyState
@@ -55,21 +55,12 @@ object VanillaProxyBridge {
     private val helloSent = AtomicBoolean(false)
     private val lastClockProbeMs = AtomicLong(0L)
 
-    /** Whether the `[proxy]` section is enabled in the active config; gates everything below. */
-    var enabled: Boolean = false
-        private set
+    var enabled: Boolean = false; private set
 
-    /** `[proxy] clock_sync_interval`, in milliseconds; how often [tick] emits a [ClockProbe]. */
     private var clockSyncIntervalMs: Long = 5_000L
 
-    /** How long a network display-id lookup waits for the backend that owns it to answer. */
     private const val RESOLVE_TIMEOUT_MS = 5_000L
 
-    /**
-     * A `/display fullscreen start id <id> server <scope>` held while the network is asked which
-     * backend hosts `<id>` — see [ResolveDisplayToken]. Everything but the URL is already decided,
-     * so the answer just fills in the last blank and the normal [startNetworkFullscreen] runs.
-     */
     private class PendingNetworkStart(
         val ownerId: UUID,
         val token: String,

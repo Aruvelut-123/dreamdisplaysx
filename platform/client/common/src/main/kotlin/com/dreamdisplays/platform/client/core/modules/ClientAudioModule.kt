@@ -1,8 +1,8 @@
 package com.dreamdisplays.platform.client.core.modules
 
-import com.dreamdisplays.api.media.audio.service.keys.AudioAcousticsServices
-import com.dreamdisplays.api.runtime.module.DreamDisplaysModule
-import com.dreamdisplays.api.runtime.module.ModuleContext
+import com.dreamdisplays.core.services.keys.AudioAcousticsServices
+import com.dreamdisplays.core.runtime.DreamDisplaysModule
+import com.dreamdisplays.core.runtime.ModuleContext
 import com.dreamdisplays.media.audio.engine.AcousticsEngine
 import com.dreamdisplays.platform.client.managers.ClientStateManager
 

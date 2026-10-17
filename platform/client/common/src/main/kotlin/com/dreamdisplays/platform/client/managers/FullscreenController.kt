@@ -1,8 +1,8 @@
 package com.dreamdisplays.platform.client.managers
 
 import com.dreamdisplays.api.media.model.VideoQuality
-import com.dreamdisplays.api.playback.model.FullscreenAckAction
-import com.dreamdisplays.api.playback.model.FullscreenMode
+import com.dreamdisplays.shared.playback.FullscreenAckAction
+import com.dreamdisplays.shared.playback.FullscreenMode
 import com.dreamdisplays.core.protocol.common.packets.FullscreenAck
 import com.dreamdisplays.core.protocol.common.packets.FullscreenState
 import com.dreamdisplays.platform.client.displays.DisplayRegistry

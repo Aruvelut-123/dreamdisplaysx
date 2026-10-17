@@ -8,9 +8,8 @@ import java.util.*
  *
  * @since 1.0.x
  */
-@JvmInline
 @Unstable
-value class DisplayId(val uuid: UUID) {
+data class DisplayId(val uuid: UUID) {
     /** Returns the string representation of the display ID. */
     override fun toString(): String = uuid.toString()
 

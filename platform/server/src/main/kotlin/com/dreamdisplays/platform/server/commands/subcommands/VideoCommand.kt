@@ -1,11 +1,12 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
 import com.dreamdisplays.platform.server.ModLoaderOnly
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.playback.policy.PlaybackPermissions
-import com.dreamdisplays.api.security.model.LanguageTag
-import com.dreamdisplays.api.security.policy.MediaUrlPolicy
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.shared.playback.PlaybackPermissions
+import com.dreamdisplays.shared.policy.LanguageTag
+import com.dreamdisplays.shared.policy.MediaUrlPolicy
 import com.dreamdisplays.platform.server.PaperServer
+import com.dreamdisplays.platform.server.api.ServerApiHost
 import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
@@ -88,6 +89,7 @@ class VideoCommand : SubCommand {
         runAsync { PaperServer.getInstance().storage.saveDisplay(data) }
         DisplayManager.broadcastUpdate(data)
         TimelineManager.onVideoChanged(data)
+        ServerApiHost.current?.urlChanged(data)
 
         MessageUtil.sendMessage(player, "settedURL")
     }
@@ -188,6 +190,7 @@ object VanillaVideoCommand {
         val receivers = DisplayManager.getReceivers(data, ctx.source.server)
         VanillaPacketUtil.sendDisplayInfo(receivers, data)
         TimelineManager.onVideoChanged(data)
+        ServerApiHost.current?.urlChanged(data)
 
         MessageUtil.sendMessage(player, "settedURL")
         return 1

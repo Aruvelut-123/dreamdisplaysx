@@ -1,9 +1,9 @@
 package com.dreamdisplays.platform.client.popout
 
 import com.dreamdisplays.api.display.model.property.DisplayId
-import com.dreamdisplays.api.media.sink.service.VideoFrameSink
-import com.dreamdisplays.api.playback.model.FullscreenMode
-import com.dreamdisplays.api.runtime.registry.service.getOrNull
+import com.dreamdisplays.api.media.sink.VideoFrameSink
+import com.dreamdisplays.shared.playback.FullscreenMode
+import com.dreamdisplays.core.runtime.getOrNull
 import com.dreamdisplays.core.protocol.common.packets.PipPin
 import com.dreamdisplays.platform.client.Initializer
 import com.dreamdisplays.platform.client.core.DreamServices

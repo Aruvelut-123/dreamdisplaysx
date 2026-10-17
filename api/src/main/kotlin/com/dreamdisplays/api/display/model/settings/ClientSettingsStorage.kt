@@ -45,7 +45,7 @@ interface ClientSettingsStorage {
     /** Sets the last known playback position for [displayUuid] and saves. */
     fun setSavedTimeNanos(displayUuid: UUID, nanos: Long)
 
-    /** Sets whether [displayUuid] is pinned to a Picture-in-Picture overlay and saves. */
+    /** Sets whether [displayUuid] is pinned to a `Picture-in-Picture` overlay and saves. */
     fun setPipOpen(displayUuid: UUID, open: Boolean)
 
     /** Sets whether the 3D acoustics engine applies to [displayUuid] and saves. */

@@ -1,8 +1,8 @@
-@file:OptIn(Unstable::class)
-
 package com.dreamdisplays.api.media.source.model
 
 import com.dreamdisplays.api.Unstable
+import com.dreamdisplays.api.media.source.CustomMediaKind
+import com.dreamdisplays.api.media.source.MediaSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -53,7 +53,7 @@ class MediaSourceTest {
         assertEquals(url, source.url)
     }
 
-    /** A URL that names a media file skips the extractors entirely (see [com.dreamdisplays.api.media.source.url.CustomMediaUrls]). */
+    /** A URL that names a media file skips the extractors entirely (see [com.dreamdisplays.api.media.source.CustomMediaUrls]). */
     @Test
     fun unknownHostWithMediaFileParsesAsDirectStream() {
         val url = "https://example.com/video.mp4"

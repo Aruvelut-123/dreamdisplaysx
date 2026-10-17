@@ -1,11 +1,10 @@
 package com.dreamdisplays.media.source.youtube
 
-import com.dreamdisplays.api.media.source.model.MediaMetadata
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.source.model.ResolvedMedia
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.service.MediaResolverRegistry
-import kotlin.time.Duration.Companion.nanoseconds
+import com.dreamdisplays.api.media.source.MediaMetadata
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.source.ResolvedMedia
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.MediaResolverRegistry
 
 /**
  * Subprocess-backed [MediaResolverService] wrapping the [YtDlp] orchestrator. This is the slow, robust
@@ -44,7 +43,7 @@ object YtDlpResolver : MediaResolverService {
             uploader = first.uploaderName,
             thumbnailUrl = first.thumbnailUrl,
             viewCount = first.viewCount,
-            duration = durationNanos.takeIf { it > 0L }?.nanoseconds,
+            durationMs = durationNanos.takeIf { it > 0L }?.div(1_000_000L),
         )
         return ResolvedMedia(
             streams = streams.map { it.toMediaStream() },

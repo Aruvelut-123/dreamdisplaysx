@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.client
 
-import com.dreamdisplays.api.runtime.registry.service.getOrNull
+import com.dreamdisplays.core.runtime.getOrNull
 import com.dreamdisplays.core.protocol.common.packets.DreamPacket
 import com.dreamdisplays.platform.client.core.ClientApplication
 import com.dreamdisplays.platform.client.core.ClientLifecycleEvent

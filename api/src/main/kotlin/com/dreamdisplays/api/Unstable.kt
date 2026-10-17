@@ -3,6 +3,8 @@ package com.dreamdisplays.api
 /**
  * Marks an API as unstable; may change or be removed without major version bump.
  *
+ * Planned for removal in 1.11.0.
+ *
  * @since 1.8.x
  */
 @RequiresOptIn(

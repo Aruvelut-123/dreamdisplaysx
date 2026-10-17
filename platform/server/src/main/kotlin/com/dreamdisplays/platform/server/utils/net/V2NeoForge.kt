@@ -1,11 +1,11 @@
 package com.dreamdisplays.platform.server.utils.net
 
-import com.dreamdisplays.api.capability.ServerFeature
-import com.dreamdisplays.api.playback.model.FullscreenAckAction
+import com.dreamdisplays.shared.capability.ServerFeature
+import com.dreamdisplays.shared.playback.FullscreenAckAction
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplays.api.playback.model.WatchPartyAction
-import com.dreamdisplays.api.protocol.model.PacketDirection
+import com.dreamdisplays.shared.protocol.PacketDirection
 import com.dreamdisplays.core.protocol.common.PacketRegistry
 import com.dreamdisplays.core.protocol.common.packets.*
 import com.dreamdisplays.platform.client.Initializer
@@ -24,9 +24,7 @@ import net.neoforged.neoforge.network.PacketDistributor
 import net.neoforged.neoforge.network.registration.PayloadRegistrar
 import org.slf4j.LoggerFactory
 
-/**
- * Protocol-v2 networking for the `NeoForge` flavor.
- */
+/** Protocol-v2 networking for the `NeoForge` flavor. */
 @NeoForgeOnly
 object NeoForgeV2Networking {
     private val logger = LoggerFactory.getLogger(javaClass)

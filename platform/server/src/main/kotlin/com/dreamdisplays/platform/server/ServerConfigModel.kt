@@ -1,6 +1,8 @@
 package com.dreamdisplays.platform.server
 
 import com.dreamdisplays.platform.server.storage.StorageBackend
+import com.dreamdisplays.shared.playback.FullscreenMode
+import com.dreamdisplays.shared.policy.CustomMediaPolicy
 import com.dreamdisplays.util.asJsonObjectOrNull
 import com.dreamdisplays.util.json.DreamJson
 import com.dreamdisplays.util.toPlainJsonValue
@@ -10,12 +12,6 @@ import java.io.File
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-
-/**
- * `config.toml` shape shared by every server platform (`Paper`, Fabric, NeoForge). [Config] and
- * [VanillaConfig] each own only the platform-specific I / O (resource lookup, data directory,
- * `Material` resolution) and delegate parsing/language-loading here so the two never drift.
- */
 
 /** Language section of the config. */
 data class LanguageSection(
@@ -59,8 +55,8 @@ data class SettingsSection(
     val defaultVolume get() = display.default_volume / 200f
 
     // Custom media (player-pasted links)
-    val customMediaPolicy: com.dreamdisplays.api.security.policy.CustomMediaPolicy.Settings
-        get() = com.dreamdisplays.api.security.policy.CustomMediaPolicy.Settings(
+    val customMediaPolicy: CustomMediaPolicy.Settings
+        get() = CustomMediaPolicy.Settings(
             enabled = customMedia.enabled,
             allowedHosts = customMedia.allowed_hosts,
             blockedHosts = customMedia.blocked_hosts,
@@ -69,9 +65,9 @@ data class SettingsSection(
     // Fullscreen broadcasts
     val fullscreenAllowForced get() = fullscreen.allow_forced
     val fullscreenQualityCap get() = fullscreen.quality_cap
-    val fullscreenDefaultMode: com.dreamdisplays.api.playback.model.FullscreenMode
-        get() = runCatching { com.dreamdisplays.api.playback.model.FullscreenMode.valueOf(fullscreen.default_mode.uppercase()) }
-            .getOrDefault(com.dreamdisplays.api.playback.model.FullscreenMode.STANDARD)
+    val fullscreenDefaultMode: FullscreenMode
+        get() = runCatching { FullscreenMode.valueOf(fullscreen.default_mode.uppercase()) }
+            .getOrDefault(FullscreenMode.STANDARD)
 
     /** Reports section. */
     data class ReportsConfig(

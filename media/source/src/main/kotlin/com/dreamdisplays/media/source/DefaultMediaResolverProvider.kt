@@ -1,7 +1,7 @@
 package com.dreamdisplays.media.source
 
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.service.MediaResolverProvider
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.MediaResolverProvider
 import com.dreamdisplays.media.source.bilibili.BilibiliResolver
 import com.dreamdisplays.media.source.direct.DirectStreamResolver
 import com.dreamdisplays.media.source.kick.KickResolver

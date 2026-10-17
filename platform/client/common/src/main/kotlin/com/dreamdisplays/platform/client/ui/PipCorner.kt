@@ -1,7 +1,7 @@
 package com.dreamdisplays.platform.client.ui
 
 /**
- * The four screen corners a Picture-in-Picture overlay can be opened in. A coarse, user-facing
+ * The four screen corners a `Picture-in-Picture` overlay can be opened in. A coarse, user-facing
  * placement hint, mapped onto the finer [PipAnchor] grid via [PipAnchor.fromCorner].
  */
 enum class PipCorner {

@@ -162,6 +162,7 @@ dependencies {
     implementation(project(":platform:client:common"))
     shadow(project(":core"))
     shadow(project(":api"))
+    shadow(project(":shared"))
     shadow(project(":util"))
     shadow(project(":media:runtime"))
     shadow(project(":media:source"))

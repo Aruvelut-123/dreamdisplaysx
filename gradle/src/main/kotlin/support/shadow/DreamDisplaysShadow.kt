@@ -7,6 +7,7 @@ val dreamDisplaysSharedModules = listOf(
     ":platform:client:common",
     ":core",
     ":api",
+    ":shared",
     ":util",
     ":media:runtime",
     ":media:source",

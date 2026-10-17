@@ -23,7 +23,7 @@ private val javaFloor: Int = allVersionsJson.allVersions
 
 private val platformIndependentModules =
     setOf(
-        ":api", ":core", ":util", ":media:audio",
+        ":api", ":shared", ":core", ":util", ":media:audio",
         ":platform:proxy", ":platform:proxy:common", ":platform:proxy:velocity", ":platform:proxy:bungeecord",
     )
 

@@ -38,7 +38,7 @@ import java.nio.ByteOrder
 import java.util.*
 
 /**
- * In-game Picture-in-Picture overlay for one display screen. Click on the body (no drag) opens `DisplayMenu`;
+ * In-game `Picture-in-Picture` overlay for one display screen. Click on the body (no drag) opens `DisplayMenu`;
  * click-and-drag moves or resizes the overlay.
  */
 class PipOverlay(

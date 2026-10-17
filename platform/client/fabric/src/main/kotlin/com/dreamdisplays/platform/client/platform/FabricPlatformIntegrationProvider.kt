@@ -1,9 +1,9 @@
 package com.dreamdisplays.platform.client.platform
 
 import com.dreamdisplays.api.platform.identity.Platform
-import com.dreamdisplays.api.platform.service.PlatformIntegrationService
+import com.dreamdisplays.shared.platform.PlatformService
 
 /** Supplies the `Fabric` [Platform] adapter. */
-object FabricPlatformIntegrationProvider : PlatformIntegrationService {
+object FabricPlatformIntegrationProvider : PlatformService {
     override fun create(): Platform = FabricPlatform
 }

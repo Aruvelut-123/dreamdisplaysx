@@ -1,16 +1,15 @@
 package com.dreamdisplays.platform.server.playback
 
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.playback.model.FullscreenAckAction
-import com.dreamdisplays.api.playback.model.FullscreenMode
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.shared.playback.FullscreenAckAction
+import com.dreamdisplays.shared.playback.FullscreenMode
 import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplays.api.playback.model.Timeline
-import com.dreamdisplays.api.playback.model.FullscreenSessionRecord
+import com.dreamdisplays.shared.playback.FullscreenSession
 import com.dreamdisplays.core.protocol.common.packets.DisplayDelete
 import com.dreamdisplays.core.protocol.common.packets.FullscreenState
 import com.dreamdisplays.core.protocol.common.toSync
 import com.dreamdisplays.platform.server.datatypes.display.DisplayData
-import com.dreamdisplays.platform.server.datatypes.display.shortLabel
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.storage.FullscreenSessionStore
 import org.slf4j.LoggerFactory
@@ -322,7 +321,7 @@ object FullscreenBroadcastManager {
     }
 
     /** Resolves the display a persisted [record] targets: looks up a real display, or rebuilds a synthetic one. */
-    private fun resolveRecordDisplay(record: FullscreenSessionRecord): DisplayData? {
+    private fun resolveRecordDisplay(record: FullscreenSession): DisplayData? {
         val id = runCatching { UUID.fromString(record.displayId) }.getOrNull() ?: return null
         if (!record.virtual) return DisplayManager.getDisplayData(id)
         val ownerId = runCatching { UUID.fromString(record.ownerId) }.getOrNull() ?: return null
@@ -335,7 +334,7 @@ object FullscreenBroadcastManager {
     /** Persists every non-transient session, or clears the store when none remain. */
     private fun persist() {
         val records = sessions.values.filter { !it.transientSession }.map { session ->
-            FullscreenSessionRecord(
+            FullscreenSession(
                 sessionId = session.sessionId,
                 displayId = session.display.id.toString(),
                 virtual = session.virtual,

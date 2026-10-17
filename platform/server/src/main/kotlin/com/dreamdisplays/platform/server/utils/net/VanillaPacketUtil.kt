@@ -38,6 +38,7 @@ object VanillaPacketUtil {
                 scheduledAction = display.scheduledAction?.wire ?: -1,
                 access = display.access.wire,
                 depth = display.depth, conforming = display.conforming,
+                customData = display.customData.toMap(),
             ),
         )
     }

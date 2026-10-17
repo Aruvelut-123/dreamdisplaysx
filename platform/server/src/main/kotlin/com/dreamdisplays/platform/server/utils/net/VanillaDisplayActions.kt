@@ -6,10 +6,11 @@ import net.minecraft.server.players.NameAndId
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.playback.policy.PlaybackPermissions
+import com.dreamdisplays.shared.playback.PlaybackPermissions
 import com.dreamdisplays.api.playback.model.WatchPartyAction
-import com.dreamdisplays.api.security.policy.MediaUrlPolicy
+import com.dreamdisplays.shared.policy.MediaUrlPolicy
 import com.dreamdisplays.platform.server.VanillaServerState
+import com.dreamdisplays.platform.server.api.ServerApiHost
 import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.managers.ActionThrottle
 import com.dreamdisplays.platform.server.managers.DisplayManager
@@ -164,6 +165,7 @@ object VanillaDisplayActions {
         val receivers = DisplayManager.getReceivers(displayData, server)
         VanillaPacketUtil.sendDisplayInfo(receivers, displayData)
         TimelineManager.onVideoChanged(displayData)
+        ServerApiHost.current?.urlChanged(displayData)
     }
 
     /** Sets who may use a display owned by [player] and rebroadcasts. */

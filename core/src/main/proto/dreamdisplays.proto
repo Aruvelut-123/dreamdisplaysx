@@ -136,6 +136,8 @@ message DisplayInfo {
   optional int32 depth = 23;
   // WARNING: a default value decoded when value is missing
   optional bool conforming = 24;
+  // WARNING: a default value decoded when value is missing
+  map<string, bytes> customData = 25;
 }
 
 // serial name 'com.dreamdisplays.core.protocol.common.packets.DisplayDelete'

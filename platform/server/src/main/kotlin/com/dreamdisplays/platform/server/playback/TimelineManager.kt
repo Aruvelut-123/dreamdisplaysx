@@ -2,14 +2,12 @@ package com.dreamdisplays.platform.server.playback
 
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.playback.policy.PlaybackPermissions
+import com.dreamdisplays.shared.playback.PlaybackPermissions
 import com.dreamdisplays.api.playback.model.Timeline
-import com.dreamdisplays.core.protocol.common.packets.PlaybackCommand
 import com.dreamdisplays.core.protocol.common.toSync
 import com.dreamdisplays.platform.server.datatypes.display.DisplayData
 import com.dreamdisplays.platform.server.managers.ActionThrottle
 import com.dreamdisplays.platform.server.managers.DisplayManager
-import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -18,52 +16,28 @@ import java.util.concurrent.ConcurrentHashMap
  * position back as truth.
  */
 object TimelineManager {
-    /** Logger. */
-    private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Minimum interval between rebroadcasts of the same timeline to nearby players. */
     private const val PERIODIC_BROADCAST_MS = 2_000L
-
-    /** Ceiling for client seeks when no duration is known, matching the v1 24h sanity limit. */
-    internal const val MAX_SEEK_MS = 24L * 60 * 60 * 1_000
-
-    /** Sanity ceiling for a client-reported duration, same 24h limit as [MAX_SEEK_MS]. */
     private const val MAX_DURATION_MS = 24L * 60 * 60 * 1_000
-
-    /**
-     * Sanity floor for a client-reported duration. A near-zero value would still pass the naive "> 0" check but can't be
-     * a real video length.
-     */
     private const val MIN_DURATION_MS = 2_000L
 
-    /** Throttles duration reports per display against packet floods. */
     private val reportDurationThrottle = ActionThrottle()
     private const val REPORT_DURATION_COOLDOWN_MS = 2_000L
 
-    /**
-     * Throttles [onCommand] per sender (not per display) — [PlaybackAction] has no other rate limit, and every caller
-     * shares this one gate.
-     */
     private val commandThrottle = ActionThrottle()
     private const val COMMAND_COOLDOWN_MS = 100L
 
-    /** Live platform transport, injected at startup. */
     private lateinit var transport: PlaybackTransport
 
-    /** The current authoritative timeline for each display, if any. */
     private val timelines = ConcurrentHashMap<UUID, Timeline>()
-
-    /** The last time a timeline was broadcast for each display, if any. */
     private val lastBroadcast = ConcurrentHashMap<UUID, Long>()
+
+    internal const val MAX_SEEK_MS = 24L * 60 * 60 * 1_000
 
     /** Wires the platform transport and seeds timelines for already-loaded displays. */
     fun init(transport: PlaybackTransport) {
         this.transport = transport
         DisplayManager.getDisplays().forEach(::ensureTimeline)
     }
-
-    /** The current authoritative timeline for [displayId], or null if it has no server clock. */
-    fun timelineOf(displayId: UUID): Timeline? = timelines[displayId]
 
     /**
      * Applies a client playback intent to a `SYNCED` display. Returns true when it was permitted, applied, and rebroadcast;
@@ -146,8 +120,6 @@ object TimelineManager {
         if (display.mode != PlaybackMode.SYNCED && display.mode != PlaybackMode.BROADCAST) return
         if (durationMs !in MIN_DURATION_MS..MAX_DURATION_MS) return
         if ((display.duration ?: 0L) > 0L) return
-        // Checked before the throttle below: an attacker who is never nearby must not be able to
-        // burn the per-display cooldown window against a legitimate viewer's real report.
         if (senderId !in transport.nearbyPlayerIds(display)) return
         if (!reportDurationThrottle.tryAcquire(display.id, REPORT_DURATION_COOLDOWN_MS)) return
 
@@ -174,19 +146,13 @@ object TimelineManager {
         }
     }
 
-    /**
-     * Clamps a client seek to the known media duration when the server has one (stored in ns),
-     * otherwise to [MAX_SEEK_MS], so a hostile seek can't run the shared clock off to infinity.
-     */
     internal fun clampSeek(positionMs: Long, display: DisplayData): Long {
         val durationMs = durationMsOf(display)
         return positionMs.coerceIn(0, if (durationMs > 0) durationMs else MAX_SEEK_MS)
     }
 
-    /** [display]'s known duration in ms (converted from the stored ns value), or 0 if unknown. */
     private fun durationMsOf(display: DisplayData): Long = display.duration?.let { it / 1_000_000L } ?: 0L
 
-    /** Creates a running, looping (`SYNCED` / `BROADCAST`) timeline if one is due, else clears it. */
     private fun ensureTimeline(display: DisplayData): Timeline? {
         if (WatchPartyManager.hasSession(display.id)) return null
         val durationMs = durationMsOf(display)
@@ -206,7 +172,6 @@ object TimelineManager {
         }
     }
 
-    /** Stamps and broadcasts [timeline] for [display] to every nearby v2 player. */
     private fun broadcast(display: DisplayData, timeline: Timeline) {
         val now = transport.nowMs()
         lastBroadcast[display.id] = now
