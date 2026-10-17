@@ -14,7 +14,6 @@ import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplays.api.watchparty.model.WatchPartySession
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.time.Duration
 
 /** Default implementation of [DisplaySystem]. */
 @Unstable
@@ -88,12 +87,12 @@ class DefaultDisplaySystem(
         if (commands.stop(displayId)) removeDisplay(displayId)
     }
 
-    override fun seek(displayId: DisplayId, position: Duration) {
-        apply(commands.seek(displayId, position))
+    override fun seek(displayId: DisplayId, positionMs: Long) {
+        apply(commands.seek(displayId, positionMs))
     }
 
-    override fun seekRelative(displayId: DisplayId, delta: Duration) {
-        apply(commands.seekRelative(displayId, delta))
+    override fun seekRelative(displayId: DisplayId, deltaMs: Long) {
+        apply(commands.seekRelative(displayId, deltaMs))
     }
 
     override fun setVolume(displayId: DisplayId, volume: Float) {

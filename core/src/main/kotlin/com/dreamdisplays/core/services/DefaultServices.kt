@@ -16,7 +16,6 @@ import com.dreamdisplays.api.playback.service.PlaybackService
 import com.dreamdisplays.api.watchparty.service.WatchPartyPort
 import com.dreamdisplays.api.watchparty.service.WatchPartyService
 import com.dreamdisplays.api.watchparty.model.WatchPartySession
-import kotlin.time.Duration
 
 /**
  * Default core implementation of [DisplayService].
@@ -42,8 +41,8 @@ class DefaultPlaybackService(
     override fun play(displayId: DisplayId) = playback.play(displayId)
     override fun pause(displayId: DisplayId) = playback.pause(displayId)
     override fun stop(displayId: DisplayId) = playback.stop(displayId)
-    override fun seek(displayId: DisplayId, position: Duration) = playback.seek(displayId, position)
-    override fun seekRelative(displayId: DisplayId, delta: Duration) = playback.seekRelative(displayId, delta)
+    override fun seek(displayId: DisplayId, positionMs: Long) = playback.seek(displayId, positionMs)
+    override fun seekRelative(displayId: DisplayId, deltaMs: Long) = playback.seekRelative(displayId, deltaMs)
     override fun setVolume(displayId: DisplayId, volume: Float) = playback.setVolume(displayId, volume)
     override fun setQuality(displayId: DisplayId, quality: VideoQuality) = playback.setQuality(displayId, quality)
     override fun setAudioTrack(displayId: DisplayId, trackUrl: String) = playback.setAudioTrack(displayId, trackUrl)

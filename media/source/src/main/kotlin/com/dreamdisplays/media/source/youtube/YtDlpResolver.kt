@@ -44,7 +44,7 @@ object YtDlpResolver : MediaResolverService {
             uploader = first.uploaderName,
             thumbnailUrl = first.thumbnailUrl,
             viewCount = first.viewCount,
-            duration = durationNanos.takeIf { it > 0L }?.nanoseconds,
+            durationMs = durationNanos.takeIf { it > 0L }?.div(1_000_000L),
         )
         return ResolvedMedia(
             streams = streams.map { it.toMediaStream() },

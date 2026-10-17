@@ -346,6 +346,6 @@ object DirectStreamResolver : MediaResolverService {
             title = fileName?.let(CustomMediaUrls::cleanFileName)?.takeIf { it.isNotBlank() }
                 ?: CustomMediaUrls.displayName(url),
             uploader = CustomMediaUrls.hostOf(url),
-            duration = durationNanos?.takeIf { it > 0L }?.nanoseconds,
+            durationMs = durationNanos?.takeIf { it > 0L }?.div(1_000_000L),
         )
 }

@@ -1,7 +1,6 @@
 package com.dreamdisplays.api.media.source.model
 
 import com.dreamdisplays.api.Unstable
-import kotlin.time.Duration
 
 /**
  * Metadata resolved for a media item. Fields are nullable because providers expose different facts.
@@ -16,8 +15,8 @@ data class MediaMetadata(
     /** Channel / uploader / author display name, if known. */
     val uploader: String?,
 
-    /** Media duration, or null for live / unknown-length content. */
-    val duration: Duration?,
+    /** Media duration in milliseconds, or null for live / unknown-length content. */
+    val durationMs: Long?,
 
     /** Provider thumbnail URL, if available. */
     val thumbnailUrl: String?,

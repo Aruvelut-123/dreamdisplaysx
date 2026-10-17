@@ -7,7 +7,6 @@ import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.display.model.settings.DisplaySettings
 import com.dreamdisplays.api.media.model.VideoQuality
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import kotlin.time.Duration
 
 /**
  * Dispatcher for display commands.
@@ -41,10 +40,10 @@ interface DisplayExecutor {
     fun stop(displayId: DisplayId): Boolean = false
 
     /** Seek to a specific position. */
-    fun seek(displayId: DisplayId, position: Duration): Display? = null
+    fun seek(displayId: DisplayId, positionMs: Long): Display? = null
 
-    /** Seek [delta] relative to the current position. */
-    fun seekRelative(displayId: DisplayId, delta: Duration): Display? = null
+    /** Seek [deltaMs] relative to the current position. */
+    fun seekRelative(displayId: DisplayId, deltaMs: Long): Display? = null
 
     /** Set the volume. */
     fun setVolume(displayId: DisplayId, volume: Float): Display? = null

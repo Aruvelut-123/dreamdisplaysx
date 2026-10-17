@@ -13,7 +13,6 @@ import com.dreamdisplays.core.protocol.common.packets.SetLocked
 import com.dreamdisplays.core.services.DisplayStorage
 import com.dreamdisplays.platform.client.Initializer
 import com.dreamdisplays.platform.client.storage.ClientSettingsStore
-import kotlin.time.Duration
 
 /**
  * Client-side [DisplayExecutor]: resolves each command to the live [DisplayScreen] in the
@@ -95,17 +94,17 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return true
     }
 
-    /** Seeks to an absolute [position] in the current video. */
-    override fun seek(displayId: DisplayId, position: Duration): Display? {
+    /** Seeks to an absolute [positionMs] in the current video. */
+    override fun seek(displayId: DisplayId, positionMs: Long): Display? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
-        screen.seekToMillis(position.inWholeMilliseconds)
+        screen.seekToMillis(positionMs)
         return screen.toDisplay()
     }
 
-    /** Seeks by a signed [delta] relative to the current position. */
-    override fun seekRelative(displayId: DisplayId, delta: Duration): Display? {
+    /** Seeks by a signed [deltaMs] relative to the current position. */
+    override fun seekRelative(displayId: DisplayId, deltaMs: Long): Display? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
-        screen.seekVideoRelative(delta.inWholeMilliseconds / 1000.0)
+        screen.seekVideoRelative(deltaMs / 1000.0)
         return screen.toDisplay()
     }
 

@@ -5,7 +5,6 @@ import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.media.session.event.MediaSessionEvent
 import com.dreamdisplays.api.media.session.property.MediaSessionState
 import com.dreamdisplays.api.media.source.model.MediaMetadata
-import kotlin.time.Duration
 
 /**
  * Live playback session for one display; owns decoder / player resources, closed by caller.
@@ -23,11 +22,11 @@ interface MediaSessionService : AutoCloseable {
     /** Current lifecycle state of the media session. */
     val state: MediaSessionState
 
-    /** Current playback position in the resolved media timeline. */
-    val currentPosition: Duration
+    /** Current playback position (ms) in the resolved media timeline. */
+    val currentPositionMs: Long
 
-    /** Total duration, or null for live / unknown-length media. */
-    val duration: Duration?
+    /** Total duration in milliseconds, or null for live / unknown-length media. */
+    val durationMs: Long?
 
     /** Metadata resolved for the current media. */
     val metadata: MediaMetadata
@@ -38,8 +37,8 @@ interface MediaSessionService : AutoCloseable {
     /** Requests playback to pause at the current position. */
     fun pause()
 
-    /** Seeks to [position] in the resolved media timeline. */
-    fun seek(position: Duration)
+    /** Seeks to [positionMs] in the resolved media timeline. */
+    fun seek(positionMs: Long)
 
     /** Sets the session volume multiplier. */
     fun setVolume(volume: Float)

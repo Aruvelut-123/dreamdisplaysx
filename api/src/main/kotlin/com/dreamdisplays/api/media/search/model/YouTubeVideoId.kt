@@ -7,9 +7,8 @@ import com.dreamdisplays.api.Unstable
  *
  * @since 1.8.x
  */
-@JvmInline
 @Unstable
-value class YouTubeVideoId(val value: String) {
+data class YouTubeVideoId(val value: String) {
     init {
         require(isValid(value)) { "Invalid YouTube video id: $value" }
     }

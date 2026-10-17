@@ -42,7 +42,7 @@ internal object MediaPreparationService {
         val audio = selected.audioStream
             ?: throw DreamMediaException.NotFound("No usable audio stream for $url.")
 
-        val durationNanos = resolved.metadata.duration?.inWholeNanoseconds ?: 0L
+        val durationNanos = resolved.metadata.durationMs?.times(1_000_000L) ?: 0L
 
         return PreparedMedia(
             streamSet = ActiveStreams(

@@ -5,7 +5,6 @@ import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.display.model.property.DisplayState
 import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplays.api.media.model.VideoQuality
-import kotlin.time.Duration
 
 /**
  * Playback port.
@@ -24,10 +23,10 @@ interface PlaybackPort {
     fun stop(displayId: DisplayId)
 
     /** Seeks to a specific position in the display with the given [displayId]. */
-    fun seek(displayId: DisplayId, position: Duration)
+    fun seek(displayId: DisplayId, positionMs: Long)
 
-    /** Seeks [delta] relative to the current position for [displayId] (negative = backward). */
-    fun seekRelative(displayId: DisplayId, delta: Duration)
+    /** Seeks [deltaMs] relative to the current position for [displayId] (negative = backward). */
+    fun seekRelative(displayId: DisplayId, deltaMs: Long)
 
     /** Sets the volume for [displayId]. */
     fun setVolume(displayId: DisplayId, volume: Float)

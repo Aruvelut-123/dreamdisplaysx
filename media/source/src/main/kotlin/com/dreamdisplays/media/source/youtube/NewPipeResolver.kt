@@ -105,7 +105,7 @@ object NewPipeResolver : MediaResolverService {
             metadata = MediaMetadata(
                 title = resolved.title,
                 uploader = resolved.uploader,
-                duration = resolved.durationNanos.takeIf { it > 0L }?.nanoseconds,
+                durationMs = resolved.durationNanos.takeIf { it > 0L }?.div(1_000_000L),
                 thumbnailUrl = resolved.thumbnailUrl,
                 viewCount = resolved.viewCount,
                 likeCount = resolved.likeCount,

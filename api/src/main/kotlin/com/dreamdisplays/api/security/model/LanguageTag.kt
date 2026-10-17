@@ -9,9 +9,8 @@ import java.util.*
  *
  * @since 1.8.x
  */
-@JvmInline
 @Unstable
-value class LanguageTag(val value: String) {
+data class LanguageTag(val value: String) {
     init {
         require(value.none { it.isWhitespace() || it.isISOControl() }) {
             "Language tag must not contain whitespace or control characters."
