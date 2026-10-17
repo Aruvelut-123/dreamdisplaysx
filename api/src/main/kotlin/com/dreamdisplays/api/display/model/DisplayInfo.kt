@@ -35,6 +35,9 @@ data class DisplayInfo(
 
     /** The live `Watch party` session over this display, or `null` when none is running. */
     val watchParty: WatchPartySession? = null,
+
+    /** Data addons keep on this display. */
+    val customData: Map<String, ByteArray> = emptyMap(),
 ) {
     /** @return `true` if the display is currently playing. */
     val isPlaying: Boolean get() = state is DisplayState.Playing

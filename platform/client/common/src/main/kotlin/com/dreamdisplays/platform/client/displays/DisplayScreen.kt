@@ -592,6 +592,9 @@ class DisplayScreen(
     /** True for a fullscreen broadcast's synthetic display. */
     var virtual: Boolean = false
 
+    /** Data addons keep on this display, as the server last sent it. */
+    var customData: Map<String, ByteArray> = emptyMap()
+
     /** Anchor block position of the display (cached). */
     val pos: BlockPos; get() = blockPos ?: BlockPos(x, y, z).also { blockPos = it }
 
@@ -749,6 +752,7 @@ class DisplayScreen(
     /** Updates position, dimensions, and video URL from an incoming [DisplayInfo] packet. */
     fun updateData(packet: DisplayInfo) {
         virtual = packet.virtual
+        customData = acceptedCustomData(packet)
         x = packet.x
         y = packet.y
         z = packet.z

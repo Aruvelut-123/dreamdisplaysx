@@ -29,6 +29,9 @@ interface DisplayLifecycle {
     /** The video link changed. */
     fun onUrlChanged(action: Consumer<String?>)
 
+    /** Addon data on the display changed; the action gets the keys that changed. */
+    fun onDataChanged(action: Consumer<Set<String>>)
+
     /** The display was removed. After this, nothing else is delivered. */
     fun onRemoved(action: Runnable)
 }

@@ -15,6 +15,7 @@ import com.dreamdisplays.platform.client.displays.DisplayScreen
 import com.dreamdisplays.platform.client.managers.DisplayLifecycleManager.MAX_DISPLAY_BLOCKS
 import com.dreamdisplays.api.display.geometry.DisplayGeometry
 import com.dreamdisplays.platform.client.displays.PlacedDisplays
+import com.dreamdisplays.platform.client.displays.acceptedCustomData
 import com.dreamdisplays.platform.client.storage.ClientSettingsStore
 import com.dreamdisplays.util.FacingUtil
 import net.minecraft.client.Minecraft
@@ -79,7 +80,10 @@ object DisplayLifecycleManager {
             mode, packet.qualityCap, DisplayRotation.fromQuarterTurns(packet.rotation),
             currentDimensionKey(), packet.depth, packet.conforming,
         )
-        DisplayRegistry.screens[packet.id]?.virtual = packet.virtual
+        DisplayRegistry.screens[packet.id]?.let {
+            it.virtual = packet.virtual
+            it.customData = acceptedCustomData(packet)
+        }
     }
 
     /**

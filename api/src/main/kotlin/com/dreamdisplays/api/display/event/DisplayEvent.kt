@@ -40,6 +40,13 @@ sealed interface DisplayEvent {
     /** Signifies that the display's URL has changed. */
     data class UrlChanged(override val displayId: DisplayId, val url: String?) : DisplayEvent
 
+    /**
+     * Signifies that addon data on the display changed;
+     *
+     * [keys] are the keys that were added, changed or removed.
+     */
+    data class CustomDataChanged(override val displayId: DisplayId, val keys: Set<String>) : DisplayEvent
+
     /** Signifies that the display's media has encountered an error. */
     data class MediaError(override val displayId: DisplayId, val cause: DreamMediaException) : DisplayEvent
 }

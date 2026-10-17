@@ -3,6 +3,8 @@ package com.dreamdisplays.core.api
 import com.dreamdisplays.api.CommandResult
 import com.dreamdisplays.api.Display
 import com.dreamdisplays.api.DisplayLifecycle
+import com.dreamdisplays.api.display.data.DisplayCustomData
+import com.dreamdisplays.api.display.data.MapCustomData
 import com.dreamdisplays.api.display.event.DisplayEvent
 import com.dreamdisplays.api.display.model.DisplayInfo
 import com.dreamdisplays.api.display.model.property.DisplayId
@@ -29,6 +31,7 @@ internal class LiveDisplay(
     override val isAlive: Boolean get() = info != null
     override val state: DisplayState get() = info?.state ?: DisplayState.Idle
     override val isPlaying: Boolean get() = state is DisplayState.Playing
+    override val customData: DisplayCustomData = MapCustomData { info?.customData ?: emptyMap() }
 
     override var url: String?
         get() = info?.url
@@ -102,6 +105,7 @@ private class LifecycleHandlers : DisplayLifecycle {
     private val stopped = ArrayList<Runnable>()
     private val failed = ArrayList<Consumer<com.dreamdisplays.api.media.model.DreamMediaException>>()
     private val urlChanged = ArrayList<Consumer<String?>>()
+    private val dataChanged = ArrayList<Consumer<Set<String>>>()
     private val removed = ArrayList<Runnable>()
 
     override fun onPlaying(action: Consumer<DisplayState.Playing>) { playing += action }
@@ -110,6 +114,7 @@ private class LifecycleHandlers : DisplayLifecycle {
     override fun onStopped(action: Runnable) { stopped += action }
     override fun onFailed(action: Consumer<com.dreamdisplays.api.media.model.DreamMediaException>) { failed += action }
     override fun onUrlChanged(action: Consumer<String?>) { urlChanged += action }
+    override fun onDataChanged(action: Consumer<Set<String>>) { dataChanged += action }
     override fun onRemoved(action: Runnable) { removed += action }
 
     /** Routes [event] to handlers; state handlers fire only when the kind of state changes, not on every tick. */
@@ -128,6 +133,7 @@ private class LifecycleHandlers : DisplayLifecycle {
             }
             is DisplayEvent.MediaError -> failed.forEach { it.accept(event.cause) }
             is DisplayEvent.UrlChanged -> urlChanged.forEach { it.accept(event.url) }
+            is DisplayEvent.CustomDataChanged -> dataChanged.forEach { it.accept(event.keys) }
             is DisplayEvent.Removed -> removed.forEach { it.run() }
             else -> Unit
         }

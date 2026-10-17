@@ -178,5 +178,18 @@ class DefaultDisplaySystem(
         if (previous.url != current.url) {
             publish(DisplayEvent.UrlChanged(current.id, current.url))
         }
+        val changedKeys = changedDataKeys(previous.customData, current.customData)
+        if (changedKeys.isNotEmpty()) {
+            publish(DisplayEvent.CustomDataChanged(current.id, changedKeys))
+        }
+    }
+
+    private fun changedDataKeys(before: Map<String, ByteArray>, after: Map<String, ByteArray>): Set<String> {
+        if (before.isEmpty() && after.isEmpty()) return emptySet()
+        return (before.keys + after.keys).filterTo(HashSet()) { key ->
+            val old = before[key]
+            val new = after[key]
+            old == null || new == null || !old.contentEquals(new)
+        }
     }
 }

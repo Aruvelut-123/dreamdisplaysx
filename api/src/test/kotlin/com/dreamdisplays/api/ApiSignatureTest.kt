@@ -2,6 +2,9 @@ package com.dreamdisplays.api
 
 import com.dreamdisplays.api.addon.AddonContext
 import com.dreamdisplays.api.addon.DreamDisplaysAddon
+import com.dreamdisplays.api.display.data.DisplayCustomData
+import com.dreamdisplays.api.display.data.DisplayCustomDataLimits
+import com.dreamdisplays.api.display.data.MutableDisplayCustomData
 import com.dreamdisplays.api.display.geometry.DisplayGeometry
 import com.dreamdisplays.api.display.placement.DisplayPlacement
 import com.dreamdisplays.api.display.placement.DisplayPlacementProvider
@@ -28,6 +31,9 @@ class ApiSignatureTest {
         DisplayPlacementProvider::class.java,
         DisplayPlacements::class.java,
         PlacementTransform::class.java,
+        DisplayCustomData::class.java,
+        MutableDisplayCustomData::class.java,
+        DisplayCustomDataLimits::class.java,
     )
 
     @Test

@@ -30,6 +30,7 @@ internal fun DisplayScreen.toDisplay(): DisplayInfo = DisplayInfo(
     state = toRuntimeState(),
     mode = effectiveMode,
     watchParty = watchParty,
+    customData = customData,
 )
 
 /** Derives the current [DisplayState] from the screen's media / error / playback state. */

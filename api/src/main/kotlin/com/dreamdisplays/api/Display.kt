@@ -1,6 +1,7 @@
 package com.dreamdisplays.api
 
 import com.dreamdisplays.api.display.event.DisplayEvent
+import com.dreamdisplays.api.display.data.DisplayCustomData
 import com.dreamdisplays.api.display.model.DisplayInfo
 import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.display.model.property.DisplayState
@@ -45,6 +46,9 @@ interface Display {
 
     /** `true` while the video is playing. */
     val isPlaying: Boolean
+
+    /** Data addons keep on this display. */
+    val customData: DisplayCustomData
 
     /**
      * The video link, or `null` when none is set.
