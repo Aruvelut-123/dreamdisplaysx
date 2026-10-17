@@ -1,9 +1,9 @@
 package com.dreamdisplays.platform.client.capabilities
 
-import com.dreamdisplays.api.media.stream.model.SupportedCodec
-import com.dreamdisplays.api.render.backend.model.RenderBackend
-import com.dreamdisplays.api.render.backend.model.ShaderBackend
-import com.dreamdisplays.api.render.texture.model.TextureUploadPath
+import com.dreamdisplays.api.media.stream.SupportedCodec
+import com.dreamdisplays.core.render.RenderBackend
+import com.dreamdisplays.core.render.ShaderBackend
+import com.dreamdisplays.core.render.TextureUploadPath
 import com.dreamdisplays.core.protocol.common.packets.ClientHello
 import com.dreamdisplays.media.player.nativebridge.NativeMedia
 import com.dreamdisplays.media.player.process.HwAccelBackend

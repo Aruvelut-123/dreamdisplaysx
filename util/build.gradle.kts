@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     api(project(":api"))
+    api(project(":shared"))
     api(libs.caffeine)
     api(libs.kotlinxCoroutinesCore)
     api(libs.kotlinxSerializationJson)

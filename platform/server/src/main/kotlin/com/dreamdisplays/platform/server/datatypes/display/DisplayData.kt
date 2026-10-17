@@ -4,7 +4,7 @@ import com.dreamdisplays.api.display.model.property.DisplayRotation
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.playback.policy.PlaybackPermissions
+import com.dreamdisplays.shared.playback.PlaybackPermissions
 import java.util.*
 import kotlin.time.Instant
 

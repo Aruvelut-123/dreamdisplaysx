@@ -2,7 +2,7 @@ package com.dreamdisplays.media.player.managers
 
 import com.dreamdisplays.api.media.model.DreamMediaException
 import com.dreamdisplays.api.media.model.FramePixelFormat
-import com.dreamdisplays.api.media.audio.service.AudioDspStage
+import com.dreamdisplays.api.media.audio.AudioDspStage
 import com.dreamdisplays.api.media.player.FrameUploaderFactory
 import com.dreamdisplays.api.media.player.GpuTextureRef
 import com.dreamdisplays.api.media.player.RenderExecutor

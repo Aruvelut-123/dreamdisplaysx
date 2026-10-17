@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.server
 
-import com.dreamdisplays.api.display.geometry.DisplaySurface
+import com.dreamdisplays.shared.geometry.DisplaySurface
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.bukkit.Bukkit
 import org.bukkit.Material

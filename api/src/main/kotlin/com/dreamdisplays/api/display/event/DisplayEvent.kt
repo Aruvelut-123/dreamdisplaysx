@@ -1,7 +1,7 @@
 package com.dreamdisplays.api.display.event
 
 import com.dreamdisplays.api.Unstable
-import com.dreamdisplays.api.display.model.Display
+import com.dreamdisplays.api.display.model.DisplayInfo
 import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.display.model.property.DisplayState
 import com.dreamdisplays.api.display.model.settings.DisplaySettings
@@ -18,7 +18,7 @@ sealed interface DisplayEvent {
     val displayId: DisplayId
 
     /** Created when a display is created. */
-    data class Created(override val displayId: DisplayId, val display: Display) : DisplayEvent
+    data class Created(override val displayId: DisplayId, val display: DisplayInfo) : DisplayEvent
 
     /** Created when a display is removed. */
     data class Removed(override val displayId: DisplayId) : DisplayEvent

@@ -1,8 +1,8 @@
 package com.dreamdisplays.platform.client.managers
 
-import com.dreamdisplays.api.platform.service.keys.PlatformServices
-import com.dreamdisplays.api.runtime.module.DreamDisplaysModule
-import com.dreamdisplays.api.runtime.registry.service.register
+import com.dreamdisplays.core.services.keys.PlatformServices
+import com.dreamdisplays.core.runtime.DreamDisplaysModule
+import com.dreamdisplays.core.runtime.register
 import com.dreamdisplays.media.player.nativebridge.NativeMedia
 import com.dreamdisplays.media.player.process.FFmpegBinary
 import com.dreamdisplays.media.source.youtube.cache.FormatDiskCache
@@ -46,14 +46,12 @@ object ClientStartupManager {
 
     /** The default module set installed into every [ClientApplication] built by [start]. */
     private val defaultModules: List<DreamDisplaysModule> = listOf(
-        ClientStorageModule,
         CoreDisplayModule,
         CorePlaybackModule,
         ClientAudioModule,
         MediaResolverModule,
         ClientOverlayModule,
         ClientInputModule,
-        ClientRenderModule,
         ClientCapabilityModule,
     )
 

@@ -1,12 +1,12 @@
 package com.dreamdisplays.media.source.twitch
 
 import com.dreamdisplays.api.media.model.DreamMediaException
-import com.dreamdisplays.api.media.source.model.MediaMetadata
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.source.model.ResolvedMedia
-import com.dreamdisplays.api.media.stream.model.MediaStream
-import com.dreamdisplays.api.media.stream.model.MediaStreamType
+import com.dreamdisplays.api.media.source.MediaMetadata
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.source.ResolvedMedia
+import com.dreamdisplays.api.media.stream.MediaStream
+import com.dreamdisplays.api.media.stream.MediaStreamType
 import com.dreamdisplays.media.source.platform.LiveAwareResolvedMediaCache
 import com.dreamdisplays.media.source.youtube.YtDlpResolver
 import com.dreamdisplays.util.net.DreamHttpClient

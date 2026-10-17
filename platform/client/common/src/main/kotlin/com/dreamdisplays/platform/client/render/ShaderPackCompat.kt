@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.client.render
 
-import com.dreamdisplays.api.render.backend.model.ShaderBackend
+import com.dreamdisplays.core.render.ShaderBackend
 
 /** Shader-pack detector: checks for `Iris`, `OptiFine`, or `Canvas` shader packs without adding hard dependencies. */
 internal object ShaderPackCompat {

@@ -3,15 +3,13 @@ package com.dreamdisplays.core.services
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.Unstable
 import com.dreamdisplays.api.display.event.DisplayEvent
-import com.dreamdisplays.api.display.model.Display
+import com.dreamdisplays.api.display.model.DisplayInfo
 import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.display.model.property.DisplayState
 import com.dreamdisplays.api.display.model.settings.DisplaySettings
-import com.dreamdisplays.api.display.service.DisplayExecutor
-import com.dreamdisplays.api.display.service.DisplaySystem
 import com.dreamdisplays.api.media.model.VideoQuality
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.watchparty.model.WatchPartySession
+import com.dreamdisplays.api.watchparty.WatchPartySession
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -20,18 +18,18 @@ import java.util.concurrent.CopyOnWriteArrayList
 class DefaultDisplaySystem(
     private val commands: DisplayExecutor = DisplayExecutor.Noop,
 ) : DisplaySystem {
-    private val displays = ConcurrentHashMap<DisplayId, Display>()
+    private val displays = ConcurrentHashMap<DisplayId, DisplayInfo>()
     private val listeners = CopyOnWriteArrayList<(DisplayEvent) -> Unit>()
 
-    override fun getDisplay(id: DisplayId): Display? = displays[id]
-    override fun listDisplays(): List<Display> = displays.values.sortedBy { it.id.uuid.toString() }
+    override fun getDisplay(id: DisplayId): DisplayInfo? = displays[id]
+    override fun listDisplays(): List<DisplayInfo> = displays.values.sortedBy { it.id.uuid.toString() }
 
     override fun onDisplayEvent(listener: (DisplayEvent) -> Unit): AutoCloseable {
         listeners += listener
         return AutoCloseable { listeners -= listener }
     }
 
-    override fun recordDisplay(display: Display) {
+    override fun recordDisplay(display: DisplayInfo) {
         val previous = displays.put(display.id, display)
         if (previous == null) {
             publish(DisplayEvent.Created(display.id, display))
@@ -166,11 +164,11 @@ class DefaultDisplaySystem(
     override fun getSession(displayId: DisplayId): WatchPartySession? =
         displays[displayId]?.watchParty
 
-    private fun apply(display: Display?) {
+    private fun apply(display: DisplayInfo?) {
         if (display != null) recordDisplay(display)
     }
 
-    private fun publishChanges(previous: Display, current: Display) {
+    private fun publishChanges(previous: DisplayInfo, current: DisplayInfo) {
         if (previous.settings != current.settings) {
             publish(DisplayEvent.SettingsChanged(current.id, previous.settings, current.settings))
         }

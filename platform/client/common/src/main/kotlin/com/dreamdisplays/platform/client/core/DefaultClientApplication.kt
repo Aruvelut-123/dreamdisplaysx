@@ -1,7 +1,12 @@
 package com.dreamdisplays.platform.client.core
 
-import com.dreamdisplays.api.runtime.module.DreamDisplaysModule
-import com.dreamdisplays.api.runtime.registry.service.ServiceRegistry
+import com.dreamdisplays.core.runtime.DreamDisplaysModule
+import com.dreamdisplays.core.runtime.ServiceRegistry
+import com.dreamdisplays.api.internal.ApiHolder
+import com.dreamdisplays.api.addon.AddonSide
+import com.dreamdisplays.core.addon.AddonManager
+import com.dreamdisplays.core.addon.ClientAddonBinder
+import com.dreamdisplays.core.runtime.DefaultApiBackend
 import com.dreamdisplays.core.runtime.DefaultRuntime
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -11,6 +16,11 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 class DefaultClientApplication(override val context: ClientContext) : ClientApplication {
     private val runtime = DefaultRuntime(context)
+
+    private val addons = AddonManager(
+        AddonSide.CLIENT,
+        listOf(ClientAddonBinder { ApiHolder.current!!.displays }),
+    )
     private val clientModules = LinkedHashMap<String, ClientModule>()
 
     /** Listeners for lifecycle events. */
@@ -53,6 +63,9 @@ class DefaultClientApplication(override val context: ClientContext) : ClientAppl
                 throw it
             }
         started = true
+        val backend = DefaultApiBackend(services, ClientDisplayBudget, addons)
+        ApiHolder.attach(backend)
+        addons.start()
         emit(ClientLifecycleEvent.Ready)
     }
 
@@ -61,6 +74,8 @@ class DefaultClientApplication(override val context: ClientContext) : ClientAppl
     override fun stop() {
         if (!started) return
         emit(ClientLifecycleEvent.ShuttingDown)
+        addons.stop()
+        ApiHolder.detach()
         runtime.stop()
         started = false
     }

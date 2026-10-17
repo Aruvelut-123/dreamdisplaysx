@@ -1,9 +1,9 @@
 package com.dreamdisplays.media.source.vimeo
 
 import com.dreamdisplays.api.media.model.DreamMediaException
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.source.model.ResolvedMedia
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.source.ResolvedMedia
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.slf4j.LoggerFactory
@@ -11,13 +11,10 @@ import java.util.concurrent.TimeUnit
 
 /** In-process Vimeo resolver: one call to the player config endpoint (see [VimeoApi]) instead of a `yt-dlp` subprocess spawn. */
 object VimeoResolver : MediaResolverService {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Above the `yt-dlp` fallback (0), alongside the other first-party in-process resolvers. */
     override val priority: Int = 10
 
-    /** Progressive/HLS URLs are signed but stable for a while; the cache mostly absorbs prefetch->resolve. */
     private val cache: Cache<String, ResolvedMedia> = Caffeine.newBuilder()
         .maximumSize(64)
         .expireAfterWrite(10, TimeUnit.MINUTES)

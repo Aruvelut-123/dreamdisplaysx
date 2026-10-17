@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.client.net
 
-import com.dreamdisplays.api.protocol.model.PacketDirection
+import com.dreamdisplays.shared.protocol.PacketDirection
 import com.dreamdisplays.core.protocol.common.PacketRegistry
 import com.dreamdisplays.core.protocol.common.packets.*
 import com.dreamdisplays.platform.client.managers.ClientPacketManager

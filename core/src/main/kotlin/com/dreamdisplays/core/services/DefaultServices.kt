@@ -2,20 +2,14 @@ package com.dreamdisplays.core.services
 
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.display.event.DisplayEvent
-import com.dreamdisplays.api.display.model.Display
+import com.dreamdisplays.api.display.model.DisplayInfo
 import com.dreamdisplays.api.display.model.property.DisplayId
 import com.dreamdisplays.api.display.model.property.DisplayState
 import com.dreamdisplays.api.display.model.settings.DisplaySettings
-import com.dreamdisplays.api.display.service.DisplayLookup
-import com.dreamdisplays.api.display.service.DisplayMutationPort
-import com.dreamdisplays.api.display.service.DisplayService
 import com.dreamdisplays.api.media.model.VideoQuality
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.playback.service.PlaybackPort
-import com.dreamdisplays.api.playback.service.PlaybackService
-import com.dreamdisplays.api.watchparty.service.WatchPartyPort
-import com.dreamdisplays.api.watchparty.service.WatchPartyService
-import com.dreamdisplays.api.watchparty.model.WatchPartySession
+import com.dreamdisplays.api.watchparty.WatchPartyService
+import com.dreamdisplays.api.watchparty.WatchPartySession
 
 /**
  * Default core implementation of [DisplayService].
@@ -24,8 +18,8 @@ class DefaultDisplayService(
     private val lookup: DisplayLookup,
     private val mutations: DisplayMutationPort,
 ) : DisplayService {
-    override fun getDisplay(id: DisplayId): Display? = lookup.getDisplay(id)
-    override fun listDisplays(): List<Display> = lookup.listDisplays()
+    override fun getDisplay(id: DisplayId): DisplayInfo? = lookup.getDisplay(id)
+    override fun listDisplays(): List<DisplayInfo> = lookup.listDisplays()
     override fun updateSettings(id: DisplayId, settings: DisplaySettings) = mutations.updateSettings(id, settings)
     override fun setUrl(id: DisplayId, url: String?, lang: String?) = mutations.setUrl(id, url, lang)
     override fun setAccess(id: DisplayId, access: DisplayAccess) = mutations.setAccess(id, access)

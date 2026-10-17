@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.server.proxy
 
-import com.dreamdisplays.api.playback.model.FullscreenMode
+import com.dreamdisplays.shared.playback.FullscreenMode
 import com.dreamdisplays.api.playback.model.WatchPartySessionState
 import com.dreamdisplays.core.protocol.common.packets.DisplayDelete
 import com.dreamdisplays.core.protocol.common.packets.WatchPartyState

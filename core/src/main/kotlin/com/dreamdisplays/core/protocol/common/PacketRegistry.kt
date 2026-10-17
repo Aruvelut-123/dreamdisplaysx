@@ -2,7 +2,7 @@
 
 package com.dreamdisplays.core.protocol.common
 
-import com.dreamdisplays.api.protocol.model.PacketDirection
+import com.dreamdisplays.shared.protocol.PacketDirection
 import com.dreamdisplays.core.protocol.common.packets.ClearCache
 import com.dreamdisplays.core.protocol.common.packets.DreamPacket
 import com.dreamdisplays.core.protocol.common.packets.ClientHello

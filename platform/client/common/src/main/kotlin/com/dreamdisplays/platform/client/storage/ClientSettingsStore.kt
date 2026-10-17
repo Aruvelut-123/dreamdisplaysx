@@ -109,7 +109,7 @@ object ClientSettingsStore : ClientSettingsStorage {
         save()
     }
 
-    /** Sets whether [displayUuid] is pinned to a Picture-in-Picture overlay and saves. */
+    /** Sets whether [displayUuid] is pinned to a `Picture-in-Picture` overlay and saves. */
     override fun setPipOpen(displayUuid: UUID, open: Boolean) {
         val s = getSettings(displayUuid)
         s.pipOpen = open

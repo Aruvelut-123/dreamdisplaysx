@@ -1,7 +1,7 @@
 package com.dreamdisplays.platform.server
 
-import com.dreamdisplays.api.display.geometry.DisplaySurface
-import com.dreamdisplays.api.display.geometry.normalizeBlockId
+import com.dreamdisplays.shared.geometry.DisplaySurface
+import com.dreamdisplays.shared.geometry.normalizeBlockId
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.data.BlockFamilies
 import net.minecraft.data.BlockFamily

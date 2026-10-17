@@ -1,8 +1,8 @@
 package com.dreamdisplays.platform.client.render
 
-import com.dreamdisplays.api.display.geometry.ConformQuad
-import com.dreamdisplays.api.display.geometry.ConformVertex
-import com.dreamdisplays.api.display.geometry.clipToUvRect
+import com.dreamdisplays.shared.geometry.ConformQuad
+import com.dreamdisplays.shared.geometry.ConformVertex
+import com.dreamdisplays.shared.geometry.clipToUvRect
 import com.dreamdisplays.platform.client.displays.DisplayScreen
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer

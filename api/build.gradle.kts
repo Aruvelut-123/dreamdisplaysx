@@ -12,6 +12,10 @@ java {
     withSourcesJar()
 }
 
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions.freeCompilerArgs.add("-Xno-source-debug-extension")
+}
+
 publishing {
     publications {
         create<MavenPublication>("api") {

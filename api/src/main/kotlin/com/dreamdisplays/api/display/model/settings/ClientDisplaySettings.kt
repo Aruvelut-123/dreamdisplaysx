@@ -44,10 +44,10 @@ data class ClientDisplaySettings(
     /** Last known playback position in nanoseconds, resumed on Local displays after a restart. */
     var savedTimeNanos: Long = 0,
 
-    /** Whether the viewer pinned this display to a Picture-in-Picture overlay; re-opened on rejoin regardless of render distance. */
+    /** Whether the viewer pinned this display to a `Picture-in-Picture` overlay; re-opened on rejoin regardless of render distance. */
     var pipOpen: Boolean = false,
 
-    /** Picture-in-Picture anchor point. */
+    /** `Picture-in-Picture` anchor point. */
     var pipAnchor: String? = null,
 
     /** Height of the PiP as a fraction of the screen, or `0` when the viewer never resized it. */

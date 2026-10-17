@@ -1,7 +1,7 @@
 package com.dreamdisplays.platform.client.ui
 
 /**
- * The 8 magnetic snap zones a Picture-in-Picture overlay can dock to (4 corners + 4 edge midpoints); a dragged overlay
+ * The 8 magnetic snap zones a `Picture-in-Picture` overlay can dock to (4 corners + 4 edge midpoints); a dragged overlay
  * snaps to the nearest one on release.
  */
 enum class PipAnchor {

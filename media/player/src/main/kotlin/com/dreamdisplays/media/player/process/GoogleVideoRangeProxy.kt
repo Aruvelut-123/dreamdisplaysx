@@ -1,6 +1,6 @@
 package com.dreamdisplays.media.player.process
 
-import com.dreamdisplays.api.security.policy.MediaHosts
+import com.dreamdisplays.shared.policy.MediaHosts
 import java.io.IOException
 import java.net.URI
 import java.net.http.HttpClient

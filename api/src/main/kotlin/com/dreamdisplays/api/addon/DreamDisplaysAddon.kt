@@ -1,0 +1,35 @@
+package com.dreamdisplays.api.addon
+
+import com.dreamdisplays.api.Unstable
+
+/**
+ * Optional lifecycle hooks for an addon. An addon works without it when it only needs annotated
+ * handlers.
+ *
+ * @since 1.10.x
+ */
+@Unstable
+interface DreamDisplaysAddon {
+    /** Called when the addon is enabled. Everything started through [context] ends on [onDisable]. */
+    fun onEnable(context: AddonContext) {}
+
+    /** Called when the addon is disabled, before its subscriptions are closed. */
+    fun onDisable() {}
+}
+
+/**
+ * What an addon gets when it is enabled.
+ *
+ * @since 1.10.x
+ */
+@Unstable
+interface AddonContext {
+    /** The addon ID. */
+    val id: String
+
+    /** Where this addon runs now: [AddonSide.CLIENT] or [AddonSide.SERVER]. */
+    val side: AddonSide
+
+    /** Makes [resource] close together with the addon. Returns [resource]. */
+    fun <T : AutoCloseable> own(resource: T): T
+}

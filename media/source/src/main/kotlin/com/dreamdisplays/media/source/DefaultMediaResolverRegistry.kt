@@ -1,10 +1,10 @@
 package com.dreamdisplays.media.source
 
 import com.dreamdisplays.api.media.model.DreamMediaException
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.service.MediaResolverRegistry
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.source.model.ResolvedMedia
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.MediaResolverRegistry
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.source.ResolvedMedia
 import com.dreamdisplays.media.runtime.security.MediaHostGuard
 import com.dreamdisplays.util.DreamCoroutines
 import kotlinx.coroutines.CancellationException

@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.client.capabilities
 
-import com.dreamdisplays.api.capability.ServerFeature
+import com.dreamdisplays.shared.capability.ServerFeature
 import com.dreamdisplays.core.protocol.common.packets.ClientHello
 import com.dreamdisplays.core.protocol.common.packets.ServerHello
 

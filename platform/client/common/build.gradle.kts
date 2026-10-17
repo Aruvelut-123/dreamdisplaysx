@@ -53,7 +53,7 @@ neoForge {
         }
     }
     accessTransformers.from(
-        project(":platform:client:neoforge").file("src/main/resources/META-INF/accesstransformer.cfg"),
+        rootProject.file("platform/client/neoforge/src/main/resources/META-INF/accesstransformer.cfg"),
     )
 }
 

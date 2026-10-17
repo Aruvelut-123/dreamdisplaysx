@@ -1,8 +1,8 @@
 package com.dreamdisplays.platform.client.displays
 
-import com.dreamdisplays.api.media.service.keys.MediaServices
-import com.dreamdisplays.api.media.audio.service.keys.AudioAcousticsServices
-import com.dreamdisplays.api.media.source.model.MediaSource
+import com.dreamdisplays.core.services.keys.MediaServices
+import com.dreamdisplays.core.services.keys.AudioAcousticsServices
+import com.dreamdisplays.api.media.source.MediaSource
 import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplays.core.protocol.common.packets.ReportDuration
 import com.dreamdisplays.media.player.MediaPlayer

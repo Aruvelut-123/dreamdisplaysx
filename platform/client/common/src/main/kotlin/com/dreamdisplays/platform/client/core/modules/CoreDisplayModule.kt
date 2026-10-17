@@ -1,12 +1,15 @@
 package com.dreamdisplays.platform.client.core.modules
 
-import com.dreamdisplays.api.display.service.*
-import com.dreamdisplays.api.display.service.keys.DisplayServices
-import com.dreamdisplays.api.playback.service.PlaybackPort
-import com.dreamdisplays.api.runtime.module.DreamDisplaysModule
-import com.dreamdisplays.api.runtime.module.ModuleContext
-import com.dreamdisplays.api.runtime.registry.service.register
-import com.dreamdisplays.api.watchparty.service.WatchPartyPort
+import com.dreamdisplays.core.services.DisplayService
+import com.dreamdisplays.core.services.DisplayLookup
+import com.dreamdisplays.core.services.DisplayMutationPort
+import com.dreamdisplays.core.services.DisplaySystem
+import com.dreamdisplays.core.services.keys.DisplayServices
+import com.dreamdisplays.core.services.PlaybackPort
+import com.dreamdisplays.core.runtime.DreamDisplaysModule
+import com.dreamdisplays.core.runtime.ModuleContext
+import com.dreamdisplays.core.runtime.register
+import com.dreamdisplays.core.services.WatchPartyPort
 import com.dreamdisplays.core.services.DefaultDisplayService
 import com.dreamdisplays.core.services.DefaultDisplaySystem
 import com.dreamdisplays.platform.client.displays.MinecraftDisplayCommands

@@ -1,12 +1,11 @@
 package com.dreamdisplays.platform.client.ui.widgets
 
-import com.dreamdisplays.api.media.search.model.MediaSearchResult
+import com.dreamdisplays.api.media.search.MediaSearchResult
 import com.dreamdisplays.platform.client.input.MouseButtons
 import com.dreamdisplays.platform.client.render.Thumbnails
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplays.platform.client.ui.drawText
 //? if <1.21.11 {
-import com.dreamdisplays.platform.client.ui.enableScissorPoseAware
 //?}
 import com.dreamdisplays.platform.client.ui.kit.*
 import com.dreamdisplays.platform.client.ui.widgets.SuggestionsPanel.Companion.THUMB_H

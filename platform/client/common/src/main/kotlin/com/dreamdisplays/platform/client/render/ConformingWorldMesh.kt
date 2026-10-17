@@ -1,10 +1,10 @@
 package com.dreamdisplays.platform.client.render
 
-import com.dreamdisplays.api.display.geometry.ConformQuad
-import com.dreamdisplays.api.display.geometry.ShapeBox
-import com.dreamdisplays.api.display.geometry.ShapedBlock
-import com.dreamdisplays.api.display.geometry.blockSpans
-import com.dreamdisplays.api.display.geometry.buildConformingMesh
+import com.dreamdisplays.shared.geometry.ConformQuad
+import com.dreamdisplays.shared.geometry.ShapeBox
+import com.dreamdisplays.shared.geometry.ShapedBlock
+import com.dreamdisplays.shared.geometry.blockSpans
+import com.dreamdisplays.shared.geometry.buildConformingMesh
 import com.dreamdisplays.api.display.model.property.DisplayFacing
 import com.dreamdisplays.platform.client.displays.DisplayScreen
 import net.minecraft.client.Minecraft

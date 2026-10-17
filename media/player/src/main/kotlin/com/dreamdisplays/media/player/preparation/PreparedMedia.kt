@@ -1,6 +1,6 @@
 package com.dreamdisplays.media.player.preparation
 
-import com.dreamdisplays.api.media.stream.model.SubtitleTrack
+import com.dreamdisplays.api.media.stream.SubtitleTrack
 import com.dreamdisplays.media.player.stream.ActiveStreams
 
 /**

@@ -3,7 +3,7 @@ package com.dreamdisplays.platform.client
 import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
 import com.dreamdisplays.platform.client.platform.NeoForgePlatformIntegrationProvider
-import com.dreamdisplays.api.platform.service.keys.PlatformServices
+import com.dreamdisplays.core.services.keys.PlatformServices
 import com.dreamdisplays.platform.client.render.ScreenRenderer
 import com.dreamdisplays.platform.client.render.UnshadedDisplayPass
 import com.dreamdisplays.platform.client.Mod as DreamMod

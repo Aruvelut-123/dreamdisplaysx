@@ -1,7 +1,7 @@
 package com.dreamdisplays.media.source.youtube.model
 
-import com.dreamdisplays.api.media.stream.model.MediaStream
-import com.dreamdisplays.api.media.stream.model.MediaStreamType
+import com.dreamdisplays.api.media.stream.MediaStream
+import com.dreamdisplays.api.media.stream.MediaStreamType
 import kotlinx.serialization.Serializable
 
 /**

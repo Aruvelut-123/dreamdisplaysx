@@ -1,11 +1,10 @@
 package com.dreamdisplays.media.source.youtube
 
-import com.dreamdisplays.api.media.source.model.MediaMetadata
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.source.model.ResolvedMedia
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.service.MediaResolverRegistry
-import kotlin.time.Duration.Companion.nanoseconds
+import com.dreamdisplays.api.media.source.MediaMetadata
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.source.ResolvedMedia
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.MediaResolverRegistry
 
 /**
  * Subprocess-backed [MediaResolverService] wrapping the [YtDlp] orchestrator. This is the slow, robust

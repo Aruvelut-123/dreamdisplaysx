@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.server.playback
 
-import com.dreamdisplays.api.playback.model.PipPinRecord
+import com.dreamdisplays.shared.playback.PipPinSession
 import com.dreamdisplays.platform.server.managers.ActionThrottle
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.meta.ServerCoroutines
@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Tracks which displays each player has pinned to a Picture-in-Picture overlay, so a pinned display's updates keep
+ * Tracks which displays each player has pinned to a `Picture-in-Picture` overlay, so a pinned display's updates keep
  * reaching them out of range.
  */
 object PipPinManager {
@@ -120,7 +120,7 @@ object PipPinManager {
     /** Persists every pin, or clears the store when none remain. */
     private fun persistNow() {
         val records = pins.flatMap { (playerId, displayIds) ->
-            displayIds.map { displayId -> PipPinRecord(playerId.toString(), displayId.toString()) }
+            displayIds.map { displayId -> PipPinSession(playerId.toString(), displayId.toString()) }
         }
         PipPinStore.save(records)
     }

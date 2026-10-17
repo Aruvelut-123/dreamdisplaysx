@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.server
 
+import com.dreamdisplays.platform.server.api.PaperServerApi
 import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.managers.StorageManager
@@ -81,6 +82,8 @@ class PaperServer : JavaPlugin() {
         runRepeatingTasks()
 
         TelemetryMetrics.register(this, Metrics(this, 26488))
+
+        PaperServerApi.start()
     }
 
     /** Calls the Paper-only scheduler registrar without requiring its symbol in Fabric compilation. */
@@ -97,6 +100,7 @@ class PaperServer : JavaPlugin() {
      */
     fun doDisable() {
         if (!::storage.isInitialized) return
+        disableStep("stop addons") { PaperServerApi.stop() }
         disableStep("save displays") { DisplayManager.save { data: PaperDisplayData -> storage.saveDisplay(data) } }
         disableStep("stop background IO") { ServerCoroutines.shutdown() }
         disableStep("close storage") { storage.disconnect() }

@@ -1,8 +1,8 @@
 package com.dreamdisplays.api.media.player
 
 import com.dreamdisplays.api.Unstable
-import com.dreamdisplays.api.media.source.service.MediaResolverRegistry
-import com.dreamdisplays.api.media.stream.service.StreamSelector
+import com.dreamdisplays.api.media.source.MediaResolverRegistry
+import com.dreamdisplays.api.media.stream.StreamSelector
 
 /**
  * Cross-cutting platform services a playback engine depends on, bundled so a player can be created

@@ -6,7 +6,7 @@ import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplays.api.playback.model.WatchPartyAction
 import com.dreamdisplays.api.playback.model.WatchPartySessionState
-import com.dreamdisplays.api.protocol.model.PacketDirection
+import com.dreamdisplays.shared.protocol.PacketDirection
 import com.dreamdisplays.core.protocol.common.packets.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.protobuf.ProtoBuf

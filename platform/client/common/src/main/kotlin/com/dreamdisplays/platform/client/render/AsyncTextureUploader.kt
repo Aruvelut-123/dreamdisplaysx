@@ -4,11 +4,10 @@ package com.dreamdisplays.platform.client.render
 import com.mojang.blaze3d.opengl.GlStateManager
 //?}
 //? if <1.21.11 {
-import com.mojang.blaze3d.platform.GlStateManager
 //?}
-import com.dreamdisplays.api.media.sink.model.DecodedVideoFrame
-import com.dreamdisplays.api.render.texture.model.TextureHandle
-import com.dreamdisplays.api.render.texture.service.TextureUploaderService
+import com.dreamdisplays.api.media.sink.DecodedVideoFrame
+import com.dreamdisplays.core.render.TextureHandle
+import com.dreamdisplays.core.render.TextureUploaderService
 import com.dreamdisplays.platform.client.render.AsyncTextureUploader.Companion.PBO_COUNT
 import org.lwjgl.opengl.*
 import org.lwjgl.system.MemoryUtil

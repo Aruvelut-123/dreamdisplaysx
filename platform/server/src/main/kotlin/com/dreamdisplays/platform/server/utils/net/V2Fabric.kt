@@ -1,11 +1,11 @@
 package com.dreamdisplays.platform.server.utils.net
 
-import com.dreamdisplays.api.capability.ServerFeature
-import com.dreamdisplays.api.playback.model.FullscreenAckAction
+import com.dreamdisplays.shared.capability.ServerFeature
+import com.dreamdisplays.shared.playback.FullscreenAckAction
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplays.api.playback.model.WatchPartyAction
-import com.dreamdisplays.api.protocol.model.PacketDirection
+import com.dreamdisplays.shared.protocol.PacketDirection
 import com.dreamdisplays.core.protocol.common.PacketRegistry
 import com.dreamdisplays.core.protocol.common.packets.*
 import com.dreamdisplays.platform.client.net.V2Payload

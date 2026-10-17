@@ -3,10 +3,11 @@ package com.dreamdisplays.platform.server.utils.net
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.playback.policy.PlaybackPermissions
+import com.dreamdisplays.shared.playback.PlaybackPermissions
 import com.dreamdisplays.api.playback.model.WatchPartyAction
-import com.dreamdisplays.api.security.policy.MediaUrlPolicy
+import com.dreamdisplays.shared.policy.MediaUrlPolicy
 import com.dreamdisplays.platform.server.PaperServer
+import com.dreamdisplays.platform.server.api.PaperServerApi
 import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.managers.ActionThrottle
 import com.dreamdisplays.platform.server.managers.DisplayManager
@@ -37,25 +38,13 @@ import java.util.*
 @PaperOnly
 @NullMarked
 object DisplayActions {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /**
-     * Bounds how often one display's video can be changed — each call persists to disk, broadcasts to
-     * every viewer, and makes every viewer's client re-resolve the new URL, so unlike the cheap
-     * per-packet sync state this genuinely amplifies.
-     */
     private val setVideoThrottle = ActionThrottle()
     private const val SET_VIDEO_COOLDOWN_MS = 250L
 
-    /**
-     * Strips control characters (newlines, carriage returns, ANSI escapes, ...) from client-supplied
-     * text before it's interpolated into a log line, and caps its length — otherwise a forged
-     * version string or URL can inject fake extra log lines or flood the log file.
-     */
     private fun String.sanitizedForLog(maxLength: Int = 200): String = take(maxLength).filter { !it.isISOControl() }
 
-    /** Bounds how often one player may request a catch-up snapshot for one display. */
     private val requestSyncThrottle = ActionThrottle()
     private const val REQUEST_SYNC_COOLDOWN_MS = 250L
 
@@ -103,6 +92,7 @@ object DisplayActions {
         runAsync { PaperServer.getInstance().storage.saveDisplay(displayData) }
         DisplayManager.broadcastUpdate(displayData)
         TimelineManager.onVideoChanged(displayData)
+        PaperServerApi.urlChanged(displayData)
     }
 
     /** Sets who may use a display owned by [player] and rebroadcasts. */

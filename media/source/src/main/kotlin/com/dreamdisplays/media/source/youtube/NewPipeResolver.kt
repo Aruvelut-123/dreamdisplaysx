@@ -1,10 +1,10 @@
 package com.dreamdisplays.media.source.youtube
 
-import com.dreamdisplays.api.media.source.url.YouTubeUrls
-import com.dreamdisplays.api.media.source.model.MediaMetadata
-import com.dreamdisplays.api.media.source.service.MediaResolverService
-import com.dreamdisplays.api.media.source.model.MediaSource
-import com.dreamdisplays.api.media.source.model.ResolvedMedia
+import com.dreamdisplays.api.media.source.YouTubeUrls
+import com.dreamdisplays.api.media.source.MediaMetadata
+import com.dreamdisplays.api.media.source.MediaResolverService
+import com.dreamdisplays.api.media.source.MediaSource
+import com.dreamdisplays.api.media.source.ResolvedMedia
 import com.dreamdisplays.media.source.youtube.cache.FormatDiskCache
 import com.dreamdisplays.media.source.youtube.model.YtStream
 import com.dreamdisplays.media.source.youtube.model.YtStreams
@@ -22,7 +22,6 @@ import kotlinx.coroutines.launch
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.services.youtube.YoutubeJavaScriptPlayerManager
 import org.slf4j.LoggerFactory
-import kotlin.time.Duration.Companion.nanoseconds
 
 /**
  * In-process YouTube stream resolver backed by `NewPipeExtractor`; fast path before `yt-dlp`

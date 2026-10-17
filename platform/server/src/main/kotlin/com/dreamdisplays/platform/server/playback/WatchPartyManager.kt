@@ -1,6 +1,6 @@
 package com.dreamdisplays.platform.server.playback
 
-import com.dreamdisplays.api.playback.policy.PlaybackPermissions
+import com.dreamdisplays.shared.playback.PlaybackPermissions
 import com.dreamdisplays.api.playback.model.Timeline
 import com.dreamdisplays.api.playback.model.WatchPartyAction
 import com.dreamdisplays.api.playback.model.WatchPartySessionState
@@ -15,7 +15,7 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 /** Runs the ephemeral watch-party state machine, one session per display. Only the host drives playback; nearby players just receive updates. */
-// TODO: release in 1.10.0
+// TODO: release in 1.11.0
 object WatchPartyManager {
     private const val COUNTDOWN_MS = 3_000L
     private const val HOST_GRACE_MS = 30_000L

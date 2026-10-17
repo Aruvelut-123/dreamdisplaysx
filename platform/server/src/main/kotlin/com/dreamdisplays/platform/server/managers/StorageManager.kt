@@ -3,7 +3,7 @@ package com.dreamdisplays.platform.server.managers
 import com.dreamdisplays.api.playback.model.DisplayAccess
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.security.policy.MediaUrlPolicy
+import com.dreamdisplays.shared.policy.MediaUrlPolicy
 import com.dreamdisplays.platform.server.datatypes.display.DisplayData
 import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData

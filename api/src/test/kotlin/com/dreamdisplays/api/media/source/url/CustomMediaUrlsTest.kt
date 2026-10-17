@@ -3,8 +3,9 @@
 package com.dreamdisplays.api.media.source.url
 
 import com.dreamdisplays.api.Unstable
-import com.dreamdisplays.api.media.source.model.CustomMediaKind
-import com.dreamdisplays.api.media.source.model.MediaSource
+import com.dreamdisplays.api.media.source.CustomMediaKind
+import com.dreamdisplays.api.media.source.CustomMediaUrls
+import com.dreamdisplays.api.media.source.MediaSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

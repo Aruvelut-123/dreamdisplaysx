@@ -1,6 +1,6 @@
 package com.dreamdisplays.media.source.platform
 
-import com.dreamdisplays.api.media.source.model.MediaMetadata
+import com.dreamdisplays.api.media.source.MediaMetadata
 
 /**
  * Lightweight, provider-agnostic video metadata: the facts the menu needs to draw a card and the preview overlay.

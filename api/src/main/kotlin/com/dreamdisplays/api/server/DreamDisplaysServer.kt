@@ -1,0 +1,56 @@
+package com.dreamdisplays.api.server
+
+import com.dreamdisplays.api.Unstable
+import com.dreamdisplays.api.internal.ServerBackend
+import com.dreamdisplays.api.internal.ServerHolder
+import java.util.UUID
+import java.util.function.Consumer
+
+/**
+ * The `Dream Displays` API on a server (`Paper`). The client side has `DreamDisplays`.
+ *
+ * Example:
+ * ```
+ * DreamDisplaysServer.displays.ownedBy(player.uniqueId).forEach { it.setUrl("https://...") }
+ * ```
+ * It is available once the plugin has finished loading;
+ * use [onReady] if your code may run earlier.
+ *
+ * @since 1.10.x
+ */
+@Unstable
+object DreamDisplaysServer {
+    /** The live implementation; throws while the server API is not loaded yet. */
+    private val backend: ServerBackend
+        get() = ServerHolder.current
+            ?: error("Dream Displays server API is not available yet. Use DreamDisplaysServer.onReady { ... }.")
+
+    /** True once the plugin has finished loading and the API can be used. */
+    @JvmStatic
+    val isAvailable: Boolean get() = ServerHolder.current != null
+
+    /** Runs [action] as soon as the API is available: right away if it already is, otherwise once it loads. */
+    @JvmStatic
+    fun onReady(action: Runnable): Unit = ServerHolder.whenReady { action.run() }
+
+    /** All displays on this server. */
+    @JvmStatic
+    val displays: ServerDisplays get() = backend.displays
+
+    /** The display with [id], or `null`. */
+    @JvmStatic
+    fun display(id: UUID): ServerDisplay? = backend.displays[id]
+
+    /** Subscribes to display events. Close the handle to stop. */
+    @JvmStatic
+    fun on(listener: Consumer<ServerDisplayEvent>): AutoCloseable = backend.on(listener)
+
+    /**
+     * Registers an addon: an instance of a class annotated with `@Addon` (and optionally implementing
+     * `DreamDisplaysAddon`).
+     *
+     * It is enabled when the API is ready and disabled when the plugin shuts down.
+     */
+    @JvmStatic
+    fun register(addon: Any): Unit = ServerHolder.whenReady { backend.registerAddon(addon) }
+}

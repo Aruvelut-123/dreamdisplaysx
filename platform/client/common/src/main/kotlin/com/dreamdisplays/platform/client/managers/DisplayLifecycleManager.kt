@@ -2,11 +2,11 @@ package com.dreamdisplays.platform.client.managers
 
 import com.dreamdisplays.api.display.model.property.DisplayRotation
 import com.dreamdisplays.api.display.model.property.DisplayFacing
-import com.dreamdisplays.api.media.service.keys.MediaServices
+import com.dreamdisplays.core.services.keys.MediaServices
 import com.dreamdisplays.api.media.model.VideoQuality
-import com.dreamdisplays.api.media.source.model.MediaSource
+import com.dreamdisplays.api.media.source.MediaSource
 import com.dreamdisplays.api.playback.model.PlaybackMode
-import com.dreamdisplays.api.storage.model.FullDisplayData
+import com.dreamdisplays.shared.storage.DisplayData
 import com.dreamdisplays.core.protocol.common.packets.DisplayInfo
 import com.dreamdisplays.core.services.DisplayStorage
 import com.dreamdisplays.platform.client.core.DreamServices
@@ -90,7 +90,7 @@ object DisplayLifecycleManager {
         packet: DisplayInfo, facing: FacingUtil, mode: PlaybackMode, dimensionKey: String,
     ) {
         val settings = ClientSettingsStore.getSettings(packet.id, DisplayScreen.defaultVolume())
-        DisplayRegistry.unloadedScreens[packet.id] = FullDisplayData(
+        DisplayRegistry.unloadedScreens[packet.id] = DisplayData(
             uuid = packet.id,
             x = packet.x, y = packet.y, z = packet.z,
             facing = facing.toDisplayFacing(),
@@ -181,7 +181,7 @@ object DisplayLifecycleManager {
     /*level.dimension().location().toString()*/
 
     /** Rebuilds a [DisplayScreen] from persisted [data] and re-registers it. */
-    private fun restoreScreen(data: FullDisplayData) {
+    private fun restoreScreen(data: DisplayData) {
         if (!isValidDisplaySize(data.width, data.height, data.depth)) {
             logger.warn("Skipping cached display ${data.uuid}: invalid size ${data.width}x${data.height}x${data.depth}.")
             DisplayStorage.removeDisplay(data.uuid)
@@ -211,7 +211,7 @@ object DisplayLifecycleManager {
     }
 
     /** Distance from [playerPos] to the persisted display [data]'s bounding box. */
-    private fun distanceToData(data: FullDisplayData, playerPos: BlockPos) =
+    private fun distanceToData(data: DisplayData, playerPos: BlockPos) =
         distanceToScreen(data.x, data.y, data.z, data.width, data.height, data.facing, playerPos, data.depth)
 
     /** Shortest distance from [playerPos] to the screen's block bounding box (facing-aware). */

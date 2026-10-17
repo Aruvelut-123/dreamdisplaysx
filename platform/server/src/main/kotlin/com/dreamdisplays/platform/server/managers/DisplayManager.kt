@@ -6,6 +6,7 @@ import com.dreamdisplays.platform.server.PaperServer.Companion.getInstance
 import com.dreamdisplays.platform.server.PaperSurfaces
 import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.VanillaSurfaces
+import com.dreamdisplays.platform.server.api.PaperServerApi
 import com.dreamdisplays.platform.server.baseMaterial
 import com.dreamdisplays.platform.server.baseMaterialId
 import com.dreamdisplays.platform.server.datatypes.display.DisplayData
@@ -161,6 +162,7 @@ object DisplayManager {
         displays[data.id] = data
         runAsync { getInstance().storage.saveDisplay(data) }
         broadcastUpdate(data)
+        PaperServerApi.created(data)
     }
 
     /** Returns the players currently in range of [display] in its world. */
@@ -288,6 +290,7 @@ object DisplayManager {
         PipPinManager.onDisplayRemoved(displayData.id)
         displays.remove(displayData.id)
         proximityIndex.forgetDisplay(displayData.id)
+        PaperServerApi.removed(displayData)
     }
 
     /**
