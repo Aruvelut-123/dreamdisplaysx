@@ -34,7 +34,6 @@ import java.util.*
  * Handles the `/display video` command. Assigns a YouTube URL (and optional audio language)
  * to the display the player is looking at, after validating ownership.
  */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @PaperOnly
 class VideoCommand : SubCommand {
     override val name = "video"
@@ -139,7 +138,6 @@ private fun canonicalUrl(raw: String): String? {
 /**
  * Shared `Fabric` / `NeoForge` implementation of the `/display video` command.
  */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @ModLoaderOnly
 object VanillaVideoCommand {
     /** Assigns a YouTube URL (and optional language) to the targeted display, after validating ownership. */

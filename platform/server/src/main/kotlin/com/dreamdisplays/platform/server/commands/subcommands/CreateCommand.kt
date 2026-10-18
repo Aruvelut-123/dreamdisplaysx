@@ -19,12 +19,10 @@ import io.github.arnodoelinger.platformweaver.PaperOnly
 import kotlinx.coroutines.launch
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.core.BlockPos
-import net.minecraft.core.Direction
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
-import org.bukkit.block.BlockFace
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import kotlin.math.abs
@@ -34,7 +32,6 @@ import kotlin.math.abs
  * Also validates the player's current selection, enforces overlap and Y-range limits, and
  * registers the resulting display.
  */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @PaperOnly
 class CreateCommand : SubCommand {
     override val name = "create"
@@ -162,7 +159,6 @@ class CreateCommand : SubCommand {
 }
 
 /** Shared `Fabric` / `NeoForge` version of the [CreateCommand]. */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @ModLoaderOnly
 object VanillaCreateCommand {
     /** Command execution logic. */

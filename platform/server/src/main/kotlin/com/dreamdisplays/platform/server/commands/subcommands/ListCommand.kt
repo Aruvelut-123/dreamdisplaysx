@@ -26,7 +26,6 @@ import kotlin.math.max
  * Handles the `/display list` command. Renders a paged, filterable listing of all registered
  * displays with teleport and URL buttons for in-game players.
  */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @PaperOnly
 class ListCommand : SubCommand {
     private companion object {
@@ -287,10 +286,7 @@ class ListCommand : SubCommand {
     }
 }
 
-/**
- * Shared `Fabric` / `NeoForge` implementation of the `/display list` command.
- */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
+/** Shared `Fabric` / `NeoForge` implementation of the `/display list` command. */
 @ModLoaderOnly
 object VanillaListCommand {
     private const val PAGE_SIZE = 10

@@ -20,7 +20,6 @@ import org.bukkit.entity.Player
  * Handles the `/display delete` command. Used for deleting displays the player is currently looking at.
  * Players can delete their own displays; deleting others' requires the `delete.others` permission.
  */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @PaperOnly
 class DeleteCommand : SubCommand {
     override val name = "delete"
@@ -34,9 +33,10 @@ class DeleteCommand : SubCommand {
 
         val data = resolvePaperDisplayTarget(sender, player, token) ?: return
 
-        if (data.ownerId != player.uniqueId &&
-            !player.hasPermission(PaperServer.config.permissions.deleteOthers)
-        ) {
+        val isOwner = data.ownerId == player.uniqueId
+        val canDelete = player.hasPermission(PaperServer.config.permissions.deleteOthers) ||
+                (isOwner && player.hasPermission(PaperServer.config.permissions.delete))
+        if (!canDelete) {
             MessageUtil.sendMessage(player, "displayCommandMissingPermission")
             return
         }
@@ -46,10 +46,7 @@ class DeleteCommand : SubCommand {
     }
 }
 
-/**
- * Shared `Fabric` / `NeoForge` implementation of the `/display delete` command.
- */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
+/** Shared `Fabric` / `NeoForge` implementation of the `/display delete` command. */
 @ModLoaderOnly
 object VanillaDeleteCommand {
     /** Deletes the display named by `this` (looked-at, within 32 blocks) or a remote id/prefix. */
@@ -59,13 +56,17 @@ object VanillaDeleteCommand {
 
         val data = resolveVanillaDisplayTarget(player, token) as? VanillaDisplayData ?: return 0
 
-        if (data.ownerId != player.uuid &&
-            !VanillaPermissions.has(
-                player,
-                VanillaServerState.config.permissions.deleteOthers,
-                VanillaPermissions.Fallback.OP
-            )
-        ) {
+        val isOwner = data.ownerId == player.uuid
+        val canDelete = VanillaPermissions.has(
+            player,
+            VanillaServerState.config.permissions.deleteOthers,
+            VanillaPermissions.Fallback.OP
+        ) || (isOwner && VanillaPermissions.has(
+            player,
+            VanillaServerState.config.permissions.delete,
+            VanillaPermissions.Fallback.EVERYONE
+        ))
+        if (!canDelete) {
             MessageUtil.sendMessage(player, "displayCommandMissingPermission")
             return 0
         }

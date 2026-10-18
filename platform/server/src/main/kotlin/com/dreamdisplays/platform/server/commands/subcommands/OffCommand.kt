@@ -21,7 +21,6 @@ import org.bukkit.entity.Player
  * Handles the `/display off` command. Disables display rendering for the sender or for another
  * player when the caller holds the `toggleOthers` permission.
  */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @PaperOnly
 class OffCommand : SubCommand {
     override val name = "off"
@@ -95,10 +94,7 @@ class OffCommand : SubCommand {
     }
 }
 
-/**
- * Shared `Fabric` / `NeoForge` implementation of the `/display off` command.
- */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
+/** Shared `Fabric` / `NeoForge` implementation of the `/display off` command. */
 @ModLoaderOnly
 object VanillaOffCommand {
     /** Disables displays for the executing player or the named [targetName], checking op-level permission for the latter. */

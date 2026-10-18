@@ -21,7 +21,6 @@ import org.bukkit.entity.Player
  * Handles the `/display on` command. Enables display rendering for the sender or for another
  * player when the caller holds the `toggleOthers` permission.
  */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @PaperOnly
 class OnCommand : SubCommand {
     override val name = "on"
@@ -95,10 +94,7 @@ class OnCommand : SubCommand {
     }
 }
 
-/**
- * Shared `Fabric` / `NeoForge` implementation of the `/display on` command.
- */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
+/** Shared `Fabric` / `NeoForge` implementation of the `/display on` command. */
 @ModLoaderOnly
 object VanillaOnCommand {
     /** Enables displays for the executing player or the named [targetName], checking op-level permission for the latter. */

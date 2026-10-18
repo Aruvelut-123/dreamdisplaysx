@@ -20,7 +20,6 @@ import org.bukkit.entity.Player
  * Handles the `/display info` command. Prints owner, UUID, region, size, and media metadata
  * of the display named by `this` (looked-at) or a remote id/prefix.
  */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
 @PaperOnly
 class InfoCommand : SubCommand {
     override val name = "info"
@@ -102,10 +101,7 @@ class InfoCommand : SubCommand {
     }
 }
 
-/**
- * Shared `Fabric` / `NeoForge` implementation of the `/display info` command.
- */
-@Deprecated("This command is being replaced by UI interface. Will be removed in a future update.")
+/** Shared `Fabric` / `NeoForge` implementation of the `/display info` command. */
 @ModLoaderOnly
 object VanillaInfoCommand {
     /** Prints owner, UUID, region, size, and media metadata of the targeted display. */
