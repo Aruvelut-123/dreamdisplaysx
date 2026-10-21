@@ -11,6 +11,7 @@ import com.dreamdisplays.media.player.events.PlayerEvents
 import com.dreamdisplays.media.player.nativebridge.NativeMedia
 import com.dreamdisplays.media.player.pipeline.*
 import com.dreamdisplays.media.player.process.FFmpegBinary
+import com.dreamdisplays.media.player.process.GoogleVideoRangeProxy
 import com.dreamdisplays.media.player.process.HlsAudioFeeder
 import com.dreamdisplays.media.player.process.HwAccelBackend
 import com.dreamdisplays.media.player.process.MediaProcess
@@ -128,7 +129,9 @@ internal class PlaybackSessionManager(
             // The in-process decoder seeks through the same libav demuxer that gets this container
             // wrong, and unlike the process path it has no way to fall back to decoding forward.
             val seekByDecoding = streamSet.currentVideo.seekByDecoding
-            val lavThread = if (nativePipe != null && NativeMedia.lavInProcessEnabled && !seekByDecoding) {
+            val lavThread = if (nativePipe != null && NativeMedia.lavInProcessEnabled && !seekByDecoding &&
+                !GoogleVideoRangeProxy.needsProxy(safeUrl)
+            ) {
                 nativePipe.startInProcess(
                     url = safeUrl, w = w, h = h, seekOffsetNanos = offsetNanos,
                     sourceFps = fps, hwAccel = hwAccel, stopFlag = stop, terminated = terminated,

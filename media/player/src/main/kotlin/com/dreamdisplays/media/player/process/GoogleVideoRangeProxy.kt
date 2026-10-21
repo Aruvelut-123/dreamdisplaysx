@@ -26,13 +26,22 @@ internal object GoogleVideoRangeProxy {
             .build()
     }
 
-    private val server: RangeProxyServer by lazy { RangeProxyServer(::fetch) }
+    private val server: RangeProxyServer by lazy { RangeProxyServer(::cachedFetch) }
 
-    /** The URL an `FFmpeg` process should open for [url]: the loopback proxy for googlevideo VOD, else [url]. */
+    private val chunks = object : LinkedHashMap<String, UpstreamChunk>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, UpstreamChunk>?) = size > MAX_CACHED_CHUNKS
+    }
+    private const val MAX_CACHED_CHUNKS = 24
+    private const val CACHED_HEAD_BYTES = 1L shl 20
+    private const val CACHED_TAIL_BYTES = 32L shl 20
+
     fun wrap(url: String): String {
         if (!enabled || !eligible(url)) return url
         return server.register(url, contentLength(url)) ?: url
     }
+
+    fun needsProxy(url: String): Boolean =
+        enabled && runCatching { URI(url) }.getOrNull()?.let(::isDrive) == true
 
     internal fun eligible(url: String): Boolean {
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
@@ -62,6 +71,16 @@ internal object GoogleVideoRangeProxy {
             ?.substring(5)
             ?.toLongOrNull()
             ?.takeIf { it > 0 }
+
+    private fun cachedFetch(url: String, from: Long, to: Long): UpstreamChunk {
+        val key = "$from-$to $url"
+        synchronized(chunks) { chunks[key] }?.let { return it }
+        val chunk = fetch(url, from, to)
+        val total = chunk.total
+        val reusable = from < CACHED_HEAD_BYTES || (total != null && from >= total - CACHED_TAIL_BYTES)
+        if (chunk.status == 206 && reusable) synchronized(chunks) { chunks[key] = chunk }
+        return chunk
+    }
 
     private fun fetch(url: String, from: Long, to: Long): UpstreamChunk {
         val origin = URI(url)
