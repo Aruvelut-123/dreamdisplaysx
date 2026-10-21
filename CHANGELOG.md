@@ -1,3 +1,38 @@
+# 1.10.3 Release
+
+## Highlights
+
+- Synced playback now survives the Atlantic: no more endless skipping on slow or far-away connections
+- Fixed "Unrecoverable stream failure" for Google Drive
+- Minor codebase improvements
+
+## Client
+
+### Improvements
+
+- Better transatlantic synchronization:
+  - A synced display learns how long a jump takes on your connection and aims far enough ahead to land on time
+  - If jumps still keep landing behind, it waits longer between them and accepts a few seconds of delay instead of
+    skipping again and again
+- Seeking in long Google Drive videos is about 3x faster
+
+### Fixes
+
+- Fixed synced videos skipping forward over and over (and sometimes never starting) when the video host is far away,
+  e.g. American services for players in Europe
+- Fixed "Unrecoverable stream failure" for Google Drive
+  ([#261](https://github.com/arnodoelinger/dreamdisplays/issues/261))
+
+## Server
+
+### Improvements
+
+- Everyone starts together: a new video on a `Synced` or `Broadcast` display waits 5 seconds so every viewer can buffer
+  first, then starts for all at once
+- Less network traffic for big audiences: synced displays send a keep-alive every 5 seconds instead of every 2 (pause,
+  seek and video changes are still sent instantly)
+- Minor codebase improvements
+
 # 1.10.2 Release
 
 ## Highlights
