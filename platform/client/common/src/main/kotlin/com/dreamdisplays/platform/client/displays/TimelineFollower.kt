@@ -1,24 +1,16 @@
 package com.dreamdisplays.platform.client.displays
 
-import com.dreamdisplays.core.protocol.common.packets.DisplaySync
-import com.dreamdisplays.platform.client.displays.TimelineFollower.Companion.SEEK_COOLDOWN_MS
-import com.dreamdisplays.platform.client.displays.TimelineFollower.Companion.SEEK_LEAD_MS
 
 /** Follows server-authoritative playback timeline with drift correction and optional seek cooldown. */
 internal class TimelineFollower(private val screen: DisplayScreen) {
-    /** [System.nanoTime] of the last corrective seek; gates the re-seek cooldown. 0 = never. */
     private var lastSeekNanos = 0L
-
-    /** Server timestamp of the most recently applied packet; older packets are dropped. `MIN_VALUE` = none yet. */
+    private var learnedLeadMs = SEEK_LEAD_MS
+    private var missStreak = 0
+    private var awaitingLanding = false
     private var lastServerTimeMs = Long.MIN_VALUE
-
-    /** Monotonic sequence stamped on each pending packet so stale deferred applies can be discarded. */
     private var nextSeq = 0L
-
-    /** The latest timeline packet awaiting (re)application, or `null` when none is pending. */
     private var pending: Pending? = null
 
-    /** A buffered timeline packet, captured at receive time so its target can be projected forward. */
     private data class Pending(
         val seq: Long,
         val targetMs: Long,
@@ -31,6 +23,8 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
     /** Clears follow state when a new video loads. */
     fun reset() {
         lastSeekNanos = 0L
+        missStreak = 0
+        awaitingLanding = false
         lastServerTimeMs = Long.MIN_VALUE
         pending = null
     }
@@ -53,7 +47,6 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
         applyPending(packet)
     }
 
-    /** Applies [packet] once the player is initialized: matches pause state and seeks only when drift leaves the tolerance band. */
     private fun applyPending(packet: Pending) {
         screen.primeTimelineStart(projectTargetMs(packet) * 1_000_000L)
         val generation = screen.mediaGeneration
@@ -94,9 +87,16 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
             // Always honor the cooldown: re-seeking while a previous correction is still warming up is
             // exactly what makes a cold rejoin thrash. The first correction after a load is exempt
             // (lastSeekNanos == 0), so joining still snaps to live immediately.
-            if (!initialTimeline && sinceSeekMs < SEEK_COOLDOWN_MS) return@waitForMFInit
+            if (!initialTimeline && sinceSeekMs < SEEK_COOLDOWN_MS * (1 + missStreak)) return@waitForMFInit
 
-            val needsSeek = driftMs > CATCH_UP_TOLERANCE_MS || -driftMs > AHEAD_TOLERANCE_MS
+            if (awaitingLanding && !packet.paused) {
+                awaitingLanding = false
+                learnFromLanding(driftMs)
+            }
+
+            val catchUpToleranceMs = (CATCH_UP_TOLERANCE_MS shl missStreak.coerceAtMost(MAX_BACKOFF_SHIFT))
+                .coerceAtMost(MAX_BACKOFF_TOLERANCE_MS)
+            val needsSeek = driftMs > catchUpToleranceMs || -driftMs > AHEAD_TOLERANCE_MS
             if (!needsSeek) {
                 screen.markInitialTimelineReady()
                 pending = null
@@ -105,8 +105,9 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
 
             // When catching up forward, overshoot by the restart cost so the post-stall position lands
             // on the live point. Clamp shy of the end so we never seek past EOS (which would loop to 0).
-            val seekMs = if (driftMs > 0 && !packet.paused) {
-                val lead = target + SEEK_LEAD_MS
+            val catchUp = driftMs > 0 && !packet.paused
+            val seekMs = if (catchUp) {
+                val lead = target + learnedLeadMs
                 wrap(
                     if (!packet.loop && durationMs > 0) lead.coerceAtMost(durationMs - END_MARGIN_MS) else lead,
                     packet.loop,
@@ -117,22 +118,34 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
             if (!packet.paused) screen.clearRenderedFrameForTimeline()
             screen.seekVideoTo(seekMs * 1_000_000L)
             lastSeekNanos = System.nanoTime()
+            awaitingLanding = catchUp
             screen.markInitialTimelineReady()
             pending = null
         }
     }
 
-    /** Projects [packet]'s target forward by the time elapsed since it was received (unchanged while paused). */
+    private fun learnFromLanding(landingDriftMs: Long) {
+        when {
+            landingDriftMs > CATCH_UP_TOLERANCE_MS -> {
+                learnedLeadMs = (learnedLeadMs + landingDriftMs + LEAD_MARGIN_MS).coerceAtMost(MAX_LEAD_MS)
+                missStreak++
+            }
+            landingDriftMs < -LEAD_MARGIN_MS -> {
+                learnedLeadMs = (learnedLeadMs + landingDriftMs / 2).coerceAtLeast(SEEK_LEAD_MS)
+                missStreak = 0
+            }
+            else -> missStreak = 0
+        }
+    }
+
     private fun projectTargetMs(packet: Pending): Long {
         val elapsedMs = if (packet.paused) 0L else (System.nanoTime() - packet.receivedAtNanos) / 1_000_000L
         return packet.targetMs + elapsedMs
     }
 
-    /** Wraps [ms] into [0, durationMs) for [loop] (Broadcast); otherwise just clamps to >= 0. */
     private fun wrap(ms: Long, loop: Boolean, durationMs: Long): Long =
         if (loop && durationMs > 0) ((ms % durationMs) + durationMs) % durationMs else ms.coerceAtLeast(0)
 
-    /** Collapses a raw target-local difference to the shortest signed distance, wrapping for [loop]. */
     private fun signedDrift(rawDiff: Long, loop: Boolean, durationMs: Long): Long {
         if (!loop || durationMs <= 0) return rawDiff
         val half = durationMs / 2
@@ -140,19 +153,14 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
     }
 
     companion object {
-        /** The player is behind the server by more than this: seek forward to catch up. */
         private const val CATCH_UP_TOLERANCE_MS = 1_500L
-
-        /** The player is ahead by more than this (beyond plausible latency): real desync, hard-correct. */
         private const val AHEAD_TOLERANCE_MS = 3_500L
-
-        /** A forward catch-up seek overshoots by this much to absorb the decoder restart stall. */
         private const val SEEK_LEAD_MS = 2_500L
-
-        /** After a corrective seek, leave the stream alone this long so it can re-buffer before re-measuring. */
         private const val SEEK_COOLDOWN_MS = 7_000L
-
-        /** Keep catch-up overshoot this far shy of the end so we never seek past EOS. */
+        private const val MAX_LEAD_MS = 20_000L
+        private const val LEAD_MARGIN_MS = 500L
+        private const val MAX_BACKOFF_SHIFT = 3
+        private const val MAX_BACKOFF_TOLERANCE_MS = 10_000L
         private const val END_MARGIN_MS = 500L
     }
 }
