@@ -68,7 +68,7 @@ object CustomMediaUrls {
             host == "drive.google.com" || host == "docs.google.com" -> {
                 val id = DRIVE_PATH_ID.find(uri.path ?: "")?.groupValues?.get(1)
                     ?: driveIdQueryParam(uri)
-                id?.let { "https://drive.google.com/uc?export=download&id=$it" }
+                id?.let { "https://drive.usercontent.google.com/download?id=$it&export=download&confirm=t" }
             }
 
             // Dropbox serves the file itself only with raw=1; ?dl=0/1 still lands on the preview page

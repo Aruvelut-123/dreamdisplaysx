@@ -122,4 +122,12 @@ class RangeProxyServerTest {
         assertTrue(!GoogleVideoRangeProxy.eligible("https://evil.example/videoplayback?clen=5"))
         assertTrue(!GoogleVideoRangeProxy.eligible("http://rr2---sn-abc.googlevideo.com/videoplayback?clen=5"))
     }
+
+    @Test
+    fun `google drive downloads are proxied`() {
+        assertTrue(GoogleVideoRangeProxy.eligible("https://drive.usercontent.google.com/download?id=abc&export=download&confirm=t"))
+        assertTrue(!GoogleVideoRangeProxy.eligible("https://drive.usercontent.google.com/other?id=abc"))
+        assertTrue(!GoogleVideoRangeProxy.eligible("https://evil.example/download?id=abc"))
+        assertTrue(!GoogleVideoRangeProxy.eligible("http://drive.usercontent.google.com/download?id=abc"))
+    }
 }

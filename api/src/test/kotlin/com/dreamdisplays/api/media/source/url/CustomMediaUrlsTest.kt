@@ -49,13 +49,13 @@ class CustomMediaUrlsTest {
 
     @Test
     fun googleDriveShareBecomesDirectDownload() = assertEquals(
-        "https://drive.google.com/uc?export=download&id=1A2B3C4D5E6F",
+        "https://drive.usercontent.google.com/download?id=1A2B3C4D5E6F&export=download&confirm=t",
         CustomMediaUrls.normalize("https://drive.google.com/file/d/1A2B3C4D5E6F/view?usp=sharing"),
     )
 
     @Test
     fun googleDriveOpenIdBecomesDirectDownload() = assertEquals(
-        "https://drive.google.com/uc?export=download&id=1A2B3C4D5E6F",
+        "https://drive.usercontent.google.com/download?id=1A2B3C4D5E6F&export=download&confirm=t",
         CustomMediaUrls.normalize("https://drive.google.com/open?id=1A2B3C4D5E6F"),
     )
 
