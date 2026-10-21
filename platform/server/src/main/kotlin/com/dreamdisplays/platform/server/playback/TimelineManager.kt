@@ -30,6 +30,9 @@ object TimelineManager {
 
     private val timelines = ConcurrentHashMap<UUID, Timeline>()
     private val lastBroadcast = ConcurrentHashMap<UUID, Long>()
+    private val startHolds = ConcurrentHashMap<UUID, Long>()
+
+    private const val START_HOLD_MS = 5_000L
 
     internal const val MAX_SEEK_MS = 24L * 60 * 60 * 1_000
 
@@ -54,6 +57,7 @@ object TimelineManager {
         if (senderId !in transport.nearbyPlayerIds(display)) return false
 
         val now = transport.nowMs()
+        startHolds.remove(display.id)
         val current = timelines[display.id] ?: Timeline.start(now)
         val updated = when (action) {
             PlaybackAction.PLAY -> current.withPaused(false, now)
@@ -74,6 +78,7 @@ object TimelineManager {
         if (display.mode != PlaybackMode.SYNCED && display.mode != PlaybackMode.BROADCAST) return false
         if (action != PlaybackAction.PLAY && action != PlaybackAction.PAUSE) return false
         val now = transport.nowMs()
+        startHolds.remove(display.id)
         val current = ensureTimeline(display) ?: Timeline.start(now, durationMs = durationMsOf(display), loop = true)
         val updated = current.withPaused(action == PlaybackAction.PAUSE, now)
         timelines[display.id] = updated
@@ -90,6 +95,7 @@ object TimelineManager {
     /** Re-initializes the clock after a base-mode change and broadcasts the result. */
     fun onModeChanged(display: DisplayData, positionMs: Long = -1) {
         timelines.remove(display.id)
+        startHolds.remove(display.id)
         val now = transport.nowMs()
         val durationMs = durationMsOf(display)
         val timeline = when (display.mode) {
@@ -104,17 +110,21 @@ object TimelineManager {
         }
     }
 
-    /** Resets the clock to 0 when the video changes (`SYNCED` / `BROADCAST` only). */
+    /** Resets the clock to 0 when the video changes (`SYNCED` / `BROADCAST` only), held paused for [START_HOLD_MS]. */
     fun onVideoChanged(display: DisplayData) {
         if (display.mode != PlaybackMode.SYNCED && display.mode != PlaybackMode.BROADCAST) return
-        display.duration = null // Fresh video: let onDurationReported accept its own report.
-        val fresh = Timeline.start(transport.nowMs(), loop = true)
+        display.duration = null // Fresh video
+        val now = transport.nowMs()
+        val fresh = Timeline.start(now, paused = true, loop = true)
         timelines[display.id] = fresh
+        startHolds[display.id] = now + START_HOLD_MS
         broadcast(display, fresh)
     }
 
     /**
-     * Applies a client-reported media duration for [display]'s current video. First-report-wins: a no-op once [DisplayData.duration] is already set.
+     * Applies a client-reported media duration for [display]'s current video.
+     *
+     * First-report-wins: a no-op once [DisplayData.duration] is already set.
      */
     fun onDurationReported(display: DisplayData, senderId: UUID, durationMs: Long) {
         if (display.mode != PlaybackMode.SYNCED && display.mode != PlaybackMode.BROADCAST) return
@@ -133,16 +143,35 @@ object TimelineManager {
     fun remove(displayId: UUID) {
         timelines.remove(displayId)
         lastBroadcast.remove(displayId)
+        startHolds.remove(displayId)
     }
 
-    /** Periodic keep-alive so late joiners and drifting clients stay corrected. Called once per second. */
+    /**
+     * Periodic keep-alive so late joiners and drifting clients stay corrected.
+     *
+     * Called once per second.
+     */
     fun tick() {
         if (timelines.isEmpty()) return
         val now = transport.nowMs()
+        releaseStartHolds(now)
         for ((displayId, timeline) in timelines) {
             if (now - (lastBroadcast[displayId] ?: 0L) < PERIODIC_BROADCAST_MS) continue
             val display = DisplayManager.getDisplayData(displayId) ?: continue
             broadcast(display, timeline)
+        }
+    }
+
+    private fun releaseStartHolds(now: Long) {
+        for ((displayId, startAt) in startHolds) {
+            if (now < startAt) continue
+            startHolds.remove(displayId)
+            if (WatchPartyManager.hasSession(displayId)) continue
+            val timeline = timelines[displayId] ?: continue
+            val display = DisplayManager.getDisplayData(displayId) ?: continue
+            val started = timeline.withPaused(false, now)
+            timelines[displayId] = started
+            broadcast(display, started)
         }
     }
 
