@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
  * position back as truth.
  */
 object TimelineManager {
-    private const val PERIODIC_BROADCAST_MS = 2_000L
+    private const val PERIODIC_BROADCAST_MS = 5_000L
     private const val MAX_DURATION_MS = 24L * 60 * 60 * 1_000
     private const val MIN_DURATION_MS = 2_000L
 
