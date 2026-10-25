@@ -3,7 +3,8 @@ package com.dreamdisplays.platform.server.listeners
 import com.dreamdisplays.platform.server.*
 import com.dreamdisplays.platform.server.managers.SelectionManager
 import com.dreamdisplays.platform.server.managers.SelectionVisualizer
-import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.RegionUtil
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
@@ -46,7 +47,7 @@ class SelectionListener(plugin: PaperServer) : Listener {
         if (player.isSneaking && event.action.isRightClick) {
             if (SelectionManager.selectionPoints.containsKey(player.uniqueId)) {
                 SelectionManager.resetSelection(player)
-                MessageUtil.sendMessage(player, "selectionClear")
+                ServerMessage.SELECTION_CLEAR.sendTo(player)
             }
             return
         }
@@ -102,7 +103,7 @@ object VanillaSelectionListener {
         if (player.isShiftKeyDown) {
             if (SelectionManager.selectionPoints.containsKey(player.uuid)) {
                 SelectionManager.resetSelection(player)
-                MessageUtil.sendMessage(player, "selectionClear")
+                ServerMessage.SELECTION_CLEAR.sendTo(player)
             }
             return true
         }

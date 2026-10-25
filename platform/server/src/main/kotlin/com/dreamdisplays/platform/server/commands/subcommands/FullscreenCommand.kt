@@ -16,6 +16,8 @@ import com.dreamdisplays.platform.server.proxy.ProxyBridge
 import com.dreamdisplays.platform.server.proxy.ProxyNetwork
 import com.dreamdisplays.platform.server.proxy.VanillaProxyBridge
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.RegionUtil
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import com.mojang.brigadier.context.CommandContext
@@ -37,6 +39,31 @@ sealed class FullscreenStartResult {
     data object ForcedDisallowed : FullscreenStartResult()
 }
 
+/** The `/display fullscreen start` flags as typed by the sender, shared by the Paper and vanilla command trees. */
+data class FullscreenStartOptions(
+    val serverScope: String?,
+    val players: String?,
+    val radiusBlocks: Double?,
+    val radiusX: Double?,
+    val radiusY: Double?,
+    val radiusZ: Double?,
+    val mode: String?,
+    val forced: Boolean,
+    val transientSession: Boolean,
+    val volume: Float?,
+    val loop: Boolean,
+    val quality: String?,
+) {
+    /** [mode] parsed, or null when it is absent or not a [FullscreenMode]. */
+    val fullscreenMode: FullscreenMode? get() = mode?.let { runCatching { FullscreenMode.valueOf(it.uppercase()) }.getOrNull() }
+}
+
+/** The server config's fullscreen limits. */
+data class FullscreenLimits(val defaultMode: FullscreenMode, val allowForced: Boolean, val qualityCap: Int)
+
+/** Where the sender stands, the default center of a radius target. */
+data class FullscreenOrigin(val world: String, val x: Double, val y: Double, val z: Double)
+
 /**
  * Shared `/display fullscreen` logic, common to both the `Paper` and `Fabric` / `NeoForge` command trees
  * see `PaperFullscreenCommand` and `FabricFullscreenCommand`).
@@ -50,33 +77,20 @@ object FullscreenCommand {
         display: DisplayData,
         virtual: Boolean,
         ownerId: UUID,
-        mode: FullscreenMode?,
-        forced: Boolean,
-        transientSession: Boolean,
-        volume: Float?,
-        loop: Boolean,
-        quality: String?,
-        targetNamesRaw: String?,
-        radiusBlocks: Double?,
-        radiusX: Double?,
-        radiusY: Double?,
-        radiusZ: Double?,
-        defaultMode: FullscreenMode,
-        allowForced: Boolean,
-        qualityCap: Int,
-        senderWorld: String,
-        senderX: Double,
-        senderY: Double,
-        senderZ: Double,
+        options: FullscreenStartOptions,
+        limits: FullscreenLimits,
+        origin: FullscreenOrigin,
         resolveTarget: (String) -> Set<UUID>,
     ): FullscreenStartResult {
-        if (forced && !allowForced) return FullscreenStartResult.ForcedDisallowed
+        if (options.forced && !limits.allowForced) return FullscreenStartResult.ForcedDisallowed
 
-        val namedTargets = targetNamesRaw
+        val namedTargets = options.players
             ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?.flatMap(resolveTarget)?.toSet()?.takeIf { it.isNotEmpty() }
-        val radius = radiusBlocks?.let { blocks ->
-            FullscreenRadiusTarget(senderWorld, radiusX ?: senderX, radiusY ?: senderY, radiusZ ?: senderZ, blocks)
+        val radius = options.radiusBlocks?.let { blocks ->
+            FullscreenRadiusTarget(
+                origin.world, options.radiusX ?: origin.x, options.radiusY ?: origin.y, options.radiusZ ?: origin.z, blocks,
+            )
         }
         if (namedTargets == null && radius == null) return FullscreenStartResult.NoTargets
 
@@ -84,13 +98,13 @@ object FullscreenCommand {
             sessionId = UUID.randomUUID().toString().take(8),
             display = display,
             virtual = virtual,
-            transientSession = transientSession,
+            transientSession = options.transientSession,
             ownerId = ownerId,
-            mode = mode ?: defaultMode,
-            forced = forced,
-            volume = volume ?: -1f,
-            loop = loop,
-            quality = clampQuality(quality, qualityCap),
+            mode = options.fullscreenMode ?: limits.defaultMode,
+            forced = options.forced,
+            volume = options.volume ?: -1f,
+            loop = options.loop,
+            quality = clampQuality(options.quality, limits.qualityCap),
             title = "",
             namedTargets = namedTargets,
             radius = radius,
@@ -137,22 +151,11 @@ object PaperFullscreenCommand {
         sender: CommandSender,
         origin: Location,
         id: String,
-        serverScope: String?,
-        players: String?,
-        radiusBlocks: Double?,
-        radiusX: Double?,
-        radiusY: Double?,
-        radiusZ: Double?,
-        mode: String?,
-        forced: Boolean,
-        transientSession: Boolean,
-        volume: Float?,
-        loop: Boolean,
-        quality: String?,
+        options: FullscreenStartOptions,
     ) {
         val player = sender as? Player
         val id = if (id.equals("this", ignoreCase = true)) {
-            if (player == null) return MessageUtil.sendMessage(sender, "fullscreenPlayerOnly")
+            if (player == null) return ServerMessage.FULLSCREEN_PLAYER_ONLY.sendTo(sender)
             val block = player.getTargetBlock(null, 32)
             val data = DisplayManager.isContains(block.location)
                 ?: return MessageUtil.sendMessage(
@@ -165,24 +168,23 @@ object PaperFullscreenCommand {
                 )
             data.id.toString()
         } else id
-        if (serverScope != null) {
-            if (radiusBlocks != null) return MessageUtil.sendMessage(sender, "fullscreenNetworkRadiusUnsupported")
-            if (!ProxyNetwork.isConnected()) return MessageUtil.sendMessage(sender, "fullscreenNetworkNoProxy")
-            val fullscreenMode = mode?.let { m -> runCatching { FullscreenMode.valueOf(m.uppercase()) }.getOrNull() }
-            val resolvedUrl = FullscreenBroadcastManager.resolveNetworkFullscreenUrl(id)
+        if (options.serverScope != null) {
+            if (options.radiusBlocks != null) return ServerMessage.FULLSCREEN_NETWORK_RADIUS_UNSUPPORTED.sendTo(sender)
+            if (!ProxyNetwork.isConnected()) return ServerMessage.FULLSCREEN_NETWORK_NO_PROXY.sendTo(sender)
+                        val resolvedUrl = FullscreenBroadcastManager.resolveNetworkFullscreenUrl(id)
             val networkOwner = player?.uniqueId ?: FullscreenCommand.SERVER_OWNER
             val sent = if (resolvedUrl != null) {
                 ProxyBridge.startNetworkFullscreen(
                     rider = player,
                     ownerId = networkOwner,
-                    scope = serverScope,
+                    scope = options.serverScope,
                     url = resolvedUrl,
-                    mode = fullscreenMode,
-                    forced = forced,
-                    volume = volume,
-                    loop = loop,
-                    quality = quality,
-                    targetsRaw = players,
+                    mode = options.fullscreenMode,
+                    forced = options.forced,
+                    volume = options.volume,
+                    loop = options.loop,
+                    quality = options.quality,
+                    targetsRaw = options.players,
                 )
             } else {
                 // Unknown here, but display ids are per-backend - the one being named very likely
@@ -190,46 +192,31 @@ object PaperFullscreenCommand {
                 ProxyBridge.startNetworkFullscreenByDisplayId(
                     rider = player,
                     ownerId = networkOwner,
-                    scope = serverScope,
+                    scope = options.serverScope,
                     token = id,
-                    mode = fullscreenMode,
-                    forced = forced,
-                    volume = volume,
-                    loop = loop,
-                    quality = quality,
-                    targetsRaw = players,
+                    mode = options.fullscreenMode,
+                    forced = options.forced,
+                    volume = options.volume,
+                    loop = options.loop,
+                    quality = options.quality,
+                    targetsRaw = options.players,
                 )
             }
-            if (!sent) return MessageUtil.sendMessage(sender, "fullscreenNetworkNoPlayers")
-            return MessageUtil.sendMessage(sender, "fullscreenNetworkQueued")
+            if (!sent) return ServerMessage.FULLSCREEN_NETWORK_NO_PLAYERS.sendTo(sender)
+            return ServerMessage.FULLSCREEN_NETWORK_QUEUED.sendTo(sender)
         }
         val ownerId = player?.uniqueId ?: FullscreenCommand.SERVER_OWNER
         val resolved = FullscreenBroadcastManager.resolveOrCreateDisplay(id, ownerId)
-            ?: return MessageUtil.sendMessage(sender, "fullscreenNoDisplay")
+            ?: return ServerMessage.FULLSCREEN_NO_DISPLAY.sendTo(sender)
         val (display, virtual) = resolved
         val config = PaperServer.config.settings
         val result = FullscreenCommand.start(
             display = display,
             virtual = virtual,
             ownerId = ownerId,
-            mode = mode?.let { m -> runCatching { FullscreenMode.valueOf(m.uppercase()) }.getOrNull() },
-            forced = forced,
-            transientSession = transientSession,
-            volume = volume,
-            loop = loop,
-            quality = quality,
-            targetNamesRaw = players,
-            radiusBlocks = radiusBlocks,
-            radiusX = radiusX,
-            radiusY = radiusY,
-            radiusZ = radiusZ,
-            defaultMode = config.fullscreenDefaultMode,
-            allowForced = config.fullscreenAllowForced,
-            qualityCap = config.fullscreenQualityCap,
-            senderWorld = origin.world.name,
-            senderX = origin.x,
-            senderY = origin.y,
-            senderZ = origin.z,
+            options = options,
+            limits = FullscreenLimits(config.fullscreenDefaultMode, config.fullscreenAllowForced, config.fullscreenQualityCap),
+            origin = FullscreenOrigin(origin.world.name, origin.x, origin.y, origin.z),
             resolveTarget = { token -> resolveTargetToken(player, origin, token) },
         )
         reply(sender, result)
@@ -274,11 +261,11 @@ object PaperFullscreenCommand {
         when {
             count > 0 -> MessageUtil.sendColoredMessage(
                 sender,
-                MessageUtil.formatIndexed(sender, "fullscreenStopped", count.toString())
+                MessageUtil.formatIndexed(sender, ServerMessage.FULLSCREEN_STOPPED, count.toString())
             )
 
-            forwarded -> MessageUtil.sendMessage(sender, "fullscreenNetworkStopQueued")
-            else -> MessageUtil.sendMessage(sender, "fullscreenStopFailed")
+            forwarded -> ServerMessage.FULLSCREEN_NETWORK_STOP_QUEUED.sendTo(sender)
+            else -> ServerMessage.FULLSCREEN_STOP_FAILED.sendTo(sender)
         }
     }
 
@@ -287,7 +274,7 @@ object PaperFullscreenCommand {
         val local = FullscreenCommand.list()
         val network = ProxyNetwork.networkSessions()
         if (sender is Player && ProxyNetwork.isConnected()) ProxyBridge.requestNetworkSessions(sender)
-        if (local.isEmpty() && network.isEmpty()) return MessageUtil.sendMessage(sender, "fullscreenListEmpty")
+        if (local.isEmpty() && network.isEmpty()) return ServerMessage.FULLSCREEN_LIST_EMPTY.sendTo(sender)
         local.forEach { s ->
             MessageUtil.sendColoredMessage(
                 sender,
@@ -318,12 +305,12 @@ object PaperFullscreenCommand {
         when (result) {
             is FullscreenStartResult.Started -> MessageUtil.sendColoredMessage(
                 sender,
-                MessageUtil.formatIndexed(sender, "fullscreenStarted", result.sessionId, result.reach.toString()),
+                MessageUtil.formatIndexed(sender, ServerMessage.FULLSCREEN_STARTED, result.sessionId, result.reach.toString()),
             )
 
-            FullscreenStartResult.NoTargets -> MessageUtil.sendMessage(sender, "fullscreenNoTargets")
-            FullscreenStartResult.AlreadyRunning -> MessageUtil.sendMessage(sender, "fullscreenAlreadyRunning")
-            FullscreenStartResult.ForcedDisallowed -> MessageUtil.sendMessage(sender, "fullscreenForcedDisallowed")
+            FullscreenStartResult.NoTargets -> ServerMessage.FULLSCREEN_NO_TARGETS.sendTo(sender)
+            FullscreenStartResult.AlreadyRunning -> ServerMessage.FULLSCREEN_ALREADY_RUNNING.sendTo(sender)
+            FullscreenStartResult.ForcedDisallowed -> ServerMessage.FULLSCREEN_FORCED_DISALLOWED.sendTo(sender)
         }
     }
 }
@@ -339,75 +326,63 @@ object VanillaFullscreenCommand {
     fun start(
         ctx: CommandContext<CommandSourceStack>,
         id: String,
-        serverScope: String?,
-        players: String?,
-        radiusBlocks: Double?,
-        radiusX: Double?,
-        radiusY: Double?,
-        radiusZ: Double?,
-        mode: String?,
-        forced: Boolean,
-        transientSession: Boolean,
-        volume: Float?,
-        loop: Boolean,
-        quality: String?,
+        options: FullscreenStartOptions,
     ): Int {
         val player = ctx.source.entity as? ServerPlayer
         val id = if (id.equals("this", ignoreCase = true)) {
-            if (player == null) return tell(ctx, null, "fullscreenPlayerOnly").let { 0 }
+            if (player == null) return tell(ctx, null, ServerMessage.FULLSCREEN_PLAYER_ONLY).let { 0 }
             val targetPos = RegionUtil.getTargetedBlockPos(player)
-                ?: return MessageUtil.sendMessage(player, "displayVideoWrongTargetBlock").let { 0 }
+                ?: return ServerMessage.DISPLAY_VIDEO_WRONG_TARGET_BLOCK.sendTo(player).let { 0 }
             val worldKey = RegionUtil.getPlayerLevelKey(player)
             val data = DisplayManager.isContains(worldKey, targetPos)
-                ?: return MessageUtil.sendMessage(player, "noDisplay").let { 0 }
+                ?: return ServerMessage.NO_DISPLAY.sendTo(player).let { 0 }
             data.id.toString()
         } else id
-        if (serverScope != null) {
-            if (radiusBlocks != null) {
-                tell(ctx, player, "fullscreenNetworkRadiusUnsupported")
+        if (options.serverScope != null) {
+            if (options.radiusBlocks != null) {
+                tell(ctx, player, ServerMessage.FULLSCREEN_NETWORK_RADIUS_UNSUPPORTED)
                 return 0
             }
             if (!ProxyNetwork.isConnected()) {
-                tell(ctx, player, "fullscreenNetworkNoProxy")
+                tell(ctx, player, ServerMessage.FULLSCREEN_NETWORK_NO_PROXY)
                 return 0
             }
-            val fullscreenMode = mode?.let { m -> runCatching { FullscreenMode.valueOf(m.uppercase()) }.getOrNull() }
-            val resolvedUrl = FullscreenBroadcastManager.resolveNetworkFullscreenUrl(id)
+                        val resolvedUrl = FullscreenBroadcastManager.resolveNetworkFullscreenUrl(id)
             val networkOwner = player?.uuid ?: FullscreenCommand.SERVER_OWNER
             val sent = if (resolvedUrl != null) {
                 VanillaProxyBridge.startNetworkFullscreen(
                     rider = player,
                     ownerId = networkOwner,
-                    scope = serverScope,
+                    scope = options.serverScope,
                     url = resolvedUrl,
-                    mode = fullscreenMode,
-                    forced = forced,
-                    volume = volume,
-                    loop = loop,
-                    quality = quality,
-                    targetsRaw = players,
+                    mode = options.fullscreenMode,
+                    forced = options.forced,
+                    volume = options.volume,
+                    loop = options.loop,
+                    quality = options.quality,
+                    targetsRaw = options.players,
                 )
             } else {
                 VanillaProxyBridge.startNetworkFullscreenByDisplayId(
                     rider = player,
                     ownerId = networkOwner,
-                    scope = serverScope,
+                    scope = options.serverScope,
                     token = id,
-                    mode = fullscreenMode,
-                    forced = forced,
-                    volume = volume,
-                    loop = loop,
-                    quality = quality,
-                    targetsRaw = players,
+                    mode = options.fullscreenMode,
+                    forced = options.forced,
+                    volume = options.volume,
+                    loop = options.loop,
+                    quality = options.quality,
+                    targetsRaw = options.players,
                 )
             }
-            if (!sent) return tell(ctx, player, "fullscreenNetworkNoPlayers").let { 0 }
-            tell(ctx, player, "fullscreenNetworkQueued")
+            if (!sent) return tell(ctx, player, ServerMessage.FULLSCREEN_NETWORK_NO_PLAYERS).let { 0 }
+            tell(ctx, player, ServerMessage.FULLSCREEN_NETWORK_QUEUED)
             return 1
         }
         val ownerId = player?.uuid ?: FullscreenCommand.SERVER_OWNER
         val resolved = FullscreenBroadcastManager.resolveOrCreateDisplay(id, ownerId) ?: run {
-            tell(ctx, player, "fullscreenNoDisplay")
+            tell(ctx, player, ServerMessage.FULLSCREEN_NO_DISPLAY)
             return 0
         }
         val origin = ctx.source.position
@@ -417,24 +392,9 @@ object VanillaFullscreenCommand {
             display = display,
             virtual = virtual,
             ownerId = ownerId,
-            mode = mode?.let { m -> runCatching { FullscreenMode.valueOf(m.uppercase()) }.getOrNull() },
-            forced = forced,
-            transientSession = transientSession,
-            volume = volume,
-            loop = loop,
-            quality = quality,
-            targetNamesRaw = players,
-            radiusBlocks = radiusBlocks,
-            radiusX = radiusX,
-            radiusY = radiusY,
-            radiusZ = radiusZ,
-            defaultMode = config.fullscreenDefaultMode,
-            allowForced = config.fullscreenAllowForced,
-            qualityCap = config.fullscreenQualityCap,
-            senderWorld = RegionUtil.getLevelKey(ctx.source.level),
-            senderX = origin.x,
-            senderY = origin.y,
-            senderZ = origin.z,
+            options = options,
+            limits = FullscreenLimits(config.fullscreenDefaultMode, config.fullscreenAllowForced, config.fullscreenQualityCap),
+            origin = FullscreenOrigin(RegionUtil.getLevelKey(ctx.source.level), origin.x, origin.y, origin.z),
             resolveTarget = { token -> resolveTargetToken(ctx, player, token) },
         )
         reply(ctx, player, result)
@@ -495,9 +455,9 @@ object VanillaFullscreenCommand {
         }
 
         val line = when {
-            count > 0 -> MessageUtil.formatIndexed(player, "fullscreenStopped", count.toString())
-            forwarded -> MessageUtil.messageFor(player, "fullscreenNetworkStopQueued")
-            else -> MessageUtil.messageFor(player, "fullscreenStopFailed")
+            count > 0 -> MessageUtil.formatIndexed(player, ServerMessage.FULLSCREEN_STOPPED, count.toString())
+            forwarded -> MessageUtil.messageFor(player, ServerMessage.FULLSCREEN_NETWORK_STOP_QUEUED)
+            else -> MessageUtil.messageFor(player, ServerMessage.FULLSCREEN_STOP_FAILED)
         }
         if (player != null) MessageUtil.sendColoredMessage(
             player,
@@ -513,7 +473,7 @@ object VanillaFullscreenCommand {
         val network = ProxyNetwork.networkSessions()
         if (player != null && ProxyNetwork.isConnected()) VanillaProxyBridge.requestNetworkSessions(player)
         if (local.isEmpty() && network.isEmpty()) {
-            val line = MessageUtil.messageFor(player, "fullscreenListEmpty")
+            val line = MessageUtil.messageFor(player, ServerMessage.FULLSCREEN_LIST_EMPTY)
             if (player != null) MessageUtil.sendColoredMessage(
                 player,
                 line
@@ -553,25 +513,25 @@ object VanillaFullscreenCommand {
     private fun reply(ctx: CommandContext<CommandSourceStack>, player: ServerPlayer?, result: FullscreenStartResult) {
         when (result) {
             is FullscreenStartResult.Started ->
-                tell(ctx, player, "fullscreenStarted", result.sessionId, result.reach.toString())
+                tell(ctx, player, ServerMessage.FULLSCREEN_STARTED, result.sessionId, result.reach.toString())
 
-            FullscreenStartResult.NoTargets -> tell(ctx, player, "fullscreenNoTargets")
-            FullscreenStartResult.AlreadyRunning -> tell(ctx, player, "fullscreenAlreadyRunning")
-            FullscreenStartResult.ForcedDisallowed -> tell(ctx, player, "fullscreenForcedDisallowed")
+            FullscreenStartResult.NoTargets -> tell(ctx, player, ServerMessage.FULLSCREEN_NO_TARGETS)
+            FullscreenStartResult.AlreadyRunning -> tell(ctx, player, ServerMessage.FULLSCREEN_ALREADY_RUNNING)
+            FullscreenStartResult.ForcedDisallowed -> tell(ctx, player, ServerMessage.FULLSCREEN_FORCED_DISALLOWED)
         }
     }
 
     private fun tell(
         ctx: CommandContext<CommandSourceStack>,
         player: ServerPlayer?,
-        key: String,
+        message: ServerMessage,
         vararg values: String,
     ) {
-        val message = MessageUtil.formatIndexed(player, key, *values)
+        val text = MessageUtil.formatIndexed(player, message, *values)
         if (player != null) {
-            MessageUtil.sendColoredMessage(player, message)
+            MessageUtil.sendColoredMessage(player, text)
         } else {
-            ctx.source.sendSystemMessage(Component.literal(message.replace(Regex("&[0-9a-fk-or]"), "")))
+            ctx.source.sendSystemMessage(Component.literal(text.replace(Regex("&[0-9a-fk-or]"), "")))
         }
     }
 }

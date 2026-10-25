@@ -4,7 +4,8 @@ import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.datatypes.display.DisplayData
 import com.dreamdisplays.platform.server.managers.DisplayManager
-import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.RegionUtil
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import io.github.arnodoelinger.platformweaver.PaperOnly
@@ -21,16 +22,16 @@ fun resolvePaperDisplayTarget(sender: CommandSender, player: Player, token: Stri
     if (token.equals("this", ignoreCase = true)) {
         val block = player.getTargetBlock(null, 32)
         return DisplayManager.isContains(block.location) ?: run {
-            MessageUtil.sendMessage(sender, "noDisplay")
+            ServerMessage.NO_DISPLAY.sendTo(sender)
             null
         }
     }
     if (!player.hasPermission(PaperServer.config.permissions.remote)) {
-        MessageUtil.sendMessage(sender, "displayCommandMissingPermission")
+        ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(sender)
         return null
     }
     return DisplayManager.resolveByIdOrPrefix(token) ?: run {
-        MessageUtil.sendMessage(sender, "noDisplay")
+        ServerMessage.NO_DISPLAY.sendTo(sender)
         null
     }
 }
@@ -39,21 +40,21 @@ fun resolvePaperDisplayTarget(sender: CommandSender, player: Player, token: Stri
 fun resolveVanillaDisplayTarget(player: ServerPlayer, token: String): DisplayData? {
     if (token.equals("this", ignoreCase = true)) {
         val targetPos = RegionUtil.getTargetedBlockPos(player) ?: run {
-            MessageUtil.sendMessage(player, "noDisplay")
+            ServerMessage.NO_DISPLAY.sendTo(player)
             return null
         }
         val worldKey = RegionUtil.getPlayerLevelKey(player)
         return DisplayManager.isContains(worldKey, targetPos) ?: run {
-            MessageUtil.sendMessage(player, "noDisplay")
+            ServerMessage.NO_DISPLAY.sendTo(player)
             null
         }
     }
     if (!VanillaPermissions.has(player, VanillaServerState.config.permissions.remote, VanillaPermissions.Fallback.OP)) {
-        MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+        ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
         return null
     }
     return DisplayManager.resolveByIdOrPrefix(token) ?: run {
-        MessageUtil.sendMessage(player, "noDisplay")
+        ServerMessage.NO_DISPLAY.sendTo(player)
         null
     }
 }

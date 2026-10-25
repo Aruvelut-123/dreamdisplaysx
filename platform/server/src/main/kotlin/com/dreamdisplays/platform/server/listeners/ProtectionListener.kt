@@ -8,7 +8,8 @@ import net.neoforged.neoforge.event.level.block.BreakBlockEvent as NeoForgeBreak
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.managers.PlayerManager
 import com.dreamdisplays.platform.server.managers.SelectionManager
-import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.RegionUtil
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
@@ -45,7 +46,7 @@ class ProtectionListener : Listener {
     fun onBlockBreak(event: BlockBreakEvent) {
         val loc = event.block.location
         if (DisplayManager.isContains(loc) != null && PlayerManager.getVersion(event.player) == null) {
-            MessageUtil.sendMessage(event.player, "displayBlockBreak")
+            ServerMessage.DISPLAY_BLOCK_BREAK.sendTo(event.player)
         }
         cancelIfProtected(loc, event)
     }
@@ -123,7 +124,7 @@ object VanillaProtectionListener {
                 SelectionManager.isLocationSelected(pos, worldKey)
 
         if (isProtected && player != null && PlayerManager.getVersion(player.uuid) == null) {
-            MessageUtil.sendMessage(player, "displayBlockBreak")
+            ServerMessage.DISPLAY_BLOCK_BREAK.sendTo(player)
         }
         return isProtected
     }

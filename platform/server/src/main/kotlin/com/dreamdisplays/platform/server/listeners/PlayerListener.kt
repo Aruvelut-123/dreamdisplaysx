@@ -8,7 +8,8 @@ import com.dreamdisplays.platform.server.managers.PlayerManager
 import com.dreamdisplays.platform.server.meta.Scheduler
 import com.dreamdisplays.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplays.platform.server.playback.WatchPartyManager
-import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.PlatformUtil
 import com.dreamdisplays.platform.server.utils.RegionUtil
 import com.dreamdisplays.platform.server.utils.net.V2PlayerTracker
@@ -57,7 +58,7 @@ class PlayerListener : Listener {
 
         Scheduler.runPlayerLater(player, 600L) {
             if (PlayerManager.getVersion(player) == null && !PlayerManager.hasBeenNotifiedAboutModRequired(player)) {
-                MessageUtil.sendMessage(player, "modRequired")
+                ServerMessage.MOD_REQUIRED.sendTo(player)
                 PlayerManager.setModRequiredNotified(player, true)
             }
         }
@@ -102,7 +103,7 @@ object VanillaPlayerListener {
                 PlayerManager.getVersion(player.uuid) == null &&
                 !PlayerManager.hasBeenNotifiedAboutModRequired(player.uuid)
             ) {
-                MessageUtil.sendMessage(player, "modRequired")
+                ServerMessage.MOD_REQUIRED.sendTo(player)
                 PlayerManager.setModRequiredNotified(player.uuid, true)
             }
         }

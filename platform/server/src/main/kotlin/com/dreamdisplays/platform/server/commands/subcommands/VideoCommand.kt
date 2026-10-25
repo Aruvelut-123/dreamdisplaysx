@@ -16,6 +16,8 @@ import com.dreamdisplays.platform.server.meta.ServerCoroutines
 import com.dreamdisplays.platform.server.playback.PlaybackContexts
 import com.dreamdisplays.platform.server.playback.TimelineManager
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import com.dreamdisplays.platform.server.utils.net.CustomMediaGate
 import com.dreamdisplays.platform.server.utils.net.VanillaDisplayActions
@@ -43,7 +45,7 @@ class VideoCommand : SubCommand {
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val player = (sender as? Player) ?: return
         if (args.size < 2) {
-            MessageUtil.sendMessage(player, "invalidURL")
+            ServerMessage.INVALID_URL.sendTo(player)
             return
         }
         val token = args[0] ?: "this"
@@ -52,7 +54,7 @@ class VideoCommand : SubCommand {
         // menu takes work here too, subject to the same server policy applied further down.
         val requestedUrl = canonicalUrl(args[1] ?: "")
         if (requestedUrl == null) {
-            MessageUtil.sendMessage(player, "invalidURL")
+            ServerMessage.INVALID_URL.sendTo(player)
             return
         }
 
@@ -62,7 +64,7 @@ class VideoCommand : SubCommand {
                 PlaybackContexts.of(data, player.uniqueId, player.hasPermission(PaperServer.config.permissions.deleteOthers))
             )
         ) {
-            MessageUtil.sendMessage(player, "displayVideoNotOwner")
+            ServerMessage.DISPLAY_VIDEO_NOT_OWNER.sendTo(player)
             return
         }
 
@@ -86,7 +88,7 @@ class VideoCommand : SubCommand {
         TimelineManager.onVideoChanged(data)
         ServerApiHost.current?.urlChanged(data)
 
-        MessageUtil.sendMessage(player, "settedURL")
+        ServerMessage.SETTED_URL.sendTo(player)
     }
 
     override fun complete(sender: CommandSender, args: Array<String?>): List<String> {
@@ -141,12 +143,12 @@ object VanillaVideoCommand {
         val langRaw = if (parts.size > 1) parts.last() else ""
 
         if (urlRaw.isBlank()) {
-            MessageUtil.sendMessage(player, "invalidURL")
+            ServerMessage.INVALID_URL.sendTo(player)
             return 0
         }
 
         val requestedUrl = canonicalUrl(urlRaw)
-            ?: return MessageUtil.sendMessage(player, "invalidURL").let { 0 }
+            ?: return ServerMessage.INVALID_URL.sendTo(player).let { 0 }
 
         val data = resolveVanillaDisplayTarget(player, token) as? VanillaDisplayData ?: return 0
 
@@ -154,7 +156,7 @@ object VanillaVideoCommand {
                 PlaybackContexts.of(data, player.uuid, VanillaDisplayActions.isAdmin(player))
             )
         ) {
-            MessageUtil.sendMessage(player, "displayVideoNotOwner")
+            ServerMessage.DISPLAY_VIDEO_NOT_OWNER.sendTo(player)
             return 0
         }
 
@@ -181,7 +183,7 @@ object VanillaVideoCommand {
         TimelineManager.onVideoChanged(data)
         ServerApiHost.current?.urlChanged(data)
 
-        MessageUtil.sendMessage(player, "settedURL")
+        ServerMessage.SETTED_URL.sendTo(player)
         return 1
     }
 }

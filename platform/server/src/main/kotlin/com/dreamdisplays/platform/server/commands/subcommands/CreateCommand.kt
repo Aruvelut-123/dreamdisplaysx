@@ -10,6 +10,8 @@ import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.managers.SelectionManager
 import com.dreamdisplays.platform.server.meta.ServerCoroutines
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.RegionUtil
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import com.dreamdisplays.platform.server.utils.WorldGuardRegions
@@ -70,7 +72,7 @@ class CreateCommand : SubCommand {
         ) ?: return
 
         if (DisplayManager.isOverlaps(sel)) {
-            MessageUtil.sendMessage(player, "displayOverlap")
+            ServerMessage.DISPLAY_OVERLAP.sendTo(player)
             return
         }
 
@@ -78,7 +80,7 @@ class CreateCommand : SubCommand {
         if (maxDisplays > 0 && !player.hasPermission(PaperServer.config.permissions.createBypass) &&
             DisplayManager.countOwnedBy(player.uniqueId) >= maxDisplays
         ) {
-            MessageUtil.sendMessage(player, "displayLimitReached", maxDisplays)
+            ServerMessage.DISPLAY_LIMIT_REACHED.sendTo(player, maxDisplays)
             return
         }
 
@@ -93,7 +95,7 @@ class CreateCommand : SubCommand {
         SelectionManager.selectionPoints.remove(player.uniqueId)
 
         DisplayManager.register(displayData)
-        MessageUtil.sendMessage(player, "successfulCreation")
+        ServerMessage.SUCCESSFUL_CREATION.sendTo(player)
     }
 
     private fun validate(
@@ -192,7 +194,7 @@ object VanillaCreateCommand {
         ) ?: return 0
 
         if (DisplayManager.isOverlaps(sel)) {
-            MessageUtil.sendMessage(player, "displayOverlap")
+            ServerMessage.DISPLAY_OVERLAP.sendTo(player)
             return 0
         }
 
@@ -205,7 +207,7 @@ object VanillaCreateCommand {
             ) &&
             DisplayManager.countOwnedBy(player.uuid) >= maxDisplays
         ) {
-            MessageUtil.sendMessage(player, "displayLimitReached", maxDisplays)
+            ServerMessage.DISPLAY_LIMIT_REACHED.sendTo(player, maxDisplays)
             return 0
         }
 
@@ -218,7 +220,7 @@ object VanillaCreateCommand {
         val receivers = DisplayManager.getReceivers(displayData, ctx.source.server)
         VanillaPacketUtil.sendDisplayInfo(receivers, displayData)
 
-        MessageUtil.sendMessage(player, "successfulCreation")
+        ServerMessage.SUCCESSFUL_CREATION.sendTo(player)
         return 1
     }
 

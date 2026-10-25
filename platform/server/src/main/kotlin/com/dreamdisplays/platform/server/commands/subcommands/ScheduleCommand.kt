@@ -10,6 +10,8 @@ import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.datatypes.display.shortLabel
 import com.dreamdisplays.platform.server.playback.ScheduledPlaybackManager
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.ScheduleTimeUtil
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import com.mojang.brigadier.context.CommandContext
@@ -41,7 +43,7 @@ class ScheduleCommand : SubCommand {
 
         val data = resolvePaperDisplayTarget(sender, player, token) as? PaperDisplayData ?: return
         if (!canManage(data, player.uniqueId, player.hasPermission(PaperServer.config.permissions.scheduleOthers))) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
 
@@ -64,7 +66,7 @@ object VanillaScheduleCommand {
             player, VanillaServerState.config.permissions.scheduleOthers, VanillaPermissions.Fallback.OP,
         )
         if (!canManage(data, player.uuid, canManageOthers)) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return 0
         }
 

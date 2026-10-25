@@ -330,18 +330,20 @@ object VanillaCommandTree {
         return VanillaFullscreenCommand.start(
             ctx,
             id = StringArgumentType.getString(ctx, "id"),
-            serverScope = tryArg(ctx, "name", String::class.java),
-            players = tryArg(ctx, "players", String::class.java),
-            radiusBlocks = tryArg(ctx, "blocks", Double::class.javaObjectType),
-            radiusX = tryArg(ctx, "x", Double::class.javaObjectType),
-            radiusY = tryArg(ctx, "y", Double::class.javaObjectType),
-            radiusZ = tryArg(ctx, "z", Double::class.javaObjectType),
-            mode = mode,
-            forced = "forced" in nodeNames,
-            transientSession = "transient" in nodeNames,
-            volume = tryArg(ctx, "volume", Double::class.javaObjectType)?.let { (it.toFloat() / 200f) },
-            loop = "looped" in nodeNames,
-            quality = tryArg(ctx, "quality", String::class.java),
+            options = FullscreenStartOptions(
+                serverScope = tryArg(ctx, "name", String::class.java),
+                players = tryArg(ctx, "players", String::class.java),
+                radiusBlocks = tryArg(ctx, "blocks", Double::class.javaObjectType),
+                radiusX = tryArg(ctx, "x", Double::class.javaObjectType),
+                radiusY = tryArg(ctx, "y", Double::class.javaObjectType),
+                radiusZ = tryArg(ctx, "z", Double::class.javaObjectType),
+                mode = mode,
+                forced = "forced" in nodeNames,
+                transientSession = "transient" in nodeNames,
+                volume = tryArg(ctx, "volume", Double::class.javaObjectType)?.let { (it.toFloat() / 200f) },
+                loop = "looped" in nodeNames,
+                quality = tryArg(ctx, "quality", String::class.java),
+            ),
         )
     }
 

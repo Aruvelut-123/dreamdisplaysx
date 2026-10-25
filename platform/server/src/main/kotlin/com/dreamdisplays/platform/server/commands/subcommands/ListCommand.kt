@@ -7,6 +7,8 @@ import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.datatypes.display.shortLabel
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.mojang.brigadier.context.CommandContext
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.kyori.adventure.text.Component.text
@@ -44,14 +46,14 @@ class ListCommand : SubCommand {
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val displays = sortedDisplays()
         if (displays.isEmpty()) {
-            MessageUtil.sendMessage(sender, "noDisplaysFound")
+            ServerMessage.NO_DISPLAYS_FOUND.sendTo(sender)
             return
         }
 
         val ownerNameCache = mutableMapOf<UUID, String?>()
         val query = parseQuery(sender, args, displays, ownerNameCache) ?: return
         if (query.displays.isEmpty()) {
-            MessageUtil.sendMessage(sender, "noDisplaysFound")
+            ServerMessage.NO_DISPLAYS_FOUND.sendTo(sender)
             return
         }
         val totalPages = pageCount(query.displays.size)
@@ -60,7 +62,7 @@ class ListCommand : SubCommand {
         val endExclusive = minOf(startIndex + PAGE_SIZE, query.displays.size)
         val pageDisplays = query.displays.subList(startIndex, endExclusive)
 
-        MessageUtil.sendMessage(sender, "displayListHeader")
+        ServerMessage.DISPLAY_LIST_HEADER.sendTo(sender)
         MessageUtil.sendColoredMessage(
             sender,
             MessageUtil.formatIndexed(
@@ -75,10 +77,10 @@ class ListCommand : SubCommand {
         pageDisplays.forEachIndexed { localIndex, d ->
             val index = startIndex + localIndex + 1
             val owner =
-                getOwnerName(d.ownerId, ownerNameCache) ?: MessageUtil.messageFor(sender, "displayListUnknownOwner")
-            val worldName = d.pos1.world?.name ?: MessageUtil.messageFor(sender, "displayListUnknownWorld")
+                getOwnerName(d.ownerId, ownerNameCache) ?: MessageUtil.messageFor(sender, ServerMessage.DISPLAY_LIST_UNKNOWN_OWNER)
+            val worldName = d.pos1.world?.name ?: MessageUtil.messageFor(sender, ServerMessage.DISPLAY_LIST_UNKNOWN_WORLD)
             val idShort = d.shortLabel
-            val url = d.url.ifBlank { MessageUtil.messageFor(sender, "displayListUnavailableUrl") }
+            val url = d.url.ifBlank { MessageUtil.messageFor(sender, ServerMessage.DISPLAY_LIST_UNAVAILABLE_URL) }
             val baseLine = MessageUtil.formatIndexed(
                 sender,
                 "displayListEntry",
@@ -107,7 +109,7 @@ class ListCommand : SubCommand {
 
             val component = LEGACY_SERIALIZER.deserialize(fullLine)
                 .append(
-                    text(MessageUtil.messageFor(sender, "displayListTpButton"))
+                    text(MessageUtil.messageFor(sender, ServerMessage.DISPLAY_LIST_TP_BUTTON))
                         .color(NamedTextColor.GREEN)
                         .clickEvent(
                             ClickEvent.runCommand(
@@ -120,7 +122,7 @@ class ListCommand : SubCommand {
                 component
             } else {
                 component.append(
-                    text(MessageUtil.messageFor(sender, "displayListUrlButton")).color(NamedTextColor.RED)
+                    text(MessageUtil.messageFor(sender, ServerMessage.DISPLAY_LIST_URL_BUTTON)).color(NamedTextColor.RED)
                         .clickEvent(ClickEvent.openUrl(d.url))
                 )
             }
@@ -190,7 +192,7 @@ class ListCommand : SubCommand {
         return when (ListFilter.fromToken(selector)) {
             ListFilter.MINE -> {
                 if (sender !is Player) {
-                    MessageUtil.sendMessage(sender, "commandPlayersOnly")
+                    ServerMessage.COMMAND_PLAYERS_ONLY.sendTo(sender)
                     return null
                 }
                 if (args.size !in 2..3) return wrong(sender)
@@ -226,7 +228,7 @@ class ListCommand : SubCommand {
         if (rawPage == null) return 1
         val page = rawPage.toIntOrNull()
         if (page == null) {
-            MessageUtil.sendMessage(sender, "displayWrongCommand")
+            ServerMessage.DISPLAY_WRONG_COMMAND.sendTo(sender)
             return null
         }
         return page
@@ -270,7 +272,7 @@ class ListCommand : SubCommand {
     private fun pageSuggestions(size: Int): List<String> = (1..pageCount(size)).map { it.toString() }
 
     private fun wrong(sender: CommandSender): ListQuery? {
-        MessageUtil.sendMessage(sender, "displayWrongCommand")
+        ServerMessage.DISPLAY_WRONG_COMMAND.sendTo(sender)
         return null
     }
 }
@@ -373,10 +375,10 @@ object VanillaListCommand {
 
         pageDisplays.forEachIndexed { localIndex, d ->
             val index = startIndex + localIndex + 1
-            val owner = getOwnerName(d.ownerId) ?: MessageUtil.messageFor(player, "displayListUnknownOwner")
+            val owner = getOwnerName(d.ownerId) ?: MessageUtil.messageFor(player, ServerMessage.DISPLAY_LIST_UNKNOWN_OWNER)
             val worldName = d.worldKey.substringAfterLast(':')
             val idShort = d.shortLabel
-            val url = d.url.ifBlank { MessageUtil.messageFor(player, "displayListUnavailableUrl") }
+            val url = d.url.ifBlank { MessageUtil.messageFor(player, ServerMessage.DISPLAY_LIST_UNAVAILABLE_URL) }
             val baseLine = MessageUtil.formatIndexed(
                 player,
                 "displayListEntry",

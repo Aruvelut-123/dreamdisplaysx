@@ -4,6 +4,8 @@ import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.managers.PlayerManager
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.mojang.brigadier.context.CommandContext
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.minecraft.commands.CommandSourceStack
@@ -28,17 +30,17 @@ class StatsCommand : SubCommand {
             .eachCount()
             .toSortedMap()
 
-        MessageUtil.sendMessage(sender, "displayStatsHeader")
+        ServerMessage.DISPLAY_STATS_HEADER.sendTo(sender)
 
         for ((version, count) in counts) {
             MessageUtil.sendColoredMessage(
                 sender,
-                MessageUtil.formatPrintf(sender, "displayStatsEntry", version, count)
+                MessageUtil.formatPrintf(sender, ServerMessage.DISPLAY_STATS_ENTRY, version, count)
             )
         }
 
         val total = counts.values.sum()
-        MessageUtil.sendColoredMessage(sender, MessageUtil.formatPrintf(sender, "displayStatsTotal", total))
+        MessageUtil.sendColoredMessage(sender, MessageUtil.formatPrintf(sender, ServerMessage.DISPLAY_STATS_TOTAL, total))
     }
 }
 
@@ -59,23 +61,23 @@ object VanillaStatsCommand {
             .toSortedMap()
 
         if (player != null) {
-            MessageUtil.sendMessage(player, "displayStatsHeader")
+            ServerMessage.DISPLAY_STATS_HEADER.sendTo(player)
             for ((version, count) in counts) {
                 MessageUtil.sendColoredMessage(
                     player,
-                    MessageUtil.formatPrintf(player, "displayStatsEntry", version, count)
+                    MessageUtil.formatPrintf(player, ServerMessage.DISPLAY_STATS_ENTRY, version, count)
                 )
             }
             val total = counts.values.sum()
-            MessageUtil.sendColoredMessage(player, MessageUtil.formatPrintf(player, "displayStatsTotal", total))
+            MessageUtil.sendColoredMessage(player, MessageUtil.formatPrintf(player, ServerMessage.DISPLAY_STATS_TOTAL, total))
         } else {
-            ctx.source.sendSystemMessage(Component.literal(MessageUtil.messageFor(player, "displayStatsHeader")))
+            ctx.source.sendSystemMessage(Component.literal(MessageUtil.messageFor(player, ServerMessage.DISPLAY_STATS_HEADER)))
             for ((version, count) in counts) {
                 ctx.source.sendSystemMessage(
                     Component.literal(
                         MessageUtil.formatPrintf(
                             player,
-                            "displayStatsEntry",
+                            ServerMessage.DISPLAY_STATS_ENTRY,
                             version,
                             count
                         )
@@ -87,7 +89,7 @@ object VanillaStatsCommand {
                 Component.literal(
                     MessageUtil.formatPrintf(
                         player,
-                        "displayStatsTotal",
+                        ServerMessage.DISPLAY_STATS_TOTAL,
                         total
                     )
                 )

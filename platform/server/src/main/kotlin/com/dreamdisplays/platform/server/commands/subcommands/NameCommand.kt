@@ -8,7 +8,8 @@ import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.meta.Scheduler.runAsync
 import com.dreamdisplays.platform.server.meta.ServerCoroutines
-import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import com.mojang.brigadier.context.CommandContext
 import io.github.arnodoelinger.platformweaver.PaperOnly
@@ -39,31 +40,31 @@ class NameCommand : SubCommand {
 
         val requestedName = args.getOrNull(1)
         if (requestedName == null) {
-            data.name?.let { MessageUtil.sendMessage(player, "currentName", it) }
-                ?: MessageUtil.sendMessage(player, "noNameSet")
+            data.name?.let { ServerMessage.CURRENT_NAME.sendTo(player, it) }
+                ?: ServerMessage.NO_NAME_SET.sendTo(player)
             return
         }
 
         if (data.ownerId != player.uniqueId &&
             !player.hasPermission(PaperServer.config.permissions.nameOthers)
         ) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
 
         val normalized = normalizeDisplayName(requestedName)
         if (normalized == null) {
-            MessageUtil.sendMessage(player, "invalidName")
+            ServerMessage.INVALID_NAME.sendTo(player)
             return
         }
         if (DisplayManager.isNameTaken(normalized, data.id)) {
-            MessageUtil.sendMessage(player, "nameTaken")
+            ServerMessage.NAME_TAKEN.sendTo(player)
             return
         }
 
         data.name = normalized
         runAsync { PaperServer.getInstance().storage.saveDisplay(data) }
-        MessageUtil.sendMessage(player, "settedName")
+        ServerMessage.SETTED_NAME.sendTo(player)
     }
 }
 
@@ -88,8 +89,8 @@ object VanillaNameCommand {
         val data = resolveVanillaDisplayTarget(player, token) as? VanillaDisplayData ?: return 0
 
         if (requestedName == null) {
-            data.name?.let { MessageUtil.sendMessage(player, "currentName", it) }
-                ?: MessageUtil.sendMessage(player, "noNameSet")
+            data.name?.let { ServerMessage.CURRENT_NAME.sendTo(player, it) }
+                ?: ServerMessage.NO_NAME_SET.sendTo(player)
             return 1
         }
 
@@ -100,23 +101,23 @@ object VanillaNameCommand {
                 VanillaPermissions.Fallback.OP,
             )
         ) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return 0
         }
 
         val normalized = normalizeDisplayName(requestedName)
         if (normalized == null) {
-            MessageUtil.sendMessage(player, "invalidName")
+            ServerMessage.INVALID_NAME.sendTo(player)
             return 0
         }
         if (DisplayManager.isNameTaken(normalized, data.id)) {
-            MessageUtil.sendMessage(player, "nameTaken")
+            ServerMessage.NAME_TAKEN.sendTo(player)
             return 0
         }
 
         data.name = normalized
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(data) }
-        MessageUtil.sendMessage(player, "settedName")
+        ServerMessage.SETTED_NAME.sendTo(player)
         return 1
     }
 }

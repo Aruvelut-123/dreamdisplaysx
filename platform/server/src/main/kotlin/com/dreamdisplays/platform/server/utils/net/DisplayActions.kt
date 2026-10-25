@@ -20,6 +20,8 @@ import com.dreamdisplays.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplays.platform.server.playback.TimelineManager
 import com.dreamdisplays.platform.server.playback.WatchPartyManager
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.VersionUtil
 import com.dreamdisplays.platform.server.utils.WorldGuardRegions
 import com.dreamdisplays.platform.server.utils.net.DisplayActions.context
@@ -50,21 +52,21 @@ object DisplayActions {
     /** Handles a client-requested deletion, enforcing owner-or-permission check and physical proximity. */
     fun delete(player: Player, displayId: UUID) {
         val displayData = DisplayManager.getDisplayData(displayId)
-            ?: return MessageUtil.sendMessage(player, "noDisplay")
+            ?: return ServerMessage.NO_DISPLAY.sendTo(player)
 
         val isOwner = displayData.ownerId == player.uniqueId
         val canDelete = (isOwner && player.hasPermission(PaperServer.config.permissions.delete)) ||
                 player.hasPermission(PaperServer.config.permissions.deleteOthers)
         if (!canDelete) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
         if (displayData !is PaperDisplayData || !DisplayManager.isPlayerInRange(player, displayData)) {
-            return MessageUtil.sendMessage(player, "noDisplay")
+            return ServerMessage.NO_DISPLAY.sendTo(player)
         }
 
         DisplayManager.delete(displayId)
-        MessageUtil.sendMessage(player, "displayDeleted")
+        ServerMessage.DISPLAY_DELETED.sendTo(player)
     }
 
     /** Applies a client-supplied URL / language to a display, broadcasting and resetting the timeline. */
@@ -115,7 +117,7 @@ object DisplayActions {
 
         // Check mode-specific permissions
         if (!canAccessMode(player, mode)) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
         if (!DisplayManager.isPlayerInRange(player, displayData)) return
@@ -136,7 +138,7 @@ object DisplayActions {
     fun watchPartyStart(player: Player, displayId: UUID, url: String, lang: String) {
         val displayData = DisplayManager.getDisplayData(displayId) as? PaperDisplayData ?: return
         if (!player.hasPermission(PaperServer.config.permissions.watchparty)) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
         if (!MediaUrlPolicy.isAllowed(url)) {
@@ -196,7 +198,7 @@ object DisplayActions {
     /** Tells a v1-only client that its Dream Displays is too old for this server. */
     fun notifyOutdatedClient(player: Player) {
         logger.info("${player.name} joined with an outdated Dream Displays (protocol v1); asked to update.")
-        MessageUtil.sendMessage(player, "outdatedClient")
+        ServerMessage.OUTDATED_CLIENT.sendTo(player)
     }
 
     /** Records the player's reported mod version and runs the mod / plugin update checks. */

@@ -4,6 +4,8 @@ import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.managers.PlayerManager
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import com.dreamdisplays.platform.server.utils.net.PacketUtil
 import com.dreamdisplays.platform.server.utils.net.VanillaPacketUtil
@@ -32,17 +34,17 @@ class OffCommand : SubCommand {
         val selfTarget = sender is Player && sender.uniqueId == target.uniqueId
 
         if (!selfTarget && !sender.hasPermission(PaperServer.config.permissions.toggleOthers)) {
-            MessageUtil.sendMessage(sender, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(sender)
             return
         }
 
         if (!PlayerManager.isDisplaysEnabled(target)) {
             PacketUtil.sendDisplayEnabled(target, false)
-            MessageUtil.sendMessage(target, "display.already-disabled")
+            ServerMessage.DISPLAY_ALREADY_DISABLED.sendTo(target)
             if (!selfTarget) {
                 MessageUtil.sendColoredMessage(
                     sender,
-                    MessageUtil.formatPrintf(sender, "display.already-disabled.target", target.name)
+                    MessageUtil.formatPrintf(sender, ServerMessage.DISPLAY_ALREADY_DISABLED_TARGET, target.name)
                 )
             }
             return
@@ -50,11 +52,11 @@ class OffCommand : SubCommand {
 
         PlayerManager.setDisplaysEnabled(target, false)
         PacketUtil.sendDisplayEnabled(target, false)
-        MessageUtil.sendMessage(target, "display.disabled")
+        ServerMessage.DISPLAY_DISABLED.sendTo(target)
         if (!selfTarget) {
             MessageUtil.sendColoredMessage(
                 sender,
-                MessageUtil.formatPrintf(sender, "display.disabled.target", target.name)
+                MessageUtil.formatPrintf(sender, ServerMessage.DISPLAY_DISABLED_TARGET, target.name)
             )
         }
     }
@@ -68,25 +70,25 @@ class OffCommand : SubCommand {
     private fun resolveTarget(sender: CommandSender, args: Array<String?>): Player? {
         if (args.size == 1) {
             return sender as? Player ?: run {
-                MessageUtil.sendMessage(sender, "displayWrongCommand")
+                ServerMessage.DISPLAY_WRONG_COMMAND.sendTo(sender)
                 null
             }
         }
         if (args.size != 2) {
-            MessageUtil.sendMessage(sender, "displayWrongCommand")
+            ServerMessage.DISPLAY_WRONG_COMMAND.sendTo(sender)
             return null
         }
 
         val targetName = args[1]?.trim().orEmpty()
         if (targetName.isBlank()) {
-            MessageUtil.sendMessage(sender, "displayWrongCommand")
+            ServerMessage.DISPLAY_WRONG_COMMAND.sendTo(sender)
             return null
         }
 
         val target = Bukkit.getPlayerExact(targetName)
         if (target != null) return target
 
-        MessageUtil.sendColoredMessage(sender, MessageUtil.formatPrintf(sender, "displayTargetNotFound", targetName))
+        MessageUtil.sendColoredMessage(sender, MessageUtil.formatPrintf(sender, ServerMessage.DISPLAY_TARGET_NOT_FOUND, targetName))
         return null
     }
 }
@@ -122,14 +124,14 @@ object VanillaOffCommand {
                 VanillaPermissions.Fallback.OP
             ))
         ) {
-            if (self != null) MessageUtil.sendMessage(self, "displayCommandMissingPermission")
+            if (self != null) ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(self)
             else ctx.source.sendFailure(Component.literal("Missing permission."))
             return 0
         }
 
         if (!PlayerManager.isDisplaysEnabled(target)) {
             VanillaPacketUtil.sendDisplayEnabled(target, false)
-            MessageUtil.sendMessage(target, "display.already-disabled")
+            ServerMessage.DISPLAY_ALREADY_DISABLED.sendTo(target)
             if (!selfTarget) {
                 val msg = config.getMessageForPlayer(self, "display.already-disabled.target") as? String
                 if (msg != null) MessageUtil.sendColoredMessage(self, String.format(msg, target.name.string))
@@ -139,7 +141,7 @@ object VanillaOffCommand {
 
         PlayerManager.setDisplaysEnabled(target, false)
         VanillaPacketUtil.sendDisplayEnabled(target, false)
-        MessageUtil.sendMessage(target, "display.disabled")
+        ServerMessage.DISPLAY_DISABLED.sendTo(target)
         if (!selfTarget) {
             val msg = config.getMessageForPlayer(self, "display.disabled.target") as? String
             if (msg != null) MessageUtil.sendColoredMessage(self, String.format(msg, target.name.string))

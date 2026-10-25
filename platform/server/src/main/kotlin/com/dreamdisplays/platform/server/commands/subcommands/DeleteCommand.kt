@@ -5,7 +5,8 @@ import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.managers.DisplayManager
-import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import com.dreamdisplays.platform.server.utils.net.VanillaPacketUtil
 import com.mojang.brigadier.context.CommandContext
@@ -36,12 +37,12 @@ class DeleteCommand : SubCommand {
         val canDelete = player.hasPermission(PaperServer.config.permissions.deleteOthers) ||
                 (isOwner && player.hasPermission(PaperServer.config.permissions.delete))
         if (!canDelete) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
 
         DisplayManager.delete(data.id)
-        MessageUtil.sendMessage(player, "displayDeleted")
+        ServerMessage.DISPLAY_DELETED.sendTo(player)
     }
 }
 
@@ -66,14 +67,14 @@ object VanillaDeleteCommand {
             VanillaPermissions.Fallback.EVERYONE
         ))
         if (!canDelete) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return 0
         }
 
         val receivers = DisplayManager.getReceivers(data, ctx.source.server)
         DisplayManager.delete(data)
         VanillaPacketUtil.sendDelete(receivers, data.id)
-        MessageUtil.sendMessage(player, "displayDeleted")
+        ServerMessage.DISPLAY_DELETED.sendTo(player)
         return 1
     }
 }

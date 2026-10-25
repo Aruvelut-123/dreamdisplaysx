@@ -22,6 +22,8 @@ import com.dreamdisplays.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplays.platform.server.playback.TimelineManager
 import com.dreamdisplays.platform.server.playback.WatchPartyManager
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.VanillaPermissions
 import com.dreamdisplays.platform.server.utils.VersionUtil
 import com.dreamdisplays.platform.server.utils.net.VanillaDisplayActions.context
@@ -46,7 +48,7 @@ object VanillaDisplayActions {
     /** Tells a v1-only client that its Dream Displays is too old for this server. */
     fun notifyOutdatedClient(player: ServerPlayer) {
         logger.info("${player.name.string} joined with an outdated Dream Displays (protocol v1); asked to update.")
-        MessageUtil.sendMessage(player, "outdatedClient")
+        ServerMessage.OUTDATED_CLIENT.sendTo(player)
     }
 
     /** Records the player's reported mod version and runs the mod / plugin update checks. */
@@ -110,7 +112,7 @@ object VanillaDisplayActions {
     /** Handles a client-requested deletion, enforcing owner-or-permission check and physical proximity. */
     fun delete(player: ServerPlayer, server: MinecraftServer, displayId: java.util.UUID) {
         val displayData = DisplayManager.getDisplayData(displayId) as? VanillaDisplayData
-            ?: return MessageUtil.sendMessage(player, "noDisplay")
+            ?: return ServerMessage.NO_DISPLAY.sendTo(player)
 
         val perms = VanillaServerState.config.permissions
         val canDelete = if (displayData.ownerId == player.uuid) {
@@ -119,15 +121,15 @@ object VanillaDisplayActions {
             VanillaPermissions.has(player, perms.deleteOthers, VanillaPermissions.Fallback.OP)
         }
         if (!canDelete) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
         if (!DisplayManager.isPlayerInRange(player, displayData)) {
-            return MessageUtil.sendMessage(player, "noDisplay")
+            return ServerMessage.NO_DISPLAY.sendTo(player)
         }
 
         DisplayManager.delete(displayData)
-        MessageUtil.sendMessage(player, "displayDeleted")
+        ServerMessage.DISPLAY_DELETED.sendTo(player)
     }
 
     /** Applies a client-supplied URL / language to a display, broadcasting and resetting the timeline. */
@@ -163,13 +165,13 @@ object VanillaDisplayActions {
     /** Sets who may use a display owned by [player] and rebroadcasts. */
     fun setAccess(player: ServerPlayer, server: MinecraftServer, displayId: java.util.UUID, access: DisplayAccess) {
         val displayData = DisplayManager.getDisplayData(displayId) as? VanillaDisplayData
-            ?: return MessageUtil.sendMessage(player, "noDisplay")
+            ?: return ServerMessage.NO_DISPLAY.sendTo(player)
         if (!VanillaPermissions.has(player, VanillaServerState.config.permissions.lock, VanillaPermissions.Fallback.EVERYONE)) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
         if (!PlaybackPermissions.canToggleLock(lockContext(displayData, player))) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
         if (!DisplayManager.isPlayerInRange(player, displayData)) return
@@ -194,7 +196,7 @@ object VanillaDisplayActions {
         if (!PlaybackPermissions.canSetMode(context(displayData, player))) return
 
         if (!canAccessMode(player, mode)) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
         if (!DisplayManager.isPlayerInRange(player, displayData)) return
@@ -216,7 +218,7 @@ object VanillaDisplayActions {
         val displayData = DisplayManager.getDisplayData(displayId) as? VanillaDisplayData ?: return
         val perms = VanillaServerState.config.permissions
         if (!VanillaPermissions.has(player, perms.watchparty, VanillaPermissions.Fallback.EVERYONE)) {
-            MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+            ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(player)
             return
         }
         if (!MediaUrlPolicy.isAllowed(url)) return

@@ -5,6 +5,8 @@ import com.dreamdisplays.platform.server.datatypes.selection.PaperSelectionData
 import com.dreamdisplays.platform.server.datatypes.selection.SelectionData
 import com.dreamdisplays.platform.server.datatypes.selection.VanillaSelectionData
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.RegionUtil
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.minecraft.core.BlockPos
@@ -34,7 +36,7 @@ object SelectionManager {
         sel.setFace(face as BlockFace)
         sel.setHorizontal(player.facing)
         sel.isReady = false
-        MessageUtil.sendMessage(player, "firstPointSelected")
+        ServerMessage.FIRST_POINT_SELECTED.sendTo(player)
     }
 
     /** Records the first selection corner for [player] and resets stale state if the world changed. */
@@ -47,7 +49,7 @@ object SelectionManager {
         sel.facing = face
         sel.horizontalFacing = player.direction
         sel.isReady = false
-        MessageUtil.sendMessage(player, "firstPointSelected")
+        ServerMessage.FIRST_POINT_SELECTED.sendTo(player)
     }
 
     /** Records the second selection corner, validating the worlds match the first point. */
@@ -64,7 +66,7 @@ object SelectionManager {
         }
         sel.pos2 = loc.clone()
         sel.isReady = true
-        MessageUtil.sendMessage(player, "secondPointSelected")
+        ServerMessage.SECOND_POINT_SELECTED.sendTo(player)
     }
 
     /** Records the second selection corner, validating the worlds match the first point. */
@@ -82,7 +84,7 @@ object SelectionManager {
         }
         sel.pos2 = pos
         sel.isReady = true
-        MessageUtil.sendMessage(player, "secondPointSelected")
+        ServerMessage.SECOND_POINT_SELECTED.sendTo(player)
     }
 
     /** Returns true if [loc] lies within any player's finalized selection. */

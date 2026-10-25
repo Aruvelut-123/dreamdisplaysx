@@ -52,6 +52,12 @@ object MessageUtil {
         sendColoredMessage(sender, message)
     }
 
+    /** Sends the localized [message] to [sender]. */
+    @PaperOnly
+    @NullMarked
+    fun sendMessage(sender: CommandSender?, message: ServerMessage, vararg args: Any) =
+        sendMessage(sender, message.key, *args)
+
     /** Sends [message] to [sender], auto-detecting Component / legacy string / JSON forms. */
     @PaperOnly
     @NullMarked
@@ -83,10 +89,19 @@ object MessageUtil {
     fun messageFor(sender: CommandSender, key: String): String =
         PaperServer.config.getMessageForPlayer(sender as? Player, key) as? String ?: key
 
+    /** Returns the localized string for [message] in [sender]'s language. */
+    @PaperOnly
+    fun messageFor(sender: CommandSender, message: ServerMessage): String = messageFor(sender, message.key)
+
     /** Returns the localized string for [key], substituting `{0}`, `{1}`, ... with [values]. */
     @PaperOnly
     fun formatIndexed(sender: CommandSender, key: String, vararg values: String): String =
         applyPlaceholders(messageFor(sender, key), *values)
+
+    /** Returns the localized [message], substituting `{0}`, `{1}`, ... with [values]. */
+    @PaperOnly
+    fun formatIndexed(sender: CommandSender, message: ServerMessage, vararg values: String): String =
+        formatIndexed(sender, message.key, *values)
 
     /** Returns the localized string for [key], substituting `%s`/`%d`-style [values] via `String.format`. */
     @PaperOnly
@@ -94,6 +109,11 @@ object MessageUtil {
         val template = messageFor(sender, key)
         return runCatching { String.format(template, *values) }.getOrElse { template }
     }
+
+    /** Returns the localized [message], substituting `%s`/`%d`-style [values] via `String.format`. */
+    @PaperOnly
+    fun formatPrintf(sender: CommandSender, message: ServerMessage, vararg values: Any): String =
+        formatPrintf(sender, message.key, *values)
 
     /**
      * Sends a localized message to [sender], replacing `{0}`, `{1}` ... placeholders with
@@ -142,6 +162,10 @@ object MessageUtil {
         sendColoredMessage(player, message)
     }
 
+    /** Sends the localized [message] to [player]. */
+    fun sendMessage(player: ServerPlayer?, message: ServerMessage, vararg args: Any) =
+        sendMessage(player, message.key, *args)
+
     /**
      * Interpolates `%s` placeholders in a raw config [message] with [args], preserving its form:
      * plain strings are formatted directly, JSON component maps have `%s` substituted inside their
@@ -159,15 +183,26 @@ object MessageUtil {
     fun messageFor(player: ServerPlayer?, key: String): String =
         VanillaServerState.config.getMessageForPlayer(player, key) as? String ?: key
 
+    /** Returns the localized string for [message] in [player]'s language. */
+    fun messageFor(player: ServerPlayer?, message: ServerMessage): String = messageFor(player, message.key)
+
     /** Returns the localized string for [key], substituting `{0}`, `{1}`, ... with [values]. */
     fun formatIndexed(player: ServerPlayer?, key: String, vararg values: String): String =
         applyPlaceholders(messageFor(player, key), *values)
+
+    /** Returns the localized [message], substituting `{0}`, `{1}`, ... with [values]. */
+    fun formatIndexed(player: ServerPlayer?, message: ServerMessage, vararg values: String): String =
+        formatIndexed(player, message.key, *values)
 
     /** Returns the localized string for [key], substituting `%s`/`%d`-style [values] via `String.format`. */
     fun formatPrintf(player: ServerPlayer?, key: String, vararg values: Any): String {
         val template = messageFor(player, key)
         return runCatching { String.format(template, *values) }.getOrElse { template }
     }
+
+    /** Returns the localized [message], substituting `%s`/`%d`-style [values] via `String.format`. */
+    fun formatPrintf(player: ServerPlayer?, message: ServerMessage, vararg values: Any): String =
+        formatPrintf(player, message.key, *values)
 
     /** Replaces `{0}`, `{1}`, ... placeholders in [template] with the matching value from [values]. */
     fun applyPlaceholders(template: String, vararg values: String): String {
@@ -337,3 +372,11 @@ object MessageUtil {
     private fun parseAmpersandLegacy(text: String): NmsComponent =
         NmsComponent.literal(text.replace(Regex("&[0-9a-fA-FrRlLoOnNmMkK]"), ""))
 }
+
+/** Sends this message to [target]; shorthand for [MessageUtil.sendMessage]. */
+@PaperOnly
+@NullMarked
+fun ServerMessage.sendTo(target: CommandSender?, vararg args: Any) = MessageUtil.sendMessage(target, this, *args)
+
+/** Sends this message to [target]; shorthand for [MessageUtil.sendMessage]. */
+fun ServerMessage.sendTo(target: ServerPlayer?, vararg args: Any) = MessageUtil.sendMessage(target, this, *args)

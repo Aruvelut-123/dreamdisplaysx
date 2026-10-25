@@ -6,6 +6,7 @@ import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplays.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
 import com.dreamdisplays.platform.server.utils.ScheduleTimeUtil
 import com.mojang.brigadier.context.CommandContext
 import io.github.arnodoelinger.platformweaver.PaperOnly
@@ -33,20 +34,20 @@ class InfoCommand : SubCommand {
         val data = resolvePaperDisplayTarget(sender, player, token) as? PaperDisplayData ?: return
 
         val ownerName =
-            Bukkit.getOfflinePlayer(data.ownerId).name ?: MessageUtil.messageFor(player, "displayInfoUnknownOwner")
-        val worldName = data.pos1.world?.name ?: MessageUtil.messageFor(player, "displayInfoUnknownWorld")
-        val displayUrl = data.url.ifBlank { MessageUtil.messageFor(player, "displayInfoUnavailableUrl") }
-        val displayLang = data.lang.ifBlank { MessageUtil.messageFor(player, "displayInfoAutoLang") }
-        val duration = data.duration?.toString() ?: MessageUtil.messageFor(player, "displayInfoUnknownDuration")
+            Bukkit.getOfflinePlayer(data.ownerId).name ?: MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_UNKNOWN_OWNER)
+        val worldName = data.pos1.world?.name ?: MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_UNKNOWN_WORLD)
+        val displayUrl = data.url.ifBlank { MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_UNAVAILABLE_URL) }
+        val displayLang = data.lang.ifBlank { MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_AUTO_LANG) }
+        val duration = data.duration?.toString() ?: MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_UNKNOWN_DURATION)
 
-        MessageUtil.sendColoredMessage(player, MessageUtil.messageFor(player, "displayInfoHeader"))
+        MessageUtil.sendColoredMessage(player, MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_HEADER))
         MessageUtil.sendColoredMessage(
             player,
-            MessageUtil.formatIndexed(player, "displayInfoOwnerLine", ownerName, data.ownerId.toString())
+            MessageUtil.formatIndexed(player, ServerMessage.DISPLAY_INFO_OWNER_LINE, ownerName, data.ownerId.toString())
         )
         MessageUtil.sendColoredMessage(
             player,
-            MessageUtil.formatIndexed(player, "displayInfoUuidLine", data.id.toString())
+            MessageUtil.formatIndexed(player, ServerMessage.DISPLAY_INFO_UUID_LINE, data.id.toString())
         )
         MessageUtil.sendColoredMessage(
             player,
@@ -77,7 +78,7 @@ class InfoCommand : SubCommand {
             player,
             MessageUtil.formatIndexed(
                 player,
-                "displayInfoMediaLine",
+                ServerMessage.DISPLAY_INFO_MEDIA_LINE,
                 displayLang,
                 duration,
                 displayUrl
@@ -113,20 +114,20 @@ object VanillaInfoCommand {
         val server = ctx.source.server
 
         val ownerName = server.playerList.players.find { it.uuid == data.ownerId }?.name?.string
-            ?: MessageUtil.messageFor(player, "displayInfoUnknownOwner")
+            ?: MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_UNKNOWN_OWNER)
         val worldName = data.worldKey
-        val displayUrl = data.url.ifBlank { MessageUtil.messageFor(player, "displayInfoUnavailableUrl") }
-        val displayLang = data.lang.ifBlank { MessageUtil.messageFor(player, "displayInfoAutoLang") }
-        val duration = data.duration?.toString() ?: MessageUtil.messageFor(player, "displayInfoUnknownDuration")
+        val displayUrl = data.url.ifBlank { MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_UNAVAILABLE_URL) }
+        val displayLang = data.lang.ifBlank { MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_AUTO_LANG) }
+        val duration = data.duration?.toString() ?: MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_UNKNOWN_DURATION)
 
-        MessageUtil.sendColoredMessage(player, MessageUtil.messageFor(player, "displayInfoHeader"))
+        MessageUtil.sendColoredMessage(player, MessageUtil.messageFor(player, ServerMessage.DISPLAY_INFO_HEADER))
         MessageUtil.sendColoredMessage(
             player,
-            MessageUtil.formatIndexed(player, "displayInfoOwnerLine", ownerName, data.ownerId.toString())
+            MessageUtil.formatIndexed(player, ServerMessage.DISPLAY_INFO_OWNER_LINE, ownerName, data.ownerId.toString())
         )
         MessageUtil.sendColoredMessage(
             player,
-            MessageUtil.formatIndexed(player, "displayInfoUuidLine", data.id.toString())
+            MessageUtil.formatIndexed(player, ServerMessage.DISPLAY_INFO_UUID_LINE, data.id.toString())
         )
         MessageUtil.sendColoredMessage(
             player,
@@ -151,7 +152,7 @@ object VanillaInfoCommand {
         )
         MessageUtil.sendColoredMessage(
             player,
-            MessageUtil.formatIndexed(player, "displayInfoMediaLine", displayLang, duration, displayUrl)
+            MessageUtil.formatIndexed(player, ServerMessage.DISPLAY_INFO_MEDIA_LINE, displayLang, duration, displayUrl)
         )
         data.scheduledStart?.let { at ->
             val localSecond = ScheduleTimeUtil.localSecondOfDay(at, ScheduleTimeUtil.offsetMinutesOf(player.uuid))

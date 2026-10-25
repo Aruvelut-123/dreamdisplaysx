@@ -23,7 +23,8 @@ import com.dreamdisplays.platform.server.playback.PipPinManager
 import com.dreamdisplays.platform.server.playback.ScheduledPlaybackManager
 import com.dreamdisplays.platform.server.playback.TimelineManager
 import com.dreamdisplays.platform.server.playback.WatchPartyManager
-import com.dreamdisplays.platform.server.utils.MessageUtil
+import com.dreamdisplays.platform.server.utils.ServerMessage
+import com.dreamdisplays.platform.server.utils.sendTo
 import com.dreamdisplays.platform.server.utils.PlatformUtil
 import com.dreamdisplays.platform.server.utils.RegionUtil
 import com.dreamdisplays.platform.server.utils.WorldGuardRegions
@@ -299,7 +300,7 @@ object DisplayManager {
         val displayData = displays[id] as? PaperDisplayData ?: return
 
         if (reportThrottle.isThrottled(id, player.uniqueId, config.settings.reportCooldown)) {
-            MessageUtil.sendMessage(player, "reportTooQuickly")
+            ServerMessage.REPORT_TOO_QUICKLY.sendTo(player)
             return
         }
 
@@ -312,10 +313,10 @@ object DisplayManager {
                     config.settings.webhookUrl, getOfflinePlayer(displayData.ownerId).name,
                 )
             }.onSuccess {
-                runSync { MessageUtil.sendMessage(player, "reportSent") }
+                runSync { ServerMessage.REPORT_SENT.sendTo(player) }
             }.onFailure { e ->
                 getInstance().logger.warning("Exception while sending report: ${e.message}")
-                runSync { MessageUtil.sendMessage(player, "reportFailed") }
+                runSync { ServerMessage.REPORT_FAILED.sendTo(player) }
             }
         }
     }
@@ -449,7 +450,7 @@ object DisplayManager {
         val displayData = displays[id] as? VanillaDisplayData ?: return
         val cfg = VanillaServerState.config
         if (reportThrottle.isThrottled(id, player.uuid, cfg.settings.reportCooldown)) {
-            MessageUtil.sendMessage(player, "reportTooQuickly")
+            ServerMessage.REPORT_TOO_QUICKLY.sendTo(player)
             return
         }
         if (cfg.settings.webhookUrl.isEmpty()) return
@@ -468,9 +469,9 @@ object DisplayManager {
                     ownerName,
                     cfg.settings.webhookUrl,
                 )
-                server.execute { MessageUtil.sendMessage(player, "reportSent") }
+                server.execute { ServerMessage.REPORT_SENT.sendTo(player) }
             }.onFailure {
-                server.execute { MessageUtil.sendMessage(player, "reportFailed") }
+                server.execute { ServerMessage.REPORT_FAILED.sendTo(player) }
             }
         }
     }
