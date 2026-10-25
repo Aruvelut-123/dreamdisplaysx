@@ -36,6 +36,9 @@ repositories {
     maven("https://maven.neoforged.net/releases")
     maven("https://prmaven.neoforged.net/NeoForge/pr3403")
     maven("https://maven.enginehub.org/repo/")
+    maven("https://maven.shedaniel.me/") {
+        content { includeGroup("me.shedaniel.cloth") }
+    }
     maven("https://api.modrinth.com/maven") {
         content { includeGroup("maven.modrinth") }
     }
@@ -165,6 +168,7 @@ dependencies {
         implementation("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")
         implementation("net.fabricmc.fabric-api:fabric-api:${scVersion("fabric.api.version")}")
     }
+    "localRuntime"("me.shedaniel.cloth:basic-math:0.6.1")
     implementation(project(":platform:client:common"))
     shadow(project(":core"))
     shadow(project(":api"))
