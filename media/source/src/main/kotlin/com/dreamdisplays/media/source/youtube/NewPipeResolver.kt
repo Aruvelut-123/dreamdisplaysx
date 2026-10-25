@@ -144,10 +144,10 @@ object NewPipeResolver : MediaResolverService {
      */
     fun fetch(videoUrl: String): List<YtStream> {
         ensureInitialized()
-        if (!initialized.value) return emptyList()
+        if (!initialized.value) return []
         // No overlap here: this is the call [YtDlp.fetchUncached] makes from inside the very race
         // the overlap exists to start.
-        return resolveCached(videoUrl)?.streams ?: emptyList()
+        return resolveCached(videoUrl)?.streams ?: []
     }
 
     override fun prefetch(source: MediaSource): Boolean {

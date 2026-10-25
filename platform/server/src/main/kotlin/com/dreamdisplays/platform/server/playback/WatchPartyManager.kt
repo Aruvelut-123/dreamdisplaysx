@@ -293,7 +293,7 @@ object WatchPartyManager {
 
     private fun nearbyIds(session: Session): List<UUID> {
         if (session.virtual) return session.members.filter { it in transport.onlinePlayerIds() }
-        val display = DisplayManager.getDisplayData(session.displayId) ?: return emptyList()
+        val display = DisplayManager.getDisplayData(session.displayId) ?: return []
         return transport.nearbyPlayerIds(display)
     }
 

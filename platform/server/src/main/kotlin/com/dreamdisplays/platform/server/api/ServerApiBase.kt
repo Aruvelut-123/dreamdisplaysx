@@ -41,7 +41,7 @@ internal object ServerApiHost {
 abstract class BaseServerBackend : ServerBackend {
     private val logger = LoggerFactory.getLogger(BaseServerBackend::class.java)
     private val listeners = CopyOnWriteArrayList<Consumer<ServerDisplayEvent>>()
-    private val addons = AddonManager(AddonSide.SERVER, listOf(ServerAddonBinder { listener -> on(listener) }))
+    private val addons = AddonManager(AddonSide.SERVER, [ServerAddonBinder { listener -> on(listener) }])
 
     internal abstract fun wrap(data: DisplayData): ServerDisplay
 

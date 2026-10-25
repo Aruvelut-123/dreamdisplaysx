@@ -52,7 +52,7 @@ class AudioMasterClockTest {
         val skips = ArrayList<Long>()
         val clock = AudioMasterClock("test", requestAudioResync = { skips.add(it) })
         val out = clock.nanos(sample(0, originKnown = false), wallNanos = second, suspended = false) { -2 * second }
-        assertEquals(listOf(3 * second), skips)
+        assertEquals([3 * second], skips)
         assertEquals(second, out, "The clock holds at the picture's position until the skip lands.")
 
         val synced = clock.nanos(sample(3 * second, originKnown = false), wallNanos = second, suspended = false) {

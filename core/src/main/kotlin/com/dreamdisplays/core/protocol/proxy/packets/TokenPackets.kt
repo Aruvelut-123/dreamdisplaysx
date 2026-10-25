@@ -32,5 +32,5 @@ data class DisplayIndexEntry(
 /** Backend advertises all displays it hosts, enabling proxy to answer [ResolveDisplayToken] queries. */
 @Serializable
 data class BackendDisplayIndex(
-    @ProtoNumber(1) val displays: List<DisplayIndexEntry> = emptyList(),
+    @ProtoNumber(1) val displays: List<DisplayIndexEntry> = [],
 ) : ProxyPacket

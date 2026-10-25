@@ -14,16 +14,16 @@ import java.util.*
  */
 @Unstable
 object MediaHosts {
-    private val PLATFORM_DOMAINS: List<Pair<MediaPlatform, List<String>>> = listOf(
-        MediaPlatform.YOUTUBE to listOf(
+    private val PLATFORM_DOMAINS: List<Pair<MediaPlatform, List<String>>> = [
+        MediaPlatform.YOUTUBE to [
             "youtube.com", "youtu.be", "youtube-nocookie.com", "ytimg.com", "ggpht.com",
             "googlevideo.com", "googleusercontent.com", "youtubei.googleapis.com",
-        ),
-        MediaPlatform.TWITCH to listOf("twitch.tv", "ttvnw.net", "jtvnw.net", "live-video.net"),
-        MediaPlatform.VIMEO to listOf("vimeo.com", "vimeocdn.com"),
-        MediaPlatform.KICK to listOf("kick.com"),
-        MediaPlatform.BILIBILI to listOf("bilibili.com", "hdslb.com", "bilivideo.com"),
-    )
+        ],
+        MediaPlatform.TWITCH to ["twitch.tv", "ttvnw.net", "jtvnw.net", "live-video.net"],
+        MediaPlatform.VIMEO to ["vimeo.com", "vimeocdn.com"],
+        MediaPlatform.KICK to ["kick.com"],
+        MediaPlatform.BILIBILI to ["bilibili.com", "hdslb.com", "bilivideo.com"],
+    ]
 
     private val PLATFORM_REFERERS: Map<MediaPlatform, String> = mapOf(
         MediaPlatform.YOUTUBE to "https://www.youtube.com/",

@@ -17,10 +17,10 @@ internal object HlsSeekPlaylist {
     private const val CACHE_TTL_NANOS = 30L * 1_000_000_000L
     private const val CACHE_LIMIT = 8
 
-    private val HEADER_TAGS = listOf(
+    private val HEADER_TAGS = [
         "#EXTM3U", "#EXT-X-VERSION", "#EXT-X-TARGETDURATION", "#EXT-X-PLAYLIST-TYPE",
         "#EXT-X-INDEPENDENT-SEGMENTS", "#EXT-X-MAP",
-    )
+    ]
 
     private val URI_ATTRIBUTE = Regex("""URI="([^"]*)"""")
 

@@ -15,7 +15,7 @@ internal class DefaultDisplays(
     private val displayService: DisplayService,
     private val playbackService: PlaybackService,
     private val owner: DefaultSession?,
-    private val filters: List<(DisplayInfo) -> Boolean> = emptyList(),
+    private val filters: List<(DisplayInfo) -> Boolean> = [],
 ) : Displays {
     override val size: Int get() = infos().size
 

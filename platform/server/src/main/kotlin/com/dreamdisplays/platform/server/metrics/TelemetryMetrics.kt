@@ -71,11 +71,11 @@ object TelemetryMetrics {
     }
 
     private fun onlinePlayers(plugin: PaperServer): List<Player> =
-        runCatching { plugin.server.onlinePlayers.toList() }.getOrDefault(emptyList())
+        runCatching { plugin.server.onlinePlayers.toList() }.getOrDefault([])
 
     private fun onlineHellos(plugin: PaperServer): List<ClientHello> {
         val onlineIds = onlinePlayers(plugin).mapTo(HashSet()) { it.uniqueId }
-        if (onlineIds.isEmpty()) return emptyList()
+        if (onlineIds.isEmpty()) return []
         return V2PlayerTracker.snapshot()
             .filterKeys { it in onlineIds }
             .values

@@ -93,7 +93,7 @@ class VideoCommand : SubCommand {
         if (args.size == 3) {
             return languageSuggestions
         }
-        return emptyList()
+        return []
     }
 
     companion object {

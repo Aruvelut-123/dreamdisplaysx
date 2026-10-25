@@ -87,25 +87,25 @@ private fun respond(
     CANCEL_TOKEN -> cancel(data, localize)
     PLAY_TOKEN -> onAction(data, PlaybackAction.PLAY, time, playerId, localize)
     PAUSE_TOKEN -> onAction(data, PlaybackAction.PAUSE, time, playerId, localize)
-    else -> localize("scheduleInvalidTime", emptyList())
+    else -> localize("scheduleInvalidTime", [])
 }
 
 private fun canManage(data: DisplayData, playerId: UUID, canManageOthers: Boolean): Boolean =
     data.ownerId == playerId || canManageOthers
 
 private fun showCurrent(data: DisplayData, viewerId: UUID, localize: (String, List<String>) -> String): String {
-    val at = data.scheduledStart ?: return localize("scheduleNoneSet", emptyList())
+    val at = data.scheduledStart ?: return localize("scheduleNoneSet", [])
     val action = data.scheduledAction ?: PlaybackAction.PLAY
     val localSecond = ScheduleTimeUtil.localSecondOfDay(at, ScheduleTimeUtil.offsetMinutesOf(viewerId))
     return localize(
         "scheduleCurrentSet",
-        listOf(localize(actionKey(action), emptyList()), ScheduleTimeUtil.format(localSecond, withSeconds = true)),
+        [localize(actionKey(action), []), ScheduleTimeUtil.format(localSecond, withSeconds = true)],
     )
 }
 
 private fun cancel(data: DisplayData, localize: (String, List<String>) -> String): String =
-    if (ScheduledPlaybackManager.cancel(data.id)) localize("scheduleCancelled", emptyList())
-    else localize("scheduleNoneSet", emptyList())
+    if (ScheduledPlaybackManager.cancel(data.id)) localize("scheduleCancelled", [])
+    else localize("scheduleNoneSet", [])
 
 private fun onAction(
     data: DisplayData,
@@ -117,11 +117,11 @@ private fun onAction(
     val offset = ScheduleTimeUtil.offsetMinutesOf(playerId)
     if (time == null) {
         val nowSecond = ScheduleTimeUtil.currentSecondOfDay(offset)
-        return localize("scheduleNeedsTime", listOf(ScheduleTimeUtil.format(nowSecond, withSeconds = true)))
+        return localize("scheduleNeedsTime", [ScheduleTimeUtil.format(nowSecond, withSeconds = true)])
     }
 
     val targetSecond = ScheduleTimeUtil.parseSecondOfDay(time)
-        ?: return localize("scheduleInvalidTime", emptyList())
+        ?: return localize("scheduleInvalidTime", [])
 
     val now = Clock.System.now()
     val nowSecond = ScheduleTimeUtil.localSecondOfDay(now, offset)
@@ -133,25 +133,25 @@ private fun onAction(
     val countdown = when {
         secondsAhead >= 3600 -> localize(
             "scheduleCountdownHours",
-            listOf((secondsAhead / 3600).toString(), ((secondsAhead % 3600) / 60).toString())
+            [(secondsAhead / 3600).toString(), ((secondsAhead % 3600) / 60).toString()]
         )
 
         secondsAhead >= 60 -> localize(
             "scheduleCountdownMinutes",
-            listOf((secondsAhead / 60).toString(), (secondsAhead % 60).toString())
+            [(secondsAhead / 60).toString(), (secondsAhead % 60).toString()]
         )
 
-        else -> localize("scheduleCountdownSeconds", listOf(secondsAhead.toString()))
+        else -> localize("scheduleCountdownSeconds", [secondsAhead.toString()])
     }
     return localize(
         "scheduleSet",
-        listOf(
+        [
             ScheduleTimeUtil.format(nowSecond, withSeconds = true),
             data.shortLabel,
-            localize(actionKey(action), emptyList()),
+            localize(actionKey(action), []),
             ScheduleTimeUtil.format(targetSecond, withSeconds = true),
             countdown,
-        ),
+        ],
     )
 }
 

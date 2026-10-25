@@ -82,7 +82,7 @@ object Updater {
                 callTimeoutMs = 10_000,
             ),
         )
-        if (response.code != 200) return emptyList()
+        if (response.code != 200) return []
 
         return parseReleases(response.bodyString())
     }
@@ -98,7 +98,7 @@ object Updater {
                 )
             }
             ?.filter { it.tagName.isNotBlank() }
-            ?: emptyList()
+            ?: []
 
     private fun parseVersion(tag: String): Semver? =
         Semver.coerce(tag)?.takeIf { it.isStable() }

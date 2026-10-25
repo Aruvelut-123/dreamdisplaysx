@@ -14,11 +14,11 @@ object DisplayChapters {
     /** Chapters for [ds]'s current video, requesting them on first ask and empty until they arrive. */
     fun of(ds: DisplayScreen): List<MediaChapter> {
         val videoId = DreamServices.registry.getOrNull(MediaServices.SEARCH)?.extractVideoId(ds.videoUrl ?: "")
-            ?: return emptyList()
+            ?: return []
         val cached = YouTubeChapterCache.get(videoId)
         if (cached == null) {
             YouTubeChapterCache.requestAsync(videoId)
-            return emptyList()
+            return []
         }
         return cached
     }

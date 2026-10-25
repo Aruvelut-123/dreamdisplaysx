@@ -307,12 +307,12 @@ object YouTubeInnerTube {
     internal fun extractChapters(root: JsonObject): List<MediaChapter> {
         return runCatching { findChapters(root) }.getOrElse { e ->
             logger.debug("Chapter parse failed: ${e.message}")
-            emptyList()
+            []
         }
     }
 
     private fun findChapters(root: JsonObject): List<MediaChapter> {
-        val panels = root.array("engagementPanels") ?: return emptyList()
+        val panels = root.array("engagementPanels") ?: return []
         for (panel in panels) {
             val items = panel.asJsonObjectOrNull()
                 ?.obj("engagementPanelSectionListRenderer")
@@ -330,7 +330,7 @@ object YouTubeInnerTube {
             }
             if (chapters.isNotEmpty()) return chapters
         }
-        return emptyList()
+        return []
     }
 
     private fun extractRelatedPage(root: JsonObject, limit: Int): MediaSearchPage {

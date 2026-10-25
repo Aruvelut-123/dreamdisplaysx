@@ -25,7 +25,7 @@ object PaperSurfaces {
     }
 
     private fun shapedVariants(base: Material): List<String> {
-        if (!base.isItem) return emptyList()
+        if (!base.isItem) return []
         val sample = ItemStack(base)
         val out = ArrayList<String>(2)
         Bukkit.recipeIterator().forEachRemaining { recipe ->

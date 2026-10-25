@@ -60,8 +60,8 @@ class OffCommand : SubCommand {
     }
 
     override fun complete(sender: CommandSender, args: Array<String?>): List<String> {
-        if (args.size != 2) return emptyList()
-        if (!sender.hasPermission(PaperServer.config.permissions.toggleOthers)) return emptyList()
+        if (args.size != 2) return []
+        if (!sender.hasPermission(PaperServer.config.permissions.toggleOthers)) return []
         return Bukkit.getOnlinePlayers().map { it.name }.sorted()
     }
 

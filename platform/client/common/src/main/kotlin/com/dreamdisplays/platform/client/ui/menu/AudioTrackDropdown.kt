@@ -28,7 +28,7 @@ class AudioTrackDropdown(
 ) {
     var visible: Boolean = false
 
-    private var items: List<MediaStream> = emptyList()
+    private var items: List<MediaStream> = []
     private var scrollIndex = 0
     private var scrollPx = 0f
     private var rect = UiRect(0, 0, WIDTH, ITEM_H)

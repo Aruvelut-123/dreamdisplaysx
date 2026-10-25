@@ -19,7 +19,7 @@ class DefaultClientApplication(override val context: ClientContext) : ClientAppl
 
     private val addons = AddonManager(
         AddonSide.CLIENT,
-        listOf(ClientAddonBinder { ApiHolder.current!!.displays }),
+        [ClientAddonBinder { ApiHolder.current!!.displays }],
     )
     private val clientModules = LinkedHashMap<String, ClientModule>()
     private val listeners = CopyOnWriteArrayList<(ClientLifecycleEvent) -> Unit>()

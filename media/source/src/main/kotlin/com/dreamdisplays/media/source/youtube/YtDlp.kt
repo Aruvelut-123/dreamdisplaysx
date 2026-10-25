@@ -52,7 +52,7 @@ object YtDlp {
     @Throws(IOException::class)
     fun fetch(videoUrl: String): List<YtStream> {
         if (!MediaUrlPolicy.isAllowed(videoUrl)) {
-            return emptyList()
+            return []
         }
         return formatCache.fetch(videoUrl)
     }
@@ -120,11 +120,11 @@ object YtDlp {
         val abandoned = AbandonFlag()
         val ytdlp = DreamCoroutines.clientIo.async {
             if (HEDGE_DELAY_MS > 0) delay(HEDGE_DELAY_MS.milliseconds)
-            if (abandoned.isAbandoned) return@async emptyList()
+            if (abandoned.isAbandoned) return@async []
             clientRace.resolve(videoUrl) { proc ->
                 ytProcesses.add(proc)
                 if (abandoned.isAbandoned) Processes.destroyTree(proc)
-            } ?: emptyList()
+            } ?: []
         }
 
         // Aborts the parallel yt-dlp branch and reaps any subprocess it managed to spawn
@@ -142,7 +142,7 @@ object YtDlp {
                 }
                 logger.debug("NewPipe resolve failed for {}: {}.", videoUrl, e.message?.take(200))
             }
-            .getOrElse { emptyList() }
+            .getOrElse { [] }
 
         if (YtStreams.usable(viaNewPipe) && YtStreams.offersQualityLadder(viaNewPipe) &&
             viaNewPipe.none { it.isLive }
@@ -163,7 +163,7 @@ object YtDlp {
         }.onFailure { e ->
             abandonYtDlp()
             logger.debug("yt-dlp resolve did not settle for {}: {}.", videoUrl, e.message?.take(200))
-        }.getOrElse { emptyList() }
+        }.getOrElse { [] }
 
         return when {
             YtStreams.usable(viaYtDlp) && YtStreams.offersQualityLadder(viaYtDlp) -> viaYtDlp

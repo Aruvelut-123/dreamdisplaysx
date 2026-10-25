@@ -41,12 +41,12 @@ object VanillaPlaybackTransport : PlaybackTransport {
     override fun sendTo(playerId: UUID, packet: DreamPacket) {
         val s = server ?: return
         val player = s.playerList.getPlayer(playerId) ?: return
-        if (V2PlayerTracker.isV2(playerId)) VanillaNetworking.adapter.sendV2(listOf(player), packet)
+        if (V2PlayerTracker.isV2(playerId)) VanillaNetworking.adapter.sendV2([player], packet)
     }
 
     override fun nearbyPlayerIds(display: DisplayData): List<UUID> {
-        val s = server ?: return emptyList()
-        val vanilla = display as? VanillaDisplayData ?: return emptyList()
+        val s = server ?: return []
+        val vanilla = display as? VanillaDisplayData ?: return []
         return DisplayManager.getReceivers(vanilla, s).map { it.uuid }
     }
 
@@ -60,7 +60,7 @@ object VanillaPlaybackTransport : PlaybackTransport {
 
     override fun isTerritoryMember(display: DisplayData, playerId: UUID): Boolean = false
 
-    override fun onlinePlayerIds(): List<UUID> = server?.playerList?.players?.map { it.uuid } ?: emptyList()
+    override fun onlinePlayerIds(): List<UUID> = server?.playerList?.players?.map { it.uuid } ?: []
 
     override fun playerDistanceSq(playerId: UUID, world: String, x: Double, y: Double, z: Double): Double? {
         val player = server?.playerList?.getPlayer(playerId) ?: return null
@@ -74,7 +74,7 @@ object VanillaPlaybackTransport : PlaybackTransport {
     override fun sendDisplayInfo(playerId: UUID, display: DisplayData, forced: Boolean) {
         val vanilla = display as? VanillaDisplayData ?: return
         val player = server?.playerList?.getPlayer(playerId) ?: return
-        VanillaPacketUtil.sendDisplayInfo(listOf(player), vanilla, forced)
+        VanillaPacketUtil.sendDisplayInfo([player], vanilla, forced)
     }
 
     override fun runOnMainThread(task: () -> Unit) {

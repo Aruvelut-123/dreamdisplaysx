@@ -37,7 +37,7 @@ object ClientStartupManager {
     private val qualityRefreshInterval = 2500.milliseconds
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val defaultModules: List<DreamDisplaysModule> = listOf(
+    private val defaultModules: List<DreamDisplaysModule> = [
         CoreDisplayModule,
         CorePlaybackModule,
         ClientAudioModule,
@@ -45,7 +45,7 @@ object ClientStartupManager {
         ClientOverlayModule,
         ClientInputModule,
         ClientCapabilityModule,
-    )
+    ]
 
     /** Loads config, wires services, hosts the application, prewarms backends, and launches maintenance loops. */
     fun start() {

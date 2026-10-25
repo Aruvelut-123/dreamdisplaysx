@@ -9,7 +9,7 @@ import com.dreamdisplays.platform.client.input.*
 object ClientInputModule : DreamDisplaysModule {
     override val id: String = "dreamdisplays:client_input"
 
-    override val dependencies: List<String> = listOf(CoreDisplayModule.id)
+    override val dependencies: List<String> = [CoreDisplayModule.id]
 
     override fun install(context: ModuleContext) {
         val services = context.services

@@ -177,13 +177,13 @@ class MediaPlayer(
     private var streams: ActiveStreams? = null
 
     @Volatile
-    private var subtitleTracks: List<SubtitleTrack> = emptyList()
+    private var subtitleTracks: List<SubtitleTrack> = []
 
     @Volatile
     private var subtitleTrack: SubtitleTrack? = null
 
     @Volatile
-    private var subtitleCues: List<SubtitleCue> = emptyList()
+    private var subtitleCues: List<SubtitleCue> = []
     private val subtitlesEnabled = AtomicBoolean(false)
 
     // Bumped on every setSubtitleTrack call
@@ -434,7 +434,7 @@ class MediaPlayer(
      * Returns selectable audio tracks (deduped by language).
      */
     fun getAvailableAudioTracks(): List<MediaStream> {
-        val audio = streams?.availableAudio?.filter { !it.type.hasVideo } ?: return emptyList()
+        val audio = streams?.availableAudio?.filter { !it.type.hasVideo } ?: return []
         return audio
             .groupBy { it.audioTrackLang ?: it.audioTrackName }
             .values
@@ -477,21 +477,21 @@ class MediaPlayer(
         if (wanted == null) {
             subtitlesEnabled.set(false)
             subtitleTrack = null
-            subtitleCues = emptyList()
+            subtitleCues = []
             return
         }
         val track = subtitleTracks.firstOrNull { it.lang == wanted } ?: return
         subtitlesEnabled.set(true)
         if (track == subtitleTrack) return
         subtitleTrack = track
-        subtitleCues = emptyList()
+        subtitleCues = []
         val requestId = subtitleFetchId.incrementAndGet()
         SUBTITLE_EXECUTOR.submit {
             val cues = runCatching {
                 WebVttParser.parse(DreamHttpClient.readText(track.url))
             }.onFailure { e ->
                 logger.debug("$debugLabel subtitle fetch failed for lang=$wanted: ${e.message}")
-            }.getOrDefault(emptyList())
+            }.getOrDefault([])
             if (!terminated.get() && subtitleFetchId.get() == requestId) subtitleCues = cues
         }
     }
@@ -603,7 +603,7 @@ class MediaPlayer(
                 host.videoContentAspect = it.streamSet.currentVideo.contentAspect()
                 subtitleTracks = it.availableSubtitles
                 subtitleTrack = null
-                subtitleCues = emptyList()
+                subtitleCues = []
                 subtitlesEnabled.set(false)
             }
 
@@ -1048,7 +1048,7 @@ class MediaPlayer(
     private fun refreshWarmAudioTracks() {
         val ss = streams
         if (ss == null || liveStream) {
-            sessionManager.setWarmAudioTracks(emptyList())
+            sessionManager.setWarmAudioTracks([])
             return
         }
         val playing = ss.currentAudio.url

@@ -29,7 +29,7 @@ internal class FullscreenFlags<S>(
     fun nodes(): List<CommandNode<S>> {
         var following = emptyList<CommandNode<S>>()
         for (name in ORDER.asReversed()) {
-            following = listOf(flag(name, following)) + following
+            following = [flag(name, following)] + following
         }
         return following
     }
@@ -97,6 +97,6 @@ internal class FullscreenFlags<S>(
         RequiredArgumentBuilder.argument<S, T>(name, type)
 
     private companion object {
-        val ORDER = listOf("server", "target", "radius", "mode", "forced", "transient", "volume", "looped", "quality")
+        val ORDER = ["server", "target", "radius", "mode", "forced", "transient", "volume", "looped", "quality"]
     }
 }

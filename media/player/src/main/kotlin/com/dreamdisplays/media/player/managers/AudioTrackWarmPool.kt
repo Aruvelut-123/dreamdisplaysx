@@ -33,7 +33,7 @@ internal class AudioTrackWarmPool(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val lock = Any()
     private val warm = LinkedHashMap<String, Warm>()
-    private var wanted: List<WarmTrack> = emptyList()
+    private var wanted: List<WarmTrack> = []
     private var refresher: Thread? = null
     private val closed = AtomicBoolean(false)
 
@@ -62,7 +62,7 @@ internal class AudioTrackWarmPool(
                 drift >= 0L && drift <= MAX_TAKE_DRIFT_NANOS &&
                 runCatching { w.process.inputStream.available() > 0 }.getOrDefault(false)
         if (!usable) {
-            discardAsync(listOf(w))
+            discardAsync([w])
             return null
         }
         return w
@@ -75,7 +75,7 @@ internal class AudioTrackWarmPool(
     fun close() {
         if (!closed.compareAndSet(false, true)) return
         val t = synchronized(lock) {
-            wanted = emptyList()
+            wanted = []
             refresher.also { refresher = null }
         }
         t?.interrupt()

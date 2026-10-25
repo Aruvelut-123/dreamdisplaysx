@@ -49,7 +49,7 @@ object VanillaPacketUtil {
 
     /** Pushes the global displays-enabled flag for [player] to the client. */
     fun sendDisplayEnabled(player: ServerPlayer, isEnabled: Boolean) {
-        VanillaNetworking.adapter.sendV2(v2Players(listOf(player)), SetDisplaysEnabled(isEnabled))
+        VanillaNetworking.adapter.sendV2(v2Players([player]), SetDisplaysEnabled(isEnabled))
     }
 
     /** Tells [players] to evict the listed display UUIDs from any local caches. */

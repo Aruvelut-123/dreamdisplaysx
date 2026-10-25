@@ -57,7 +57,7 @@ object KickApi {
         )
         // Offline channels have no playback URL; still return the metadata so the card can say so
         if (!isLive || playbackUrl == null) {
-            return KickPlayback(streams = emptyList(), metadata = metadata, durationSec = null, isSeekable = false)
+            return KickPlayback(streams = [], metadata = metadata, durationSec = null, isSeekable = false)
         }
         return KickPlayback(
             streams = hlsStreams(playbackUrl),
@@ -101,7 +101,7 @@ object KickApi {
         }.getOrNull()
 
         val variants = parsed?.variants.orEmpty()
-        if (variants.isEmpty()) return listOf(muxed(masterUrl))
+        if (variants.isEmpty()) return [muxed(masterUrl)]
         return variants.map { v ->
             MediaStream(
                 url = v.url,

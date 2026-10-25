@@ -161,7 +161,7 @@ class SuggestionsController {
             source !is MediaSource.Vimeo && source !is MediaSource.Kick && source !is MediaSource.Bilibili
         ) {
             customUrlOf(source)?.let {
-                publish(seq, listOf(customResult(it)), null)
+                publish(seq, [customResult(it)], null)
                 return
             }
         }
@@ -173,7 +173,7 @@ class SuggestionsController {
                         val meta = runCatching { svc.metadata(maybeId) }
                             .onFailure { if (it is CancellationException) throw it; logger.warn("URL meta: ${it.message}") }
                             .getOrNull()
-                        listOf(meta ?: fallbackResult(maybeId))
+                        [meta ?: fallbackResult(maybeId)]
                     }
 
                     source is MediaSource.Twitch -> {
@@ -182,7 +182,7 @@ class SuggestionsController {
                         }
                             .onFailure { if (it is CancellationException) throw it; logger.warn("Twitch meta: ${it.message}") }
                             .getOrNull()
-                        listOf(twitchResult(source, meta))
+                        [twitchResult(source, meta)]
                     }
 
                     source is MediaSource.Vimeo -> {
@@ -191,14 +191,14 @@ class SuggestionsController {
                         }
                             .onFailure { if (it is CancellationException) throw it; logger.warn("Vimeo meta: ${it.message}") }
                             .getOrNull()
-                        listOf(
+                        [
                             platformResult(
                                 source.url,
                                 MediaPlatform.VIMEO,
                                 meta,
                                 fallbackTitle = "Vimeo ${source.videoId}"
                             )
-                        )
+                        ]
                     }
 
                     source is MediaSource.Kick -> {
@@ -208,7 +208,7 @@ class SuggestionsController {
                             .onFailure { if (it is CancellationException) throw it; logger.warn("Kick meta: ${it.message}") }
                             .getOrNull()
                         val fallback = source.channel ?: source.videoUuid ?: "Kick"
-                        listOf(platformResult(source.url, MediaPlatform.KICK, meta, fallbackTitle = fallback))
+                        [platformResult(source.url, MediaPlatform.KICK, meta, fallbackTitle = fallback)]
                     }
 
                     source is MediaSource.Bilibili -> {
@@ -221,7 +221,7 @@ class SuggestionsController {
                             }
                             .getOrNull()
                         val fallback = source.bvid ?: source.avid?.let { "av$it" } ?: source.roomId?.toString() ?: "Bilibili"
-                        listOf(platformResult(source.url, MediaPlatform.BILIBILI, meta, fallbackTitle = fallback))
+                        [platformResult(source.url, MediaPlatform.BILIBILI, meta, fallbackTitle = fallback)]
                     }
 
                     else -> {
@@ -282,18 +282,18 @@ class SuggestionsController {
                         // Chinese query is exactly where it's most useful. Kick is not mixed in here at all
                         // anymore. Twitch keeps its own unweighted mix-in below, untouched by this ratio.
                         val youtubeAndMinor = weightedInterleave(
-                            listOf(
+                            [
                                 youtubeResults.orEmpty() to YOUTUBE_WEIGHT,
                                 bilibiliResults.orEmpty().take(BILIBILI_RESULT_CAP) to BILIBILI_WEIGHT,
-                            )
+                            ]
                         )
                         // Twitch channel hits get folded in at a small weight too, same idea as Bilibili
                         // above: YouTube should stay the thing you mostly see, Twitch an occasional find.
                         val onDemand = weightedInterleave(
-                            listOf(
+                            [
                                 youtubeAndMinor to (1.0 - TWITCH_WEIGHT),
                                 twitchSearchResults.orEmpty().take(TWITCH_RESULT_CAP) to TWITCH_WEIGHT,
-                            )
+                            ]
                         )
                         val combined = ArrayList<MediaSearchResult>(1 + onDemand.size).apply {
                             liveTwitch?.let(::add)
@@ -386,7 +386,7 @@ class SuggestionsController {
      */
     private fun weightedInterleave(lists: List<Pair<List<MediaSearchResult>, Double>>): List<MediaSearchResult> {
         val sources = lists.filter { it.first.isNotEmpty() }
-        if (sources.isEmpty()) return emptyList()
+        if (sources.isEmpty()) return []
         if (sources.size == 1) return sources[0].first
 
         val totalSize = sources.sumOf { it.first.size }

@@ -40,7 +40,7 @@ object DisplayUnlitRenderTypes {
                 "_rp"
                 //?} else
                 /*""*/),
-            listOf(SAMPLER_TEXTURE),
+            [SAMPLER_TEXTURE],
         )
         assignIrisTexturedProgram(pipeline)
         pipeline

@@ -93,7 +93,7 @@ object DisplayYuvRenderTypes {
                 "_rp"
                 //?} else
                 /*""*/),
-            listOf(SAMPLER_Y, SAMPLER_U, SAMPLER_V),
+            [SAMPLER_Y, SAMPLER_U, SAMPLER_V],
         )
     }
 

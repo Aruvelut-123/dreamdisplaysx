@@ -27,7 +27,7 @@ internal class DisplayProximityIndex {
 
     /** Cached nearby player ids for [displayId], safe to read from the global coordinator. */
     fun trackedNearbyPlayerIds(displayId: UUID): List<UUID> =
-        nearbyPlayersByDisplay[displayId]?.toList() ?: emptyList()
+        nearbyPlayersByDisplay[displayId]?.toList() ?: []
 
     /** Updates the cached index after [playerId]'s entity task computed their nearby displays. */
     fun update(playerId: UUID, nearbyDisplayIds: Set<UUID>) {

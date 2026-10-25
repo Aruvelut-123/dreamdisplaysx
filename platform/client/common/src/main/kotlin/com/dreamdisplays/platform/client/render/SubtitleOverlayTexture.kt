@@ -131,7 +131,7 @@ class SubtitleOverlayTexture {
             }
             if (current.isNotEmpty()) out.add(current.toString())
         }
-        return out.ifEmpty { listOf("") }.take(MAX_LINES)
+        return out.ifEmpty { [""] }.take(MAX_LINES)
     }
 
     private fun toNativeImage(image: BufferedImage): NativeImage {

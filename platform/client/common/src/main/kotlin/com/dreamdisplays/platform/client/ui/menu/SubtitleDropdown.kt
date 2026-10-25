@@ -31,7 +31,7 @@ class SubtitleDropdown(
 ) {
     var visible: Boolean = false
 
-    private var items: List<SubtitleTrack?> = listOf(null)
+    private var items: List<SubtitleTrack?> = [null]
     private var scrollIndex = 0
     private var scrollPx = 0f
     private var rect = UiRect(0, 0, WIDTH, ITEM_H)
@@ -48,7 +48,7 @@ class SubtitleDropdown(
     fun toggle() {
         visible = !visible
         if (!visible) return
-        items = listOf(null) + getTracks()
+        items = [null] + getTracks()
         val maxIndex = maxScrollIndex()
         val activeIdx = items.indexOfFirst { it?.lang == currentLang() }.takeIf { it >= 0 } ?: 0
         scrollIndex = (activeIdx - MAX_VISIBLE / 2).coerceIn(0, maxIndex)

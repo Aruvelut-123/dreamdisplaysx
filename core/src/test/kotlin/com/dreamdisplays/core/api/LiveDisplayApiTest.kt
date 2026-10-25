@@ -63,7 +63,7 @@ class LiveDisplayApiTest {
         system.removeDisplay(id(1))
         system.publish(DisplayEvent.UrlChanged(id(1), "after"))
 
-        assertEquals(listOf("UrlChanged", "Removed"), seen.map { it::class.simpleName })
+        assertEquals(["UrlChanged", "Removed"], seen.map { it::class.simpleName })
     }
 
     @Test
@@ -82,7 +82,7 @@ class LiveDisplayApiTest {
         system.recordDisplay(info(1, state = DisplayState.Paused("s", 3_000)))
         system.removeDisplay(id(1))
 
-        assertEquals(listOf("playing", "paused", "removed"), log)
+        assertEquals(["playing", "paused", "removed"], log)
     }
 
     @Test
@@ -101,7 +101,7 @@ class LiveDisplayApiTest {
         system.publish(DisplayEvent.UrlChanged(id(1), "b"))
 
         assertEquals(1, log.size)
-        assertEquals(listOf(2, 1), order)
+        assertEquals([2, 1], order)
         assertTrue(session.isClosed)
     }
 
@@ -129,11 +129,11 @@ class LiveDisplayApiTest {
         system.recordDisplay(info(3, x = 5.0, state = playing(1)))   // update, not a new display
 
         assertEquals(2, nearOrigin.size)
-        assertEquals(listOf(id(1), id(3)), seen)
+        assertEquals([id(1), id(3)], seen)
 
         subscription.close()
         system.recordDisplay(info(5, x = 1.0))
-        assertEquals(listOf(id(1), id(3)), seen)
+        assertEquals([id(1), id(3)], seen)
     }
 
     @Test
@@ -143,6 +143,6 @@ class LiveDisplayApiTest {
         val displays = DefaultDisplays(displayService, playbackService, owner = null)
 
         val playingNearby = displays.near(0.0, 0.0, 0.0, 10.0).filter { it.isPlaying }
-        assertEquals(listOf(id(1)), playingNearby.map { it.id })
+        assertEquals([id(1)], playingNearby.map { it.id })
     }
 }

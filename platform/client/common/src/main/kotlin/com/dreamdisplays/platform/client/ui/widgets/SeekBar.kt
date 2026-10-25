@@ -38,8 +38,8 @@ class SeekBar(
     private val previewFrame: ((Long) -> Identifier?)? = null,
     private val waitingLabel: (() -> String?)? = null,
     private val scheduleLabel: (() -> String?)? = null,
-    statusLabels: List<() -> String?> = emptyList(),
-    private val chapters: () -> List<MediaChapter> = { emptyList() },
+    statusLabels: List<() -> String?> = [],
+    private val chapters: () -> List<MediaChapter> = { [] },
     private val onSeek: (Long) -> Unit,
 ) : UiWidget(Component.empty()) {
 

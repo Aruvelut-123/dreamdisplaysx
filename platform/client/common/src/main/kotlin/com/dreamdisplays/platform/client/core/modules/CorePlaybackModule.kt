@@ -15,7 +15,7 @@ import com.dreamdisplays.core.services.DefaultWatchPartyService
 object CorePlaybackModule : DreamDisplaysModule {
     override val id: String = "dreamdisplays:core_playback"
 
-    override val dependencies: List<String> = listOf(CoreDisplayModule.id)
+    override val dependencies: List<String> = [CoreDisplayModule.id]
 
     override fun install(context: ModuleContext) {
         val services = context.services

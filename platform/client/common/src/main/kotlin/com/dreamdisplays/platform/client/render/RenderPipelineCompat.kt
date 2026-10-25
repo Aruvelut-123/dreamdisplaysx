@@ -146,7 +146,7 @@ internal object RenderPipelineCompat {
         bindWorldDisplayUniforms(withBindGroupLayout, builder)
         withBindGroupLayout.invoke(
             builder,
-            if (samplers == listOf("Sampler0")) vanillaLayout("SAMPLER0") else samplerLayout(samplers),
+            if (samplers == ["Sampler0"]) vanillaLayout("SAMPLER0") else samplerLayout(samplers),
         )
 
         builderClass.getMethod("withVertexBinding", Int::class.javaPrimitiveType, VertexFormat::class.java)

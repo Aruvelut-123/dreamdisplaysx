@@ -337,11 +337,11 @@ class DisplayMenu private constructor(
             )
         settings = SettingsSection(
             rows = settingsRows(qualityReset, brightnessReset, audio3dReset, syncReset, accessReset),
-            ownerActions = listOf(reportButton, deleteButton),
-            buttonTooltips = listOf(
+            ownerActions = [reportButton, deleteButton],
+            buttonTooltips = [
                 deleteButton to { buttonTooltip("dreamdisplays.button.delete") },
                 reportButton to { buttonTooltip("dreamdisplays.button.report") },
-            ),
+            ],
         )
         errorPanel = ErrorPanel(retryButton, deleteButton, reportButton) { ds.mediaError }
     }
@@ -352,7 +352,7 @@ class DisplayMenu private constructor(
         accessReset: IconButton,
     ): List<SettingsSection.Row> {
         val ds = displayScreen
-        return listOf(
+        return [
             SettingsSection.Row("dreamdisplays.button.quality", quality, qualityReset) {
                 val tip = mutableListOf(
                     tooltipTitle("dreamdisplays.button.quality.tooltip.1"),
@@ -369,15 +369,15 @@ class DisplayMenu private constructor(
                 tip
             },
             SettingsSection.Row("dreamdisplays.button.brightness", brightness, brightnessReset) {
-                listOf(
+                [
                     tooltipTitle("dreamdisplays.button.brightness.tooltip.1"),
                     tooltipBody("dreamdisplays.button.brightness.tooltip.2"),
                     Component.literal(""),
                     tooltipValue("dreamdisplays.button.brightness.tooltip.3", floor(brightness.value * 100).toInt()),
-                )
+                ]
             },
             SettingsSection.Row("dreamdisplays.button.audio3d", audio3d, audio3dReset) {
-                listOf(
+                [
                     tooltipTitle("dreamdisplays.button.audio3d.tooltip.1"),
                     tooltipBody("dreamdisplays.button.audio3d.tooltip.2"),
                     Component.literal(""),
@@ -389,10 +389,10 @@ class DisplayMenu private constructor(
                         "dreamdisplays.button.audio3d.tooltip.6",
                         Component.translatable(audio3dModeLabel(audio3d.mode)),
                     ),
-                )
+                ]
             },
             SettingsSection.Row("dreamdisplays.button.synchronization", sync, syncReset, extraGapBefore = 6) {
-                listOf(
+                [
                     tooltipTitle("dreamdisplays.button.synchronization.tooltip.1"),
                     tooltipBody("dreamdisplays.button.synchronization.tooltip.2"),
                     Component.literal(""),
@@ -404,7 +404,7 @@ class DisplayMenu private constructor(
                         "dreamdisplays.button.synchronization.tooltip.5",
                         Component.translatable(syncModeLabel(sync.mode)),
                     ),
-                )
+                ]
             },
             SettingsSection.Row("dreamdisplays.button.access", access, accessReset) {
                 buildList {
@@ -432,7 +432,7 @@ class DisplayMenu private constructor(
                     )
                 }
             },
-        )
+        ]
     }
 
     private fun scheduleCountdownText(): String? {
@@ -462,10 +462,10 @@ class DisplayMenu private constructor(
             .append(Component.literal(": ").withStyle { it.withColor(ChatFormatting.GRAY) })
             .append(Component.translatable(descKey).withStyle { it.withColor(ChatFormatting.GRAY) })
 
-    private fun buttonTooltip(prefix: String): List<Component> = listOf(
+    private fun buttonTooltip(prefix: String): List<Component> = [
         tooltipTitle("$prefix.tooltip.1"),
         tooltipBody("$prefix.tooltip.2"),
-    )
+    ]
 
     private fun onPickSuggested(info: MediaSearchResult) {
         val ds = displayScreen
@@ -742,7 +742,7 @@ class DisplayMenu private constructor(
             PlaybackMode.BROADCAST -> "dreamdisplays.mode.broadcast"
         }
 
-        private val AUDIO_3D_MODES = listOf(AcousticQuality.OFF, AcousticQuality.ADVANCED, AcousticQuality.ULTRA)
+        private val AUDIO_3D_MODES = [AcousticQuality.OFF, AcousticQuality.ADVANCED, AcousticQuality.ULTRA]
         private val AUDIO_3D_DEFAULT = AcousticQuality.ADVANCED
 
         private fun audio3dModeLabel(quality: AcousticQuality): String = when (quality) {
@@ -751,13 +751,13 @@ class DisplayMenu private constructor(
             else -> "dreamdisplays.mode.audio_enhanced"
         }
 
-        private val SYNC_MODES = listOf(PlaybackMode.LOCAL, PlaybackMode.SYNCED, PlaybackMode.BROADCAST)
+        private val SYNC_MODES = [PlaybackMode.LOCAL, PlaybackMode.SYNCED, PlaybackMode.BROADCAST]
 
         private fun accessModesFor(ds: DisplayScreen): List<DisplayAccess> =
             if (ds.supportsRegionAccess || ds.access == DisplayAccess.REGION) {
-                listOf(DisplayAccess.EVERYONE, DisplayAccess.REGION, DisplayAccess.LOCKED)
+                [DisplayAccess.EVERYONE, DisplayAccess.REGION, DisplayAccess.LOCKED]
             } else {
-                listOf(DisplayAccess.EVERYONE, DisplayAccess.LOCKED)
+                [DisplayAccess.EVERYONE, DisplayAccess.LOCKED]
             }
 
         private fun accessLevelLabel(access: DisplayAccess): String = when (access) {

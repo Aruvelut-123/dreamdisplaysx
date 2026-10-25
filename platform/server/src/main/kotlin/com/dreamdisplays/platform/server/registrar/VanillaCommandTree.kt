@@ -290,12 +290,12 @@ object VanillaCommandTree {
         val displays = DisplayManager.getDisplays().filterIsInstance<VanillaDisplayData>()
         val online = ctx.source.server.playerList.players
         return when (ListFilter.fromToken(filter)) {
-            ListFilter.MINE -> if (value != null) emptyList() else {
+            ListFilter.MINE -> if (value != null) [] else {
                 val player = ctx.source.entity as? ServerPlayer
                 DisplaySuggestions.pages(displays.count { player == null || it.ownerId == player.uuid })
             }
 
-            ListFilter.SYNC -> if (value != null) emptyList() else DisplaySuggestions.pages(displays.count { it.isSync })
+            ListFilter.SYNC -> if (value != null) [] else DisplaySuggestions.pages(displays.count { it.isSync })
             ListFilter.WORLD -> if (value != null) {
                 DisplaySuggestions.pages(displays.count { it.worldKey.endsWith(value, ignoreCase = true) })
             } else {
@@ -313,7 +313,7 @@ object VanillaCommandTree {
                     .map { Suggestion(it, "suggestOwner") }
             }
 
-            null -> emptyList()
+            null -> []
         }
     }
 

@@ -79,7 +79,7 @@ internal class PaperServerDisplay(
 /** Lazy view over `Paper` displays. */
 @PaperOnly
 internal class PaperServerDisplays(
-    filters: List<(PaperDisplayData) -> Boolean> = emptyList(),
+    filters: List<(PaperDisplayData) -> Boolean> = [],
 ) : ServerDisplaysBase<PaperDisplayData>(filters) {
     override fun all(): List<PaperDisplayData> = DisplayManager.getDisplays().filterIsInstance<PaperDisplayData>()
     override fun wrap(data: PaperDisplayData): ServerDisplay = PaperServerApi.wrap(data)

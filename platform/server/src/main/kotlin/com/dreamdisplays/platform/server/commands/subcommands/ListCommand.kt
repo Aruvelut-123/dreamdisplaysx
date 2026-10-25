@@ -142,7 +142,7 @@ class ListCommand : SubCommand {
             3 -> when (ListFilter.fromToken(args[1])) {
                 ListFilter.MINE -> {
                     if (sender !is Player) {
-                        emptyList()
+                        []
                     } else {
                         pageSuggestions(displays.count { it.ownerId == sender.uniqueId })
                     }
@@ -159,16 +159,16 @@ class ListCommand : SubCommand {
                     .distinct()
                     .sorted()
 
-                else -> emptyList()
+                else -> []
             }
 
             4 -> when (ListFilter.fromToken(args[1])) {
                 ListFilter.WORLD -> pageSuggestions(filterByWorld(displays, args[2].orEmpty()).size)
                 ListFilter.OWNER -> pageSuggestions(filterByOwner(displays, args[2].orEmpty(), ownerNameCache).size)
-                else -> emptyList()
+                else -> []
             }
 
-            else -> emptyList()
+            else -> []
         }
     }
 

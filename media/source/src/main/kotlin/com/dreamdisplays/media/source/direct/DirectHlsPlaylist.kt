@@ -44,7 +44,7 @@ internal object DirectHlsPlaylist {
 
         /** Separate audio playlists usable by [variant], best (default) first. */
         fun audioFor(variant: Variant): List<AudioRendition> {
-            val group = variant.audioGroupId ?: return emptyList()
+            val group = variant.audioGroupId ?: return []
             return audioRenditions.filter { it.groupId == group }.sortedByDescending { it.isDefault }
         }
     }

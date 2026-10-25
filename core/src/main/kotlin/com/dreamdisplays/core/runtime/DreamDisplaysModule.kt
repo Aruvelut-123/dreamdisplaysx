@@ -13,7 +13,7 @@ interface DreamDisplaysModule {
     val id: String
 
     /** Module ids that must be installed before this module. */
-    val dependencies: List<String> get() = emptyList()
+    val dependencies: List<String> get() = []
 
     /** Installs this module into [context]. Called once after all dependencies are installed. */
     fun install(context: ModuleContext)

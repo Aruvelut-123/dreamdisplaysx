@@ -74,7 +74,7 @@ object BilibiliApi {
     fun searchVideos(keyword: String, page: Int = 1): List<BilibiliSearchItem> {
         val params = mapOf("search_type" to "video", "keyword" to keyword, "page" to page.toString())
         val root = getJson("https://api.bilibili.com/x/web-interface/wbi/search/type?${signedQuery(params)}")
-        val results = root?.obj("data")?.array("result")?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
+        val results = root?.obj("data")?.array("result")?.mapNotNull { it.asJsonObjectOrNull() } ?: return []
         return results.mapNotNull { item ->
             val bvid = item.optString("bvid") ?: return@mapNotNull null
             BilibiliSearchItem(
@@ -217,7 +217,7 @@ object BilibiliApi {
             isLive = isLive,
         )
 
-        if (!isLive) return BilibiliPlayback(streams = emptyList(), metadata = metadata, isSeekable = false)
+        if (!isLive) return BilibiliPlayback(streams = [], metadata = metadata, isSeekable = false)
 
         val playParams = mapOf(
             "room_id" to roomId.toString(),
@@ -234,7 +234,7 @@ object BilibiliApi {
     }
 
     private fun buildStreams(playurlData: JsonObject?): List<MediaStream> {
-        if (playurlData == null) return emptyList()
+        if (playurlData == null) return []
 
         val dash = playurlData.obj("dash")
         if (dash != null) {
@@ -273,15 +273,15 @@ object BilibiliApi {
         // Very low quality / old videos have no DASH manifest, only a single progressive URL.
         // Regular VODs key this "durl"; bangumi's `video_info` keys the same shape "durls".
         val durl = (playurlData.array("durl") ?: playurlData.array("durls"))
-            ?.firstOrNull()?.asJsonObjectOrNull() ?: return emptyList()
-        val durlUrl = durl.optString("url") ?: return emptyList()
-        return listOf(
+            ?.firstOrNull()?.asJsonObjectOrNull() ?: return []
+        val durlUrl = durl.optString("url") ?: return []
+        return [
             MediaStream(
                 url = durlUrl, type = MediaStreamType.VIDEO_AUDIO,
                 codec = null, width = null, height = null, fps = null, bitrate = durl.optInt("bandwidth"),
                 audioTrackName = null, audioTrackLang = null,
             ),
-        )
+        ]
     }
 
     private fun buildLiveStreams(playInfoData: JsonObject?): List<MediaStream> {

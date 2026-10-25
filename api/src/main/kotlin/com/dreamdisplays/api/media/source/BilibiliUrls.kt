@@ -24,7 +24,7 @@ object BilibiliUrls {
         val host = parsed.uri.host?.lowercase(Locale.ROOT)?.removePrefix("www.")?.removePrefix("m.") ?: return null
 
         val normalized = parsed.value
-        val segments = parsed.uri.path?.split('/')?.filter { it.isNotBlank() } ?: emptyList()
+        val segments = parsed.uri.path?.split('/')?.filter { it.isNotBlank() } ?: []
 
         if (host == "b23.tv") {
             if (segments.isEmpty()) return null

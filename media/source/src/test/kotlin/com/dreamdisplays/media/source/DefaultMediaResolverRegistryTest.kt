@@ -23,7 +23,7 @@ class DefaultMediaResolverRegistryTest {
         override fun canResolve(source: MediaSource): Boolean = true
 
         override fun resolve(source: MediaSource): ResolvedMedia =
-            ResolvedMedia(emptyList(), MediaMetadata.UNKNOWN, isLive = false, isSeekable = false)
+            ResolvedMedia([], MediaMetadata.UNKNOWN, isLive = false, isSeekable = false)
 
         override fun prefetch(source: MediaSource): Boolean {
             calls.incrementAndGet()

@@ -85,7 +85,7 @@ object ScrubPreview {
                 if (e is CancellationException) throw e
 
                 logger.warn("Scrub preview generation failed for $key: ${e.message}", e)
-                FRAMES.put(key, emptyList())
+                FRAMES.put(key, [])
             }.also {
                 IN_FLIGHT.invalidate(key)
             }
@@ -109,7 +109,7 @@ object ScrubPreview {
         val ffmpeg = FFmpegBinary.getPath()
         if (ffmpeg == null) {
             logger.warn("Scrub preview aborted for $key: no FFmpeg binary available")
-            FRAMES.put(key, emptyList())
+            FRAMES.put(key, [])
             return
         }
         val firstParty = MediaHosts.isFirstParty(sourceUrl)
@@ -121,7 +121,7 @@ object ScrubPreview {
 
         val collected = Collections.synchronizedList(ArrayList<Frame>(timestamps.size))
         val semaphore = Semaphore(concurrency)
-        FRAMES.put(key, emptyList())
+        FRAMES.put(key, [])
         val outcomes = coroutineScope {
             timestamps.map { ts ->
                 async {

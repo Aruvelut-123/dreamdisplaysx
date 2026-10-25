@@ -79,7 +79,7 @@ internal class VanillaServerDisplay(
 
 /** Lazy view over `Fabric` / `NeoForge` displays. */
 internal class VanillaServerDisplays(
-    filters: List<(VanillaDisplayData) -> Boolean> = emptyList(),
+    filters: List<(VanillaDisplayData) -> Boolean> = [],
 ) : ServerDisplaysBase<VanillaDisplayData>(filters) {
     override fun all(): List<VanillaDisplayData> = DisplayManager.getDisplays().filterIsInstance<VanillaDisplayData>()
     override fun wrap(data: VanillaDisplayData): ServerDisplay = VanillaServerApi.wrap(data)

@@ -36,7 +36,7 @@ internal object TwitchHls {
         usherUrl("$USHER_BASE/vod/$id.m3u8", token)
 
     private fun usherUrl(base: String, token: TwitchAccessToken): String {
-        val params = listOf(
+        val params = [
             "allow_source" to "true",
             "allow_audio_only" to "true",
             "playlist_include_framerate" to "true",
@@ -45,7 +45,7 @@ internal object TwitchHls {
             "p" to Random.nextInt(1_000_000, 10_000_000).toString(),
             "sig" to token.signature,
             "token" to token.value,
-        )
+        ]
         return "$base?" + params.joinToString("&") { (key, value) ->
             "$key=${URLEncoder.encode(value, StandardCharsets.UTF_8)}"
         }

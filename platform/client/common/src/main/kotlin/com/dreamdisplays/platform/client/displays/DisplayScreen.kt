@@ -561,11 +561,11 @@ class DisplayScreen(
 
     /** Pixel heights of the qualities available for the current video. */
     val qualityList: List<Int>
-        get() = mediaPlayer?.getAvailableQualities() ?: emptyList()
+        get() = mediaPlayer?.getAvailableQualities() ?: []
 
     /** Audio tracks available for the current video (more than one only when the provider exposes dubs). */
     val audioTrackList: List<MediaStream>
-        get() = mediaPlayer?.getAvailableAudioTracks() ?: emptyList()
+        get() = mediaPlayer?.getAvailableAudioTracks() ?: []
 
     /** Resolved URL of the audio track currently playing, or empty before a stream has resolved. */
     val currentAudioTrackUrl: String
@@ -577,7 +577,7 @@ class DisplayScreen(
 
     /** Subtitle tracks available for the current video (empty unless the provider exposed captions). */
     val subtitleTrackList: List<SubtitleTrack>
-        get() = mediaPlayer?.getAvailableSubtitleTracks() ?: emptyList()
+        get() = mediaPlayer?.getAvailableSubtitleTracks() ?: []
 
     /** Language of the currently selected subtitle track, or null when subtitles are off. */
     val currentSubtitleLang: String?

@@ -136,6 +136,6 @@ object FormatDiskCache {
         val v: Int,
         val ts: Long,
         val url: String,
-        val streams: List<YtStream> = emptyList(),
+        val streams: List<YtStream> = [],
     )
 }

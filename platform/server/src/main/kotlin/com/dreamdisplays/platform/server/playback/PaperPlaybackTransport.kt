@@ -33,16 +33,16 @@ object PaperPlaybackTransport : PlaybackTransport {
     override fun sendTo(playerId: UUID, packet: DreamPacket) {
         if (PlatformUtil.isFolia) {
             Scheduler.runTrackedPlayer(playerId) { player ->
-                if (V2PlayerTracker.isV2(playerId)) PaperV2Networking.send(listOf(player), packet)
+                if (V2PlayerTracker.isV2(playerId)) PaperV2Networking.send([player], packet)
             }
             return
         }
         val player = PaperServer.getInstance().server.getPlayer(playerId) ?: return
-        if (V2PlayerTracker.isV2(playerId)) PaperV2Networking.send(listOf(player), packet)
+        if (V2PlayerTracker.isV2(playerId)) PaperV2Networking.send([player], packet)
     }
 
     override fun nearbyPlayerIds(display: DisplayData): List<UUID> {
-        val paper = display as? PaperDisplayData ?: return emptyList()
+        val paper = display as? PaperDisplayData ?: return []
         if (PlatformUtil.isFolia) return DisplayManager.getTrackedNearbyPlayerIds(paper)
         return DisplayManager.getReceivers(paper).map { it.uniqueId }
     }
@@ -78,7 +78,7 @@ object PaperPlaybackTransport : PlaybackTransport {
     override fun sendDisplayInfo(playerId: UUID, display: DisplayData, forced: Boolean) {
         val paper = display as? PaperDisplayData ?: return
         val player = PaperServer.getInstance().server.getPlayer(playerId) ?: return
-        DisplayManager.sendUpdate(paper, listOf(player), forced)
+        DisplayManager.sendUpdate(paper, [player], forced)
     }
 
     override fun runOnMainThread(task: () -> Unit) {

@@ -71,7 +71,7 @@ class ErrorPanel(
     }
 
     private fun detailLines(font: Font, message: String?, maxW: Int): List<String> {
-        val text = message?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
+        val text = message?.trim()?.takeIf { it.isNotEmpty() } ?: return []
         val lines = ArrayList<String>()
         var line = ""
         for (word in text.split(Regex("\\s+"))) {

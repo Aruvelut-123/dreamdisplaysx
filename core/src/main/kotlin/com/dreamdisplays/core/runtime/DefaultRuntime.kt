@@ -40,7 +40,7 @@ class DefaultRuntime(
         started = false
     }
 
-    private fun install(module: DreamDisplaysModule, chain: List<String> = emptyList()) {
+    private fun install(module: DreamDisplaysModule, chain: List<String> = []) {
         if (module.id in installed) return
         check(module.id !in chain) {
             "Circular module dependency: ${(chain + module.id).joinToString(" -> ")}."

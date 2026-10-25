@@ -17,14 +17,14 @@ internal object DisplaySuggestions {
     private const val PAGE_SIZE = 10
     private val THIS = Suggestion("this", "suggestThis")
 
-    private val LINKS = listOf(
+    private val LINKS = [
         Suggestion("https://www.youtube.com/watch?v=", "suggestLinkYoutube"),
         Suggestion("https://youtu.be/", "suggestLinkYoutubeShort"),
         Suggestion("https://www.twitch.tv/", "suggestLinkTwitch"),
         Suggestion("https://vimeo.com/", "suggestLinkVimeo"),
         Suggestion("https://kick.com/", "suggestLinkKick"),
         Suggestion("https://", "suggestLinkDirect"),
-    )
+    ]
 
     private val FILTERS = mapOf(
         ListFilter.MINE to "suggestFilterMine",
@@ -33,47 +33,47 @@ internal object DisplaySuggestions {
         ListFilter.SYNC to "suggestFilterSync",
     )
 
-    private val SELECTORS = listOf(
+    private val SELECTORS = [
         Suggestion("@a", "suggestSelectorAll"),
         Suggestion("@p", "suggestSelectorNearest"),
         Suggestion("@r", "suggestSelectorRandom"),
         Suggestion("@s", "suggestSelectorSelf"),
         Suggestion("@e", "suggestSelectorEntities"),
-    )
+    ]
 
-    private val QUALITIES = listOf(
+    private val QUALITIES = [
         Suggestion("auto", "suggestQualityAuto"),
         Suggestion("360"),
         Suggestion("480"),
         Suggestion("720"),
         Suggestion("1080"),
-    )
+    ]
 
-    private val VOLUMES = listOf(
+    private val VOLUMES = [
         Suggestion("0", "suggestVolumeMuted"),
         Suggestion("50"),
         Suggestion("100"),
         Suggestion("150"),
         Suggestion("200", "suggestVolumeMax"),
-    )
+    ]
 
-    private val RADII = listOf("8", "16", "32", "64", "128").map { Suggestion(it, "suggestRadiusBlocks") }
+    private val RADII = ["8", "16", "32", "64", "128"].map { Suggestion(it, "suggestRadiusBlocks") }
 
     /** `this`, then every display by name or short id when [remote] targeting is allowed. */
     fun targets(typed: String, remote: Boolean): List<Suggestion> =
-        (listOf(THIS) + if (remote) displays() else emptyList()).startingWith(typed)
+        ([THIS] + if (remote) displays() else []).startingWith(typed)
 
     /** The name [token] currently carries, offered so it can be edited instead of retyped. */
     fun currentName(token: String, typed: String): List<Suggestion> {
-        if (token.equals("this", ignoreCase = true)) return emptyList()
-        val name = DisplayManager.resolveByIdOrPrefix(token)?.name ?: return emptyList()
-        return listOf(Suggestion(name, "suggestCurrentName")).startingWith(typed)
+        if (token.equals("this", ignoreCase = true)) return []
+        val name = DisplayManager.resolveByIdOrPrefix(token)?.name ?: return []
+        return [Suggestion(name, "suggestCurrentName")].startingWith(typed)
     }
 
     /** Link starters while the link is being typed, then [languages] once a space follows it. */
     fun link(remaining: String, typed: String, languages: () -> List<String>): List<Suggestion> {
         if (' ' !in remaining) return links(typed)
-        if (remaining.count { it == ' ' } > 1) return emptyList()
+        if (remaining.count { it == ' ' } > 1) return []
         return languages().filter { it.startsWith(typed, ignoreCase = true) }.map { Suggestion(it, "suggestLanguage") }
     }
 
@@ -100,7 +100,7 @@ internal object DisplaySuggestions {
             val text = ScheduleTimeUtil.format(minute * 60)
             if (minute == firstMinute) return@map Suggestion(text, "suggestTimeNow")
             val secondsAhead = ScheduleTimeUtil.secondsUntil(minute * 60, offsetMinutes)
-            Suggestion(text, "suggestTimeIn", listOf(ScheduleTimeUtil.compactCountdown(secondsAhead)))
+            Suggestion(text, "suggestTimeIn", [ScheduleTimeUtil.compactCountdown(secondsAhead)])
         }
     }
 
@@ -112,7 +112,7 @@ internal object DisplaySuggestions {
     /** Page numbers for a list of [size] displays. */
     fun pages(size: Int): List<Suggestion> {
         val count = maxOf(1, (size + PAGE_SIZE - 1) / PAGE_SIZE)
-        return (1..count).map { Suggestion(it.toString(), "suggestPage", listOf(it.toString(), count.toString())) }
+        return (1..count).map { Suggestion(it.toString(), "suggestPage", [it.toString(), count.toString()]) }
     }
 
     /** [names] of players, best match for [typed] first. */
@@ -145,8 +145,8 @@ internal object DisplaySuggestions {
 
     /** One coordinate of where the sender stands, as a radius origin. */
     fun coordinate(value: Double?, axis: String, typed: String): List<Suggestion> {
-        val text = value?.let { String.format(Locale.ROOT, "%.1f", it) } ?: return emptyList()
-        return listOf(Suggestion(text, "suggestCoordinate", listOf(axis.uppercase()))).startingWith(typed)
+        val text = value?.let { String.format(Locale.ROOT, "%.1f", it) } ?: return []
+        return [Suggestion(text, "suggestCoordinate", [axis.uppercase()])].startingWith(typed)
     }
 
     private fun displays(): List<Suggestion> =
@@ -155,7 +155,7 @@ internal object DisplaySuggestions {
             .map { describe(it) }
 
     private fun describe(display: DisplayData): Suggestion {
-        val size = listOf(display.width.toString(), display.height.toString())
+        val size = [display.width.toString(), display.height.toString()]
         if (display.name == null) return Suggestion(display.shortLabel, "suggestDisplay", size)
         return Suggestion(display.shortLabel, "suggestDisplayNamed", size + display.id.toString().take(8))
     }

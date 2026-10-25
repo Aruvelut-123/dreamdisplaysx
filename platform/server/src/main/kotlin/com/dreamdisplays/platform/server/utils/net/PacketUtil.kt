@@ -98,7 +98,7 @@ object PacketUtil {
         )
         if (access == DisplayAccess.REGION && isRegionMember != null) {
             recipients.forEach { player ->
-                PaperV2Networking.send(listOf(player), info.copy(viewerInRegion = isRegionMember(player)))
+                PaperV2Networking.send([player], info.copy(viewerInRegion = isRegionMember(player)))
             }
         } else {
             PaperV2Networking.send(recipients, info)
@@ -112,7 +112,7 @@ object PacketUtil {
 
     /** Pushes the global displays-enabled flag for [player] to the client. */
     fun sendDisplayEnabled(player: Player, isEnabled: Boolean) {
-        PaperV2Networking.send(v2Players(listOf(player)), SetDisplaysEnabled(isEnabled))
+        PaperV2Networking.send(v2Players([player]), SetDisplaysEnabled(isEnabled))
     }
 
     /** Tells [players] to evict the listed display UUIDs from any local caches. */

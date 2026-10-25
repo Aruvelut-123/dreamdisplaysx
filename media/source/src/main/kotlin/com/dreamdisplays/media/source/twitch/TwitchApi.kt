@@ -171,7 +171,7 @@ object TwitchApi {
                     """profileImageURL(width:70) user{displayName broadcastSettings{title} """ +
                     """stream{viewersCount previewImageURL(width:640,height:360) game{displayName}}}}}}}}}"""
         )
-        val edges = data.obj("searchSuggestions")?.array("edges")?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
+        val edges = data.obj("searchSuggestions")?.array("edges")?.mapNotNull { it.asJsonObjectOrNull() } ?: return []
         return edges.mapNotNull { edge ->
             val content = edge.obj("node")?.obj("content") ?: return@mapNotNull null
             if (content.optString("__typename") != "SearchSuggestionChannel") return@mapNotNull null

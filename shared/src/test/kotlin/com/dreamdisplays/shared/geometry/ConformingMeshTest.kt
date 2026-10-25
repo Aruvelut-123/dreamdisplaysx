@@ -11,7 +11,7 @@ class ConformingMeshTest {
     fun shapedVariantsComeFromThePlatformNotFromTheName() {
         val concrete = DisplaySurface(
             "minecraft:black_concrete",
-            listOf("minecraft:black_concrete_stairs", "minecraft:black_concrete_slab"),
+            ["minecraft:black_concrete_stairs", "minecraft:black_concrete_slab"],
         )
         assertEquals(SurfaceRole.FULL, concrete.role("BLACK_CONCRETE"))
         assertEquals(SurfaceRole.SHAPED, concrete.role("minecraft:black_concrete_stairs"))
@@ -19,10 +19,10 @@ class ConformingMeshTest {
         assertEquals(SurfaceRole.AIR, concrete.role("minecraft:cave_air"))
         assertEquals(SurfaceRole.FOREIGN, concrete.role("minecraft:oak_stairs"))
 
-        val bricks = DisplaySurface("minecraft:stone_bricks", listOf("minecraft:stone_brick_slab"))
+        val bricks = DisplaySurface("minecraft:stone_bricks", ["minecraft:stone_brick_slab"])
         assertTrue(bricks.accepts("STONE_BRICK_SLAB"))
         assertEquals(SurfaceRole.FOREIGN, bricks.role("minecraft:stone_bricks_slab"))
-        assertTrue(DisplaySurface("minecraft:black_concrete", emptyList()).role("black_concrete_stairs") == SurfaceRole.FOREIGN)
+        assertTrue(DisplaySurface("minecraft:black_concrete", []).role("black_concrete_stairs") == SurfaceRole.FOREIGN)
     }
 
     @Test
@@ -38,7 +38,7 @@ class ConformingMeshTest {
     @Test
     fun fullCubeWallMatchesTheFlatScreenUv() {
         val quads = buildConformingMesh(
-            listOf(ShapedBlock(0, 0, 0, listOf(FULL))),
+            [ShapedBlock(0, 0, 0, [FULL])],
             width = 1, height = 1, depth = 1, facing = DisplayFacing.NORTH,
         )
         assertEquals(1, quads.size)
@@ -56,7 +56,7 @@ class ConformingMeshTest {
     @Test
     fun bottomSlabSitsOnTheHalfHeightAndWrapsTheTop() {
         val quads = buildConformingMesh(
-            listOf(ShapedBlock(0, 0, 0, listOf(BOTTOM))),
+            [ShapedBlock(0, 0, 0, [BOTTOM])],
             width = 1, height = 1, depth = 1, facing = DisplayFacing.NORTH,
         )
         val fronts = quads.filter { it.nz < 0f }
@@ -70,7 +70,7 @@ class ConformingMeshTest {
     @Test
     fun floorSlabKeepsThePictureOnTheTopFace() {
         val quads = buildConformingMesh(
-            listOf(ShapedBlock(0, 0, 0, listOf(ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0)))),
+            [ShapedBlock(0, 0, 0, [ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0)])],
             width = 1, height = 1, depth = 1, facing = DisplayFacing.UP,
         )
         assertEquals(1, quads.size)
@@ -87,10 +87,10 @@ class ConformingMeshTest {
     @Test
     fun faceTuckedBehindAStepGetsNoPicture() {
         val quads = buildConformingMesh(
-            listOf(
-                ShapedBlock(0, 0, 0, listOf(BOTTOM, STEP)),
-                ShapedBlock(0, 1, 1, listOf(BOTTOM, STEP)),
-            ),
+            [
+                ShapedBlock(0, 0, 0, [BOTTOM, STEP]),
+                ShapedBlock(0, 1, 1, [BOTTOM, STEP]),
+            ],
             width = 1, height = 2, depth = 2, facing = DisplayFacing.NORTH,
         )
         assertTrue(quads.none { it.ny < 0f }, "the underside of the upper stair hides behind the lower one")
@@ -101,7 +101,7 @@ class ConformingMeshTest {
         for (facing in DisplayFacing.entries) {
             for (turns in 0..3) {
                 val quads = buildConformingMesh(
-                    listOf(ShapedBlock(0, 0, 0, listOf(BOTTOM, STEP))),
+                    [ShapedBlock(0, 0, 0, [BOTTOM, STEP])],
                     width = 1, height = 1, depth = 1, facing = facing, quarterTurns = turns,
                 )
                 assertTrue(quads.isNotEmpty(), "$facing")
@@ -116,7 +116,7 @@ class ConformingMeshTest {
     @Test
     fun straightStairWrapsTheRiserAndTheTread() {
         val quads = buildConformingMesh(
-            listOf(ShapedBlock(0, 0, 0, listOf(BOTTOM, STEP))),
+            [ShapedBlock(0, 0, 0, [BOTTOM, STEP])],
             width = 1, height = 1, depth = 1, facing = DisplayFacing.NORTH,
         )
         val fronts = quads.filter { it.nz < 0f }
@@ -133,14 +133,14 @@ class ConformingMeshTest {
     @Test
     fun grooveWrapsBothSideWallsAndStaysContinuous() {
         val quads = buildConformingMesh(
-            listOf(
-                ShapedBlock(0, 0, 0, listOf(FULL)), ShapedBlock(0, 0, 1, listOf(FULL)),
-                ShapedBlock(1, 0, 1, listOf(FULL)),
-                ShapedBlock(2, 0, 0, listOf(FULL)), ShapedBlock(2, 0, 1, listOf(FULL)),
-            ),
+            [
+                ShapedBlock(0, 0, 0, [FULL]), ShapedBlock(0, 0, 1, [FULL]),
+                ShapedBlock(1, 0, 1, [FULL]),
+                ShapedBlock(2, 0, 0, [FULL]), ShapedBlock(2, 0, 1, [FULL]),
+            ],
             width = 3, height = 1, depth = 2, facing = DisplayFacing.NORTH,
         )
-        for (plane in listOf(1f, 2f)) {
+        for (plane in [1f, 2f]) {
             val wall = quads.filter { q -> q.nx != 0f && q.vertices.all { abs(it.x - plane) < 1e-3f } }
             assertTrue(wall.isNotEmpty(), "wall at x=$plane")
             assertTrue(uvSpan(wall) > 0.1f, "the wall at x=$plane spans picture, not one smeared column")
@@ -154,10 +154,10 @@ class ConformingMeshTest {
     @Test
     fun staircasePictureContinuesFromOneStepOntoTheNext() {
         val quads = buildConformingMesh(
-            listOf(
-                ShapedBlock(0, 0, 0, listOf(BOTTOM, STEP)),
-                ShapedBlock(0, 1, 1, listOf(BOTTOM, STEP)),
-            ),
+            [
+                ShapedBlock(0, 0, 0, [BOTTOM, STEP]),
+                ShapedBlock(0, 1, 1, [BOTTOM, STEP]),
+            ],
             width = 1, height = 2, depth = 2, facing = DisplayFacing.NORTH,
         )
         assertDraped(quads)
@@ -173,7 +173,7 @@ class ConformingMeshTest {
         val stairX = 4
         val blocks = ArrayList<ShapedBlock>()
         for (x in 0 until width) for (y in 0 until height) {
-            blocks += if (x == stairX && y == 0) ShapedBlock(x, y, 0, listOf(BOTTOM, STEP)) else ShapedBlock(x, y, 0, listOf(FULL))
+            blocks += if (x == stairX && y == 0) ShapedBlock(x, y, 0, [BOTTOM, STEP]) else ShapedBlock(x, y, 0, [FULL])
         }
         val quads = buildConformingMesh(blocks, width, height, depth = 1, facing = DisplayFacing.NORTH)
         assertDraped(quads)
@@ -188,14 +188,14 @@ class ConformingMeshTest {
 
     @Test
     fun aFloorOfSlabsAndStairsDrapesWithoutSeamsOrFolds() {
-        val blocks = listOf(
-            ShapedBlock(0, 0, 0, listOf(BOTTOM)),
-            ShapedBlock(1, 0, 0, listOf(FULL)),
-            ShapedBlock(2, 0, 0, listOf(BOTTOM, ShapeBox(0.5, 0.5, 0.0, 1.0, 1.0, 1.0))),
-            ShapedBlock(0, 0, 1, listOf(FULL)),
-            ShapedBlock(1, 0, 1, listOf(FULL)),
-            ShapedBlock(2, 0, 1, listOf(FULL)),
-        )
+        val blocks = [
+            ShapedBlock(0, 0, 0, [BOTTOM]),
+            ShapedBlock(1, 0, 0, [FULL]),
+            ShapedBlock(2, 0, 0, [BOTTOM, ShapeBox(0.5, 0.5, 0.0, 1.0, 1.0, 1.0)]),
+            ShapedBlock(0, 0, 1, [FULL]),
+            ShapedBlock(1, 0, 1, [FULL]),
+            ShapedBlock(2, 0, 1, [FULL]),
+        ]
         val quads = buildConformingMesh(blocks, width = 3, height = 2, depth = 1, facing = DisplayFacing.UP)
         assertDraped(quads)
         assertTrue(uvSpan(quads.filter { it.ny == 0f }) > 0.05f)
@@ -207,23 +207,23 @@ class ConformingMeshTest {
         val stepNorth = ShapeBox(0.0, 0.5, 0.0, 1.0, 1.0, 0.5)
         val stepEast = ShapeBox(0.5, 0.5, 0.0, 1.0, 1.0, 1.0)
         val stepWest = ShapeBox(0.0, 0.5, 0.0, 0.5, 1.0, 1.0)
-        val between = listOf(
-            ShapedBlock(0, 0, 0, listOf(BOTTOM)), ShapedBlock(1, 0, 0, listOf(BOTTOM, stepSouth)),
-            ShapedBlock(2, 0, 0, listOf(BOTTOM)),
-            ShapedBlock(0, 0, 1, listOf(BOTTOM)), ShapedBlock(1, 0, 1, listOf(BOTTOM, stepNorth)),
-            ShapedBlock(2, 0, 1, listOf(BOTTOM)),
-        )
+        val between = [
+            ShapedBlock(0, 0, 0, [BOTTOM]), ShapedBlock(1, 0, 0, [BOTTOM, stepSouth]),
+            ShapedBlock(2, 0, 0, [BOTTOM]),
+            ShapedBlock(0, 0, 1, [BOTTOM]), ShapedBlock(1, 0, 1, [BOTTOM, stepNorth]),
+            ShapedBlock(2, 0, 1, [BOTTOM]),
+        ]
         val betweenQuads = buildConformingMesh(between, width = 3, height = 2, depth = 1, facing = DisplayFacing.UP)
         assertDraped(betweenQuads)
         assertTrue(uvSpan(betweenQuads.filter { it.nz != 0f }) > 0.05f, "the lone stairs' risers show picture")
 
-        val row = listOf(
-            ShapedBlock(0, 0, 0, listOf(BOTTOM)), ShapedBlock(1, 0, 0, listOf(BOTTOM, stepEast)),
-            ShapedBlock(2, 0, 0, listOf(BOTTOM, stepWest)), ShapedBlock(3, 0, 0, listOf(BOTTOM)),
-        )
+        val row = [
+            ShapedBlock(0, 0, 0, [BOTTOM]), ShapedBlock(1, 0, 0, [BOTTOM, stepEast]),
+            ShapedBlock(2, 0, 0, [BOTTOM, stepWest]), ShapedBlock(3, 0, 0, [BOTTOM]),
+        ]
         val rowQuads = buildConformingMesh(row, width = 4, height = 1, depth = 1, facing = DisplayFacing.UP)
         assertDraped(rowQuads)
-        for (plane in listOf(1.5f, 2.5f)) {
+        for (plane in [1.5f, 2.5f]) {
             val riser = rowQuads.filter { q -> q.nx != 0f && q.vertices.all { abs(it.x - plane) < 1e-3f } }
             assertTrue(uvSpan(riser) > 0.05f, "the riser at x=$plane unfolds into picture")
         }

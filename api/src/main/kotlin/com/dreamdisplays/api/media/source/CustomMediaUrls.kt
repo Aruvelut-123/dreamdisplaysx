@@ -118,7 +118,7 @@ object CustomMediaUrls {
 
     private fun rewriteShareLink(uri: URI): String? {
         val host = uri.host?.lowercase(Locale.ROOT)?.removePrefix("www.") ?: return null
-        val segments = uri.path?.split('/')?.filter { it.isNotBlank() } ?: emptyList()
+        val segments = uri.path?.split('/')?.filter { it.isNotBlank() } ?: []
         return when {
             // Drive share pages ("/file/d/<id>/view") and the legacy "/open?id=" shape
             host == "drive.google.com" || host == "docs.google.com" -> {
@@ -133,7 +133,7 @@ object CustomMediaUrls {
             // github.com/<owner>/<repo>/blob/<ref>/<path> -> raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>
             host == "github.com" && segments.size >= 5 && segments[2] == "blob" ->
                 "https://raw.githubusercontent.com/" +
-                        (listOf(segments[0], segments[1]) + segments.drop(3)).joinToString("/")
+                        ([segments[0], segments[1]] + segments.drop(3)).joinToString("/")
 
             // GitLab uses the same shape with a "/-/" separator and a "raw" verb
             host == "gitlab.com" && segments.contains("-") && segments.contains("blob") ->
@@ -163,7 +163,7 @@ object CustomMediaUrls {
             ?.split('&')
             ?.filter { it.isNotBlank() }
             ?.filterNot { it.substringBefore('=') == "raw" || it.substringBefore('=') == "dl" }
-            ?: emptyList()
+            ?: []
         val query = (kept + "raw=1").joinToString("&")
         return "${uri.scheme}://${uri.authority}${uri.path.orEmpty()}?$query"
     }

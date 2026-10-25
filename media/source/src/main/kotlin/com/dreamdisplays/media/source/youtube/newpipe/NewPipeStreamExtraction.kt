@@ -25,7 +25,7 @@ class NewPipeResolved(
     val likeCount: Long?,
     val isLive: Boolean,
     val isSeekable: Boolean,
-    val subtitles: List<SubtitleTrack> = emptyList(),
+    val subtitles: List<SubtitleTrack> = [],
 )
 
 /**
