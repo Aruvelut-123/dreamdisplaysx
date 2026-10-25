@@ -22,34 +22,21 @@ import kotlin.time.Duration.Companion.milliseconds
 
 /** Default [MediaResolverRegistry]: tries registered resolvers in priority order, returning the first success. */
 class DefaultMediaResolverRegistry : MediaResolverRegistry {
-    /** Backing list of resolvers, sorted by priority on every access. */
     private val backing = CopyOnWriteArrayList<MediaResolverService>()
-
-    /** Limits concurrent prefetch hints to avoid network/process flooding. */
     private val prefetchPermit = Semaphore(PREFETCH_CONCURRENCY)
-
-    /**
-     * Sources with a hint already in flight. The client fires [prefetch] on every URL change and on
-     * every display load, so without this a wall of screens showing the same video queues one
-     * identical warm-up per screen.
-     */
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
 
-    /** Returns the registered resolvers in priority order (highest first). */
     override val resolvers: List<MediaResolverService>
         get() = backing.sortedByDescending { it.priority }
 
-    /** Adds [resolver] to the chain (btw resolver instance is never registered twice). */
     override fun register(resolver: MediaResolverService) {
         if (resolver !in backing) backing.add(resolver)
     }
 
-    /** Removes [resolver] from the chain; no-op if it was never registered. */
     override fun unregister(resolver: MediaResolverService) {
         backing.remove(resolver)
     }
 
-    /** Prefetches [source] through capable resolvers, stopping at the first success (best-effort). */
     override fun prefetch(source: MediaSource) {
         val key = source.toResolvableUrl() ?: source.toString()
         if (!inFlight.add(key)) return
@@ -114,7 +101,6 @@ class DefaultMediaResolverRegistry : MediaResolverRegistry {
         }
     }
 
-    /** SSRF guard: blocks non-public addresses like localhost, 192.168.*, etc. */
     private fun isBlockedHost(source: MediaSource): Boolean {
         val url = when (source) {
             is MediaSource.Remote -> source.url

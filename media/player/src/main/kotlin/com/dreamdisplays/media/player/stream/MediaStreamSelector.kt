@@ -8,24 +8,16 @@ import kotlin.math.abs
 
 /** Pure helpers for parsing quality values and picking video / audio tracks from a [MediaStream] list. */
 object MediaStreamSelector {
-    /** Realtime-safe selection is enabled by default, but can be disabled via system property. */
     private val realtimeSafeSelection: Boolean =
         System.getProperty("dreamdisplays.stream.realtimeSafe", "true").toBoolean()
 
-    /** Default 60 fps preference. Can be overridden by system property. */
     private val defaultPreferFps60: Boolean = System.getProperty("dreamdisplays.stream.prefer60", "false").toBoolean()
 
-    /** Default 60 fps penalty. Can be overridden by system property. */
     private val defaultFps60Penalty: Int =
         System.getProperty("dreamdisplays.stream.fps60Penalty", "420").toIntOrNull()?.coerceAtLeast(0) ?: 420
 
-    /** Is the current platform macOS? */
     private val isMac: Boolean = OsInfo.isMac
-
-    /** Is the current platform Windows? */
     private val isWindows: Boolean = OsInfo.isWindows
-
-    /** Is the current platform Apple Silicon? */
     private val isAppleSilicon: Boolean = OsInfo.isMac && OsInfo.isArm64
 
     /** Returns the pixel height of [stream], or [Int.MAX_VALUE] if unknown. */
@@ -108,22 +100,11 @@ object MediaStreamSelector {
                 " realtimeSafe=$realtimeSafeSelection"
     }
 
-    /**
-     * Selection score measured in "height pixels plus realtime risk". It still strongly prefers
-     * the requested height, but lets a hardware-friendly 1080p/1440p stream beat a risky 2160p
-     * software path on platforms where that path is known to stutter.
-     */
     private fun realtimeScore(stream: MediaStream, target: Int, preferFps60: Boolean): Int {
         val height = parseQuality(stream)
         return abs(height - target) + platformCodecPenalty(stream) + fpsPenalty(stream, preferFps60)
     }
 
-    /**
-     * Decode-cost penalty by platform.
-     *
-     * Note: macOS is deliberately conservative: YouTube 4K VP9 often lands outside the fast `VideoToolbox` path or
-     * pays an expensive hardware-surface download, which is exactly the stutter pattern the LAV diagnostics exposed.
-     */
     private fun platformCodecPenalty(stream: MediaStream): Int {
         if (!realtimeSafeSelection) return genericCodecRank(stream) * 32
         val height = stream.height ?: Int.MAX_VALUE
@@ -159,11 +140,6 @@ object MediaStreamSelector {
         }
     }
 
-    /**
-     * 60 fps is not free in Minecraft's world render pass. By default, a 60 fps stream must be
-     * substantially better than a 30 fps alternative to win; otherwise audio stays smooth while
-     * the displayed video drops frames under render-thread pressure.
-     */
     private fun fpsPenalty(stream: MediaStream, preferFps60: Boolean): Int {
         val fps = stream.fps ?: return 16
         return if (preferFps60) {
@@ -173,10 +149,8 @@ object MediaStreamSelector {
         }
     }
 
-    /** Codec name to enum mapping. */
     private fun codec(stream: MediaStream): SupportedCodec = SupportedCodec.fromCodecName(stream.codec)
 
-    /** Generic codec ranking. Used when the platform-specific ranking is not available. */
     private fun genericCodecRank(stream: MediaStream): Int {
         return when (codec(stream)) {
             SupportedCodec.H264 -> 0
@@ -210,10 +184,6 @@ object MediaStreamSelector {
         return audioStreams.firstOrNull()
     }
 
-    /**
-     * The highest-bitrate stream, or the first one when no candidate reports a bitrate (`maxByOrNull`
-     * keeps the earliest of equal values, so an all-unknown list preserves the resolver's own order).
-     */
     private fun List<MediaStream>.highestBitrate(): MediaStream? = maxByOrNull { it.bitrate ?: 0 }
 
     /** Case-insensitive partial match of [lang] against the stream's language tag and track name. */

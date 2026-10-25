@@ -11,17 +11,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /** Minecraft-backed display interaction service via ray-casting from the player's eye. */
 object MinecraftDisplayInteractionService : DisplayInteractionService {
-    /** Max reach, in blocks, for the look ray-cast. Mirrors the value used by [ClientTickManager]. */
     private const val MAX_REACH: Double = 64.0
-
-    /** Thread-safe list of listeners subscribed to [DisplayInteraction] events. */
     private val listeners = CopyOnWriteArrayList<(DisplayInteraction) -> Unit>()
 
-    /**
-     * Casts a look ray from the player's eye and returns the display under the crosshair as a
-     * [RaycastResult.Hit], or [RaycastResult.Miss] if the ray hits no block, no display occupies the
-     * hit block, or there is no player / level.
-     */
     override fun raycast(): RaycastResult {
         val mc = Minecraft.getInstance()
         val player = mc.player ?: return RaycastResult.Miss
@@ -40,10 +32,8 @@ object MinecraftDisplayInteractionService : DisplayInteractionService {
         )
     }
 
-    /** Convenience wrapper around [raycast] that returns the [RaycastResult.Hit] or null on a miss. */
     override fun getCurrentTarget(): RaycastResult.Hit? = raycast() as? RaycastResult.Hit
 
-    /** Maps a [DisplayFacing] to the outward block-face [Direction] the display surface sits on. */
     private fun DisplayFacing.toDirection(): Direction = when (this) {
         DisplayFacing.NORTH -> Direction.NORTH
         DisplayFacing.EAST -> Direction.EAST
@@ -53,16 +43,11 @@ object MinecraftDisplayInteractionService : DisplayInteractionService {
         DisplayFacing.DOWN -> Direction.DOWN
     }
 
-    /** Subscribes [listener] to [DisplayInteraction] events; close the returned handle to unsubscribe. */
     override fun on(listener: (DisplayInteraction) -> Unit): AutoCloseable {
         listeners += listener
         return AutoCloseable { listeners -= listener }
     }
 
-    /**
-     * Publishes [interaction] to all subscribers. Call sites (e.g. the tick / input handlers) emit
-     * here once they detect a right-click, hotbar scroll, focus toggle, popout request, etc.
-     */
     override fun emit(interaction: DisplayInteraction) {
         listeners.forEach { it(interaction) }
     }

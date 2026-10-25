@@ -16,10 +16,7 @@ import java.util.Locale
  * isolate search caching from format resolution.
  */
 object YtDlpSearchCache {
-    /** Info cache TTL: 30 minutes is a good balance between freshness and avoiding repeated InnerTube calls. */
     private const val INFO_CACHE_TTL_MS: Long = 30L * 60L * 1_000L
-
-    /** In-memory cache of search results, keyed by lowercase query + limit. */
     private val searchMemo = AsyncMemo<String, List<MediaSearchResult>>(100, INFO_CACHE_TTL_MS, DreamCoroutines.clientIo, "search")
     private val relatedMemo = AsyncMemo<String, List<MediaSearchResult>>(200, INFO_CACHE_TTL_MS, DreamCoroutines.clientIo, "related")
 

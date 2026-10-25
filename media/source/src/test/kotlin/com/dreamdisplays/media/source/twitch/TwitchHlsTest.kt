@@ -6,7 +6,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TwitchHlsTest {
-    /** A trimmed-down real usher master playlist: source, one lower rendition, and audio-only. */
     private val master = """
         #EXTM3U
         #EXT-X-TWITCH-INFO:NODE="video-edge",MANIFEST-NODE-TYPE="weaver_cluster"

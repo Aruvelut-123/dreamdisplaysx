@@ -17,10 +17,7 @@ import java.nio.file.Files
 @PaperOnly
 @NullMarked
 class Config(private val plugin: PaperServer) {
-    /** The plugin's configuration file. */
     private val configFile = File(plugin.dataFolder, "config.toml")
-
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     private val langStore = LanguageStore(
@@ -58,7 +55,6 @@ class Config(private val plugin: PaperServer) {
         langStore.loadMessages(logger)
     }
 
-    /** Copies the bundled `config.toml` into the plugin folder on first run. */
     private fun createDefaultConfig() {
         if (!configFile.exists()) {
             plugin.dataFolder.mkdirs()
@@ -68,7 +64,6 @@ class Config(private val plugin: PaperServer) {
         }
     }
 
-    /** Parses `config.toml`, falling back to defaults when sections are missing or malformed. */
     private fun load() {
         val t: TomlTable? = runCatching { Toml.parse(configFile.toPath()) }
             .onFailure { logger.error("Failed to parse config.toml.", it) }

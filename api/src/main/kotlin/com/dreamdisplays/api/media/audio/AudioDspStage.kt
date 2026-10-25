@@ -15,6 +15,5 @@ interface AudioDspStage : AutoCloseable {
     /** Resets internal filter / delay-line state; called at the start of every fresh playback session. */
     fun reset()
 
-    /** Close. */
     override fun close() {}
 }

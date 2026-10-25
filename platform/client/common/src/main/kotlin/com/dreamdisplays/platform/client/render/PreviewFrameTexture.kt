@@ -19,7 +19,6 @@ import java.util.*
 class PreviewFrameTexture(private val uuid: UUID) {
     @Volatile
     private var frontBuf: ByteBuffer = EMPTY_DIRECT
-
     private var backBuf: ByteBuffer = EMPTY_DIRECT
 
     @Volatile
@@ -33,9 +32,7 @@ class PreviewFrameTexture(private val uuid: UUID) {
 
     @Volatile
     private var frameVersion = 0L
-
     private var uploadedVersion = 0L
-
     private var dynamicTexture: DynamicTexture? = null
     var textureId: Identifier? = null
         private set

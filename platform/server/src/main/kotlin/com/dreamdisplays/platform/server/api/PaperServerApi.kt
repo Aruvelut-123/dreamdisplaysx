@@ -117,7 +117,6 @@ internal class PaperServerDisplays(
     }
 }
 
-/** Maps the public facing to `Bukkit`'s. */
 private fun DisplayFacing.toBlockFace(): BlockFace = when (this) {
     DisplayFacing.NORTH -> BlockFace.NORTH
     DisplayFacing.EAST -> BlockFace.EAST

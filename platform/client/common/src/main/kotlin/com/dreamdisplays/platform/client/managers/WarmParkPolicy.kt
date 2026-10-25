@@ -8,38 +8,19 @@ import kotlin.math.max
 
 /** Adaptive budget for displays kept fully warm versus compressed into replay snapshots. */
 object WarmParkPolicy {
-    /** Bytes in one mebibyte. */
     private const val MIB = 1024L * 1024L
-
-    /** Fallback warm-display limit when system RAM can't be probed. */
     private const val DEFAULT_WARM_LIMIT = 8
-
-    /** Hard ceiling on the auto-computed warm-display limit. */
     private const val MAX_AUTO_WARM_LIMIT = 12
-
-    /** Default delay before a parked display is demoted to a replay snapshot, in milliseconds. */
     private const val DEFAULT_DEMOTE_MS = 15_000L
-
-    /** Default time-to-live for a dormant display before teardown, in milliseconds. */
     private const val DEFAULT_TTL_MS = 60_000L
-
-    /** Fallback replay-cache budget when system RAM can't be probed. */
     private const val DEFAULT_REPLAY_CACHE_BYTES = 512L * MIB
-
-    /** Whether to skip full warm-park and always use replay snapshots by default. */
     private const val DEFAULT_REPLAY_ONLY = false
-
-    /** Conservative full-warm RAM estimate: decoder state, packet ring, audio process, sockets, threads. */
     private const val ESTIMATED_FULL_WARM_RAM_BYTES = 96L * MIB
-
-    /** Typical current texture budget for one display; actual display textures are counted separately. */
     private const val ESTIMATED_FULL_WARM_VRAM_BYTES = 8L * MIB
 
-    /** Operator override for the warm limit via `dreamdisplays.warmPark.max`, or `null` to auto-compute. */
     private val configuredMax: Int? =
         System.getProperty("dreamdisplays.warmPark.max")?.toIntOrNull()?.coerceAtLeast(0)
 
-    /** Whether full warm-park is disabled in favor of replay snapshots (`dreamdisplays.warmPark.replayOnly`). */
     private val replayOnly: Boolean =
         System.getProperty("dreamdisplays.warmPark.replayOnly")?.toBooleanStrictOrNull() ?: DEFAULT_REPLAY_ONLY
 
@@ -105,7 +86,6 @@ object WarmParkPolicy {
         return ram <= ramBudgetBytes && vram <= vramBudgetBytes
     }
 
-    /** Derives the warm-display limit from probed RAM / VRAM, clamped to [MAX_AUTO_WARM_LIMIT]. */
     private fun autoWarmLimit(): Int {
         val memory = ClientMemoryProbe.detected
         val ramLimit = if (memory.systemRamBytes > 0L) {

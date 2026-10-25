@@ -25,7 +25,6 @@ interface PopoutWindow : AutoCloseable {
      */
     fun open(config: WindowConfig): VideoFrameSink
 
-    /** Closes the window. If the window is already closed, does nothing. May throw an exception if the window fails to close properly. */
     override fun close()
 
     /**

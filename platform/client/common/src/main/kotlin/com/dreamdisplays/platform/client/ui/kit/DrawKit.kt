@@ -103,12 +103,10 @@ fun lightenRgb(color: Int, factor: Float): Int {
     return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
 }
 
-/** Row spans (xStart, xEndExclusive) approximating an 8px filled circle, the [drawVerifiedBadge] backdrop. */
 private val VERIFIED_BADGE_ROWS = arrayOf(
     2 to 6, 1 to 7, 0 to 8, 0 to 8, 0 to 8, 0 to 8, 1 to 7, 2 to 6,
 )
 
-/** Pixel coordinates (within the 8px badge grid) tracing [drawVerifiedBadge]'s checkmark. */
 private val VERIFIED_BADGE_CHECK_PIXELS = arrayOf(
     1 to 4, 2 to 5, 3 to 6, 4 to 5, 4 to 4, 5 to 3, 5 to 2, 6 to 1,
 )

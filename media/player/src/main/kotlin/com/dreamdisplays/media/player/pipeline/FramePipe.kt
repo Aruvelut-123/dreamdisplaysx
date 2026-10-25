@@ -92,43 +92,14 @@ internal class LastFrameCache {
 
 /** A / V pacing shared by both frame pipes: sleep until a frame is due, drop when too late. */
 internal object FramePacing {
-    /** Threshold under which we use busy-wait (spin) instead of sleep for precise timing. */
     private const val SPIN_THRESHOLD_NS = 300L * 1_000L
-
-    /** Drop a frame when it's more than 80 ms behind the audio clock. */
     private const val DROP_THRESHOLD_NS = 80_000_000L
-
-    /** Cap on a single park slice so an [abort] request is honored promptly mid-wait. */
     private const val ABORT_POLL_NS = 50L * 1_000_000L
-
-    /**
-     * A pacing wait this long is anomalous (stalled clock, late audio start after a seek, or a
-     * frame from a stale timeline) — logged (rate-limited) so it's never silent, but the wait
-     * itself continues: the clock usually recovers and the frame becomes due.
-     */
     private const val SUSPICIOUS_WAIT_NS = 2_000_000_000L
-
-    /**
-     * Any diff larger than this, for a caller that has no independent way to tell a stale-timeline frame from real drift,
-     * is treated as a stale-timeline frame.
-     */
     private const val STALE_TIMELINE_DIFF_NS = 1_000_000_000L
-
-    /**
-     * Give up on a frame after actually waiting this long: either it belongs to a dead timeline (survived a seek's flush) or the clock is stuck.
-     */
     private const val MAX_PACING_WAIT_NS = 1_500_000_000L
-
-    /**
-     * If the wait budget is exhausted but the frame is still only a little ahead of the frozen
-     * clock, present it anyway instead of dropping.
-     */
     private const val GIVE_UP_PRESENT_THRESHOLD_NS = DROP_THRESHOLD_NS
-
-    /** Rate limiter for the suspicious-wait warn: at most one line per second across all frames. */
     private val lastWarnNanos = AtomicLong(0)
-
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**

@@ -57,7 +57,6 @@ class SettingsSection(
         placeOwnerActions(panel)
     }
 
-    /** Draws one row's background and label, and places its control and reset button. */
     private fun renderRow(g: GuiGraphicsCompat, row: Row, x: Int, y: Int, w: Int, labelColW: Int) {
         val font = Minecraft.getInstance().font
         g.fill(x, y, x + w, y + UiTheme.ROW_H, UiTheme.ROW_BG)
@@ -77,7 +76,6 @@ class SettingsSection(
         row.control.place(UiRect(rightEdge - controlW, y, controlW, UiTheme.ROW_H))
     }
 
-    /** Places the owner action buttons right-to-left along the panel's bottom-right corner. */
     private fun placeOwnerActions(panel: UiRect) {
         val btn = UiTheme.CONTROL_BUTTON
         var rightEdge = panel.right - UiTheme.PANEL_PADDING_X

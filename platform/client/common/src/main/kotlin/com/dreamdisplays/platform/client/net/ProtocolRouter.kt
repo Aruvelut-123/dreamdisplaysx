@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory
  * answering the blind [ClientHello] with a [ServerHello].
  */
 object ProtocolRouter {
-    /** Logger for negotiation and decode diagnostics. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /** True once the server has proven v2 support by answering with a [ServerHello]. */
@@ -22,7 +21,6 @@ object ProtocolRouter {
     var v2Negotiated: Boolean = false
         private set
 
-    /** True once the player was told this server only speaks protocol v1. */
     @Volatile
     private var outdatedServerReported: Boolean = false
 

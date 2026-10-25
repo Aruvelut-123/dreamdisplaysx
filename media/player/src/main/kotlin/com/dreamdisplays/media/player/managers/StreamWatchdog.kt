@@ -21,12 +21,9 @@ internal class StreamWatchdog(
 
     @Volatile
     private var job: Job? = null
-
     private var deliveredAFrame = false
     private var lastSeenStamp = 0L
     private var silentSinceNanos = 0L
-
-    /** Coroutine scope for the watchdog task. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("MediaPlayer-watchdog"))
 
     /** Start watchdog. */
@@ -50,10 +47,6 @@ internal class StreamWatchdog(
         job = null
     }
 
-    /**
-     * One pass over [stallThresholdMs] / [startupThresholdMs]. Returns false once [onStall] has been called, which ends
-     * the watchdog's polling loop.
-     */
     private fun check(): Boolean {
         return runCatching {
             if (!isSessionActive()) {

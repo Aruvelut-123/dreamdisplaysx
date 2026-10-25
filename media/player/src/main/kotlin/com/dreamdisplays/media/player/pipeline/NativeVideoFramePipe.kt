@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicLong
 internal class NativeVideoFramePipe(
     private val debugLabel: String,
     uploaderFactory: FrameUploaderFactory,
-    /** True when frames stay as raw I420 planes and the YUV -> RGB conversion happens on the GPU. */
     private val planarOutput: Boolean,
 ) : FramePipe {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -31,12 +30,6 @@ internal class NativeVideoFramePipe(
         private const val LAV_HW_AUTO = 1
         private const val LAV_PTS_ORIGIN_TOLERANCE_NS = 10_000_000_000L
         private const val LAV_PREROLL_MARGIN_NS = 50_000_000L
-
-        /**
-         * A raw LAV PTS step larger than this (either direction) between consecutive frames is a
-         * mid-stream discontinuity — a Twitch ad-break splice resets the PTS base — not normal frame
-         * progression, so the pipe re-anchors the origin bias on it instead of dropping every frame.
-         */
         private const val LAV_PTS_DISCONTINUITY_NS = 1_000_000_000L
 
         // Rolling packet cache, enabled by default: ~60 s of recent stream. Serves in-window seeks
@@ -46,26 +39,21 @@ internal class NativeVideoFramePipe(
         private const val DEFAULT_CACHE_WINDOW_MS = 60_000L
         private const val DEFAULT_CACHE_MAX_BYTES = 96L * 1024L * 1024L
 
-        /** Rolling encoded-packet cache window for live LAV sessions; 0 disables it. */
         private val cacheWindowMs: Long =
             System.getProperty("dreamdisplays.cache.windowMs")?.toLongOrNull()?.coerceIn(0, 120_000)
                 ?: DEFAULT_CACHE_WINDOW_MS
 
-        /** Hard byte cap for one live LAV packet ring. */
         private val cacheMaxBytes: Long =
             System.getProperty("dreamdisplays.cache.maxBytes")?.toLongOrNull()?.coerceAtLeast(0)
                 ?: DEFAULT_CACHE_MAX_BYTES
     }
 
-    /** Updated by the reader thread on every frame; used by the watchdog to detect stalls. */
     override val lastFrameReceivedNanos = AtomicLong(0)
 
     @Volatile
     private var rawPopoutFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
-
     private val lastFrame = LastFrameCache()
 
-    /** Popout frame sink; replays cached last frame when set. */
     override var popoutFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
         get() = rawPopoutFrameSink
         set(value) {
@@ -85,20 +73,14 @@ internal class NativeVideoFramePipe(
 
     @Volatile
     private var activePrebuffer: FramePrebuffer? = null
-
-    /** Scratch RGBA buffer for the popout window in planar mode (it still wants RGBA frames). */
     private var popoutRgba: ByteBuffer? = null
 
     @Volatile
     private var handle = 0L
 
-    /** Handle of the in-process libav session, when [startInProcess] is used instead of FFmpeg. */
     @Volatile
     private var lavHandle = 0L
 
-    /** When set and true, the reader idles (no decode) while keeping the native session open — used to keep
-     *  the decoder warm while a display is warm-paused or parked out of render distance. On the process
-     *  path the full pipe back-pressures FFmpeg into a standstill. Null = not parkable. */
     @Volatile
     private var parked: AtomicBoolean? = null
 
@@ -127,7 +109,6 @@ internal class NativeVideoFramePipe(
 
     @Volatile
     private var pendingLavSeek: LavSeekCommand? = null
-
     private var readerDone = false
 
     override fun textureFilled(): Boolean = surface.textureFilled()
@@ -146,7 +127,6 @@ internal class NativeVideoFramePipe(
 
     override fun clear() = surface.clear()
 
-    /** Drops parked raw buffers while preserving the already-uploaded GPU texture. */
     override fun trimForPark() {
         activePrebuffer?.trimForPark()
         surface.clear()
@@ -350,7 +330,6 @@ internal class NativeVideoFramePipe(
         return true
     }
 
-    /** Bytes of one output frame at [w] x [h]: packed I420 planes in planar mode, else [outputFormat] pixels. */
     private fun frameBytesFor(w: Int, h: Int): Int = if (planarOutput) {
         val c = ((w + 1) / 2) * ((h + 1) / 2)
         w * h + 2 * c
@@ -358,10 +337,6 @@ internal class NativeVideoFramePipe(
         w * h * outputFormat.bytesPerPixel
     }
 
-    /**
-     * Main loop of the reader thread: blocks in the native library until a converted frame lands
-     * in the spare buffer, then paces and publishes it exactly like the JVM pipe.
-     */
     private fun read(
         handle: Long, w: Int, h: Int, frameNs: Long, seekOffsetNanos: Long, stopFlag: AtomicBoolean,
         terminated: AtomicBoolean, getAudioClock: () -> Long, onFirstFrame: () -> Unit, getBrightness: () -> Double,
@@ -643,7 +618,6 @@ internal class NativeVideoFramePipe(
         }
     }
 
-    /** Feeds the current [spare] frame to the popout sink, converting planar I420 -> RGBA when needed. */
     private fun feedPopout(spare: ByteBuffer, w: Int, h: Int, frameSize: Int, metrics: NativeReadMetrics) {
         val sink = popoutFrameSink ?: return
         val popoutStartNs = if (MediaPlayer.DEBUG) System.nanoTime() else 0L
@@ -666,7 +640,6 @@ internal class NativeVideoFramePipe(
         if (MediaPlayer.DEBUG) metrics.recordPopout(System.nanoTime() - popoutStartNs)
     }
 
-    /** Enables the native encoded-packet ring for a live LAV session when configured. */
     private fun enableLavCache(handle: Long) {
         if (cacheWindowMs <= 0 || cacheMaxBytes <= 0) return
         val maxBytes = FrameMemoryBudget.packetCacheBytesFor(cacheMaxBytes)
@@ -708,11 +681,6 @@ internal class NativeVideoFramePipe(
         if (lh != 0L) NativeMedia.lavClose(lh)
     }
 
-    /**
-     * LAV defaults to native-side auto probing for a non-NONE hardware request. That lets one
-     * binary try platform fallbacks (for example VAAPI then CUDA on Linux) before software decode.
-     * `-Ddreamdisplays.native.libav.hw=<backend>` pins it for driver debugging.
-     */
     private fun lavHwCode(hwAccel: HwAccelBackend): Int {
         if (hwAccel == HwAccelBackend.NONE) return HwAccelBackend.NONE.lavCode
         val configured = System.getProperty("dreamdisplays.native.libav.hw")?.lowercase()

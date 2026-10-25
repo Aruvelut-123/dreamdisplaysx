@@ -29,7 +29,6 @@ object VersionState {
  * `NeoForge`.
  */
 object Updater {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
@@ -69,7 +68,6 @@ object Updater {
             }
     }
 
-    /** Fetches releases from GitHub API, returning an empty list on non-200 responses. Rethrows connection errors. */
     private fun fetchReleases(owner: String, repo: String): List<Release> {
         val url = "https://api.github.com/repos/$owner/$repo/releases"
         val response = DreamHttpClient.execute(
@@ -89,7 +87,6 @@ object Updater {
         return parseReleases(response.bodyString())
     }
 
-    /** Parses only the GitHub release fields used by the updater; no generated serializer required. */
     private fun parseReleases(body: String): List<Release> =
         DreamJson.compact.parseToJsonElement(body)
             .asJsonArrayOrNull()
@@ -103,7 +100,6 @@ object Updater {
             ?.filter { it.tagName.isNotBlank() }
             ?: emptyList()
 
-    /** Extracts a stable semver from a GitHub release tag; returns null for snapshots and unparseable tags. */
     private fun parseVersion(tag: String): Semver? =
         Semver.coerce(tag)?.takeIf { it.isStable() }
 

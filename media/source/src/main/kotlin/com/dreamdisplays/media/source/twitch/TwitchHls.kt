@@ -35,7 +35,6 @@ internal object TwitchHls {
     fun vodUrl(id: String, token: TwitchAccessToken): String =
         usherUrl("$USHER_BASE/vod/$id.m3u8", token)
 
-    /** Appends the query parameters Twitch's web player sends usher (mirrors `yt-dlp`'s set). */
     private fun usherUrl(base: String, token: TwitchAccessToken): String {
         val params = listOf(
             "allow_source" to "true",
@@ -85,10 +84,6 @@ internal object TwitchHls {
         return out
     }
 
-    /**
-     * Parses a m3u8 attribute list into a key -> value map, honoring quoted values — `CODECS`
-     * contains commas, so a plain split would shear it apart. Quotes are stripped from values.
-     */
     private fun parseAttributes(list: String): Map<String, String> {
         val attrs = LinkedHashMap<String, String>()
         var i = 0

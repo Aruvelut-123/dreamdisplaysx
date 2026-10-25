@@ -12,13 +12,10 @@ import org.slf4j.LoggerFactory
  * other first-party resolvers.
  */
 object BilibiliResolver : MediaResolverService {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Alongside the other first-party in-process resolvers, above the `yt-dlp` fallback. */
     override val priority: Int = 10
 
-    /** Live playurl URLs are session-bound, so live entries expire fast; VODs are stable. */
     private val cache = LiveAwareResolvedMediaCache(maxSize = 64, liveTtlSeconds = 25, staticTtlMinutes = 30)
 
     override fun canResolve(source: MediaSource): Boolean = source is MediaSource.Bilibili

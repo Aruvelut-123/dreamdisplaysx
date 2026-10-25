@@ -20,7 +20,6 @@ import net.minecraft.client.Minecraft
  * saved state on start, and teardown.
  */
 internal class DisplayMediaController(private val screen: DisplayScreen) {
-    /** Generation counter for async callbacks. */
     private val generation = atomic(0L)
 
     /** The active media player, or null between videos and after [shutdown]. */
@@ -100,7 +99,6 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
         DisplayRegistry.recordScreen(screen)
     }
 
-    /** Reports the resolved media duration once, if this display's server clock needs it to loop. */
     private fun reportDurationIfNeeded() {
         val mode = screen.effectiveMode
         if (mode != PlaybackMode.SYNCED && mode != PlaybackMode.BROADCAST) return
@@ -112,7 +110,6 @@ internal class DisplayMediaController(private val screen: DisplayScreen) {
     /** Runs [action] once the current player is initialized; guards against stale generations. */
     fun whenInitialized(action: () -> Unit) = whenInitialized(generation.value, action)
 
-    /** Runs [action] when the player is initialized, only if [expectedGeneration] still matches (i.e. video hasn't changed). */
     private fun whenInitialized(expectedGeneration: Long, action: () -> Unit) {
         val mp = player ?: return
         mp.whenInitialized {

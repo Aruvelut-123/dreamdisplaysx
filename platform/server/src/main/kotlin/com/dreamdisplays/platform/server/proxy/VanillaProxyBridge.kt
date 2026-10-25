@@ -58,7 +58,6 @@ object VanillaProxyBridge {
     var enabled: Boolean = false; private set
 
     private var clockSyncIntervalMs: Long = 5_000L
-
     private const val RESOLVE_TIMEOUT_MS = 5_000L
 
     private class PendingNetworkStart(
@@ -106,11 +105,6 @@ object VanillaProxyBridge {
         sendDisplayIndex(player)
     }
 
-    /**
-     * Tells the proxy every display this backend can play, so `fullscreen start id <id>` resolves
-     * network-wide even for a display whose backend is empty at the time — such a backend can be
-     * neither asked nor heard, since plugin messages ride player connections.
-     */
     private fun sendDisplayIndex(player: ServerPlayer) {
         val entries = DisplayManager.getDisplays()
             .filter { it.url.isNotBlank() }
@@ -118,7 +112,6 @@ object VanillaProxyBridge {
         if (entries.isNotEmpty()) send(player, BackendDisplayIndex(entries))
     }
 
-    /** Encodes and sends [packet] on the `dreamdisplays:proxy` channel via [player]'s connection to the proxy. */
     private fun send(player: ServerPlayer, packet: ProxyPacket) {
         val bytes = runCatching { ProxyPacketRegistry.encode(packet) }
             .onFailure { logger.warn("Failed to encode proxy packet", it) }
@@ -127,7 +120,6 @@ object VanillaProxyBridge {
             .onFailure { logger.debug("Failed to send proxy packet (no proxy listening?)", it) }
     }
 
-    /** Same as [send], but picks any online player to ride the message — for packets with no natural sender. */
     private fun sendViaAnyPlayer(packet: ProxyPacket) {
         sendVia(null, packet)
     }
@@ -210,7 +202,6 @@ object VanillaProxyBridge {
         send(player, StartNetworkWatchParty(hostId = player.uuid.toString(), url = url, lang = lang))
     }
 
-    /** Relays the host's own [WatchPartyState] snapshot to the proxy, translated to its epoch. */
     private fun relayWatchPartyState(displayId: UUID, snapshot: WatchPartyState) {
         sendViaAnyPlayer(
             NetworkWatchPartyState(
@@ -232,11 +223,6 @@ object VanillaProxyBridge {
         )
     }
 
-    /**
-     * Resolves a broadcast's `target` tokens against this backend's online players. Sender-relative
-     * selectors (`@s`, `@p`, `@r`) are meaningless for a network broadcast — the commanding player is
-     * on one backend only — so they are not offered here. Blank means everyone online.
-     */
     private fun resolveNetworkTargets(server: MinecraftServer, targetsRaw: String): Set<UUID> {
         val online = server.playerList.players
         if (targetsRaw.isBlank()) return online.map { it.uuid }.toSet()
@@ -257,7 +243,6 @@ object VanillaProxyBridge {
         send(player, ListNetworkSessions())
     }
 
-    /** Applies a proxy-driven [ApplyFullscreen], creating a fresh local virtual display for it. */
     private fun applyNetworkFullscreen(server: MinecraftServer, packet: ApplyFullscreen) {
         val ownerId = runCatching { UUID.fromString(packet.ownerId) }.getOrNull() ?: return
         val sharedId = runCatching { UUID.fromString(packet.sharedDisplayId) }.getOrNull()

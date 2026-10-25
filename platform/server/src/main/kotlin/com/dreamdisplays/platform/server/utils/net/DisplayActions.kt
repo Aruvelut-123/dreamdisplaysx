@@ -39,7 +39,6 @@ import java.util.*
 @NullMarked
 object DisplayActions {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private val setVideoThrottle = ActionThrottle()
     private const val SET_VIDEO_COOLDOWN_MS = 250L
 
@@ -175,18 +174,15 @@ object DisplayActions {
         TimelineManager.onDurationReported(displayData, player.uniqueId, durationMs)
     }
 
-    /** Builds the permission context for [player] acting on [display]. */
     private fun context(display: PaperDisplayData, player: Player) =
         PlaybackContexts.of(display, player.uniqueId, isAdmin(player)) {
             WorldGuardRegions.isRegionMember(player, display.pos1)
         }
 
-    /** Same as [context]; kept separate because changing access additionally requires the [lock][PermissionsSection.lock] node (see [setAccess]). */
     private fun lockContext(display: PaperDisplayData, player: Player) = context(display, player)
 
     private fun isAdmin(player: Player) = player.hasPermission(PaperServer.config.permissions.deleteOthers)
 
-    /** Checks if [player] has permission to access the specified [mode]. */
     private fun canAccessMode(player: Player, mode: PlaybackMode): Boolean {
         val permission = when (mode) {
             PlaybackMode.LOCAL -> PaperServer.config.permissions.local
@@ -237,7 +233,6 @@ object DisplayActions {
         }
     }
 
-    /** Sends a single batch of display-info packets to [player] (protocol chosen per player). */
     private fun sendDisplayBatch(player: Player, displays: List<PaperDisplayData>) {
         displays.forEach { display ->
             PacketUtil.sendDisplayInfo(
@@ -264,7 +259,6 @@ object DisplayActions {
         }
     }
 
-    /** Tells [player] about a newer mod version if they haven't been notified this session. */
     private fun checkModUpdate(player: Player, userVersion: Semver) {
         val latestVersion = VersionState.modLatestVersion ?: return
 
@@ -274,7 +268,6 @@ object DisplayActions {
         }
     }
 
-    /** Tells privileged [player] about a newer plugin release; skipped for `-SNAPSHOT` builds. */
     private fun checkPluginUpdate(player: Player) {
         val latestPluginVersion = VersionState.pluginLatestVersion ?: return
 
@@ -296,7 +289,6 @@ object DisplayActions {
         }
     }
 
-    /** Sends the localized `newVersion` message to [player], handling both plain and JSON templates. */
     private fun sendModUpdateMessage(player: Player, version: Semver) {
         val message = when (val rawMessage = PaperServer.config.getMessageForPlayer(player, "newVersion")) {
             is String -> String.format(rawMessage, version.toString())
@@ -314,7 +306,6 @@ object DisplayActions {
         MessageUtil.sendColoredMessage(player, message)
     }
 
-    /** Sends the localized `newPluginVersion` message with the latest version interpolated in. */
     private fun sendPluginUpdateMessage(player: Player, version: String) {
         val template = PaperServer.config.getMessageForPlayer(player, "newPluginVersion") as? String ?: return
         val message = String.format(template, version)

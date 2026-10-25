@@ -6,20 +6,9 @@ import java.util.concurrent.atomic.AtomicLong
 /** Tracks the NTP-style clock offset between this backend and the proxy via sampled RTT measurements. */
 object ProxyClock {
     private const val NO_SAMPLE = Long.MIN_VALUE
-
-    /**
-     * How long a sustained run of rejected outlier samples is tolerated before the next one is
-     * force-accepted as a fresh baseline instead.
-     */
     private const val STALE_REBASE_MS = 15_000L
-
-    /** `proxyEpoch - localEpoch`, EWMA-smoothed (7:1) after the first sample. */
     private val offsetMs = AtomicLong(0L)
-
-    /** Round-trip time of the last accepted sample; used to reject later, worse-than-2x outliers. */
     private val lastRttMs = AtomicLong(NO_SAMPLE)
-
-    /** Local-clock instant of the last accepted sample; drives the [STALE_REBASE_MS] recovery above. */
     private val lastAcceptedAtMs = AtomicLong(NO_SAMPLE)
 
     /** Feeds one [ClockReply] round trip, sampled against [nowLocal] (this backend's clock at receipt). */

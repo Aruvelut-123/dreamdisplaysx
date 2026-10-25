@@ -30,7 +30,6 @@ class PaperServer : JavaPlugin() {
     /** Storage manager for persistent data. */
     lateinit var storage: StorageManager
 
-    /** Captures the plugin instance, loads config, and registers `Brigadier` commands before any worlds load. */
     override fun onLoad() {
         instance = this
         Companion.config = Config(this)
@@ -39,12 +38,10 @@ class PaperServer : JavaPlugin() {
         }
     }
 
-    /** Standard `Bukkit` hook, delegates to [doEnable] so reload commands can reuse the logic. */
     override fun onEnable() {
         doEnable()
     }
 
-    /** Disables the plugin, disconnecting from the database and tearing down resources. */
     override fun onDisable() {
         doDisable()
     }
@@ -86,7 +83,6 @@ class PaperServer : JavaPlugin() {
         PaperServerApi.start()
     }
 
-    /** Calls the Paper-only scheduler registrar without requiring its symbol in Fabric compilation. */
     private fun runRepeatingTasks() {
         val registrarClass = Class.forName("com.dreamdisplays.platform.server.registrar.SchedulerRegistrar")
         val registrar = registrarClass.getField("INSTANCE").get(null)
@@ -106,7 +102,6 @@ class PaperServer : JavaPlugin() {
         disableStep("close storage") { storage.disconnect() }
     }
 
-    /** Runs one teardown [step], logging and swallowing whatever it throws. */
     private fun disableStep(what: String, step: () -> Unit) {
         runCatching(step).onFailure { Companion.logger.error("Failed to $what while disabling.", it) }
     }
@@ -126,7 +121,6 @@ class PaperServer : JavaPlugin() {
             instance.server.pluginManager.disablePlugin(instance)
         }
 
-        /** The plugin instance. */
         private lateinit var instance: PaperServer
     }
 }

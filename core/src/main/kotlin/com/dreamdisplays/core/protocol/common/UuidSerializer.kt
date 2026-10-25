@@ -15,7 +15,6 @@ import java.util.*
 
 val ZERO_UUID: UUID = UUID(0L, 0L)
 
-/** Wire surrogate for [UUID]. */
 @Serializable
 @SerialName("Uuid")
 @OptIn(ExperimentalSerializationApi::class)

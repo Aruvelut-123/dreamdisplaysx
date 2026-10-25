@@ -12,23 +12,16 @@ import com.dreamdisplays.api.media.source.MediaResolverRegistry
  * only reaches it after the in-process fast path has declined or failed.
  */
 object YtDlpResolver : MediaResolverService {
-    /** Below [NewPipeResolver] (10) so the in-process path is always tried first. */
     override val priority: Int = 0
 
-    /** Any source with a resolvable URL is delegated to `yt-dlp`. */
     override fun canResolve(source: MediaSource): Boolean = true
 
-    /** Pre-warms the `yt-dlp` format cache for [source] on a background thread. */
     override fun prefetch(source: MediaSource): Boolean {
         val url = source.toResolvableUrl() ?: return false
         YtDlp.prefetchFormats(url)
         return true
     }
 
-    /**
-     * Resolves [source] by running `yt-dlp` (blocking) via [YtDlp.fetch]. Throws on subprocess
-     * failure or timeout; the resolver chain catches it and either falls through or reports the error.
-     */
     override fun resolve(source: MediaSource): ResolvedMedia {
         val url = source.toResolvableUrl()
             ?: throw UnsupportedOperationException("$source has no resolvable URL.")

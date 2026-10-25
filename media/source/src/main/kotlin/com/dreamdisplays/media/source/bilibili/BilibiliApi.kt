@@ -39,27 +39,22 @@ data class BilibiliSearchItem(
  * website uses, gated behind WBI-signed `playurl` requests (no API key or auth required).
  */
 object BilibiliApi {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** BIlibili's API rejects requests without a browser-shaped `Referer` / `User-Agent`. */
     private val HEADERS = DreamHttpClient.headersOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "Accept" to "application/json",
         "Referer" to "https://www.bilibili.com",
     )
 
-    /** `b23.tv` short links get followed for at most this many hops before giving up. */
     private const val MAX_REDIRECT_HOPS = 5
 
-    /** Fixed permutation table BIlibili uses to derive the 32-char WBI mixin key. Publicly documented, stable! */
     private val MIXIN_KEY_ENC_TAB = intArrayOf(
         46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12,
         38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62,
         11, 36, 20, 34, 44, 52,
     )
 
-    /** The `img_key` / `sub_key` WBI signing keys, cached since they rotate roughly once a day. */
     private data class WbiKeys(val imgKey: String, val subKey: String, val fetchedAt: Instant)
 
     private var wbiCache: WbiKeys? = null
@@ -93,17 +88,14 @@ object BilibiliApi {
         }
     }
 
-    /** Strips the `<em class="keyword">...</em>` highlight markup BIlibili's search API wraps matches in. */
     private fun stripHighlightTags(title: String): String = title.replace(Regex("</?em[^>]*>"), "")
 
-    /** BIlibili's search API returns protocol-relative thumbnail URLs (`//i0.hdslb.com/...`). */
     private fun normalizeThumbnailUrl(pic: String?): String? = when {
         pic.isNullOrEmpty() -> null
         pic.startsWith("//") -> "https:$pic"
         else -> pic
     }
 
-    /** Parses a search result's `"mm:ss"` / `"hh:mm:ss"` duration string into seconds. */
     private fun parseSearchDuration(text: String?): Long? {
         val parts = text?.split(":")?.map { it.toLongOrNull() ?: return null } ?: return null
         return when (parts.size) {
@@ -113,7 +105,6 @@ object BilibiliApi {
         }
     }
 
-    /** Follows a `b23.tv` short link's redirect chain and reparses the final URL into a BIlibili source. */
     private fun resolveShortlink(url: String): MediaSource.Bilibili? {
         var current = url
         repeat(MAX_REDIRECT_HOPS) {
@@ -131,11 +122,9 @@ object BilibiliApi {
         return BilibiliUrls.parse(current)?.takeIf { it.isResolved }
     }
 
-    /** True once a BIlibili source carries an actual id, i.e. is no longer a bare `b23.tv` short link. */
     private val MediaSource.Bilibili.isResolved: Boolean
         get() = bvid != null || avid != null || roomId != null || epId != null || seasonId != null
 
-    /** Resolves a VOD identified by [bvid] or legacy [avid], at part [part] (1-based). */
     private fun resolveVod(bvid: String?, avid: Long?, part: Int): BilibiliPlayback? {
         val viewParams = buildMap {
             bvid?.let { put("bvid", it) }
@@ -213,7 +202,6 @@ object BilibiliApi {
         return BilibiliPlayback(streams = streams, metadata = metadata, isSeekable = true)
     }
 
-    /** Resolves a live room identified by [roomId]. */
     private fun resolveLive(roomId: Long): BilibiliPlayback {
         val infoRoot = getJson("https://api.live.bilibili.com/room/v1/Room/get_info?room_id=$roomId")
         val info = infoRoot?.obj("data")
@@ -245,7 +233,6 @@ object BilibiliApi {
         return BilibiliPlayback(streams = streams, metadata = metadata, isSeekable = false)
     }
 
-    /** Builds video-only / audio-only [MediaStream]s from a VOD `playurl` DASH response, or muxed ones from `durl`. */
     private fun buildStreams(playurlData: JsonObject?): List<MediaStream> {
         if (playurlData == null) return emptyList()
 
@@ -297,7 +284,6 @@ object BilibiliApi {
         )
     }
 
-    /** Builds muxed live streams (FLV / HLS) from a `getRoomPlayInfo` response. */
     private fun buildLiveStreams(playInfoData: JsonObject?): List<MediaStream> {
         val streams = ArrayList<MediaStream>()
         val codecs = playInfoData?.obj("playurl_info")?.obj("playurl")?.array("stream")
@@ -322,13 +308,11 @@ object BilibiliApi {
         return streams
     }
 
-    /** Reads a DASH representation's playable URL, preferring `baseUrl` over its backup list. */
     private fun dashUrl(rep: JsonObject): String? =
         rep.optString("baseUrl") ?: rep.optString("base_url")
             ?: rep.array("backupUrl")?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
             ?: rep.array("backup_url")?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
 
-    /** Fetches (and caches) the WBI `img_key` / `sub_key` pair used to sign gated endpoints. */
     private fun wbiKeys(): WbiKeys? {
         wbiCache?.let { if (Clock.System.now() - it.fetchedAt < WBI_TTL) return it }
 
@@ -340,10 +324,8 @@ object BilibiliApi {
         return WbiKeys(keySegment(imgUrl), keySegment(subUrl), Clock.System.now()).also { wbiCache = it }
     }
 
-    /** Extracts the filename segment (stripped of extension) that WBI uses as a key from a signed asset URL. */
     private fun keySegment(url: String): String = url.substringAfterLast('/').substringBeforeLast('.')
 
-    /** Builds the 32-char WBI mixin key by permuting `imgKey + subKey` through [MIXIN_KEY_ENC_TAB]. */
     private fun mixinKey(imgKey: String, subKey: String): String {
         val raw = imgKey + subKey
         val sb = StringBuilder(32)
@@ -354,7 +336,6 @@ object BilibiliApi {
         return sb.toString()
     }
 
-    /** Builds a plain (unsigned) `key=value&...` query string, URL-encoding each value. */
     private fun plainQuery(params: Map<String, String>): String =
         params.entries.joinToString("&") { (k, v) -> "$k=${urlEncode(v)}" }
 
@@ -375,14 +356,11 @@ object BilibiliApi {
         return "$base&w_rid=$wRid"
     }
 
-    /** URL-encodes [value] for a query string, using `%20` (not `+`) for spaces. */
     private fun urlEncode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
-    /** Returns the lowercase hex MD5 digest of [s]. */
     private fun md5(s: String): String =
         MessageDigest.getInstance("MD5").digest(s.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
-    /** GETs [url] and parses it as a JSON object, or null on any failure (offline, blocked, 404). */
     private fun getJson(url: String): JsonObject? = runCatching {
         val body = DreamHttpClient.readText(
             url,

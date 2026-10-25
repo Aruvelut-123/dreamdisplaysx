@@ -9,18 +9,15 @@ import kotlin.math.min
 
 private const val EPS = 1.0e-4
 private const val EPS_F = 1.0e-4f
-
 private const val S = 0
 private const val T = 1
 private const val N = 2
-
 private const val DRAPE_GRID = 0.25
 private const val DRAPE_GRID_COARSE = 0.5
 private const val DRAPE_MAX_FINE_CELLS = 24_000
 private const val DRAPE_ANCHOR = 1.0e-4
 private const val DRAPE_MAX_ITERATIONS = 4_000
 private const val DRAPE_TOLERANCE = 1.0e-10
-
 private val TANGENTS = arrayOf(intArrayOf(T, N), intArrayOf(S, N), intArrayOf(S, T))
 
 /**

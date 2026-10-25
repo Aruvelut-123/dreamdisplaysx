@@ -17,7 +17,6 @@ class AsyncMemo<K : Any, V : Any>(
     private val tag: String,
 ) {
     private val cacheEnabled = maxSize > 0 && ttlMs > 0
-
     private val cache: Cache<K, V> = Caffeine.newBuilder()
         .maximumSize(if (cacheEnabled) maxSize.toLong() else 0L)
         .expireAfterWrite(ttlMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)

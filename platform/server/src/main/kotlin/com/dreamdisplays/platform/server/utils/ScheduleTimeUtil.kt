@@ -10,10 +10,7 @@ import kotlin.time.Instant
  * Player-local wall-clock math for `/display schedule`.
  */
 object ScheduleTimeUtil {
-    /** `HH:mm` or `HH:mm:ss`, strict 24-hour. */
     private val TIME_PATTERN = Regex("^([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d))?$")
-
-    /** Seconds in a day. */
     private const val SECONDS_PER_DAY = 86_400
 
     /** [uuid]'s advertised UTC offset in minutes, or 0 (UTC) if their [ClientHello] hasn't arrived yet. */

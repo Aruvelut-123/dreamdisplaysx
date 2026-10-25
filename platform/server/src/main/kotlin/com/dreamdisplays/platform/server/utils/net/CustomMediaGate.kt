@@ -32,14 +32,8 @@ internal object CustomMediaGate {
      * has as many displays as the world holds.
      */
     private const val CUSTOM_LINKS_PER_WINDOW = 8
-
-    /** Length of the sliding window [CUSTOM_LINKS_PER_WINDOW] is counted over. */
     private const val WINDOW_MILLIS = 60_000L
-
-    /** Players tracked at once; a full map is dropped rather than grown without bound. */
     private const val MAX_TRACKED_PLAYERS = 1024
-
-    /** When each tracked player last applied custom links, newest last. */
     private val recentCustomLinks = ConcurrentHashMap<UUID, ArrayDeque<Long>>()
 
     /**

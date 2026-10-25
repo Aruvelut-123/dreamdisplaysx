@@ -35,7 +35,6 @@ internal object RenderBackendCompat {
         return isOpenGlFingerprint(deviceClass)
     }
 
-    /** Fingerprint of the active render device. */
     private fun backendFingerprint(): String =
     //? if >=1.21.11 {
         //? if >=26.2 {
@@ -45,18 +44,15 @@ internal object RenderBackendCompat {
     //?} else
     /*RenderSystem.getBackendDescription().lowercase()*/
 
-    /** True if the given [value] is a known OpenGL backend fingerprint. */
     private fun isOpenGlFingerprint(value: String): Boolean =
         "opengl" in value || "lwjgl" in value || value.substringAfterLast('.').startsWith("gl")
 
-    /** True if the Fabric mod [id] is loaded. */
     private fun isFabricModLoaded(id: String): Boolean = runCatching {
         val loaderClass = Class.forName("net.fabricmc.loader.api.FabricLoader")
         val loader = loaderClass.getMethod("getInstance").invoke(null)
         loaderClass.getMethod("isModLoaded", String::class.java).invoke(loader, id) as Boolean
     }.getOrDefault(false)
 
-    /** True if the NeoForge mod [id] is loaded. */
     private fun isNeoForgeModLoaded(id: String): Boolean = runCatching {
         val modListClass = Class.forName("net.neoforged.fml.ModList")
         val modList = modListClass.getMethod("get").invoke(null)

@@ -23,10 +23,8 @@ data class VimeoPlayback(
  * so no API key or auth is needed.
  */
 object VimeoApi {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Vimeo's config endpoint gates some videos on a browser-like request, so mimic one. */
     private val HEADERS = DreamHttpClient.headersOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "Referer" to "https://vimeo.com/",
@@ -94,7 +92,6 @@ object VimeoApi {
     /** Metadata-only lookup for the cache: the same config call, without building streams. */
     fun metadata(source: MediaSource.Vimeo): PlatformVideoMetadata? = resolve(source)?.metadata
 
-    /** GETs and parses the player config JSON for [videoId] (with optional unlisted [hash]). */
     private fun fetchConfig(videoId: String, hash: String?): JsonObject? {
         val url = buildString {
             append("https://player.vimeo.com/video/").append(videoId).append("/config")
@@ -109,18 +106,12 @@ object VimeoApi {
         }.onFailure { logger.debug("Vimeo config fetch failed for {}: {}", videoId, it.message) }.getOrNull()
     }
 
-    /**
-     * Picks the largest thumbnail Vimeo offers in the `thumbs` map, falling back to the flat
-     * `thumbnail_url` field — many config responses carry only the latter (`thumbs` comes back
-     * as an empty object), so relying on `thumbs` alone silently drops the thumbnail.
-     */
     private fun bestThumbnail(video: JsonObject?): String? {
         val thumbs = video?.obj("thumbs")
         return thumbs?.optString("1280") ?: thumbs?.optString("960") ?: thumbs?.optString("640")
         ?: thumbs?.optString("base") ?: video?.optString("thumbnail_url")
     }
 
-    /** Picks the largest owner-portrait size from the numeric-keyed `portrait` map. */
     private fun largestPortrait(portrait: JsonObject): String? =
         portrait.entries
             .mapNotNull { (key, _) -> key.toIntOrNull()?.let { it to portrait.optString(key) } }

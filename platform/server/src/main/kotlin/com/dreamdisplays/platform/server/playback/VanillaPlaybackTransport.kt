@@ -21,7 +21,6 @@ import java.util.*
  * Vanilla Minecraft API implementation of [PlaybackTransport], shared by `Fabric` and `NeoForge`.
  */
 object VanillaPlaybackTransport : PlaybackTransport {
-    /** The running server instance, bound on `SERVER_STARTED`. */
     @Volatile
     private var server: MinecraftServer? = null
 
@@ -30,10 +29,8 @@ object VanillaPlaybackTransport : PlaybackTransport {
         this.server = server
     }
 
-    /** Returns the current time in milliseconds. */
     override fun nowMs(): Long = System.currentTimeMillis()
 
-    /** Broadcasts [packet] to all v2 players in [display]'s receivers. */
     override fun broadcast(display: DisplayData, packet: DreamPacket) {
         val s = server ?: return
         val vanilla = display as? VanillaDisplayData ?: return
@@ -41,37 +38,30 @@ object VanillaPlaybackTransport : PlaybackTransport {
         if (receivers.isNotEmpty()) VanillaNetworking.adapter.sendV2(receivers, packet)
     }
 
-    /** Sends [packet] to a single player with [playerId]. */
     override fun sendTo(playerId: UUID, packet: DreamPacket) {
         val s = server ?: return
         val player = s.playerList.getPlayer(playerId) ?: return
         if (V2PlayerTracker.isV2(playerId)) VanillaNetworking.adapter.sendV2(listOf(player), packet)
     }
 
-    /** UUIDs of players currently in range of [display] (watch-party nearby / ready-check denominator). */
     override fun nearbyPlayerIds(display: DisplayData): List<UUID> {
         val s = server ?: return emptyList()
         val vanilla = display as? VanillaDisplayData ?: return emptyList()
         return DisplayManager.getReceivers(vanilla, s).map { it.uuid }
     }
 
-    /** Display name for [playerId], or null if unknown / offline. */
     override fun playerName(playerId: UUID): String? =
         server?.playerList?.getPlayer(playerId)?.gameProfile?.name
 
-    /** True if [playerId] is recognized as an admin (op / delete permission). */
     override fun isAdmin(playerId: UUID): Boolean {
         val player = server?.playerList?.getPlayer(playerId) ?: return false
         return VanillaDisplayActions.isAdmin(player)
     }
 
-    /** `WorldGuard` is `Paper`-only; always false here. */
     override fun isTerritoryMember(display: DisplayData, playerId: UUID): Boolean = false
 
-    /** UUIDs of every online player. */
     override fun onlinePlayerIds(): List<UUID> = server?.playerList?.players?.map { it.uuid } ?: emptyList()
 
-    /** Squared distance from [playerId] to (`x`, `y`, `z`) in [world], or null when offline or in a different world. */
     override fun playerDistanceSq(playerId: UUID, world: String, x: Double, y: Double, z: Double): Double? {
         val player = server?.playerList?.getPlayer(playerId) ?: return null
         if (RegionUtil.getPlayerLevelKey(player) != world) return null
@@ -81,25 +71,21 @@ object VanillaPlaybackTransport : PlaybackTransport {
         return dx * dx + dy * dy + dz * dz
     }
 
-    /** Sends [display]'s `DisplayInfo` to one [playerId], regardless of render distance. */
     override fun sendDisplayInfo(playerId: UUID, display: DisplayData, forced: Boolean) {
         val vanilla = display as? VanillaDisplayData ?: return
         val player = server?.playerList?.getPlayer(playerId) ?: return
         VanillaPacketUtil.sendDisplayInfo(listOf(player), vanilla, forced)
     }
 
-    /** Runs [task] on the main server thread. */
     override fun runOnMainThread(task: () -> Unit) {
         server?.execute(task)
     }
 
-    /** Persists [display] via the vanilla storage backend. */
     override fun saveDisplay(display: DisplayData) {
         val vanilla = display as? VanillaDisplayData ?: return
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(vanilla) }
     }
 
-    /** Builds a synthetic 1x1 [VanillaDisplayData] at the origin of the first loaded level. */
     override fun createVirtualDisplay(id: UUID, ownerId: UUID): DisplayData? {
         val s = server ?: return null
         val worldKey = RegionUtil.getLevelKey(s.overworld())

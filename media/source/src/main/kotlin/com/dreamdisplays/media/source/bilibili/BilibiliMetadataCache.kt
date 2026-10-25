@@ -29,7 +29,6 @@ object BilibiliMetadataCache {
         else -> "short:${source.url}"
     }
 
-    /** Reconstructs the [MediaSource.Bilibili] the fetch needs from a [cacheKey]. */
     private fun sourceFor(key: String): MediaSource.Bilibili? = when {
         key.startsWith("video:av") -> {
             val (avid, part) = key.removePrefix("video:av").split(':')

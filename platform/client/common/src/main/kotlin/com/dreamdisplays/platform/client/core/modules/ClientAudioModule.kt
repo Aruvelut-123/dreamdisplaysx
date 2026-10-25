@@ -15,10 +15,8 @@ object ClientAudioModule : DreamDisplaysModule {
         engine?.setLoudnessNormalization(enabled)
     }
 
-    /** The ID of this module. */
     override val id: String = "dreamdisplays:client_audio"
 
-    /** Creates the [AcousticsEngine] and registers it under [AudioAcousticsServices.ACOUSTICS]. */
     override fun install(context: ModuleContext) {
         val engine = AcousticsEngine().also { this.engine = it }
         engine.setGlobalQuality(ClientStateManager.config.audioAcoustics)

@@ -27,7 +27,6 @@ import kotlin.time.Duration.Companion.seconds
  * mechanics from its caching concerns.
  */
 class YtDlpClientRace(private val cookies: YtCookieManager) {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     companion object {
@@ -35,8 +34,6 @@ class YtDlpClientRace(private val cookies: YtCookieManager) {
         const val FETCH_TIMEOUT_SECONDS: Long = 25L
 
         private const val PRIMARY_CLIENT = "visionos"
-
-        /** Token-free clients raced in parallel (hit PO-token wall, but auto-recover if working). */
         private val FALLBACK_CLIENTS: List<String?> = listOf("android_vr", "ios", "tv", "android")
     }
 
@@ -53,7 +50,6 @@ class YtDlpClientRace(private val cookies: YtCookieManager) {
         return raceParallel(videoUrl, FALLBACK_CLIENTS, onProcess)
     }
 
-    /** Runs a single [client] fetch, reporting its subprocess to [onProcess]; returns null instead of throwing. */
     private fun runCatchingClient(videoUrl: String, client: String?, onProcess: (Process) -> Unit): List<YtStream>? =
         runCatching {
             runClientFetch(videoUrl, client, onProcess)
@@ -61,11 +57,6 @@ class YtDlpClientRace(private val cookies: YtCookieManager) {
             logger.debug("yt-dlp client {} failed for {}: {}.", client ?: "cookies", videoUrl, e.message?.take(200))
         }.getOrNull()
 
-    /**
-     * Races [clients] (one subprocess each) in parallel: the first to yield a quality ladder wins
-     * immediately and the still-running losers are killed; otherwise, once every client finishes,
-     * [bestResult] picks the strongest result. Returns null when every client failed.
-     */
     private suspend fun raceParallel(
         videoUrl: String,
         clients: List<String?>,
@@ -124,18 +115,12 @@ class YtDlpClientRace(private val cookies: YtCookieManager) {
         return finalResult.takeIf { it.isNotEmpty() }
     }
 
-    /** Picks the strongest raced result: a quality ladder first, then the one with the most heights. */
     private fun bestResult(results: List<List<YtStream>>): List<YtStream> =
         results.maxWithOrNull(
             compareBy<List<YtStream>> { if (YtStreams.offersQualityLadder(it)) 1 else 0 }
                 .thenBy { YtStreams.distinctHeights(it).size }
         ) ?: emptyList()
 
-    /**
-     * Runs a single `yt-dlp` invocation for [videoUrl] with the given [client] (null = let yt-dlp
-     * choose, used on the cookie path). [onStarted] receives the live process so the racer can kill
-     * it once another client wins. Returns the parsed streams; throws on non-zero exit or timeout.
-     */
     @Throws(IOException::class)
     private fun runClientFetch(videoUrl: String, client: String?, onStarted: (Process) -> Unit): List<YtStream> {
         val cmd = ArrayList<String>()

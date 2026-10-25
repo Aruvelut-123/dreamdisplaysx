@@ -40,10 +40,6 @@ class VideoCommand : SubCommand {
     override val permission = PaperServer.config.permissions.video
     override val playerOnly = true
 
-    /**
-     * Assigns a YouTube URL (and optional language) to the targeted display owned by the player,
-     * rebroadcasting the new state and resetting sync playback when the display was synced.
-     */
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val player = (sender as? Player) ?: return
         if (args.size < 2) {
@@ -93,7 +89,6 @@ class VideoCommand : SubCommand {
         MessageUtil.sendMessage(player, "settedURL")
     }
 
-    /** Suggests known two-letter language codes when completing the third argument. */
     override fun complete(sender: CommandSender, args: Array<String?>): List<String> {
         if (args.size == 3) {
             return languageSuggestions
@@ -123,10 +118,6 @@ class VideoCommand : SubCommand {
     }
 }
 
-/**
- * Canonical URL for [raw] as typed on the command line, or null when it is not something the mod could ever play or is
- * blocked by [MediaUrlPolicy]. Routed through the same [MediaSource.from] parser the menu uses.
- */
 private fun canonicalUrl(raw: String): String? {
     val input = raw.trim()
     if (input.isEmpty()) return null

@@ -57,10 +57,6 @@ internal object RenderPipelineCompat {
         }
     }
 
-    /**
-     * Constant term of the GPU polygon-offset bias applied to display quads (see [configureDepth]).
-     * Matches vanilla's own depth-bias constant.
-     */
     private const val DEPTH_BIAS = 3.0f
 
     /** Configures the depth state of the pipeline. */
@@ -88,11 +84,6 @@ internal object RenderPipelineCompat {
         }
     }
 
-    /**
-     * Rebuilds [defaultDepth] with a small GPU polygon-offset bias (`depthBiasScaleFactor` /
-     * `depthBiasConstant`) so the display quad wins the depth test against the block face directly
-     * behind it.
-     */
     private fun withPolygonOffset(depthStencilStateClass: Class<*>, defaultDepth: Any): Any {
         val depthTest = depthStencilStateClass.getMethod("depthTest").invoke(defaultDepth)
         val writeDepth = depthStencilStateClass.getMethod("writeDepth").invoke(defaultDepth) as Boolean
@@ -112,7 +103,6 @@ internal object RenderPipelineCompat {
         return ctor.newInstance(depthTest, writeDepth, bias, bias)
     }
 
-    /** True if the current version of Minecraft supports `BindGroupLayout`s. */
     private fun supportsBindGroupLayouts(): Boolean = bindGroupLayoutClass() != null
 
     private fun bindGroupLayoutClass(): Class<*>? = loadClass(
@@ -123,7 +113,6 @@ internal object RenderPipelineCompat {
     private fun loadClass(vararg names: String): Class<*>? =
         names.firstNotNullOfOrNull { runCatching { Class.forName(it) }.getOrNull() }
 
-    /** Configures the pipeline for a display quad. */
     private fun configureLegacy(builder: RenderPipelineBuilder, samplers: List<String>) {
         val builderClass = builder.javaClass
         val withUniform = builderClass.getMethod("withUniform", String::class.java, UniformType::class.java)
@@ -149,7 +138,6 @@ internal object RenderPipelineCompat {
             .invoke(builder, DefaultVertexFormat.POSITION_TEX_COLOR, quads)*/
     }
 
-    /** Configures the pipeline for a display quad. */
     private fun configure262(builder: RenderPipelineBuilder, samplers: List<String>) {
         val builderClass = builder.javaClass
         val bglClass = bindGroupLayoutClass() ?: return
@@ -189,7 +177,6 @@ internal object RenderPipelineCompat {
             Class.forName("net.minecraft.client.renderer.BindGroupLayouts").getField(name)
         }.isSuccess
 
-    /** Creates a `BindGroupLayout` for the given samplers. */
     private fun samplerLayout(samplers: List<String>): Any {
         val bglClass = bindGroupLayoutClass() ?: error("BindGroupLayout is missing")
         val layoutBuilder = bglClass.getMethod("builder").invoke(null)
@@ -218,7 +205,6 @@ internal object RenderPipelineCompat {
         return layoutBuilder.javaClass.getMethod("build").invoke(layoutBuilder)
     }
 
-    /** Gets the `BindGroupLayout` for the given name. */
     private fun vanillaLayout(vararg names: String): Any {
         val clazz = Class.forName("net.minecraft.client.renderer.BindGroupLayouts")
         val last = names.last()

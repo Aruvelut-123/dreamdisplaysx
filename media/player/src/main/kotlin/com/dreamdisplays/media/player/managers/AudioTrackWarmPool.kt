@@ -18,10 +18,8 @@ internal class AudioTrackWarmPool(
     private val debugLabel: String,
     private val terminated: AtomicBoolean,
 
-    /** Current content position; shadows are (re)spawned here. */
     private val positionNanos: () -> Long,
 
-    /** True only while an ordinary, un-parked VOD session is playing. */
     private val eligible: () -> Boolean,
 ) {
     /** A shadow process, holding PCM that begins at [contentStartNanos]. */
@@ -33,7 +31,6 @@ internal class AudioTrackWarmPool(
     )
 
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private val lock = Any()
     private val warm = LinkedHashMap<String, Warm>()
     private var wanted: List<WarmTrack> = emptyList()
@@ -85,7 +82,6 @@ internal class AudioTrackWarmPool(
         dropAll()
     }
 
-    /** Periodically reconciles the pool until the pool is closed or the player is torn down. */
     private fun runRefreshLoop() {
         while (!closed.get() && !terminated.get()) {
             try {
@@ -100,7 +96,6 @@ internal class AudioTrackWarmPool(
         dropAll()
     }
 
-    /** Drops shadows that went stale or are no longer wanted, then spawns whatever is missing. */
     private fun reconcile() {
         if (!eligible()) {
             dropAll()
@@ -138,7 +133,6 @@ internal class AudioTrackWarmPool(
         }
     }
 
-    /** Starts one shadow at the current playhead and files it under its track URL. */
     private fun spawn(ffmpeg: String, track: WarmTrack) {
         val at = positionNanos().coerceAtLeast(0L)
         val stop = AtomicBoolean()
@@ -160,13 +154,11 @@ internal class AudioTrackWarmPool(
         discardAsync(discard)
     }
 
-    /** Empties the pool, tearing the shadows down off-thread. */
     private fun dropAll() {
         val all = synchronized(lock) { warm.values.toList().also { warm.clear() } }
         discardAsync(all)
     }
 
-    /** Stops and destroys [items] on a throwaway thread, so no caller waits on process teardown. */
     private fun discardAsync(items: List<Warm>) {
         if (items.isEmpty()) return
         daemon({

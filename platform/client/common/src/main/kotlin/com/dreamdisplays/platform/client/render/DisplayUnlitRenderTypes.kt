@@ -25,10 +25,8 @@ import net.minecraft.resources.ResourceLocation as Identifier*/
  */
 object DisplayUnlitRenderTypes {
     //? if >=1.21.11 {
-    /** Name of the texture sampler uniform in the display shader. */
     private const val SAMPLER_TEXTURE = "Sampler0"
 
-    /** Lazily-built unlit textured pipeline for display quads. */
     private val texturedPipeline: RenderPipeline by lazy {
         val pipeline = RenderPipelineCompat.createDisplayPipeline(
             Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "pipeline/display_unlit_textured"),
@@ -58,7 +56,6 @@ object DisplayUnlitRenderTypes {
         )
     )
 
-    /** Registers [pipeline] with Iris's `TEXTURED` program so shader packs treat it correctly; no-op without Iris. */
     private fun assignIrisTexturedProgram(pipeline: RenderPipeline) {
         runCatching {
             val apiClass = Class.forName("net.irisshaders.iris.api.v0.IrisApi")

@@ -23,19 +23,14 @@ private const val PROBING = "probing"
  * [HwAccelBackend] default, and codec support from what the `FFmpeg` pipeline decodes.
  */
 object MinecraftClientCapabilityDetector : ClientCapabilityDetector {
-    /** Matches [AsyncTextureUploader]; a GL query needs a current context, which detect-time can't guarantee. */
     override val maxTextureSize: Int = 8192
 
-    /** True when `GLFW` can create the shared-context popout window on this platform. */
     override val supportsPopout: Boolean get() = VideoPopoutWindow.isAvailable
 
-    /** True when the host OS has a known `FFmpeg` hwaccel backend. */
     override val supportsHardwareDecode: Boolean get() = HwAccelBackend.detectDefault() != HwAccelBackend.NONE
 
-    /** Codecs the `FFmpeg` decode pipeline accepts regardless of hwaccel availability. */
     override val supportedCodecs: List<SupportedCodec> = SupportedCodec.advertised
 
-    /** Snapshots all probes into an immutable [ClientHello] for the handshake. */
     override fun detect(): ClientHello {
         val hwAccel = HwAccelBackend.detectDefault()
         val probed = safeBool { NativeMedia.probesFinished }

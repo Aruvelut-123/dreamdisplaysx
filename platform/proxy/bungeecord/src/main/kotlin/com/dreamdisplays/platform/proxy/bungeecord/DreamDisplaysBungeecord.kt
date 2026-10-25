@@ -38,10 +38,7 @@ import net.md_5.bungee.api.plugin.Plugin
 import net.md_5.bungee.event.EventHandler
 import java.util.concurrent.TimeUnit
 
-/** `dreamdisplays:proxy` channel tag, shared verbatim with the Velocity sibling (see that plugin's doc). */
 private const val PROXY_CHANNEL = "dreamdisplays:proxy"
-
-/** How often the stale-session sweep ([NetworkFullscreenManager.pruneStale]) runs. */
 private const val PRUNE_INTERVAL_MS = 5L * 60L * 1000L
 
 /**
@@ -65,7 +62,6 @@ class DreamDisplaysBungeecord : Plugin(), Listener {
         )
     }
 
-    /** `BungeeCord`'s server roster is config-driven and static at runtime, unlike `Velocity`'s — resynced on enable and on every hello for consistency with the `Velocity` sibling. */
     private fun refreshKnownServers() {
         NetworkBackendRegistry.updateKnownServers(proxy.servers.keys)
     }
@@ -226,29 +222,22 @@ class DreamDisplaysBungeecord : Plugin(), Listener {
         sendTo(lastServer, PlayerLeftNetwork(player.uniqueId.toString(), lastServer))
     }
 
-    /** Sends [packet] to backend [serverName], if it's currently registered on this proxy. */
     private fun sendTo(serverName: String, packet: ProxyPacket) {
         proxy.getServerInfo(serverName)?.sendData(PROXY_CHANNEL, ProxyPacketRegistry.encode(packet))
     }
 
-    /** Closes a [ResolveDisplayToken] fan-out window and forwards the answer, if [NetworkTokenResolutions.settle] found exactly one. */
     private fun settleResolution(requestId: String) {
         NetworkTokenResolutions.settle(requestId)?.let { (origin, url) ->
             sendTo(origin, DisplayTokenResolved(requestId, origin, url))
         }
     }
 
-    /** Re-applies every network fullscreen session [serverName] is still owed, on a [PlayerReady]. */
     private fun retryPendingSessions(serverName: String) {
         NetworkFullscreenManager.pendingSessionsFor(serverName).forEach { session ->
             sendTo(serverName, NetworkFullscreenManager.toApplyPacket(session))
         }
     }
 
-    /**
-     * Re-applies every live session [serverName] scope-matches, on a fresh [BackendHello] — broader than the
-     * pending-retry path since it covers sessions the backend never even acked.
-     */
     private fun resendLiveSessions(serverName: String) {
         NetworkFullscreenManager.liveSessionsApplicableTo(serverName, NetworkBackendRegistry.allServerNames())
             .forEach { session ->

@@ -50,23 +50,19 @@ internal class AudioRenderChain(
     private val rightBinaural = ParametricBinaural(sampleRate)
     private val leftPanner = StereoPanner()
     private val rightPanner = StereoPanner()
-
     private val distanceGainL = ParamSmoother(GAIN_SMOOTH_SECONDS, 1f)
     private val distanceGainR = ParamSmoother(GAIN_SMOOTH_SECONDS, 1f)
     private val directivitySmoother = ParamSmoother(GAIN_SMOOTH_SECONDS, 1f)
     private val azimuthL = ParamSmoother(AZIMUTH_SMOOTH_SECONDS, 0f)
     private val azimuthR = ParamSmoother(AZIMUTH_SMOOTH_SECONDS, 0f)
-
     private val occlusionFilterL = Biquad()
     private val occlusionFilterR = Biquad()
     private val reverb = Reverb(sampleRate)
     private val occlusionCutoff = ParamSmoother(OCCLUSION_SMOOTH_SECONDS, MAX_CUTOFF_HZ)
     private val occlusionGain = ParamSmoother(GAIN_SMOOTH_SECONDS, 1f)
     private val reverbWet = ParamSmoother(REVERB_SMOOTH_SECONDS, 0f)
-
     private var floatL = FloatArray(0)
     private var floatR = FloatArray(0)
-
     private var lastMakeup = 1f
 
     override fun process(buf: ByteArray, len: Int, legacyGain: Double) {
@@ -289,10 +285,6 @@ internal class AudioRenderChain(
         return atan2(rel dot right, rel dot forward).toFloat()
     }
 
-    /**
-     * Exactly [MediaBufferEffects.applyVolumeS16LE]'s algorithm,
-     * duplicated so the bypass path is bit-for-bit identical without a dependency on `:media:player`.
-     */
     private fun applyLegacyGain(buf: ByteArray, len: Int, gain: Double) {
         if (abs(gain - 1.0) < 1e-5) return
         var i = 0

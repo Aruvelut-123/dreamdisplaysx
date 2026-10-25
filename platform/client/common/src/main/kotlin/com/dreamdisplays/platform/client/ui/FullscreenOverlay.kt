@@ -41,7 +41,6 @@ class FullscreenOverlay(
 ) {
     @Volatile
     private var frontBuf: ByteBuffer = EMPTY_DIRECT
-
     private var backBuf: ByteBuffer = EMPTY_DIRECT
 
     @Volatile
@@ -58,16 +57,13 @@ class FullscreenOverlay(
 
     @Volatile
     private var frameFormat = UploadPixelFormat.RGB24
-
     private var uploadedVersion = 0L
-
     private var dynamicTexture: DynamicTexture? = null
     private var textureId: Identifier? = null
     private var texW = 0
     private var texH = 0
     private var uploader: AsyncTextureUploader? = null
     private var rgbaUploadBuffer: ByteBuffer? = null
-
     private var animProgress = 0f
     private var closing = false
     private var lastRenderNanos = 0L
@@ -243,7 +239,6 @@ class FullscreenOverlay(
         return true
     }
 
-    /** Crops the padded frame texture down to the actual video content area. */
     private fun contentRect(frameW: Int, frameH: Int, contentAspect: Double): ContentRect {
         if (frameW <= 0 || frameH <= 0) return ContentRect(0, 0, frameW, frameH)
         if (contentAspect <= 0.0 || !contentAspect.isFinite()) return ContentRect(0, 0, frameW, frameH)
@@ -282,11 +277,7 @@ class FullscreenOverlay(
 
     companion object {
         private val EMPTY_DIRECT: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
-
-        /** Portion of the screen the video area occupies in [FullscreenMode.STANDARD]. */
         private const val STANDARD_FRACTION = 0.92f
-
-        /** Scrim opacity behind the video in [FullscreenMode.STANDARD]. */
         private const val SCRIM_ALPHA = 0.72f
     }
 

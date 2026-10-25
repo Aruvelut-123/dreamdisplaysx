@@ -71,10 +71,7 @@ class PreviewSection(
     private var lastPresenceFrameNanos = 0L
 
     companion object {
-        /** Aspect ratio of a YouTube thumbnail image, independent of the screen's own block shape. */
         private const val THUMBNAIL_RATIO = 16f / 9f
-
-        /** Width of the volume slider in the controls row. */
         private const val VOLUME_W = 76
     }
 
@@ -141,7 +138,6 @@ class PreviewSection(
         if (subtitlePresence > 0.01f) subtitleDropdown.draw(g, subtitleBtnFinalCenterX, controlsRowY, mouseX, mouseY)
     }
 
-    /** Draws the letterboxed video frame, or the dimmed thumbnail while loading. */
     private fun drawVideoArea(g: GuiGraphicsCompat, x: Int, y: Int, w: Int, h: Int) {
         if (ds.videoUrl != lastVideoUrl) {
             lastVideoUrl = ds.videoUrl
@@ -187,11 +183,6 @@ class PreviewSection(
         }
     }
 
-    /**
-     * Attaches the single preview-frame sink shared by the full YUV preview texture (only relevant
-     * while [DisplayScreen.isYuvTexture]) and the ambient sampler (relevant for every playing video,
-     * regardless of which texture path is actually rendered on screen).
-     */
     private fun attachFrameSink() {
         if (frameSinkAttached) return
         frameSinkAttached = true
@@ -207,7 +198,6 @@ class PreviewSection(
         ds.setPreviewFrameSink(null)
     }
 
-    /** Returns the largest box with aspect ratio [ratio] that fits inside [area], centered. */
     private fun fitRatio(area: UiRect, ratio: Float): UiRect {
         val w: Int
         val h: Int
@@ -219,11 +209,6 @@ class PreviewSection(
         return area.centered(w, h)
     }
 
-    /**
-     * The decode pipeline pads every frame to the display's own block aspect ratio (its GPU texture
-     * is allocated at that shape), so a wide / narrow block display bakes black bars into the texture
-     * pixels themselves.
-     */
     private fun contentRect(frameW: Int, frameH: Int, contentAspect: Double): UiRect {
         if (frameW <= 0 || frameH <= 0 || contentAspect <= 0.0 || !contentAspect.isFinite()) {
             return UiRect(0, 0, frameW, frameH)
@@ -238,7 +223,6 @@ class PreviewSection(
         }
     }
 
-    /** Like [blitTexture], but crops the block-shape padding out of a [texW] x [texH] decode texture first. */
     private fun blitVideoTexture(
         g: GuiGraphicsCompat,
         id: Identifier,
@@ -270,8 +254,6 @@ class PreviewSection(
         g.flush()*/
     }
 
-    /** Draws the dimmed thumbnail (or shimmer, or plain backdrop) while no frame is ready yet. The
-     *  "Waiting for video..." status text itself lives on the seek bar instead (see [SeekBar]). */
     private fun drawWaiting(g: GuiGraphicsCompat, area: UiRect) {
         // YouTube thumbnails are always 16:9, regardless of the screen's own block shape.
         val box = fitRatio(area, THUMBNAIL_RATIO)
@@ -296,7 +278,6 @@ class PreviewSection(
         }
     }
 
-    /** The custom-link stand-in for a thumbnail: a soft plate naming the host the video comes from. */
     private fun drawCustomBackdrop(g: GuiGraphicsCompat, box: UiRect) {
         val font = Minecraft.getInstance().font
         g.fillVGradient(box.x, box.y, box.right, box.bottom, UiTheme.CUSTOM_ART_TOP, UiTheme.CUSTOM_ART_BOTTOM)
@@ -309,7 +290,6 @@ class PreviewSection(
         )
     }
 
-    /** Generic overlay text resolved for the current display URL, regardless of provider. */
     private data class OverlayInfo(
         val title: String?,
         val uploader: String?,
@@ -322,11 +302,6 @@ class PreviewSection(
         val platform: MediaPlatform,
     )
 
-    /**
-     * Resolves [OverlayInfo] for the current display URL: YouTube via [VideoMetadataCache], Twitch
-     * via [TwitchMetadataCache], Vimeo / Kick via their platform caches, and a bare file / long-tail
-     * link from the URL alone.
-     */
     private fun overlayInfo(): OverlayInfo {
         when (val source = currentSource()) {
             is MediaSource.Twitch -> {
@@ -390,7 +365,6 @@ class PreviewSection(
         }
     }
 
-    /** [OverlayInfo] for a Vimeo / Kick video from its [PlatformVideoMetadata]. */
     private fun platformOverlayInfo(url: String, platform: MediaPlatform, meta: PlatformVideoMetadata?): OverlayInfo =
         OverlayInfo(
             title = meta?.title ?: CustomMediaUrls.displayName(url),
@@ -404,7 +378,6 @@ class PreviewSection(
             platform = platform,
         )
 
-    /** [OverlayInfo] for a custom link: file name as the title, host in place of a channel. */
     private fun customOverlayInfo(url: String): OverlayInfo = OverlayInfo(
         title = CustomMediaUrls.displayName(url),
         uploader = CustomMediaUrls.hostOf(url),
@@ -417,14 +390,12 @@ class PreviewSection(
         platform = MediaPlatform.DIRECT,
     )
 
-    /** Formats a viewer / view count, labelling it "watching" while live and "views" otherwise. */
     private fun watchOrViewCount(count: Long?, isLive: Boolean): String = count?.let {
         formatCompactCount(it) + " " + Component.translatable(
             if (isLive) "dreamdisplays.ui.watching" else "dreamdisplays.ui.views_short",
         ).string
     } ?: ""
 
-    /** Draws the dark strip with the video title (+NEW tag) and channel / views / likes / date metadata. */
     private fun drawTitleOverlay(g: GuiGraphicsCompat, x: Int, y: Int, w: Int) {
         val font = Minecraft.getInstance().font
         val info = overlayInfo()
@@ -509,7 +480,6 @@ class PreviewSection(
         )
     }
 
-    /** Formats [v] compactly (e.g. "1.2M"), or its plain value below 1000. */
     private fun formatCompactCount(v: Long): String = when {
         v >= 1_000_000_000L -> String.format("%.1fB", v / 1_000_000_000.0)
         v >= 1_000_000L -> String.format("%.1fM", v / 1_000_000.0)
@@ -522,7 +492,6 @@ class PreviewSection(
     private var sourceUrl: String? = null
     private var sourceCache: MediaSource? = null
 
-    /** The [MediaSource] for the display's current URL, or null when there's none set. */
     private fun currentSource(): MediaSource? {
         val url = ds.videoUrl?.takeIf { it.isNotEmpty() } ?: return null
         if (url != sourceUrl) {
@@ -532,7 +501,6 @@ class PreviewSection(
         return sourceCache
     }
 
-    /** Cache key for the current source's thumbnail/metadata: a YouTube id, or a platform composite key. */
     private fun currentThumbnailKey(): String? = when (val source = currentSource()) {
         is MediaSource.Twitch -> TwitchMetadataCache.cacheKey(source)
         is MediaSource.Vimeo -> VimeoMetadataCache.cacheKey(source)
@@ -542,7 +510,6 @@ class PreviewSection(
         else -> null
     }
 
-    /** Requests the thumbnail download for the current source once its metadata (and thumbnail URL) is ready. */
     private fun requestCurrentThumbnail() {
         when (val source = currentSource()) {
             is MediaSource.Twitch -> {
@@ -596,7 +563,6 @@ class PreviewSection(
         }
     }
 
-    /** Returns the cached thumbnail for the current video, requesting it asynchronously if absent. */
     private fun currentThumbnail(): Identifier? {
         val id = currentThumbnailKey() ?: return null
         Thumbnails.get(id)?.let { return it }
@@ -623,12 +589,10 @@ class PreviewSection(
         @Volatile
         private var target: AmbientGrid.Grid? = null
         private var lastSampleNanos = 0L
-
         private var currentR: FloatArray? = null
         private var currentG: FloatArray? = null
         private var currentB: FloatArray? = null
         private var lastUploadNanos = 0L
-
         private var rgbaBuf: ByteBuffer = EMPTY_DIRECT
         private var dynamicTexture: DynamicTexture? = null
         var textureId: Identifier? = null
@@ -732,8 +696,6 @@ class PreviewSection(
         companion object {
             private val EMPTY_DIRECT: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
             private const val SAMPLE_INTERVAL_NS = 1_500_000_000L
-
-            /** Time constant of the exponential ease toward each newly sampled target — bigger = slower, calmer drift. */
             private const val SMOOTH_TAU_SECONDS = 2.5f
         }
     }

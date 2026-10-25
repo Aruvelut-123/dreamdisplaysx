@@ -21,27 +21,17 @@ import java.nio.charset.StandardCharsets
 object TwitchResolver : MediaResolverService {
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Above [YtDlpResolver] (0) so the subprocess is only reached when this path fails. */
     override val priority: Int = 10
 
-    /**
-     * Live results are cached just long enough to absorb the prefetch->resolve double call and a quick pause-resume;
-     * VOD / clip URLs are token-signed too but stable for much longer.
-     */
     private val cache = LiveAwareResolvedMediaCache(maxSize = 100, liveTtlSeconds = 25, staticTtlMinutes = 30)
 
     override fun canResolve(source: MediaSource): Boolean = source is MediaSource.Twitch
 
-    /** Warms the token + playlist cache in the background (the registry already runs this off-thread). */
     override fun prefetch(source: MediaSource): Boolean {
         val twitch = source as? MediaSource.Twitch ?: return false
         return runCatching { resolveCached(twitch) }.isSuccess
     }
 
-    /**
-     * Resolves [source] via GQL + usher. Throws on any failure so the registry falls through to
-     * the `yt-dlp` resolver.
-     */
     override fun resolve(source: MediaSource): ResolvedMedia {
         val twitch = source as? MediaSource.Twitch
             ?: throw UnsupportedOperationException("$source is not a Twitch source.")
@@ -129,7 +119,6 @@ object TwitchResolver : MediaResolverService {
         )
     }
 
-    /** Downloads and parses an usher master playlist into [MediaStream]s; throws when it has no video. */
     private fun fetchRenditions(playlistUrl: String): List<MediaStream> {
         val playlist = DreamHttpClient.readText(
             playlistUrl,

@@ -121,7 +121,6 @@ internal class VanillaServerDisplays(
     }
 }
 
-/** Maps the public facing to vanilla's. */
 private fun DisplayFacing.toDirection(): Direction = when (this) {
     DisplayFacing.NORTH -> Direction.NORTH
     DisplayFacing.EAST -> Direction.EAST

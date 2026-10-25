@@ -24,13 +24,11 @@ data class ClientMemoryInfo(
     /** [dedicatedVramBytes] rounded up to whole megabytes. */
     val dedicatedVramMb: Int get() = bytesToMb(dedicatedVramBytes)
 
-    /** Bytes to MB conversion. */
     private fun bytesToMb(bytes: Long): Int = if (bytes <= 0L) 0 else ceil(bytes / (1024.0 * 1024.0)).toInt()
 }
 
 /** Best-effort RAM / VRAM probe. VRAM is 0 when the driver does not expose the NVIDIA GL memory extension. */
 object ClientMemoryProbe {
-    /** `GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX`; value is in KiB. */
     private const val GL_NVX_TOTAL_AVAILABLE_KB = 0x9048
 
     /** Cached probe results. */

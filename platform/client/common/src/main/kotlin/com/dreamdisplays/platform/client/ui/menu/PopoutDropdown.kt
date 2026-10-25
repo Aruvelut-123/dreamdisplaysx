@@ -22,7 +22,6 @@ class PopoutDropdown(
 ) {
     var visible: Boolean = false
 
-    /** Item labels and actions in display order. */
     private val items: List<Pair<String, () -> Unit>> = listOf(
         "Window" to onWindow,
         "In-game" to onPip,
@@ -31,8 +30,6 @@ class PopoutDropdown(
     )
 
     private var rect = UiRect(0, 0, WIDTH, ITEM_H * items.size)
-
-    /** Appear / disappear progress in 0..1, eased the same way as [com.dreamdisplays.platform.client.ui.PipOverlay]. */
     private var animProgress = 0f
     private var lastFrameNanos = 0L
 

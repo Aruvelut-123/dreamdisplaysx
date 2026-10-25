@@ -9,9 +9,7 @@ import com.dreamdisplays.platform.client.managers.ClientStateManager
  * bound to the loader-specific [Platform] the entrypoint registered.
  */
 class DefaultClientContext(override val platform: Platform) : ClientContext {
-    /** The [ClientMutableState] instance for this context. */
     override val state: ClientMutableState = ClientStateManager
 
-    /** The [ServiceRegistry] instance for this context. */
     override val services: ServiceRegistry = DreamServices.registry
 }

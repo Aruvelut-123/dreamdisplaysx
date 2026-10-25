@@ -41,7 +41,6 @@ object ScrubPreview {
     const val FRAME_WIDTH = 256
     const val FRAME_HEIGHT = 144
 
-    /** Target number of sampled frames across the full duration. */
     private const val SAMPLE_COUNT = 20
 
     /**
@@ -51,22 +50,13 @@ object ScrubPreview {
      * preview is a fair trade for not being a hammer.
      */
     private const val THIRD_PARTY_SAMPLE_COUNT = 6
-
-    /** Never sample closer together than this, so short videos don't spawn a process per second. */
     private const val MIN_SAMPLE_SPACING_NANOS = 5_000_000_000L
-
-    /** Max simultaneous FFmpeg extractions: each opens its own connection, so concurrency is capped conservatively. */
     private const val EXTRACT_CONCURRENCY = 2
-
-    /** Extractions run one at a time against a pasted host (see [THIRD_PARTY_SAMPLE_COUNT]). */
     private const val THIRD_PARTY_CONCURRENCY = 1
-
-    /** Budget for one sample: extraction requires deep range-seek into file with unknown codec/container overhead. */
     private val EXTRACT_TIMEOUT = 25.seconds
 
     private class Frame(val timestampNanos: Long, val texture: Identifier)
 
-    /** Sorted (ascending timestamp) frames per video key; generation retries until all samples are extracted. */
     private val FRAMES: Cache<String, List<Frame>> = Caffeine.newBuilder()
         .maximumSize(8)
         .expireAfterAccess(30, TimeUnit.MINUTES)
@@ -75,7 +65,6 @@ object ScrubPreview {
         }
         .build()
 
-    /** Tracks which keys are currently generating, so repeated hover-triggered [request] calls no-op. */
     private val IN_FLIGHT: Cache<String, Boolean> = Caffeine.newBuilder()
         .maximumSize(64)
         .expireAfterWrite(10, TimeUnit.MINUTES)
@@ -116,7 +105,6 @@ object ScrubPreview {
         return frames[lo].texture
     }
 
-    /** Extracts sample frames via `FFmpeg` at [EXTRACT_CONCURRENCY] limit, publishing to [FRAMES] as each completes. */
     private suspend fun generate(key: String, sourceUrl: String, durationNanos: Long, seekByDecoding: Boolean) {
         val ffmpeg = FFmpegBinary.getPath()
         if (ffmpeg == null) {
@@ -153,7 +141,6 @@ object ScrubPreview {
         logger.info("Generated $key: ${collected.size} frame(s) ready, $failures extraction failure(s)")
     }
 
-    /** Runs a single-frame `FFmpeg` extraction at [offsetNanos] and returns the raw JPEG bytes. */
     private suspend fun extractFrame(
         key: String, ffmpeg: String, sourceUrl: String, offsetNanos: Long, seekByDecoding: Boolean,
     ): ByteArray? =
@@ -203,10 +190,6 @@ object ScrubPreview {
             }
         }
 
-    /**
-     * Decodes [bytes] and registers them as a Minecraft texture on the render thread; blocks the calling
-     * (background) thread until registration completes so [generate] can build an ordered frame list.
-     */
     private fun registerFrame(key: String, timestampNanos: Long, bytes: ByteArray): Identifier? {
         val image = runCatching {
             decode(bytes)
@@ -238,7 +221,6 @@ object ScrubPreview {
         return result
     }
 
-    /** Decodes [bytes] (a JPEG) into a GPU-ready RGBA [NativeImage]. */
     @Throws(IOException::class)
     private fun decode(bytes: ByteArray): NativeImage = ByteArrayInputStream(bytes).use { input ->
         val src = ImageIO.read(input) ?: throw IOException("Unsupported scrub frame image (size=${bytes.size}).")
@@ -261,7 +243,6 @@ object ScrubPreview {
         image
     }
 
-    /** Unregisters and closes every frame's texture; called when a key is evicted from [FRAMES]. */
     private fun releaseAll(frames: List<Frame>?) {
         if (frames.isNullOrEmpty()) return
         Minecraft.getInstance().execute {
@@ -269,7 +250,6 @@ object ScrubPreview {
         }
     }
 
-    /** Returns a SHA-1 hex digest of [s], falling back to `hashCode` if SHA-1 is unavailable. */
     private fun hash(s: String): String = try {
         val md = MessageDigest.getInstance("SHA-1")
         HexFormat.of().formatHex(md.digest(s.toByteArray(StandardCharsets.UTF_8)))

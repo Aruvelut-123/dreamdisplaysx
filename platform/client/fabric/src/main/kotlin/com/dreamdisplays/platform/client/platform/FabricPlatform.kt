@@ -32,7 +32,6 @@ object FabricPlatform : Platform {
     override val scheduler: PlatformScheduler = MinecraftClientScheduler
     override val logger: PlatformLogger = Slf4jPlatformLogger("DreamDisplays")
 
-    /** Mirrors the mod's existing layout: `config/dreamdisplays` for config and caches, `libs` for binaries. */
     override val paths: PlatformPaths = object : PlatformPaths {
         override val configDir: Path get() = FabricLoader.getInstance().configDir.resolve(Initializer.MOD_ID)
         override val cacheDir: Path get() = configDir.resolve("yt-cache")

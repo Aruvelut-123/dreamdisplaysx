@@ -10,16 +10,9 @@ import java.util.*
  */
 @Unstable
 object BilibiliUrls {
-    /** A `BVID`: `BV` followed by 10 alphanumeric characters. */
     private val BVID_RE = Regex("^BV[0-9A-Za-z]{10}$")
-
-    /** A legacy `AVID`: `av` followed by digits. */
     private val AVID_RE = Regex("^[aA][vV](\\d+)$")
-
-    /** A bangumi episode id: `ep` followed by digits. */
     private val EP_ID_RE = Regex("^[eE][pP](\\d+)$")
-
-    /** A bangumi season id: `ss` followed by digits. */
     private val SEASON_ID_RE = Regex("^[sS][sS](\\d+)$")
 
     /** True when [url] points at a BIlibili VOD, live room, or short link. */

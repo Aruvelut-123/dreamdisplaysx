@@ -32,7 +32,6 @@ class ValueSlider(
 
     var step: Double? = step
 
-    /** True while a drag/click that changed the value is in progress but not yet committed (non-live). */
     private var pendingCommit: Boolean = false
 
     /** Current fraction in [0, 1]. Settable from outside (e.g. reset buttons); does not fire [onApply]. */
@@ -45,11 +44,9 @@ class ValueSlider(
 
     override fun handlesWholeWidgetCursor(): Boolean = false
 
-    /** Returns the track sprite, highlighted when the widget has keyboard focus. */
     private fun trackSprite(): Identifier =
         if (isFocused && !sliderFocused) TRACK_HIGHLIGHTED else TRACK
 
-    /** Returns the handle sprite, highlighted when hovered or slider-focused. */
     private fun handleSprite(): Identifier =
         if (!isHovered && !sliderFocused) HANDLE else HANDLE_HIGHLIGHTED
 
@@ -132,10 +129,6 @@ class ValueSlider(
         }
     }
 
-    /**
-     * Converts [mouseX] to a fraction and updates [value]. For live sliders fires [onApply]
-     * immediately on change; for non-live sliders marks the change for commit on release.
-     */
     private fun setValueFromMouse(mouseX: Double) {
         val old = value
         var fraction = (mouseX - (x + 4).toDouble()) / (width - 8).toDouble()

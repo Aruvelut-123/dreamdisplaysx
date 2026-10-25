@@ -11,11 +11,6 @@ import java.util.concurrent.ConcurrentHashMap
  * tracks which sessions apply where.
  */
 object NetworkFullscreenManager {
-    /**
-     * How far into the future (from the moment the proxy fans a broadcast out) the shared timeline
-     * anchor is set. Must comfortably exceed plugin-message fan-out latency plus each backend's
-     * media prebuffer, or slower backends would start visibly behind rather than synchronized.
-     */
     private const val FANOUT_LEAD_MS = 1_500L
 
     /**
@@ -120,11 +115,6 @@ object NetworkFullscreenManager {
     fun sessionIdsApplicableTo(serverName: String, knownServers: Set<String>): List<String> =
         sessions.values.filter { serverName in targetServers(it.scope, knownServers) }.map { it.sessionId }
 
-    /**
-     * Viewers who collapsed a session to PiP, as `sessionId -> player ids`. Lives here rather than on
-     * a backend because only the backend a viewer happened to be on sees the client's ack, and it
-     * drops the player the moment they switch away - the whole point is surviving that switch.
-     */
     private val minimizedBy = ConcurrentHashMap<String, MutableSet<String>>()
 
     /** Records that [playerId] collapsed [sessionId] to PiP, or restored it. */
@@ -164,7 +154,6 @@ object NetworkFullscreenManager {
     /** Whether [sessionId] is a known, currently-live network session. */
     fun isLive(sessionId: String): Boolean = sessions.containsKey(sessionId)
 
-    /** Same 8-character shape as a locally-minted session id, so `stop` suggestions stay uniform. */
     private fun generateSessionId(): String {
         var id: String
         do id = UUID.randomUUID().toString().take(8) while (sessions.containsKey(id))

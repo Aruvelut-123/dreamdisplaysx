@@ -16,10 +16,7 @@ import kotlin.time.Clock
  * per-reporter) is enforced upstream by [DisplayManager] before any request reaches here.
  */
 object ReporterUtil {
-    /** Embed constants for the Discord webhook payload. */
     private const val EMBED_COLOR = 0x2F3136
-
-    /** Embed constants for the Discord webhook payload. */
     private const val EMBED_TITLE = "# 🛡️ New report"
 
     /**
@@ -57,7 +54,6 @@ object ReporterUtil {
         sendWebhookRequest(webhookUrl, payload)
     }
 
-    /** Builds a webhook payload for a report, including location, video link, display ID, reporter, and owner. */
     private fun buildWebhookPayload(
         locationStr: String,
         videoLink: String?,
@@ -80,11 +76,9 @@ object ReporterUtil {
         return DreamJson.compact.encodeToString(WebhookPayload(listOf(embed)))
     }
 
-    /** Creates a Discord embed field with the given [name], [value], and [inline] status. */
     private fun createField(name: String, value: String?, inline: Boolean = false) =
         WebhookField(name, value ?: "N/A", inline)
 
-    /** Sends a webhook request with the given [payload] to the given [webhookUrl]. */
     private fun sendWebhookRequest(webhookUrl: String, payload: String) {
         val response = DreamHttpClient.execute(
             webhookUrl,
@@ -101,11 +95,9 @@ object ReporterUtil {
         }
     }
 
-    /** Webhook payload and embed data classes for serialization. */
     @Serializable
     private data class WebhookPayload(val embeds: List<WebhookEmbed>)
 
-    /** Webhook embed data class for serialization. */
     @Serializable
     private data class WebhookEmbed(
         val description: String,
@@ -114,7 +106,6 @@ object ReporterUtil {
         val fields: List<WebhookField>,
     )
 
-    /** Webhook field data class for serialization. */
     @Serializable
     private data class WebhookField(
         val name: String,

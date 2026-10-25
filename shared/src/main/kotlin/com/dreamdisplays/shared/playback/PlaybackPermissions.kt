@@ -7,7 +7,6 @@ import com.dreamdisplays.api.playback.model.PlaybackMode.*
 /** The single source of truth for who may do what in each [PlaybackMode]. */
 @Unstable
 object PlaybackPermissions {
-    /** Owner, admin, or anyone when the display is unlocked. */
     private fun isEditor(c: PlaybackContext): Boolean = c.isOwner || c.isAdmin || !c.isLocked
 
     /** Max video height for [BROADCAST] displays; never exceeded, not even by the owner. */

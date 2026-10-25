@@ -17,7 +17,6 @@ import java.util.*
  * The "current" server is set by [load]; lookups and per-display saves operate against it.
  */
 object ServerDisplayStore {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
     private const val SCHEMA_VERSION = 1
     private val jsonFiles = JsonFileStore()
@@ -60,21 +59,15 @@ object ServerDisplayStore {
         return removed
     }
 
-    /**
-     * Returns the file to read the display registry for [serverId], preferring the safe hashed filename but
-     * falling back to the legacy one for backwards compatibility.
-     */
     private fun readableServerFile(serverId: String): File {
         val safe = safeServerFile(serverId)
         val legacy = jsonFiles.file("server-$serverId-displays.json")
         return if (safe.exists() || !legacy.exists()) safe else legacy
     }
 
-    /** Returns the file to write the display registry for [serverId], using a safe hashed filename. */
     private fun safeServerFile(serverId: String): File =
         jsonFiles.file("server-${safeServerFileId(serverId)}-displays.json")
 
-    /** Returns a safe filename component for [serverId] based on its lowercased slug and SHA-256 hash. */
     private fun safeServerFileId(serverId: String): String {
         val slug = serverId
             .lowercase(Locale.ROOT)

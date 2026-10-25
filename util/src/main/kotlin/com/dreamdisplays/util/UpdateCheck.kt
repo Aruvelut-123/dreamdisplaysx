@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory
 /** Checks mod updates against the latest stable GitHub release. **/
 object UpdateCheck {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private const val API = "https://api.github.com/repos/arnodoelinger/dreamdisplays/releases/latest"
 
     @Volatile

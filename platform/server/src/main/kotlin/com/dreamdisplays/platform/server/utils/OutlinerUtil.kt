@@ -16,7 +16,6 @@ import java.util.*
 @PaperOnly
 @NullMarked
 object OutlinerUtil {
-    /** The currently active outlines, keyed by player UUID. */
     private val activeOutlines: MutableMap<UUID, OutlineData> = mutableMapOf()
 
     /** Data class for an outline. */
@@ -40,7 +39,6 @@ object OutlinerUtil {
         drawOutlineBox(player, box, world)
     }
 
-    /** Emits dust particles along the 12 edges of [box] visible only to [player]. */
     private fun drawOutlineBox(player: Player, box: BoundingBox, world: org.bukkit.World) {
         val color = org.bukkit.Color.fromRGB(0, 255, 255)
 
@@ -123,7 +121,6 @@ object OutlinerUtil {
         )
     }
 
-    /** Spawns dust particles spaced every 0.5 blocks along the segment from [from] to [to]. */
     private fun drawLine(player: Player, from: Location, to: Location, color: Color) {
         val distance = from.distance(to)
         val particles = (distance * 2).toInt()

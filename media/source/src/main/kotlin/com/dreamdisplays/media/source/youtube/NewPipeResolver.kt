@@ -30,32 +30,13 @@ import org.slf4j.LoggerFactory
  * ties them together.
  */
 object NewPipeResolver : MediaResolverService {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Whether `NewPipeExtractor` has been initialized with our HTTP downloader. */
     private val initialized = atomic(false)
-
-    /** How long a resolved video is reused before `NewPipeExtractor` is hit again. Matches FormatDiskCache.DEFAULT_TTL_MS. */
     private const val POSITIVE_TTL_NANOS = FormatDiskCache.DEFAULT_TTL_MS * 1_000_000L
-
-    /**
-     * Partial ("walled") resolutions: reused across replays within a viewing session but rechecked
-     * periodically in case YouTube's PO-token / SABR wall lifts for this video. Matches
-     * [FormatDiskCache.PARTIAL_TTL_MS].
-     */
     private const val PARTIAL_TTL_NANOS = FormatDiskCache.PARTIAL_TTL_MS * 1_000_000L
-
-    /** Live playlist URLs carry short-lived tokens, so reuse is capped much lower than VOD. */
     private const val LIVE_TTL_NANOS = 60_000_000_000L
-
-    /** Negative cache for videos that `NewPipeExtractor` cannot resolve (e.g. age-gated, region-blocked, or deleted). */
     private const val NEGATIVE_TTL_NANOS = 20_000_000_000L
-
-    /** Maximum number of entries in the in-memory cache. */
     private const val MAX_CACHE_ENTRIES = 256
-
-    /** Recently resolved videos, keyed by video id (falling back to the full URL). */
     private val cache: Cache<String, CacheEntry> = Caffeine.newBuilder()
         .maximumSize(MAX_CACHE_ENTRIES.toLong())
         .expireAfter(object : Expiry<String, CacheEntry> {
@@ -78,13 +59,10 @@ object NewPipeResolver : MediaResolverService {
         })
         .build()
 
-    /** Priority in the resolver chain: `NewPipeExtractor` is fast and in-process, so it goes first. */
     override val priority: Int = 10
 
-    /** True if this resolver can handle [source], which is only YouTube. */
     override fun canResolve(source: MediaSource): Boolean = source is MediaSource.YouTube
 
-    /** Resolves [source] via `NewPipeExtractor`, falling back to `yt-dlp` if it fails or returns no quality ladder. */
     override fun resolve(source: MediaSource): ResolvedMedia {
         ensureInitialized()
         check(initialized.value) { "NewPipeExtractor failed to initialize" }
@@ -172,11 +150,6 @@ object NewPipeResolver : MediaResolverService {
         return resolveCached(videoUrl)?.streams ?: emptyList()
     }
 
-    /**
-     * Warms this resolver (and, when the wall is likely, the `yt-dlp` fallback alongside it) for
-     * [source]. Reports false for a walled or failed extraction, so the registry goes on to warm the
-     * fallback that is about to be needed.
-     */
     override fun prefetch(source: MediaSource): Boolean {
         if (!canResolve(source)) return false
         ensureInitialized()
@@ -186,7 +159,6 @@ object NewPipeResolver : MediaResolverService {
         return resolved.isLive || YtStreams.offersQualityLadder(resolved.streams)
     }
 
-    /** Returns cached resolution if fresh, otherwise resolves, caches, and records whether quality ladder is available. */
     private fun resolveCached(url: String, overlapFallback: Boolean = false): NewPipeResolved? {
         val key = YouTubeUrls.extractVideoId(url) ?: url
         cache.getIfPresent(key)?.let { return it.value }
@@ -207,6 +179,5 @@ object NewPipeResolver : MediaResolverService {
         }.value
     }
 
-    /** A cached [NewPipeResolved] (or `null` for a known-unresolvable video) with its `Caffeine` TTL. */
     private class CacheEntry(val value: NewPipeResolved?, val ttlNanos: Long)
 }

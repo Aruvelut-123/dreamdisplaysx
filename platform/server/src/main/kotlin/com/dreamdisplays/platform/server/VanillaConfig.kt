@@ -15,7 +15,6 @@ import java.nio.file.Files
  */
 class VanillaConfig(private val configDir: File) {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private val configFile = File(configDir, "config.toml")
 
     private val langStore = LanguageStore(

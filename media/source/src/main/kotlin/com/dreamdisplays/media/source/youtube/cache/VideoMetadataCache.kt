@@ -11,22 +11,14 @@ import java.util.concurrent.TimeUnit
 
 /** In-memory cache of [MediaSearchResult] keyed by YouTube video ID. */
 object VideoMetadataCache {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Time-to-live for cached metadata. */
     private const val CACHE_TTL_MINUTES = 30L
-
-    /** Time-to-live for in-flight metadata fetches. */
     private const val IN_FLIGHT_TTL_MINUTES = 2L
-
-    /** In-memory cache of [MediaSearchResult] keyed by video ID. */
     private val CACHE: Cache<String, MediaSearchResult> = Caffeine.newBuilder()
         .maximumSize(500)
         .expireAfterAccess(CACHE_TTL_MINUTES, TimeUnit.MINUTES)
         .build()
 
-    /** Tracks video ids for which a metadata fetch is currently in flight. */
     private val IN_FLIGHT: Cache<String, Boolean> = Caffeine.newBuilder()
         .maximumSize(500)
         .expireAfterWrite(IN_FLIGHT_TTL_MINUTES, TimeUnit.MINUTES)
@@ -50,7 +42,6 @@ object VideoMetadataCache {
         DreamCoroutines.clientIo.launch { fetchAndStore(videoId) }
     }
 
-    /** Fetches metadata for [videoId] via [YouTubeInnerTube] and stores the result. */
     private fun fetchAndStore(videoId: String) {
         runCatching { YouTubeInnerTube.metadata(videoId) }
             .onSuccess { metadata -> metadata?.let { put(videoId, it) } }

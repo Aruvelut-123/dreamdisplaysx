@@ -10,10 +10,8 @@ import com.dreamdisplays.platform.client.capabilities.MinecraftClientCapabilityD
 
 /** Installs local capability detection and server capability negotiation services. */
 object ClientCapabilityModule : DreamDisplaysModule {
-    /** The ID of this module. */
     override val id: String = "dreamdisplays:client_capability"
 
-    /** Installs the capability detector and negotiation service. */
     override fun install(context: ModuleContext) {
         val detector = MinecraftClientCapabilityDetector
         val services = context.services

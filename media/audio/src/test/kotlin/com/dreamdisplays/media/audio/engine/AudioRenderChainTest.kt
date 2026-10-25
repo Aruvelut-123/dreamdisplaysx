@@ -20,7 +20,6 @@ class AudioRenderChainTest {
         return AudioRenderChain(44100f, engine)
     }
 
-    /** Encodes one S16LE stereo frame (matches [AudioRenderChain]'s own decode / encode convention). */
     private fun frame(l: Short, r: Short): ByteArray = byteArrayOf(
         (l.toInt() and 0xFF).toByte(), ((l.toInt() shr 8) and 0xFF).toByte(),
         (r.toInt() and 0xFF).toByte(), ((r.toInt() shr 8) and 0xFF).toByte(),

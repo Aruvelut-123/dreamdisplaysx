@@ -9,7 +9,6 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object TransferTracker {
     private const val TTL_MS = 60_000L
-
     private val transferring = ConcurrentHashMap<UUID, Long>()
 
     /** Marks [playerId] as transferring away from this backend, effective for [TTL_MS]. */

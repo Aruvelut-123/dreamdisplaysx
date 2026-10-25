@@ -22,10 +22,7 @@ import java.util.*
  * Persistent on-disk cache for resolved YouTube format URLs.
  */
 object FormatDiskCache {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Directory under the config root where the cache is stored. */
     private val CACHE_DIR: Path = Path.of("config", "dreamdisplays", "yt-cache")
 
     /** Shared 5h format-cache TTL: the on-disk default and [YtDlp]'s in-memory format TTL. */
@@ -40,13 +37,7 @@ object FormatDiskCache {
     /** TTL for partial (non-ladder) results. */
     const val PARTIAL_TTL_MS = 15L * 60L * 1_000L
 
-    /** Schema version. */
     private const val SCHEMA_VERSION = 4
-
-    /**
-     * Serializes write / delete coroutines so same-file ops keep their submission order (the single-writer
-     * guarantee the old dedicated writer thread gave).
-     */
     private val writeMutex = Mutex()
 
     /** Reads the cached streams for [videoUrl] from disk; returns null if absent, expired, or schema-mismatched. */
@@ -88,7 +79,6 @@ object FormatDiskCache {
         DreamCoroutines.clientIo.launch { writeMutex.withLock { writeNow(videoUrl, streams) } }
     }
 
-    /** Atomically writes the stream JSON to disk using a temp file and rename. */
     private fun writeNow(videoUrl: String, streams: List<YtStream>) {
         runCatching {
             Files.createDirectories(CACHE_DIR)
@@ -131,10 +121,8 @@ object FormatDiskCache {
         }
     }
 
-    /** Returns the cache file path for [videoUrl] by hashing the URL to a stable filename. */
     private fun fileFor(videoUrl: String): File = File(CACHE_DIR.toFile(), hash(videoUrl) + ".json")
 
-    /** Returns an SHA-1 hex digest of [s], falling back to `hashCode` if SHA-1 is unavailable. */
     private fun hash(s: String): String = runCatching {
         val md = MessageDigest.getInstance("SHA-1")
         HexFormat.of().formatHex(md.digest(s.toByteArray(StandardCharsets.UTF_8)))
@@ -143,7 +131,6 @@ object FormatDiskCache {
         Integer.toHexString(s.hashCode())
     }
 
-    /** Cache entry schema for serialization. */
     @Serializable
     private data class CacheEntry(
         val v: Int,

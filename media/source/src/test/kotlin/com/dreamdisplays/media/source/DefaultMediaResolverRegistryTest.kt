@@ -32,7 +32,6 @@ class DefaultMediaResolverRegistryTest {
         }
     }
 
-    /** Waits for the registry's background hint to settle, polling so a fast run finishes fast. */
     private fun awaitCalls(deadlineMs: Long = 2_000, check: () -> Boolean) {
         val until = System.nanoTime() + deadlineMs * 1_000_000
         while (System.nanoTime() < until) {

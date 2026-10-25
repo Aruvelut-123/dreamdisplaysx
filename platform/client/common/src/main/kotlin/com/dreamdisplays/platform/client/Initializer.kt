@@ -29,7 +29,6 @@ object Initializer {
     /** The mod identifier, used for channels, resources, and registration. */
     const val MOD_ID: String = "dreamdisplays"
 
-    /** Logger for startup and lifecycle messages. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /** Called once during mod startup; initializes config, `yt-dlp`, `FFmpeg`, disk cache, and the focuser thread. */

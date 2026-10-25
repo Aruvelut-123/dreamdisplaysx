@@ -61,14 +61,10 @@ class SuggestionsPanel(
     var available: () -> Boolean = { true }
 
     private var scrollOffset: Int = 0
-
-    /** Sub-pixel shadow of [scrollOffset], eased toward [targetScroll] each frame; see [easeScroll]. */
     private var scrollOffsetF: Float = 0f
     private var targetScroll: Int = 0
     private var lastScrollFrameNanos = 0L
     private var hoveredCard: Int = -1
-
-    /** Scrollbar geometry captured in [drawScrollbar] so the mouse handlers can drag the thumb. */
     private var sbActive = false
     private var sbVertical = true
     private var sbStart = 0        // track origin along the scroll axis (stripTop / stripLeft)
@@ -76,8 +72,6 @@ class SuggestionsPanel(
     private var sbThumbLen = 0
     private var sbMaxOff = 0
     private var sbCross = 0        // the bar's fixed cross-axis coordinate (barX / barY)
-
-    /** True while the user is dragging the scrollbar thumb. */
     private var draggingScrollbar = false
     private var vertical: Boolean = false
     private var compactCards: Boolean = false
@@ -124,7 +118,6 @@ class SuggestionsPanel(
     private fun stripLeft(): Int = x + 10
     private fun stripRight(): Int = x + width - 10
 
-    /** Positions the search box and its action buttons for the current panel rect. */
     private fun layoutChildren() {
         searchBox.x = x + 10
         searchBox.y = searchRowY()
@@ -134,42 +127,27 @@ class SuggestionsPanel(
         searchButton.place(UiRect(x + width - 10 - ACTION_W, searchRowY(), ACTION_W, SEARCH_H))
     }
 
-    /** Card width for the current orientation/viewport. */
     private fun cardW(viewportW: Int): Int =
         if (vertical) max(CARD_W, viewportW) else dynCardW()
 
-    /** Thumbnail height for the current orientation/viewport. */
     private fun thumbH(viewportW: Int): Int =
         if (vertical) max(THUMB_H, (cardW(viewportW) * 180.0 / 320.0).toInt()) else dynThumbH()
 
-    /**
-     * Card height for [info] at the current orientation / viewport.
-     */
     private fun cardH(viewportW: Int, info: MediaSearchResult): Int = when {
         !vertical -> dynCardH()
         compactCards -> THUMB_H + 4
         else -> thumbH(viewportW) + textBlockH(titleLineCount(Minecraft.getInstance().font, info, cardW(viewportW)))
     }
 
-    /**
-     * Worst-case card height (a two-line title) for the current orientation / viewport, for call sites
-     * with no particular card in hand yet — the loading-more placeholder, or a row-centering calc that
-     * only applies to the (always uniform) horizontal strip anyway.
-     */
     private fun maxCardH(viewportW: Int): Int = when {
         !vertical -> dynCardH()
         compactCards -> THUMB_H + 4
         else -> thumbH(viewportW) + textBlockH(2)
     }
 
-    /** Number of lines [info]'s title wraps to at the current card width (1 or 2). */
     private fun titleLineCount(f: Font, info: MediaSearchResult, cw: Int): Int =
         UiText.wrap(f, info.title, cw - 8, 2).size.coerceAtLeast(1)
 
-    /**
-     * Exact height [drawCard]'s title + meta block needs for a title wrapped to [lines] lines, plus a
-     * small fixed [BOTTOM_PAD] below the meta row.
-     */
     private fun textBlockH(lines: Int): Int {
         val lh = Minecraft.getInstance().font.lineHeight
         return 4 + lines * (lh + 1) + 1 + lh + BOTTOM_PAD
@@ -188,10 +166,6 @@ class SuggestionsPanel(
         return max(80, (th * CARD_W / THUMB_H.toDouble()).toInt())
     }
 
-    /**
-     * Total scrollable content extent along the scroll axis. Vertical cards no longer share one height,
-     * so this sums each card's own (unlike the horizontal strip, which stays a flat width × count).
-     */
     private fun contentExtent(viewportW: Int): Int {
         val cards = controller.visibleCards
         if (cards.isEmpty()) return 0
@@ -199,7 +173,6 @@ class SuggestionsPanel(
         return cards.sumOf { cardH(viewportW, it) + CARD_GAP } - CARD_GAP
     }
 
-    /** Maximum scroll offset for the current viewport. */
     private fun maxScroll(viewportW: Int, viewportH: Int): Int =
         max(0, contentExtent(viewportW) - if (vertical) viewportH else viewportW)
 
@@ -310,7 +283,6 @@ class SuggestionsPanel(
         drawSortDropdown(g, mouseX, mouseY)
     }
 
-    /** Draws the sort dropdown last so it layers on top of the card strip below the search row. */
     private fun drawSortDropdown(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int) {
         sortDropdown.draw(g, sortButton.x + sortButton.width / 2, sortButton.y + sortButton.height, mouseX, mouseY)
     }
@@ -324,7 +296,6 @@ class SuggestionsPanel(
         drawSortDropdown(g, mouseX, mouseY)
     }
 
-    /** Draws the thin scrollbar along the scroll axis when content overflows. */
     private fun drawScrollbar(
         g: GuiGraphicsCompat,
         stripLeft: Int, stripTop: Int, stripRight: Int, stripBottom: Int,
@@ -356,7 +327,6 @@ class SuggestionsPanel(
         }
     }
 
-    /** True when ([mx], [my]) is over the (thin) scrollbar column / row, within a forgiving grab margin. */
     private fun overScrollbar(mx: Double, my: Double): Boolean {
         if (!sbActive) return false
         val along = if (sbVertical) my else mx
@@ -389,11 +359,6 @@ class SuggestionsPanel(
         return current + diff * minOf(1f, dt * SCROLL_EASE_RATE)
     }
 
-    /**
-     * The registered card thumbnail for [info]. Results carrying a [MediaSearchResult.thumbnailUrlOverride]
-     * (e.g. Twitch) were registered under the raw id via the direct-URL path, so they're read from that
-     * same slot ([Thumbnails.get] defaults to the raw-key HIGH tier); YouTube ids use the id-derived LOW tier.
-     */
     private fun cardThumbnail(info: MediaSearchResult) = when {
         // An overridden thumbnail (Twitch / Vimeo / Kick) is registered under the raw id key
         info.thumbnailUrlOverride != null -> Thumbnails.get(info.id)
@@ -402,14 +367,12 @@ class SuggestionsPanel(
         else -> null
     }
 
-    /** True when [info]'s thumbnail fetch (via whichever key [cardThumbnail] reads) has already failed. */
     private fun cardThumbnailFailed(info: MediaSearchResult): Boolean = when {
         info.thumbnailUrlOverride != null -> Thumbnails.isFailed(info.id)
         info.isYouTubeResult -> Thumbnails.isFailed(info.id, Thumbnails.Quality.LOW)
         else -> false
     }
 
-    /** Requests [info]'s card thumbnail via the path matching [cardThumbnail]'s key, if not already loaded. */
     private fun requestCardThumbnail(info: MediaSearchResult) {
         val url = info.thumbnailUrlOverride
         when {
@@ -418,7 +381,6 @@ class SuggestionsPanel(
         }
     }
 
-    /** Draws one result card: hover-pulsing background, thumbnail, NEW/duration tags, title, and meta. */
     private fun drawCard(
         g: GuiGraphicsCompat, f: Font, info: MediaSearchResult,
         x: Int, y: Int, w: Int, thumbH: Int, cardH: Int, hover: Boolean,
@@ -545,7 +507,6 @@ class SuggestionsPanel(
         }
     }
 
-    /** Draws a small top-left tag ([label]) on a [bg] plate with [textColor] text. */
     private fun drawCardTag(
         g: GuiGraphicsCompat,
         f: Font,
@@ -564,11 +525,6 @@ class SuggestionsPanel(
         g.drawText(f, label, thumbX + 5, thumbY + 4, textColor, false)
     }
 
-    /**
-     * Stand-in card art for a card with no thumbnail to load - a custom link, or a platform result
-     * whose metadata carried none: a soft vertical plate with the source's host / uploader centered
-     * on it, so the card still carries the one fact worth knowing at a glance instead of a dead box.
-     */
     private fun drawCustomCardArt(
         g: GuiGraphicsCompat, f: Font, info: MediaSearchResult,
         x: Int, y: Int, w: Int, h: Int,
@@ -710,11 +666,6 @@ class SuggestionsPanel(
         return super.mouseReleased(mouseX, mouseY, button)
     }*/
 
-    /**
-     * Handles a right-click at ([mx], [my]): forgets the remembered custom link under the cursor,
-     * with a soft click. Returns true only when a forgettable card was actually hit, so a
-     * right-click that lands on a normal search result falls through untouched.
-     */
     private fun forgetCardAt(mx: Int, my: Int): Boolean {
         val card = cardAt(mx.toDouble(), my.toDouble())
         val result = controller.visibleCards.getOrNull(card) ?: return false
@@ -798,10 +749,7 @@ class SuggestionsPanel(
 
     companion object {
         private const val HEADER_H = 14
-
         private const val SCROLL_EASE_RATE = 8f
-
-        /** Extra px around the thin scrollbar that still grabs it (a forgiving drag target). */
         private const val SB_GRAB = 4
         private const val CARD_GAP = 6
         private const val CARD_W = 152
@@ -812,10 +760,7 @@ class SuggestionsPanel(
         private const val SEARCH_H = 22
         private const val ACTION_W = SEARCH_H
         private const val ACTION_GAP = 4
-
-        /** Internal vertical paddings a card adds around its thumbnail + text (see [dynThumbH]/[dynCardH]). */
         private const val CARD_INNER_PAD = 2 + 3 + 2
-
         private const val BOTTOM_MARGIN = 6
 
         /**

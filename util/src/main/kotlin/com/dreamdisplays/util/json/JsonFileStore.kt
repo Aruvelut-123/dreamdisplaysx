@@ -88,7 +88,6 @@ class JsonFileStore(
         writeJsonElement(file, element, logger)
     }
 
-    /** Read JSON element from a file, returning null if the file is absent or unreadable. */
     private fun readJsonElement(file: File, logger: Logger): JsonElement? {
         if (!file.isFile) return null
         return runCatching {
@@ -99,7 +98,6 @@ class JsonFileStore(
         }.getOrNull()
     }
 
-    /** Decode JSON element from a file, returning null if the file is absent or unreadable. */
     private fun <T> decode(
         file: File,
         deserializer: DeserializationStrategy<T>,
@@ -111,7 +109,6 @@ class JsonFileStore(
         logger.error("Failed to parse ${file.name}.", e)
     }.getOrNull()
 
-    /** Versioned payload extraction. */
     private fun versionedPayload(
         file: File,
         element: JsonElement,
@@ -135,7 +132,6 @@ class JsonFileStore(
         return payload
     }
 
-    /** Write JSON element to a file through a temporary file and atomic replace. */
     private fun writeJsonElement(file: File, element: JsonElement, logger: Logger) {
         val parent = file.parentFile ?: dir
         if (!parent.exists() && !parent.mkdirs()) {
@@ -156,7 +152,6 @@ class JsonFileStore(
         }
     }
 
-    /** Atomic replace of a file, falling back to a non-atomic move where the filesystem can't do atomic replace. */
     private fun replace(tmp: File, target: File) {
         runCatching {
             Files.move(

@@ -25,7 +25,6 @@ internal object ListenerPoseTracker {
         )
     }
 
-    /** Resolves the main camera. */
     private fun mainCameraOf(minecraft: Minecraft): Camera {
         //? if >=26.2 {
         return minecraft.gameRenderer.mainCamera()

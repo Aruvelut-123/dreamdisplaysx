@@ -15,7 +15,6 @@ import java.util.*
  */
 internal object DisplaySuggestions {
     private const val PAGE_SIZE = 10
-
     private val THIS = Suggestion("this", "suggestThis")
 
     private val LINKS = listOf(
@@ -150,13 +149,11 @@ internal object DisplaySuggestions {
         return listOf(Suggestion(text, "suggestCoordinate", listOf(axis.uppercase()))).startingWith(typed)
     }
 
-    /** Every display by name or short ID, alphabetically. */
     private fun displays(): List<Suggestion> =
         DisplayManager.getDisplays()
             .sortedBy { it.shortLabel.lowercase() }
             .map { describe(it) }
 
-    /** A display with its size as the tooltip, plus its id when it goes by a name. */
     private fun describe(display: DisplayData): Suggestion {
         val size = listOf(display.width.toString(), display.height.toString())
         if (display.name == null) return Suggestion(display.shortLabel, "suggestDisplay", size)

@@ -20,37 +20,26 @@ import java.util.concurrent.TimeUnit
  * maintaining the exported cookie file.
  */
 class YtCookieManager {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Cookie file path under the bundled `yt-dlp` dir. This is the "master" file that all processes copy from. */
     private val cookieFile: Path get() = YtDlpBinary.bundledDir.resolve("cookies.txt")
 
-    /** Cached resolved browser name, or null if cookies are disabled or no suitable browser was found. */
     @Volatile
     private var resolvedBrowser: String? = null
 
-    /** True when the browser has been resolved (successfully or not) at least once. */
     @Volatile
     private var browserResolved: Boolean = false
 
-    /** Timestamp of the last browser resolution attempt, used to throttle repeated failed lookups. */
     @Volatile
     private var browserResolvedAt: Long = 0
 
-    /** Cached cookie header string for plain HTTP clients, or null if not yet exported. */
     @Volatile
     private var cachedHeader: String? = null
 
-    /** Timestamp of the last cookie header export, used to refresh after a TTL. */
     @Volatile
     private var headerExportedAt: Long = 0
 
-    /** True when the cookie export produced no file, so we don't keep retrying for this session. */
     @Volatile
     private var unavailableThisSession = false
-
-    /** True when a background cookie refresh is in progress, so we don't start another. */
     private val refreshInProgress = atomic(false)
 
     /** True when the user explicitly disabled browser cookies in the config. */
@@ -125,11 +114,6 @@ class YtCookieManager {
         }
     }
 
-    /**
-     * Synchronously exports cookies to [master] under a cross-process file lock. No-op if another
-     * process already created the file while we were waiting. Marks cookies unavailable for the
-     * session when the export produces nothing.
-     */
     private fun ensureMaterialized(master: Path) {
         if (resolveBrowser() == null) return
         runCatching {
@@ -153,7 +137,6 @@ class YtCookieManager {
         }
     }
 
-    /** Re-exports the browser cookie file in the background if not already in progress. */
     private fun refreshAsync() {
         if (!refreshInProgress.compareAndSet(expect = false, update = true)) return
         DreamCoroutines.clientIo.launch {
@@ -166,7 +149,6 @@ class YtCookieManager {
         }
     }
 
-    /** Runs `yt-dlp --cookies-from-browser` to write cookies.txt, then parses relevant YouTube / Google cookie lines into a header string. */
     @Throws(IOException::class)
     private fun exportHeader(): String? {
         val browser = resolveBrowser() ?: return null
@@ -217,10 +199,6 @@ class YtCookieManager {
         return result
     }
 
-    /**
-     * Resolves the browser to use for `--cookies-from-browser`, respecting the config setting.
-     * The result is cached; null means cookies are disabled or no suitable browser was found.
-     */
     private fun resolveBrowser(): String? {
         val now = System.currentTimeMillis()
         if (browserResolved && resolvedBrowser != null) return resolvedBrowser
@@ -268,7 +246,6 @@ class YtCookieManager {
         }
     }
 
-    /** Runs `yt-dlp --dump-user-agent` with [browser] cookies and checks whether the cookie file was produced. */
     private fun testBrowser(binary: String, browser: String): Boolean {
         return runCatching {
             val safeName = browser.replace(Regex("[^A-Za-z0-9_-]"), "_")
@@ -302,17 +279,9 @@ class YtCookieManager {
     }
 
     companion object {
-        /** TTL for exported cookies before we re-export them in the background. */
         private const val COOKIE_REFRESH_MS: Long = 2L * 60L * 60L * 1_000L
-
-        /** Minimum time between repeated failed browser resolutions, to avoid spamming the logs. */
         private const val BROWSER_RETRY_MS: Long = 60L * 60L * 1_000L
 
-        /**
-         * Cross-process lock for serializing `--cookies-from-browser` access across multiple game
-         * installs on the same machine. Located in the system temp dir so all installs see the same
-         * lock file.
-         */
         private val EXPORT_LOCK_FILE: Path =
             Path.of(System.getProperty("java.io.tmpdir"), "dreamdisplays-yt-cookies.lock")
     }

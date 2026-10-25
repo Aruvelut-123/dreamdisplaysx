@@ -28,31 +28,18 @@ class AudioTrackDropdown(
 ) {
     var visible: Boolean = false
 
-    /** Tracks shown in display order; refreshed from [getTracks] each time the dropdown opens. */
     private var items: List<MediaStream> = emptyList()
-
-    /** Index of the first item in the visible page; scrolled via [handleScroll] or the drag-thumb. */
     private var scrollIndex = 0
-
     private var scrollPx = 0f
-
     private var rect = UiRect(0, 0, WIDTH, ITEM_H)
-
-    /** Appear / disappear progress in 0..1, eased the same way as [PopoutDropdown]. */
     private var animProgress = 0f
     private var lastFrameNanos = 0L
-
-    /** Number of rows currently on screen (`min(items.size, MAX_VISIBLE)`), used by hit-testing. */
     private var visibleCount = 0
-
-    /** Scrollbar geometry captured during [draw] so mouse handlers can hit-test the thumb / track. */
     private var sbPaged = false
     private var sbColLeft = 0
     private var sbColRight = 0
     private var sbTrackTop = 0
     private var sbTrackBottom = 0
-
-    /** True while the user is dragging the scrollbar thumb (set on a thumb / track mouse-down). */
     private var draggingScrollbar = false
 
     /** Toggles visibility; snapshots the current track list and centers the page on the active track. */
@@ -72,10 +59,8 @@ class AudioTrackDropdown(
         draggingScrollbar = false
     }
 
-    /** Highest valid [scrollIndex] for the current item count. */
     private fun maxScrollIndex(): Int = (items.size - MAX_VISIBLE).coerceAtLeast(0)
 
-    /** Label for [stream]: its track name, else its language code, else a 1-based index fallback. */
     private fun label(stream: MediaStream, index: Int): String =
         stream.audioTrackName ?: stream.audioTrackLang ?: "Track ${index + 1}"
 
@@ -188,7 +173,6 @@ class AudioTrackDropdown(
         /*matrices.popPose()*/
     }
 
-    /** Draws a thin track + thumb whose right edge sits at [right], between [top] and [bottom]. */
     private fun drawScrollbar(g: GuiGraphicsCompat, alpha: Float, right: Int, top: Int, bottom: Int) {
         val trackX = right - SCROLLBAR_W
         val trackH = bottom - top
@@ -250,7 +234,6 @@ class AudioTrackDropdown(
         return was
     }
 
-    /** Positions [scrollIndex] so the thumb centers on cursor [my] within the captured track bounds. */
     private fun scrollToY(my: Int) {
         val maxIndex = maxScrollIndex()
         if (maxIndex <= 0) {
@@ -277,10 +260,7 @@ class AudioTrackDropdown(
         private const val SCROLLBAR_W = 5
         private const val MIN_THUMB_H = 6
         private const val SCROLLBAR_MARGIN = 0
-
-        /** Extra px to the left of the scrollbar column that still grabs the thumb (a forgiving hit target). */
         private const val SB_GRAB = 3
-
         private const val SCROLL_EASE_RATE = 8f
     }
 }

@@ -37,11 +37,9 @@ import net.minecraft.network.chat.contents.ObjectContents as NmsObjectContents
 
 /** Message utilities. Provides methods for sending localized and formatted messages to players and command senders. */
 object MessageUtil {
-    /** Legacy and JSON serializers for legacy color-coded strings. */
     @PaperOnly
     private val legacySerializer = LegacyComponentSerializer.legacyAmpersand()
 
-    /** Legacy and JSON serializers for `Adventure Components`. */
     @PaperOnly
     private val jsonSerializer = JSONComponentSerializer.json()
 
@@ -129,7 +127,6 @@ object MessageUtil {
         sender.sendMessage(builder.asComponent())
     }
 
-    /** Block items live in the `minecraft:blocks` atlas (`block/<name>`); pure items live in `minecraft:items` (`item/<name>`). */
     @PaperOnly
     private fun materialSpriteComponent(mat: Material): Component {
         if (ServerVersion.isAtLeast_1_21_11) return SpriteHoverRenderer.render(mat)
@@ -185,7 +182,6 @@ object MessageUtil {
         player.sendSystemMessage(toNmsComponent(message))
     }
 
-    /** Converts an `Adventure` [component] to a `NMS Component`. */
     private fun toNmsComponent(message: Any): NmsComponent {
         return when (message) {
             is String -> parseAmpersandLegacy(message)
@@ -195,7 +191,6 @@ object MessageUtil {
         }
     }
 
-    /** Replace placeholders in a JSON component map with [args]. */
     private fun replacePlaceholders(value: Any?, args: Array<out String>, index: IntArray): Any? = when (value) {
         is String -> {
             var formatted: String = value
@@ -217,7 +212,6 @@ object MessageUtil {
         else -> value
     }
 
-    /** NMS component builder from a JSON component map. */
     private fun nmsComponentFromJsonValue(value: Any?): NmsComponent? = when (value) {
         is String -> NmsComponent.literal(value)
         is Map<*, *> -> {
@@ -240,7 +234,6 @@ object MessageUtil {
         else -> null
     }
 
-    /** Applies JSON component style from a JSON component map. */
     private fun MutableComponent.withJsonStyle(value: Map<*, *>): MutableComponent = withStyle { base ->
         var style = base
         value.string("color")?.let { color ->
@@ -283,16 +276,12 @@ object MessageUtil {
         style
     }
 
-    /** Type-safe accessors for JSON component map values. */
     private fun Map<*, *>.string(key: String): String? = this[key] as? String
 
-    /** Type-safe accessors for JSON component map values. */
     private fun Map<*, *>.bool(key: String): Boolean? = this[key] as? Boolean
 
-    /** Type-safe accessors for JSON component map values. */
     private fun Map<*, *>.map(key: String): Map<*, *>? = this[key] as? Map<*, *>
 
-    /** Type-safe accessors for JSON component list values. */
     private fun Map<*, *>.list(key: String): List<*>? = this[key] as? List<*>
 
     /**
@@ -345,7 +334,6 @@ object MessageUtil {
         player.sendSystemMessage(root)
     }
 
-    /** Converts `&` color codes to a plain NMS text component (strips formatting on `Fabric`/`NeoForge`). */
     private fun parseAmpersandLegacy(text: String): NmsComponent =
         NmsComponent.literal(text.replace(Regex("&[0-9a-fA-FrRlLoOnNmMkK]"), ""))
 }

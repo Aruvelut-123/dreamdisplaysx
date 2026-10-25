@@ -15,9 +15,7 @@ object PlatformBadge {
      */
     data class Badge(val labelKey: String, val bgColor: Int, val textColor: Int)
 
-    /** Text color for a tag whose brand background is too bright for white text. */
     private const val DARK_TEXT = 0xFF11151A.toInt()
-
     private val TWITCH = Badge("dreamdisplays.ui.twitch", UiTheme.ACCENT_TWITCH_TAG, UiTheme.TEXT_PRIMARY)
     private val VIMEO = Badge("dreamdisplays.ui.vimeo", UiTheme.ACCENT_VIMEO_TAG, DARK_TEXT)
     private val KICK = Badge("dreamdisplays.ui.kick", UiTheme.ACCENT_KICK_TAG, DARK_TEXT)

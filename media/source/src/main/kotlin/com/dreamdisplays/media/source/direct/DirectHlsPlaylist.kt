@@ -123,18 +123,12 @@ internal object DirectHlsPlaylist {
         )
     }
 
-    /** Content duration of an `#EXTINF:<seconds>,<title>` line; 0 when it cannot be read. */
     private fun extInfNanos(line: String): Long {
         val seconds = line.substringAfter(':', "").substringBefore(',').trim().toDoubleOrNull() ?: return 0L
         if (!seconds.isFinite() || seconds <= 0.0) return 0L
         return (seconds * 1_000_000_000.0).toLong()
     }
 
-    /**
-     * Reads one `#EXT-X-MEDIA` tag, keeping only audio renditions that live in their own playlist.
-     * A `TYPE=AUDIO` tag without a `URI` means the audio is already inside the variants, and a
-     * subtitle / closed-caption tag is not something a display can play.
-     */
     private fun parseAudioRendition(attrs: Map<String, String>, baseUrl: String): AudioRendition? {
         if (!attrs["TYPE"].equals("AUDIO", ignoreCase = true)) return null
         val uri = attrs["URI"]?.takeIf { it.isNotBlank() } ?: return null
@@ -148,14 +142,9 @@ internal object DirectHlsPlaylist {
         )
     }
 
-    /** Resolves a possibly relative playlist [reference] against the absolute [baseUrl]. */
     private fun resolve(baseUrl: String, reference: String): String =
         runCatching { URI(baseUrl).resolve(reference).toString() }.getOrDefault(reference)
 
-    /**
-     * Splits an HLS attribute list (`KEY=VALUE,KEY="quoted,value"`) into a map, honouring quotes so
-     * a comma inside `CODECS="avc1.64001f,mp4a.40.2"` does not split the attribute.
-     */
     private fun parseAttributes(text: String): Map<String, String> {
         val out = LinkedHashMap<String, String>()
         val current = StringBuilder()

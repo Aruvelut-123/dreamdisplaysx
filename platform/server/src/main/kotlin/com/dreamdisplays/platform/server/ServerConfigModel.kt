@@ -324,11 +324,6 @@ private fun TomlTable?.intOr(key: String, default: Int): Int {
     return default
 }
 
-/**
- * Reads [key] as a TOML array of strings, dropping blanks and non-string entries. Returns an empty
- * list when the key is absent or is not an array, so a malformed rule never turns into a
- * silently-empty allowlist that would block every custom link.
- */
 private fun stringList(t: TomlTable?, key: String): List<String> =
     t?.getArrayOrEmpty(key)
         ?.toList()

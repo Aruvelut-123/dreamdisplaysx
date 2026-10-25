@@ -7,9 +7,7 @@ object WebVttParser {
     )
 
     private val inlineTag = Regex("<[^>]*>")
-
     private val entity = Regex("""&(#[xX][0-9a-fA-F]+|#\d+|[a-zA-Z]+);""")
-
     private val whitespaceRun = Regex("\\s+")
 
     private val namedEntities = mapOf(
@@ -18,7 +16,6 @@ object WebVttParser {
     )
 
     private const val TRANSITION_CUE_NANOS = 50_000_000L
-
     private const val MAX_BRIDGED_GAP_NANOS = 250_000_000L
 
     /** Parses [content] into a time-ordered, non-overlapping list of cues. */

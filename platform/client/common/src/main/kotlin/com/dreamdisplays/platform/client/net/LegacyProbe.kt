@@ -19,7 +19,6 @@ object LegacyProbe {
 
     /** Serverbound v1 handshake; sent by every client so v1-only servers reveal themselves. */
     data class Version(val version: String) : CustomPacketPayload {
-        /** The packet type. */
         override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = PACKET_ID
 
         companion object {
@@ -33,7 +32,6 @@ object LegacyProbe {
 
     /** Clientbound v1 reply that only v1-only servers still send; its arrival marks the server outdated. */
     data class Premium(val premium: Boolean) : CustomPacketPayload {
-        /** The packet type. */
         override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = PACKET_ID
 
         companion object {

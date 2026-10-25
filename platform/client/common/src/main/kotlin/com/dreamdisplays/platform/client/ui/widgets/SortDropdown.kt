@@ -18,10 +18,7 @@ class SortDropdown(
     var visible: Boolean = false
 
     private val items: List<SortOption> = SortOption.entries.toList()
-
     private var rect = UiRect(0, 0, WIDTH, ITEM_H * items.size)
-
-    /** Appear / disappear progress in 0..1, eased the same way as [com.dreamdisplays.platform.client.ui.menu.PopoutDropdown]. */
     private var animProgress = 0f
     private var lastFrameNanos = 0L
 

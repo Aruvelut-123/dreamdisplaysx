@@ -14,20 +14,13 @@ import java.nio.ByteBuffer
  * rendering-API code out of the platform-agnostic media/player module.
  */
 class GpuFrameUploader : FrameUploader {
-    /** PBO uploader for the interleaved (RGB / RGBA) path; created on first use. */
     private var uploader: AsyncTextureUploader? = null
-
-    /** Per-plane PBO uploaders for the planar (Y / U / V) path. */
     private val planeUploaders = arrayOfNulls<AsyncTextureUploader>(3)
-
-    /** Scratch buffer reused for RGB -> RGBA expansion. */
     private var rgbaUploadBuffer: ByteBuffer? = null
-
     private val interleavedUploader: () -> AsyncTextureUploader = { glUploader() }
     private val planarUploader: () -> AsyncTextureUploader = { planeUploader(0) }
     private val rgbaScratchSetter: (ByteBuffer) -> Unit = { rgbaUploadBuffer = it }
 
-    /** False while the window is minimized (no GL context to upload into). */
     override fun canUpload(): Boolean =
         //? if >=1.21.11 {
         //? if >=26.3 {
@@ -37,7 +30,6 @@ class GpuFrameUploader : FrameUploader {
     //?} else
     /*true*/
 
-    /** Uploads an interleaved [src] frame into [target] in the given [format]. */
     override fun uploadInterleaved(target: GpuTextureRef, src: ByteBuffer, format: FramePixelFormat): Boolean {
         //? if >=1.21.11 {
         val texture = (target as GpuTextureHandle).texture
@@ -57,7 +49,6 @@ class GpuFrameUploader : FrameUploader {
         return true
     }
 
-    /** Uploads the Y / U / V planes packed in [src] into their respective textures in one PBO pass. */
     override fun uploadPlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, src: ByteBuffer): Boolean {
         //? if >=1.21.11 {
         TextureUploadUtil.uploadPlanar(
@@ -72,15 +63,12 @@ class GpuFrameUploader : FrameUploader {
         /*return false*/
     }
 
-    /** Lazily creates the interleaved GL uploader. */
     private fun glUploader(): AsyncTextureUploader =
         uploader ?: AsyncTextureUploader(stateCache = true).also { uploader = it }
 
-    /** Lazily creates the per-plane GL uploader for plane [i] (0 = Y, 1 = U, 2 = V). */
     private fun planeUploader(i: Int): AsyncTextureUploader =
         planeUploaders[i] ?: AsyncTextureUploader(stateCache = true).also { planeUploaders[i] = it }
 
-    /** Releases all PBO uploaders and the scratch buffer. */
     override fun cleanup() {
         uploader?.cleanup()
         uploader = null

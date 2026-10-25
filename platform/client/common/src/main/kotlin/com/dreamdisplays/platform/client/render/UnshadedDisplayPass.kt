@@ -19,13 +19,9 @@ import org.joml.Matrix4f
 object UnshadedDisplayPass {
     @Volatile
     private var tailHookAlive = false
-
     private var pendingCamera: Camera? = null
-
     private val pendingView = Matrix4f()
-
     private var pending = false
-
     private val enabled: Boolean; get() = runCatching { ClientStateManager.config.unshadedDisplays }.getOrDefault(true)
 
     val active: Boolean get() = tailHookAlive && enabled && ShaderPackCompat.isShaderPackActive

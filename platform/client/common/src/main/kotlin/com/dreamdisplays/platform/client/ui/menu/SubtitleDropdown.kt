@@ -32,24 +32,17 @@ class SubtitleDropdown(
     var visible: Boolean = false
 
     private var items: List<SubtitleTrack?> = listOf(null)
-
     private var scrollIndex = 0
-
     private var scrollPx = 0f
-
     private var rect = UiRect(0, 0, WIDTH, ITEM_H)
-
     private var animProgress = 0f
     private var lastFrameNanos = 0L
-
     private var visibleCount = 0
-
     private var sbPaged = false
     private var sbColLeft = 0
     private var sbColRight = 0
     private var sbTrackTop = 0
     private var sbTrackBottom = 0
-
     private var draggingScrollbar = false
 
     fun toggle() {
@@ -245,9 +238,7 @@ class SubtitleDropdown(
         private const val SCROLLBAR_W = 5
         private const val MIN_THUMB_H = 6
         private const val SCROLLBAR_MARGIN = 0
-
         private const val SB_GRAB = 3
-
         private const val SCROLL_EASE_RATE = 8f
     }
 }

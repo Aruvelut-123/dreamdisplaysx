@@ -15,7 +15,6 @@ import java.util.*
  * that completed the v2 hello receive anything; protocol v1 is no longer supported.
  */
 object VanillaPacketUtil {
-    /** The recipients that negotiated protocol v2. */
     private fun v2Players(players: List<ServerPlayer>): List<ServerPlayer> =
         players.filter { V2PlayerTracker.isV2(it.uuid) }
 
@@ -59,7 +58,6 @@ object VanillaPacketUtil {
         VanillaNetworking.adapter.sendV2(v2Players(players), ClearCache(uuids))
     }
 
-    /** Maps a [Direction] to its wire [FacingUtil]; faces not in the protocol fall back to north. */
     private fun directionToFacingUtil(direction: Direction): FacingUtil {
         return when (direction) {
             Direction.NORTH -> FacingUtil.NORTH

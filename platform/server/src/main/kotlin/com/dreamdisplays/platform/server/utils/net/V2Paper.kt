@@ -56,10 +56,6 @@ object PaperV2Networking : PluginMessageListener {
         maxDisplays = maxDisplaysFor(player.hasPermission(PaperServer.config.permissions.createBypass)),
     )
 
-    /**
-     * The feature tokens for this server: the unconditional playback set, plus region access only
-     * where `WorldGuard` is actually installed to answer membership questions.
-     */
     private fun serverFeatureWires(): List<String> =
         if (WorldGuardRegions.isAvailable()) {
             ServerFeature.playbackFeatureWires + ServerFeature.REGION_ACCESS.wire
@@ -67,13 +63,11 @@ object PaperV2Networking : PluginMessageListener {
             ServerFeature.playbackFeatureWires
         }
 
-    /** [ServerHello.maxDisplays] for a player: `-1` (unlimited) when [hasBypass] or no cap is configured. */
     private fun maxDisplaysFor(hasBypass: Boolean): Int {
         val cap = PaperServer.config.settings.maxDisplaysPerPlayer
         return if (hasBypass || cap <= 0) -1 else cap
     }
 
-    /** Decodes an envelope frame and dispatches the packet; unknown type ids are skipped. */
     override fun onPluginMessageReceived(channel: String, player: Player, message: ByteArray) {
         if (channel != V2_CHANNEL) return
         val packet = runCatching { PacketRegistry.decode(message, PacketDirection.CLIENT_TO_SERVER) }
@@ -119,10 +113,6 @@ object PaperV2Networking : PluginMessageListener {
         }
     }
 
-    /**
-     * Marks [player] as a v2 peer, replies with the [ServerHello] and the display batch, and runs the shared
-     * version-check flow.
-     */
     private fun handleHello(player: Player, hello: ClientHello) {
         if (V2PlayerTracker.isV2(player.uniqueId)) return
         V2PlayerTracker.markV2(player.uniqueId, hello)

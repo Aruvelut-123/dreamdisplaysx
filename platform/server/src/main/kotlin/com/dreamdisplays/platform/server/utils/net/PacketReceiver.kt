@@ -15,7 +15,6 @@ const val LEGACY_VERSION_CHANNEL: String = "dreamdisplays:version"
 @PaperOnly
 @NullMarked
 class PacketReceiver : PluginMessageListener {
-    /** Tells a v1-only client to update; v2 players already negotiated and are ignored. */
     override fun onPluginMessageReceived(channel: String, player: Player, message: ByteArray) {
         if (channel != LEGACY_VERSION_CHANNEL || V2PlayerTracker.isV2(player.uniqueId)) return
         DisplayActions.notifyOutdatedClient(player)

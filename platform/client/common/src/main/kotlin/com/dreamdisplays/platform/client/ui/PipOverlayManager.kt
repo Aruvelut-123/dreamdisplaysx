@@ -71,10 +71,6 @@ object PipOverlayManager : OverlayManager {
 
     override val isEmpty: Boolean get() = overlays.isEmpty()
 
-    /**
-     * Opens (or returns the already-open) PiP overlay for [displayId]. Returns null if no display
-     * screen with that id is currently loaded, or if all anchors are occupied.
-     */
     override fun openPip(displayId: DisplayId): Overlay? {
         getOverlay(displayId)?.let { return it }
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
@@ -82,32 +78,20 @@ object PipOverlayManager : OverlayManager {
         return if (add(overlay)) overlay else null
     }
 
-    /** Starts the close animation for the overlay bound to [displayId], if any. */
     override fun closePip(displayId: DisplayId) {
         overlays.filter { it.displayId == displayId }.forEach { it.startClose() }
     }
 
-    /** Returns the live overlay for [displayId], or null if none is open. */
     override fun getOverlay(displayId: DisplayId): Overlay? =
         overlays.firstOrNull { it.displayId == displayId }
 
-    /** Snapshot of all currently open overlays. */
     override fun listOverlays(): List<Overlay> = overlays.toList()
 
-    /**
-     * [OverlayManager] render entry point. Delegates to the Minecraft render path by unwrapping a
-     * [MinecraftOverlayRenderContext]; any other context type is a no-op.
-     */
     override fun renderAll(context: OverlayRenderContext) {
         val ctx = context as? MinecraftOverlayRenderContext ?: return
         renderAll(ctx.mc, ctx.graphics, ctx.mouseX, ctx.mouseY, ctx.leftPressed, ctx.partialTick)
     }
 
-    /**
-     * Routes [event] to the top-most overlay whose bounds contain (`atX`, `atY`); iterates in
-     * reverse so the most-recently-added (visually front) overlay wins.
-     * @return true if an overlay consumed the event.
-     */
     override fun dispatchEvent(event: OverlayEvent, atX: Float, atY: Float): Boolean {
         for (i in overlays.indices.reversed()) {
             val overlay = overlays[i]
@@ -116,7 +100,6 @@ object PipOverlayManager : OverlayManager {
         return false
     }
 
-    /** Gracefully closes every overlay (animated), as opposed to the immediate [clear]. */
     override fun closeAll() {
         overlays.forEach { it.startClose() }
     }

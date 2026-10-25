@@ -15,7 +15,6 @@ object MediaProcess {
     internal const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-    /** Kill switch for GPU-side scaling (`-Ddreamdisplays.hwscale=false` falls back to software scale). */
     private val HW_SCALE_ENABLED = System.getProperty("dreamdisplays.hwscale", "true").toBoolean()
 
     /** Frame rate assumed when the source reports none, or reports something implausible. */
@@ -30,18 +29,12 @@ object MediaProcess {
         return stderr.contains("does not contain any stream") && NO_AUDIO_DISQUALIFIERS.none { stderr.contains(it, ignoreCase = true) }
     }
 
-    /** Markers that mean the empty output came from a failed input, not from a silent one. */
     private val NO_AUDIO_DISQUALIFIERS = listOf(
         "Server returned", "Connection refused", "Connection timed out", "Invalid data found",
         "No such file or directory", "Protocol not found", "Immediate exit requested",
         "Error opening input", "Unknown error", "I/O error", "HTTP error",
     )
 
-    /**
-     * Request headers for [url]. Platform CDNs get the `Referer` some of them insist on (see
-     * [MediaHosts.refererFor]); a host a player pasted gets a plain browser identity and nothing
-     * else, so its operator learns no more from the request than any visitor would give them.
-     */
     private fun headerArgs(url: String): List<String> {
         val referer = MediaHosts.refererFor(url)?.let { "Referer: $it\r\n" }.orEmpty()
         return listOf("-headers", "User-Agent: $USER_AGENT\r\n$referer")
@@ -104,7 +97,6 @@ object MediaProcess {
         }
     }
 
-    /** True when the GPU-side scale chain should be used instead of software scaling. */
     private fun useHwScale(ffmpeg: String, hwAccel: HwAccelBackend): Boolean =
         HW_SCALE_ENABLED
                 && hwAccel == HwAccelBackend.VIDEOTOOLBOX
@@ -180,7 +172,6 @@ object MediaProcess {
         }
     }
 
-    /** Builds common `FFmpeg` command line for video and audio. [alreadyResolved] skips SSRF guard. */
     @Throws(IOException::class)
     private fun baseCommand(
         ffmpeg: String,
@@ -262,7 +253,6 @@ object MediaProcess {
         }
     }
 
-    /** Connection options for an `http(s)` input; see [baseCommand] for why they are conditional. */
     private fun MutableList<String>.addHttpOptions(url: String) {
         addAll(headerArgs(url))
         addAll(
@@ -277,7 +267,6 @@ object MediaProcess {
         if (!HlsAudioFeeder.supports(url)) addAll(listOf("-multiple_requests", "1"))
     }
 
-    /** `-ss` with [offsetNanos] rendered as seconds. */
     private fun seekArgs(offsetNanos: Long): List<String> =
         listOf("-ss", String.format(Locale.US, "%.6f", offsetNanos / 1e9))
 }

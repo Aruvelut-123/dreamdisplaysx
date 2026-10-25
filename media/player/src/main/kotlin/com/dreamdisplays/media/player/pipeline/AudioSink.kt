@@ -19,7 +19,6 @@ import javax.sound.sampled.*
  * Manages PCM pipeline for `FFmpeg` audio process (owns audio master clock).
  */
 internal class AudioSink(private val debugLabel: String) {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     companion object {
@@ -29,44 +28,17 @@ internal class AudioSink(private val debugLabel: String) {
         /** Stereo 16-bit PCM: 4 bytes per frame. One second is SAMPLE_RATE * BYTES_PER_FRAME bytes. */
         const val BYTES_PER_FRAME = 4
 
-        /** Chunk size for each read from the audio process and each write to the line. 1 / 20 s of stereo 16-bit PCM */
         private const val CHUNK_BYTES = SAMPLE_RATE * 2 * 2 / 20
-
-        /**
-         * Capacity of PCM line (8 chunks, ~0.4s) — ceiling the pacer may grow into.
-         */
         private const val LINE_BUFFER_BYTES = CHUNK_BYTES * 8
-
-        /** Smallest backlog the live pacer holds (~0.05 s) — the floor it settles back to when playback is clean. */
         private const val MIN_PACE_BYTES = CHUNK_BYTES
-
-        /** Largest backlog the pacer will grow to (~0.30 s) before it stops trading latency for stability. */
         private const val MAX_PACE_BYTES = CHUNK_BYTES * 6
-
-        /** Backlog step added per detected underrun / eased off per clean-playback window. */
         private const val PACE_STEP_BYTES = CHUNK_BYTES
-
-        /** Consecutive clean chunks (~20 s at 20 chunks/s) before the pacer eases the target back down one step. */
         private const val PACE_RECOVER_CHUNKS = 400
-
-        /** Number of times to retry opening the audio line if it is temporarily unavailable. */
         private const val OPEN_RETRIES = 3
-
-        /** Retry delay between line-open attempts, multiplied by the attempt number (1..OPEN_RETRIES). */
         private const val RETRY_DELAY_MS = 200L
-
-        /** ~30 s of stereo 16-bit PCM kept for the reappearance audio bridge. */
         private const val PCM_RING_MAX_BYTES = SAMPLE_RATE * BYTES_PER_FRAME * 30
-
-        /** Content gaps below this (~1 video frame) aren't worth a catch-up skip — inaudible as lip sync. */
         private const val CATCHUP_MIN_NANOS = 40_000_000L
-
-        /** Max refine passes of the catch-up skip; each pass shrinks the residual by the decode-speed factor. */
         private const val CATCHUP_MAX_PASSES = 4
-
-        /**
-         * Ceiling on stall re-sync skip (larger gap = session broken, not stalled).
-         */
         private const val MAX_RESYNC_NANOS = 5_000_000_000L
 
         /** Converts a count of stereo 16-bit PCM frames into nanos of content. */
@@ -90,9 +62,6 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /**
-     * Clock-relevant state of one audio session (mutated only by owning thread).
-     */
     private class LineSession(
         @JvmField val epoch: Int,
         @JvmField val originKnown: Boolean,
@@ -124,9 +93,6 @@ internal class AudioSink(private val debugLabel: String) {
     @Volatile
     var currentVolume: Double = 1.0
 
-    /**
-     * Optional per-source acoustics DSP stage (replaces volume for every chunk).
-     */
     @Volatile
     private var dspStage: AudioDspStage? = null
 
@@ -136,22 +102,13 @@ internal class AudioSink(private val debugLabel: String) {
         stage?.reset()
     }
 
-    /** Adaptive backlog the live pacer currently targets; persists across sessions to keep learning the machine. */
     private var paceTargetBytes = MIN_PACE_BYTES
-
-    /** Consecutive underrun-free chunks since the last target change, used to ease the target back down. */
     private var paceCleanChunks = 0
-
-    /** True once the first live chunk has been written, so an empty line before then isn't read as an underrun. */
     private var paceStreaming = false
-
-    /** Guards session publication so a superseded thread can never install its line over a newer one. */
     private val sessionLock = Any()
 
-    /** The session whose line currently drives the master clock, or null when nothing is open. */
     @Volatile
     private var current: LineSession? = null
-
     private var epochCounter = 0
 
     /**
@@ -167,18 +124,15 @@ internal class AudioSink(private val debugLabel: String) {
         return ClockSample(s.contentStartNanos + framesToNanos(live), s.epoch, s.originKnown)
     }
 
-    /** Gate a bridge session waits on for its live `FFmpeg` process; null outside a bridge. */
     @Volatile
     private var liveGate: CountDownLatch? = null
 
     @Volatile
     private var liveProc: Process? = null
 
-    /** When set, reader pauses line (keeping open) and idles (for warm park). */
     @Volatile
     private var parked: AtomicBoolean? = null
 
-    /** Stderr buffer for bridge's live process (each session gets own buffer). */
     @Volatile
     private var liveStderrBuf: StringBuilder? = null
 
@@ -187,7 +141,6 @@ internal class AudioSink(private val debugLabel: String) {
         parked = flag
     }
 
-    /** Nanos of sound to drop for resync (not a running total — multiple observers). */
     private val pendingResyncNanos = AtomicLong(0)
 
     /** Asks pump to drop next nanos of audio to restore lip sync after line stall. */
@@ -196,7 +149,6 @@ internal class AudioSink(private val debugLabel: String) {
         pendingResyncNanos.accumulateAndGet(nanos.coerceAtMost(MAX_RESYNC_NANOS), ::maxOf)
     }
 
-    /** Consumes pending resync for session (discard PCM and advance clock origin) */
     private fun applyPendingResync(
         session: LineSession, input: InputStream, terminated: AtomicBoolean, stopFlag: AtomicBoolean,
     ) {
@@ -216,7 +168,6 @@ internal class AudioSink(private val debugLabel: String) {
         logger.debug("$debugLabel [audio] re-synced by skipping ${bytesToNanos(skipped) / 1_000_000} ms of PCM.")
     }
 
-    /** Opens new clock session, superseding previous, and resets shared state. */
     private fun beginSession(contentStartNanos: Long, originKnown: Boolean, preludeFrames: Long = 0L): LineSession {
         val session = synchronized(sessionLock) {
             LineSession(++epochCounter, originKnown, preludeFrames, contentStartNanos).also { current = it }
@@ -227,7 +178,6 @@ internal class AudioSink(private val debugLabel: String) {
         return session
     }
 
-    /** Publishes line as session's clock source (false if session superseded) */
     private fun publishLine(session: LineSession, ln: SourceDataLine): Boolean {
         synchronized(sessionLock) {
             if (current !== session) return false
@@ -236,10 +186,8 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /** True while [session] is the one driving the clock. */
     private fun owns(session: LineSession): Boolean = current === session
 
-    /** Detaches line and clears session (so clock reads unavailable) */
     private fun retireSession(session: LineSession, ln: SourceDataLine?) {
         synchronized(sessionLock) {
             if (session.line === ln) session.line = null
@@ -247,12 +195,9 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /** Rolling ring of recently decoded raw PCM (newest last), so a reappearing display can play the
-     *  cached-replay window with sound. Capped at [PCM_RING_MAX_BYTES]. Guarded by [pcmRing]'s monitor. */
     private val pcmRing = ArrayDeque<ByteArray>()
     private var pcmRingBytes = 0
 
-    /** Appends a copy of the first [len] bytes of [chunk] to the PCM ring, evicting the oldest over budget. */
     private fun ringPush(chunk: ByteArray, len: Int) {
         if (len <= 0) return
         val copy = chunk.copyOf(len)
@@ -265,10 +210,6 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /**
-     * Drops all cached PCM. Called at the start of every fresh audio session ([beginSession]) so a
-     * seek or restart can never leave pre-seek samples in the ring.
-     */
     private fun clearRing() {
         synchronized(pcmRing) {
             pcmRing.clear()
@@ -371,11 +312,6 @@ internal class AudioSink(private val debugLabel: String) {
         ).also { it.start() }
     }
 
-    /**
-     * Background body of [startSwitch]: open + skip + pre-buffer the replacement line while the old
-     * one plays, then atomically flip and continue as a normal live pump. See [startSwitch] for the
-     * DSP / ring caveats on the prime window.
-     */
     private fun runSwitch(
         proc: Process, terminated: AtomicBoolean, stopFlag: AtomicBoolean, contentStartNanos: Long,
         originKnown: Boolean, catchUp: CatchUp?, shouldPromote: () -> Boolean, onPromoted: () -> Unit,
@@ -451,9 +387,6 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /**
-     * Pre-buffers the replacement switch line with leading PCM before it is started (silent).
-     */
     private fun primeSwitchLine(
         input: InputStream, ln: SourceDataLine, terminated: AtomicBoolean, stopFlag: AtomicBoolean,
     ): Boolean {
@@ -531,10 +464,6 @@ internal class AudioSink(private val debugLabel: String) {
         current?.line?.let { runCatching { it.start() } }
     }
 
-    /**
-     * Runs the audio reading / writing loop until the process ends or [terminated] / [stopFlag] is set.
-     * Fires [onUnexpectedEnd] once the pump loop is reached and then ends on its own (neither flag set).
-     */
     private fun run(
         session: LineSession, proc: Process, terminated: AtomicBoolean, stopFlag: AtomicBoolean,
         startGate: CountDownLatch?, stderrBuf: StringBuilder, onUnexpectedEnd: (String) -> Unit,
@@ -660,12 +589,10 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /** The PCM line format shared by every session: 44.1 kHz stereo signed 16-bit little-endian. */
     private fun pcmFormat() = AudioFormat(
         AudioFormat.Encoding.PCM_SIGNED, SAMPLE_RATE.toFloat(), 16, 2, 4, SAMPLE_RATE.toFloat(), false,
     )
 
-    /** Writes the cached bridge prelude to [ln] (volume applied), without ring-caching it. */
     private fun writePrelude(
         ln: SourceDataLine,
         prelude: ByteArray,
@@ -683,7 +610,6 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /** Polls the bridge's live-input gate until the process is attached, or stop/terminate aborts it. */
     private fun awaitLiveInput(terminated: AtomicBoolean, stopFlag: AtomicBoolean): Process? {
         val gate = liveGate ?: return null
         while (!terminated.get() && !stopFlag.get()) {
@@ -696,7 +622,6 @@ internal class AudioSink(private val debugLabel: String) {
         return null
     }
 
-    /** Discards the leading PCM span between [CatchUp.contentStartNanos] and the live playback clock, so the first sample fed downstream is already caught up to now. */
     private fun skipCatchUp(
         input: InputStream, catchUp: CatchUp, terminated: AtomicBoolean, stopFlag: AtomicBoolean,
     ): Long {
@@ -726,7 +651,6 @@ internal class AudioSink(private val debugLabel: String) {
         return bytesToNanos(skippedBytes)
     }
 
-    /** Reads live PCM from [input] and writes it to [ln], ring-caching each chunk for the next bridge. */
     private fun pumpLive(
         session: LineSession, input: InputStream, ln: SourceDataLine,
         terminated: AtomicBoolean, stopFlag: AtomicBoolean,
@@ -767,11 +691,6 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /**
-     * If the session is parked, pauses the line (keeping its buffer + open handle), idles until un-parked,
-     * then resumes the line. The audio `FFmpeg` process blocks on pipe back-pressure meanwhile, staying
-     * warm. Returns true only when stop/terminate fired while parked (caller should break the loop).
-     */
     private fun parkIfRequested(ln: SourceDataLine, terminated: AtomicBoolean, stopFlag: AtomicBoolean): Boolean {
         val pk = parked ?: return false
         if (!pk.get()) return false
@@ -788,7 +707,6 @@ internal class AudioSink(private val debugLabel: String) {
         return false
     }
 
-    /** Writes the first [n] bytes of [chunk] to [ln], retrying short writes until stop/terminate. */
     private fun writeFully(
         ln: SourceDataLine,
         chunk: ByteArray,
@@ -804,10 +722,6 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /**
-     * Writes one live chunk while keeping the line's unplayed backlog near [paceTargetBytes] instead of letting it
-     * grow.
-     */
     private fun paceLiveWrite(
         ln: SourceDataLine,
         chunk: ByteArray,
@@ -840,7 +754,6 @@ internal class AudioSink(private val debugLabel: String) {
         }
     }
 
-    /** Waits for video to publish its first frame, polling so stop() can interrupt quickly. */
     private fun awaitStartGate(
         gate: CountDownLatch?,
         terminated: AtomicBoolean,
@@ -858,9 +771,6 @@ internal class AudioSink(private val debugLabel: String) {
         return false
     }
 
-    /**
-     * Opens and returns a [SourceDataLine] with the specified format, retrying a few times if the line is temporarily unavailable.
-     */
     private fun openLine(info: DataLine.Info, fmt: AudioFormat): SourceDataLine? {
         repeat(OPEN_RETRIES) { attempt ->
             try {
@@ -880,11 +790,6 @@ internal class AudioSink(private val debugLabel: String) {
         return null
     }
 
-    /**
-     * Drains [proc]'s stderr, logs interesting lines FFmpeg emits as they arrive (it runs at
-     * -loglevel error), and accumulates them into a buffer scoped to this call — returned so the
-     * caller's session can read it back once its own pump loop ends.
-     */
     private fun drainStderr(proc: Process, stopFlag: AtomicBoolean): StringBuilder {
         val buf = StringBuilder()
         daemon({

@@ -36,7 +36,6 @@ internal class RangeProxyServer(
     }
 
     private val random = SecureRandom()
-
     private val prefetch = Executors.newCachedThreadPool { r -> daemon(r, "MediaPlayer-range-proxy-fetch") }
 
     @Volatile
@@ -53,7 +52,6 @@ internal class RangeProxyServer(
     /** The registered entry behind [token], for tests. */
     internal fun entry(token: String): Entry? = synchronized(entries) { entries[token] }
 
-    /** Stops accepting connections; requests already being served run to completion. */
     override fun close() {
         server?.close()
         server = null

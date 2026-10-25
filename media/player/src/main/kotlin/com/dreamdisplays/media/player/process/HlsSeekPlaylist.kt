@@ -11,32 +11,17 @@ import java.util.Collections
  * does, instead of asking its demuxer to jump.
  */
 internal object HlsSeekPlaylist {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** A playlist larger than this is not worth reading; real ones are a few tens of kilobytes. */
     private const val MAX_PLAYLIST_BYTES = 4 * 1024 * 1024
-
-    /**
-     * Ceiling on the generated URI. Command lines are not unbounded, and a playlist long enough to
-     * approach this (tens of thousands of segments) is better served by the slow path than by a
-     * process that fails to start.
-     */
     private const val MAX_URI_LENGTH = 192 * 1024
-
-    /** How long a fetched playlist body stays reusable — long enough to cover a scrub. Not session. */
     private const val CACHE_TTL_NANOS = 30L * 1_000_000_000L
-
-    /** Bounded cache of playlist bodies, so scrubbing does not re-fetch the same playlist per seek. */
     private const val CACHE_LIMIT = 8
 
-    /** Tags that describe the playlist as a whole and must survive the trim. */
     private val HEADER_TAGS = listOf(
         "#EXTM3U", "#EXT-X-VERSION", "#EXT-X-TARGETDURATION", "#EXT-X-PLAYLIST-TYPE",
         "#EXT-X-INDEPENDENT-SEGMENTS", "#EXT-X-MAP",
     )
 
-    /** Matches the `URI="..."` attribute of `#EXT-X-MAP`, the one reference in a header tag. */
     private val URI_ATTRIBUTE = Regex("""URI="([^"]*)"""")
 
     /**
@@ -117,25 +102,21 @@ internal object HlsSeekPlaylist {
         return Trimmed(uri, residualNanos)
     }
 
-    /** Keeps a header tag, rewriting `#EXT-X-MAP`'s URI absolute; null for tags that must be dropped. */
     private fun headerLine(line: String, baseUrl: String): String? {
         if (HEADER_TAGS.none { line == it || line.startsWith("$it:") }) return null
         if (!line.startsWith("#EXT-X-MAP")) return line
         return URI_ATTRIBUTE.replace(line) { m -> """URI="${absolute(baseUrl, m.groupValues[1])}"""" }
     }
 
-    /** Content duration of an `#EXTINF:<seconds>,<title>` line, or null when it is malformed. */
     private fun extInfNanos(line: String): Long? {
         val seconds = line.substringAfter(':', "").substringBefore(',').trim().toDoubleOrNull() ?: return null
         if (!seconds.isFinite() || seconds <= 0.0) return null
         return (seconds * 1_000_000_000.0).toLong()
     }
 
-    /** Resolves a possibly relative playlist [reference] against [baseUrl]. */
     private fun absolute(baseUrl: String, reference: String): String =
         runCatching { URI(baseUrl).resolve(reference).toString() }.getOrDefault(reference)
 
-    /** Returns [url]'s body, from the short-lived cache when a recent copy is available. */
     private fun body(url: String): String? {
         val now = System.nanoTime()
         cache[url]?.let { if (now - it.fetchedNanos < CACHE_TTL_NANOS) return it.text }

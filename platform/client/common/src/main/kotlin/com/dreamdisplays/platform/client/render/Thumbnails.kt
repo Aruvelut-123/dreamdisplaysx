@@ -35,7 +35,6 @@ import kotlin.coroutines.cancellation.CancellationException
 /** Downloads, caches, and registers video thumbnails from YouTube and other sources as Minecraft textures. */
 object Thumbnails {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private val READY: Cache<String, Identifier> = Caffeine.newBuilder()
         .maximumSize(1_024)
         .expireAfterAccess(6, TimeUnit.HOURS)
@@ -71,7 +70,6 @@ object Thumbnails {
     )
 
     private val THUMB_CACHE_DIR: Path = Path.of("config", "dreamdisplays", "thumb-cache")
-
     private const val THUMB_CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1_000L
 
     private fun releaseTexture(id: Identifier?) {

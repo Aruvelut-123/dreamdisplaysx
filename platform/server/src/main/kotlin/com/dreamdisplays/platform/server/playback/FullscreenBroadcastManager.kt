@@ -21,21 +21,11 @@ data class FullscreenRadiusTarget(val world: String, val x: Double, val y: Doubl
 
 /** Manages server-forced fullscreen broadcast sessions targeting players by name or radius. */
 object FullscreenBroadcastManager {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Minimum interval between re-evaluating radius membership and refreshing already-shown targets. */
     private const val TICK_MS = 1_000L
-
-    /** Minimum interval between drift-correction resends of a real display's timeline to a target. */
     private const val TIMELINE_RESEND_MS = 5_000L
-
-    /** How long to wait for a delivery to be confirmed before sending it again. */
     private const val REDELIVER_UNCONFIRMED_MS = 1_500L
-
-    /** How long a single delivery keeps being retried before the viewer is left alone. */
     private const val DELIVERY_CONFIRM_WINDOW_MS = 20_000L
-
     private lateinit var transport: PlaybackTransport
     private val sessions = ConcurrentHashMap<String, Session>()
 
@@ -100,11 +90,9 @@ object FullscreenBroadcastManager {
     fun displayUrlByIdOrPrefix(idOrPrefix: String): String? =
         resolveDisplayByIdOrPrefix(idOrPrefix)?.url?.takeIf(String::isNotBlank)
 
-    /** Exact UUID match first, then an unambiguous case-insensitive id prefix (>= 4 chars). */
     private fun resolveDisplayByIdOrPrefix(idOrPrefix: String): DisplayData? =
         DisplayManager.resolveByIdOrPrefix(idOrPrefix)
 
-    /** True if [value] looks like a URL (with scheme or domain-like format). */
     private fun looksLikeUrl(value: String): Boolean =
         Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://").containsMatchIn(value) ||
                 Regex("""^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)+(?:[/?#].*)?$""")
@@ -227,7 +215,6 @@ object FullscreenBroadcastManager {
         }
     }
 
-    /** Drops every per-player delivery record, so a later re-target is treated as a fresh delivery. */
     private fun forget(session: Session, playerId: UUID) {
         session.shownTo.remove(playerId)
         session.confirmedBy.remove(playerId)
@@ -310,7 +297,6 @@ object FullscreenBroadcastManager {
         if (restored > 0) logger.info("Restored $restored persisted fullscreen session(s).")
     }
 
-    /** Resolves the display a persisted [record] targets: looks up a real display, or rebuilds a synthetic one. */
     private fun resolveRecordDisplay(record: FullscreenSession): DisplayData? {
         val id = runCatching { UUID.fromString(record.displayId) }.getOrNull() ?: return null
         if (!record.virtual) return DisplayManager.getDisplayData(id)
@@ -321,7 +307,6 @@ object FullscreenBroadcastManager {
         return display
     }
 
-    /** Persists every non-transient session, or clears the store when none remain. */
     private fun persist() {
         val records = sessions.values.filter { !it.transientSession }.map { session ->
             FullscreenSession(
@@ -348,7 +333,6 @@ object FullscreenBroadcastManager {
         FullscreenSessionStore.save(records)
     }
 
-    /** True if [playerId] matches [session]'s name selector or falls within its radius (OR'd). */
     private fun isTargeted(session: Session, playerId: UUID): Boolean {
         if (playerId in session.dismissedBy) return false
         if (session.namedTargets?.contains(playerId) == true) return true
@@ -357,14 +341,12 @@ object FullscreenBroadcastManager {
         return distSq <= radius.blocks * radius.blocks
     }
 
-    /** Delivers [session] to every currently online, currently-targeted player. */
     private fun deliverToAll(session: Session) {
         for (playerId in transport.onlinePlayerIds()) {
             if (isTargeted(session, playerId)) deliverTo(session, playerId)
         }
     }
 
-    /** Sends the display, fullscreen-state, and current playback position to one [playerId]. */
     private fun deliverTo(session: Session, playerId: UUID) {
         transport.sendDisplayInfo(playerId, session.display, session.forced)
         transport.sendTo(
@@ -389,7 +371,6 @@ object FullscreenBroadcastManager {
         session.deliveredAtMs[playerId] = now
     }
 
-    /** Sends the session's current playback position: the display's own clock for real displays, or the session's own looping [Timeline] for virtual ones. */
     private fun sendTimeline(session: Session, playerId: UUID, now: Long) {
         val timeline = session.timeline
         if (timeline != null) {
@@ -399,7 +380,6 @@ object FullscreenBroadcastManager {
         }
     }
 
-    /** Adds newly-in-range targets, drops out-of-range ones, and periodically refreshes drifting clients still shown. */
     private fun reconcileTargets(session: Session, now: Long) {
         val resendDue = now - session.lastTimelineResend >= TIMELINE_RESEND_MS
         for (playerId in transport.onlinePlayerIds()) {
@@ -420,7 +400,6 @@ object FullscreenBroadcastManager {
         if (resendDue) session.lastTimelineResend = now
     }
 
-    /** Tells everyone the session was shown to that it ended, and cleans up virtual display remnants. */
     private fun teardown(session: Session) {
         val now = transport.nowMs()
         for (playerId in session.shownTo) {

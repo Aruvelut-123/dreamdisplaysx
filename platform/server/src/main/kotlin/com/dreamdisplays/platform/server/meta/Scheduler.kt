@@ -16,16 +16,9 @@ import java.util.concurrent.ConcurrentHashMap
 @PaperOnly
 @NullMarked
 object Scheduler {
-    /** The plugin instance that owns this scheduler. */
     private lateinit var plugin: Plugin
-
-    /** A map of tracked players, used for `Folia` compatibility. */
     private val trackedPlayers: MutableMap<UUID, Player> = ConcurrentHashMap()
-
-    /** A map of tracked player names, used for `Folia` compatibility. */
     private val trackedNames: MutableMap<UUID, String> = ConcurrentHashMap()
-
-    /** A map of tracked admin flags, used for `Folia` compatibility. */
     private val trackedAdmins: MutableMap<UUID, Boolean> = ConcurrentHashMap()
 
     /** Binds the scheduler to its owning [plugin]. Must be called before any scheduling helper. */
@@ -138,7 +131,6 @@ object Scheduler {
     /** Cached admin flag safe to read from `Folia` global / async coordinators. */
     fun trackedPlayerIsAdmin(playerId: UUID): Boolean = trackedAdmins[playerId] == true
 
-    /** Updates the tracked player snapshot for [player]. */
     private fun refreshPlayerSnapshot(player: Player) {
         trackedNames[player.uniqueId] = player.name
         trackedAdmins[player.uniqueId] = player.hasPermission(PaperServer.config.permissions.deleteOthers)

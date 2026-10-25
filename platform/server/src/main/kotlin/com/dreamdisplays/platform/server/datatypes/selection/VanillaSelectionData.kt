@@ -32,7 +32,6 @@ class VanillaSelectionData : BaseSelectionData() {
     /** True when the selection contains slabs or stairs and the screen should wrap them. */
     var conforming: Boolean = false
 
-    /** Resets all selection state back to defaults. */
     override fun reset() {
         pos1 = null
         pos2 = null
@@ -90,7 +89,6 @@ class VanillaSelectionData : BaseSelectionData() {
         )
     }
 
-    /** Maps this direction to the shared horizontal [Cardinal], defaulting to [Cardinal.NORTH]. */
     private fun Direction.toCardinal(): Cardinal = when (this) {
         Direction.NORTH -> Cardinal.NORTH
         Direction.EAST -> Cardinal.EAST

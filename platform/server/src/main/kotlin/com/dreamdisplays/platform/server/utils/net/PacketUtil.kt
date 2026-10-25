@@ -121,11 +121,9 @@ object PacketUtil {
         PaperV2Networking.send(v2Players(players), ClearCache(displayUuids))
     }
 
-    /** The recipients that negotiated protocol v2. */
     private fun v2Players(players: List<Player?>): List<Player> =
         players.filterNotNull().filter { V2PlayerTracker.isV2(it.uniqueId) }
 
-    /** Maps a [BlockFace] to its wire value; faces not in the protocol fall back to north. */
     private fun BlockFace.toPacketByte(): Int = when (this) {
         BlockFace.NORTH -> 0
         BlockFace.EAST -> 1

@@ -16,12 +16,9 @@ object ResolverConfig {
         val ytdlpCookieSource: CookieSource
     }
 
-    /** Default values until the host installs a real provider. */
     private object Defaults : Provider {
-        /** Default `yt-dlp` proxy URL, or blank for none. */
         override val ytdlpProxy: String = ""
 
-        /** Default browser to import cookies from, or [CookieSource.NONE]. */
         override val ytdlpCookieSource: CookieSource = CookieSource.NONE
     }
 

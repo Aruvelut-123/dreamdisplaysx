@@ -44,7 +44,6 @@ internal class WatchPartyController(private val screen: DisplayScreen) {
         send(WatchPartyAction.CLOSE)
     }
 
-    /** Sends a watch-party control for this display; the server enforces participant / host rules. */
     private fun send(action: WatchPartyAction, positionMs: Long = screen.currentTimeNanos / 1_000_000L) {
         Initializer.sendPacket(WatchPartyControl(screen.uuid, action.wire, positionMs))
     }

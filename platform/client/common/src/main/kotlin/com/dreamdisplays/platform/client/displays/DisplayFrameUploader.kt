@@ -18,10 +18,6 @@ import java.util.*
  */
 internal class DisplayFrameUploader(private val uuid: UUID) {
 
-    /**
-     * A YUV texture is live but the active shader pack disabled the YUV render path; restart the
-     * pipeline once into RGBA. Latched so the restart is requested only once per fallback.
-     */
     private var shaderPackYuvFallbackRequested = false
 
     /**
@@ -69,7 +65,6 @@ internal class DisplayFrameUploader(private val uuid: UUID) {
         }
     }
 
-    /** Uploads the live channel's ready frame into the current texture(s). Returns true when uploaded. */
     private fun uploadLive(mp: MediaPlayer, tex: DisplayTextureResource): Boolean {
         val w = tex.width
         val h = tex.height
@@ -90,7 +85,6 @@ internal class DisplayFrameUploader(private val uuid: UUID) {
         }
     }
 
-    /** Uploads the incoming (quality-switch) channel's ready frame into the staged texture(s). */
     private fun uploadIncoming(mp: MediaPlayer, tex: DisplayTextureResource): Boolean {
         val w = tex.pendingWidth
         val h = tex.pendingHeight
@@ -120,7 +114,6 @@ internal class DisplayFrameUploader(private val uuid: UUID) {
     }
 
     companion object {
-        /** Logger for upload failures and quality-handoff diagnostics. */
         private val logger = LoggerFactory.getLogger(javaClass)
     }
 }
