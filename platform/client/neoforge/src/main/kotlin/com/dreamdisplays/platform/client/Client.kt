@@ -150,7 +150,6 @@ class Client(modEventBus: IEventBus, container: ModContainer) : DreamMod {
     private fun isDisplayBlock(pos: BlockPos): Boolean =
         DisplayRegistry.getScreens().any { it.isInScreen(pos) }
 
-    /** Main camera accessor. */
     private fun mainCamera(mc: Minecraft): Camera {
         //? if >=26.2 {
         return mc.gameRenderer.mainCamera()

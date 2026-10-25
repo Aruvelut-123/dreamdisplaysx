@@ -85,7 +85,7 @@ sealed interface MediaSource {
             val host = parsed?.uri?.host?.lowercase(Locale.ROOT)
             if (parsed != null && (host == "twitch.tv" || host?.endsWith(".twitch.tv") == true)) {
                 val twitchUrl = parsed.value
-                val segments = parsed.uri.path?.split('/')?.filter { it.isNotBlank() } ?: emptyList()
+                val segments = parsed.uri.path?.split('/')?.filter { it.isNotBlank() } ?: []
                 when {
                     host == "clips.twitch.tv" && segments.isNotEmpty() ->
                         return Twitch(twitchUrl, clipSlug = segments[0])

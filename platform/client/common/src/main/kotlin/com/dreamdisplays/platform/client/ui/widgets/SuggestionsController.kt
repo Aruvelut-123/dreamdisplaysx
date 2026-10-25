@@ -63,7 +63,6 @@ class SuggestionsController {
             loadStatusKey
         }
 
-    /** Status of the current network load, independent of which list is on screen. */
     private var loadStatusKey: String? = null
 
     /** Wall-clock start of the in-flight load, for the elapsed-seconds suffix on the loading message. */
@@ -74,18 +73,9 @@ class SuggestionsController {
 
     private val requestSeq = atomic(0)
     private var currentVideoId: String? = null
-
-    /** The last non-empty text search query, so [setSort] knows what to re-run for a network sort change. */
     private var lastQuery: String? = null
-
-    /** How to continue the current result list when [loadMoreIfNeeded] fires; null when the current
-     *  list isn't paginable (single-video / Twitch-only results). */
     private var moreMode: MoreMode? = null
-
-    /** Continuation token for the next page, or null when the list is exhausted (or not yet loaded). */
     private var continuationToken: String? = null
-
-    /** Guards against firing a second page-2 request while one is already in flight. */
     private var loadingMore = false
 
     /** Reload hook the panel uses to reset scroll when new results land. */
@@ -97,7 +87,6 @@ class SuggestionsController {
     /** True while a background "load more" request is in flight (distinct from the initial [isLoading]). */
     val isLoadingMore: Boolean get() = loadingMore
 
-    /** Distinguishes what a follow-up "load more" page should continue: a text search or a related-video list. */
     private sealed class MoreMode {
         data class Search(val query: String) : MoreMode()
         data class Related(val videoId: String) : MoreMode()
@@ -172,7 +161,7 @@ class SuggestionsController {
             source !is MediaSource.Vimeo && source !is MediaSource.Kick && source !is MediaSource.Bilibili
         ) {
             customUrlOf(source)?.let {
-                publish(seq, listOf(customResult(it)), null)
+                publish(seq, [customResult(it)], null)
                 return
             }
         }
@@ -184,7 +173,7 @@ class SuggestionsController {
                         val meta = runCatching { svc.metadata(maybeId) }
                             .onFailure { if (it is CancellationException) throw it; logger.warn("URL meta: ${it.message}") }
                             .getOrNull()
-                        listOf(meta ?: fallbackResult(maybeId))
+                        [meta ?: fallbackResult(maybeId)]
                     }
 
                     source is MediaSource.Twitch -> {
@@ -193,7 +182,7 @@ class SuggestionsController {
                         }
                             .onFailure { if (it is CancellationException) throw it; logger.warn("Twitch meta: ${it.message}") }
                             .getOrNull()
-                        listOf(twitchResult(source, meta))
+                        [twitchResult(source, meta)]
                     }
 
                     source is MediaSource.Vimeo -> {
@@ -202,14 +191,14 @@ class SuggestionsController {
                         }
                             .onFailure { if (it is CancellationException) throw it; logger.warn("Vimeo meta: ${it.message}") }
                             .getOrNull()
-                        listOf(
+                        [
                             platformResult(
                                 source.url,
                                 MediaPlatform.VIMEO,
                                 meta,
                                 fallbackTitle = "Vimeo ${source.videoId}"
                             )
-                        )
+                        ]
                     }
 
                     source is MediaSource.Kick -> {
@@ -219,7 +208,7 @@ class SuggestionsController {
                             .onFailure { if (it is CancellationException) throw it; logger.warn("Kick meta: ${it.message}") }
                             .getOrNull()
                         val fallback = source.channel ?: source.videoUuid ?: "Kick"
-                        listOf(platformResult(source.url, MediaPlatform.KICK, meta, fallbackTitle = fallback))
+                        [platformResult(source.url, MediaPlatform.KICK, meta, fallbackTitle = fallback)]
                     }
 
                     source is MediaSource.Bilibili -> {
@@ -232,7 +221,7 @@ class SuggestionsController {
                             }
                             .getOrNull()
                         val fallback = source.bvid ?: source.avid?.let { "av$it" } ?: source.roomId?.toString() ?: "Bilibili"
-                        listOf(platformResult(source.url, MediaPlatform.BILIBILI, meta, fallbackTitle = fallback))
+                        [platformResult(source.url, MediaPlatform.BILIBILI, meta, fallbackTitle = fallback)]
                     }
 
                     else -> {
@@ -293,18 +282,18 @@ class SuggestionsController {
                         // Chinese query is exactly where it's most useful. Kick is not mixed in here at all
                         // anymore. Twitch keeps its own unweighted mix-in below, untouched by this ratio.
                         val youtubeAndMinor = weightedInterleave(
-                            listOf(
+                            [
                                 youtubeResults.orEmpty() to YOUTUBE_WEIGHT,
                                 bilibiliResults.orEmpty().take(BILIBILI_RESULT_CAP) to BILIBILI_WEIGHT,
-                            )
+                            ]
                         )
                         // Twitch channel hits get folded in at a small weight too, same idea as Bilibili
                         // above: YouTube should stay the thing you mostly see, Twitch an occasional find.
                         val onDemand = weightedInterleave(
-                            listOf(
+                            [
                                 youtubeAndMinor to (1.0 - TWITCH_WEIGHT),
                                 twitchSearchResults.orEmpty().take(TWITCH_RESULT_CAP) to TWITCH_WEIGHT,
-                            )
+                            ]
                         )
                         val combined = ArrayList<MediaSearchResult>(1 + onDemand.size).apply {
                             liveTwitch?.let(::add)
@@ -329,20 +318,13 @@ class SuggestionsController {
         }
     }
 
-    /** True when [query] contains a Han (Chinese-script) character, the gate for even trying a Bilibili search. */
     private fun looksChinese(query: String): Boolean = CHINESE_CHAR_RE.containsMatchIn(query)
 
-    /** Returns [query] lowercased when it looks like a Twitch login (letters/digits/underscore, 3-25 chars). */
     private fun twitchLoginCandidate(query: String): String? {
         val q = query.trim()
         return if (TWITCH_LOGIN_RE.matches(q)) q.lowercase() else null
     }
 
-    /**
-     * Twitch's `searchSuggestions` matches channel/game names, not free text — a phrase like
-     * "cs:go stream" matches nothing, while "cs go" (punctuation and the generic word stripped) does.
-     * Strips punctuation and common filler words so a natural-language query still finds channels.
-     */
     private fun twitchSearchFragment(query: String): String {
         val cleaned = query.replace(NON_WORD_RE, " ")
             .split(Regex("\\s+"))
@@ -351,11 +333,9 @@ class SuggestionsController {
         return cleaned.ifBlank { query }
     }
 
-    /** True when [this] (already lowercased) or its naive singular (trailing "s" stripped) is a known noise word. */
     private fun String.isNoiseWord(): Boolean =
         this in TWITCH_SEARCH_NOISE_WORDS || removeSuffix("s") in TWITCH_SEARCH_NOISE_WORDS
 
-    /** Looks up [login] on Twitch and, if it's live, builds the card shown ahead of the YouTube results. */
     private fun liveTwitchResult(login: String): MediaSearchResult? = runCatching {
         TwitchApi.queryChannel(login)?.takeIf { it.isLive }?.let { meta ->
             twitchResult(MediaSource.Twitch(url = "https://www.twitch.tv/$login", channel = login), meta)
@@ -364,7 +344,6 @@ class SuggestionsController {
         logger.debug("Twitch live-channel lookup failed for '$login': ${e.message}.")
     }.getOrNull()
 
-    /** Builds a search-result card for a BIlibili video hit, keyed by its watch URL like other platform cards. */
     private fun bilibiliSearchResult(item: BilibiliSearchItem): MediaSearchResult {
         val url = "https://www.bilibili.com/video/${item.bvid}"
         return MediaSearchResult(
@@ -379,7 +358,6 @@ class SuggestionsController {
         )
     }
 
-    /** Builds a search-result card for a Twitch channel hit, keyed by its channel URL like other platform cards. */
     private fun twitchSearchResult(item: TwitchSearchItem): MediaSearchResult {
         val url = "https://www.twitch.tv/${item.login}"
         return MediaSearchResult(
@@ -408,7 +386,7 @@ class SuggestionsController {
      */
     private fun weightedInterleave(lists: List<Pair<List<MediaSearchResult>, Double>>): List<MediaSearchResult> {
         val sources = lists.filter { it.first.isNotEmpty() }
-        if (sources.isEmpty()) return emptyList()
+        if (sources.isEmpty()) return []
         if (sources.size == 1) return sources[0].first
 
         val totalSize = sources.sumOf { it.first.size }
@@ -434,11 +412,6 @@ class SuggestionsController {
         return result
     }
 
-    /**
-     * Picks the uploader (from [youtubeResults]) whose login shape is closest to [query] by edit
-     * distance, within the tolerance [fuzzyThreshold] allows for its length, e.g. so "shrou" or
-     * "shroug" still matches an uploader named "shroud". Returns null when no uploader is close enough.
-     */
     private fun fuzzyTwitchLogin(query: String, youtubeResults: List<MediaSearchResult>?): String? {
         if (youtubeResults.isNullOrEmpty()) return null
         val qShape = toLoginShape(query)
@@ -460,21 +433,15 @@ class SuggestionsController {
         return best
     }
 
-    /** Normalizes free text to a Twitch login's character set: lowercase letters, digits, underscore. */
     private fun toLoginShape(text: String): String =
         text.lowercase().filter { it.isLetterOrDigit() || it == '_' }.take(25)
 
-    /**
-     * Elasticsearch-style "AUTO" fuzziness: how many single-character edits still count as the same
-     * word, scaled by its length (short strings tolerate none, longer ones tolerate more).
-     */
     private fun fuzzyThreshold(length: Int): Int = when {
         length <= 2 -> 0
         length <= 5 -> 1
         else -> 2
     }
 
-    /** Levenshtein edit distance between [a] and [b] (Wagner-Fischer dynamic programming, single-row). */
     private fun levenshtein(a: String, b: String): Int {
         if (a == b) return 0
         if (a.isEmpty()) return b.length
@@ -492,7 +459,6 @@ class SuggestionsController {
         return prev[b.length]
     }
 
-    /** Loads the related-videos list for [videoId] in the background. */
     private fun loadRelated(videoId: String) {
         startLoad()
         val seq = requestSeq.incrementAndGet()
@@ -543,11 +509,9 @@ class SuggestionsController {
         }
     }
 
-    /** Launch load. */
     private fun launchLoad(block: suspend CoroutineScope.() -> Unit) =
         DreamCoroutines.clientIo.launch(block = block)
 
-    /** Switches the panel into the loading state and clears stale results. */
     private fun startLoad() {
         loadStatusKey = KEY_LOADING
         loadStartedAtMs = System.currentTimeMillis()
@@ -557,11 +521,6 @@ class SuggestionsController {
         onResults()
     }
 
-    /**
-     * Applies a finished request on the client thread, ignoring it if a newer request superseded it.
-     * [nextToken]/[mode] are set for paginable loads (plain search / related-videos); left null for
-     * single-video or Twitch-only results, which have nothing more to page through.
-     */
     private fun publish(
         seq: Int, results: List<MediaSearchResult>?, error: String?,
         nextToken: String? = null, mode: MoreMode? = null,
@@ -585,11 +544,6 @@ class SuggestionsController {
         }
     }
 
-    /**
-     * Adds [results] to [cards] (skipping ids already shown — search / related continuation pages can
-     * overlap the previous page when the underlying list shifts between requests) and kicks off their
-     * thumbnail downloads; must run on the client thread.
-     */
     private fun appendCards(results: List<MediaSearchResult>) {
         val startIndex = cards.size
         val seen = HashSet<String>(cards.size).apply { cards.mapTo(this) { it.id } }
@@ -607,18 +561,12 @@ class SuggestionsController {
         }
     }
 
-    /**
-     * The playable URL behind [source] when it is a custom link (a direct media file, or any other
-     * remote page the extractor chain may know), or null when it is not a URL at all - which is how
-     * a plain search phrase stays a search phrase.
-     */
     private fun customUrlOf(source: MediaSource): String? = when (source) {
         is MediaSource.DirectStream -> source.streamUrl
         is MediaSource.Remote -> CustomMediaUrls.normalize(source.url)
         else -> null
     }
 
-    /** The single card shown for a pasted link. Built purely from the URL: file name as the title, host as the uploader. */
     private fun customResult(url: String): MediaSearchResult = MediaSearchResult(
         id = url,
         title = CustomMediaUrls.displayName(url),
@@ -629,11 +577,9 @@ class SuggestionsController {
         isCustom = true,
     )
 
-    /** Minimal result used when URL metadata could not be fetched. */
     private fun fallbackResult(videoId: String) =
         MediaSearchResult(videoId, YouTubeUrls.watchUrl(videoId), null, null, null)
 
-    /** Builds a single-card result for a pasted Twitch URL, using [meta] when the Helix lookup succeeded. */
     private fun twitchResult(source: MediaSource.Twitch, meta: TwitchMetadata?): MediaSearchResult {
         val id = TwitchMetadataCache.cacheKey(source) ?: source.url
         val fallbackTitle = source.channel ?: source.videoId ?: source.clipSlug ?: source.url
@@ -651,11 +597,6 @@ class SuggestionsController {
         )
     }
 
-    /**
-     * Builds a single-card result for a pasted Vimeo / Kick link. The card is keyed by the watch URL
-     * (unlike Twitch, whose id is a cache key) so its thumbnail slot never collides with a YouTube id;
-     * [meta] fills in the title / uploader / thumbnail when the metadata lookup succeeded.
-     */
     private fun platformResult(
         url: String,
         platform: MediaPlatform,
@@ -677,62 +618,27 @@ class SuggestionsController {
         /** Results fetched per page; the panel loads another page as the user scrolls near the end. */
         const val PAGE_SIZE = 15
 
-        /** Translation kes for the status line. */
         private const val KEY_LOADING = "dreamdisplays.suggestions.loading"
-
-        /** Translation key for the error status line. */
         private const val KEY_ERROR = "dreamdisplays.suggestions.error"
-
-        /** Translation key for the empty status line. */
         private const val KEY_EMPTY = "dreamdisplays.suggestions.empty"
-
-        /** Translation key shown when the player has not saved any custom links yet. */
         private const val KEY_NO_LINKS = "dreamdisplays.suggestions.no_links"
-
-        /** Logger. */
         private val logger = LoggerFactory.getLogger(javaClass)
-
-        /** Twitch login shape: letters, digits, underscore, 3-25 chars (real handles never contain spaces). */
         private val TWITCH_LOGIN_RE = Regex("^[A-Za-z0-9_]{3,25}$")
-
-        /** Matches any Han-script character (CJK Unified Ideographs); the sole signal for "this query is in Chinese" ([looksChinese]). */
         private val CHINESE_CHAR_RE = Regex("[一-鿿]")
-
-        /** Anything that isn't a letter/digit/space, stripped when building a [twitchSearchFragment]. */
         private val NON_WORD_RE = Regex("[^\\p{L}\\p{N}\\s]")
 
-        /** Generic words that defeat Twitch's channel-name matcher when left in a [twitchSearchFragment]. */
         private val TWITCH_SEARCH_NOISE_WORDS = setOf(
             "stream", "streaming", "streamer", "live", "gameplay", "gaming", "playing",
             "highlights", "clips", "clip", "vod", "vods", "channel", "twitch",
         )
 
-        /** Max distinct uploader names scanned for a fuzzy Twitch-login match, so a big result page stays cheap. */
         private const val FUZZY_CANDIDATE_LIMIT = 8
-
-        /** Max BIlibili search hits mixed into a single results page — generous, since BIlibili only ever
-         *  competes at all on a Chinese query ([looksChinese]), where it should show up strongly. */
         private const val BILIBILI_RESULT_CAP = 10
-
-        /** Only BIlibili hits with at least this many views survive the popularity filter in [runSearch]. */
         private const val BILIBILI_MIN_VIEWS = 50_000L
-
-        /** Max Twitch channel hits mixed in; channel cards are heavier (whole-channel, not a single video) than a VOD card. */
         private const val TWITCH_RESULT_CAP = 4
-
-        /** Tolerance for comparing [weightedInterleave]'s fractional "how due" scores, avoiding float-equality flakiness. */
         private const val FRACTION_EPSILON = 1e-9
-
-        /** [weightedInterleave] share YouTube is entitled to against Bilibili. */
         private const val YOUTUBE_WEIGHT = 0.8
-
-        /**
-         * BIlibili's share in [weightedInterleave]. It only ever competes at all on a Chinese query
-         * ([looksChinese]) — and on those, it should show up strongly rather than as an afterthought.
-         */
         private const val BILIBILI_WEIGHT = 0.6
-
-        /** Twitch's share of the final [weightedInterleave] pass — YouTube should dominate, Twitch pop up rarely. */
         private const val TWITCH_WEIGHT = 0.12
     }
 }

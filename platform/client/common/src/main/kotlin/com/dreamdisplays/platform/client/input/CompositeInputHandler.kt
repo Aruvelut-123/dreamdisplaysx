@@ -8,7 +8,6 @@ import java.util.concurrent.CopyOnWriteArrayList
  * single [InputHandler] entry point for raw input.
  */
 class CompositeInputHandler : InputHandler {
-    /** Handlers registered to this chain. [CopyOnWriteArrayList] allows concurrent modification while iterating. */
     private val handlers = CopyOnWriteArrayList<InputHandler>()
 
     /** Adds [handler] to the chain; close the returned handle to remove it. */
@@ -17,7 +16,6 @@ class CompositeInputHandler : InputHandler {
         return AutoCloseable { handlers -= handler }
     }
 
-    /** Offers [action] to each handler by priority; true once the first handler consumes it. */
     override fun handle(action: InputAction): Boolean =
         handlers.sortedByDescending { it.priority }.any { it.handle(action) }
 }

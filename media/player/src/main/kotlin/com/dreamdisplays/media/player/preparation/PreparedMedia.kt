@@ -12,5 +12,5 @@ data class PreparedMedia(
     val isLive: Boolean,
     val isSeekable: Boolean,
     val durationNanos: Long,
-    val availableSubtitles: List<SubtitleTrack> = emptyList(),
+    val availableSubtitles: List<SubtitleTrack> = [],
 )

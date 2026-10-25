@@ -22,7 +22,6 @@ import org.bukkit.entity.Player
 import java.util.*
 import kotlin.time.Clock
 
-/** The literal actions accepted where a `HH:mm[:ss]` time can also go. */
 private const val CANCEL_TOKEN = "cancel"
 private const val PLAY_TOKEN = "play"
 private const val PAUSE_TOKEN = "pause"
@@ -77,7 +76,6 @@ object VanillaScheduleCommand {
     }
 }
 
-/** Dispatches on [action] / [time]: no action shows the current schedule, `cancel` clears it, `play` / `pause` sets or prompts for a time. */
 private fun respond(
     data: DisplayData,
     action: String?,
@@ -89,30 +87,26 @@ private fun respond(
     CANCEL_TOKEN -> cancel(data, localize)
     PLAY_TOKEN -> onAction(data, PlaybackAction.PLAY, time, playerId, localize)
     PAUSE_TOKEN -> onAction(data, PlaybackAction.PAUSE, time, playerId, localize)
-    else -> localize("scheduleInvalidTime", emptyList())
+    else -> localize("scheduleInvalidTime", [])
 }
 
-/** True if [playerId] may change [data]'s schedule: its owner, or granted [canManageOthers]. */
 private fun canManage(data: DisplayData, playerId: UUID, canManageOthers: Boolean): Boolean =
     data.ownerId == playerId || canManageOthers
 
-/** Reports the current schedule, if any, converted into [viewerId]'s own local time. */
 private fun showCurrent(data: DisplayData, viewerId: UUID, localize: (String, List<String>) -> String): String {
-    val at = data.scheduledStart ?: return localize("scheduleNoneSet", emptyList())
+    val at = data.scheduledStart ?: return localize("scheduleNoneSet", [])
     val action = data.scheduledAction ?: PlaybackAction.PLAY
     val localSecond = ScheduleTimeUtil.localSecondOfDay(at, ScheduleTimeUtil.offsetMinutesOf(viewerId))
     return localize(
         "scheduleCurrentSet",
-        listOf(localize(actionKey(action), emptyList()), ScheduleTimeUtil.format(localSecond, withSeconds = true)),
+        [localize(actionKey(action), []), ScheduleTimeUtil.format(localSecond, withSeconds = true)],
     )
 }
 
-/** Cancels the pending schedule, if any. */
 private fun cancel(data: DisplayData, localize: (String, List<String>) -> String): String =
-    if (ScheduledPlaybackManager.cancel(data.id)) localize("scheduleCancelled", emptyList())
-    else localize("scheduleNoneSet", emptyList())
+    if (ScheduledPlaybackManager.cancel(data.id)) localize("scheduleCancelled", [])
+    else localize("scheduleNoneSet", [])
 
-/** With no [time] yet, reveals the player's current local time and prompts for one; otherwise parses and schedules it. */
 private fun onAction(
     data: DisplayData,
     action: PlaybackAction,
@@ -123,11 +117,11 @@ private fun onAction(
     val offset = ScheduleTimeUtil.offsetMinutesOf(playerId)
     if (time == null) {
         val nowSecond = ScheduleTimeUtil.currentSecondOfDay(offset)
-        return localize("scheduleNeedsTime", listOf(ScheduleTimeUtil.format(nowSecond, withSeconds = true)))
+        return localize("scheduleNeedsTime", [ScheduleTimeUtil.format(nowSecond, withSeconds = true)])
     }
 
     val targetSecond = ScheduleTimeUtil.parseSecondOfDay(time)
-        ?: return localize("scheduleInvalidTime", emptyList())
+        ?: return localize("scheduleInvalidTime", [])
 
     val now = Clock.System.now()
     val nowSecond = ScheduleTimeUtil.localSecondOfDay(now, offset)
@@ -139,28 +133,27 @@ private fun onAction(
     val countdown = when {
         secondsAhead >= 3600 -> localize(
             "scheduleCountdownHours",
-            listOf((secondsAhead / 3600).toString(), ((secondsAhead % 3600) / 60).toString())
+            [(secondsAhead / 3600).toString(), ((secondsAhead % 3600) / 60).toString()]
         )
 
         secondsAhead >= 60 -> localize(
             "scheduleCountdownMinutes",
-            listOf((secondsAhead / 60).toString(), (secondsAhead % 60).toString())
+            [(secondsAhead / 60).toString(), (secondsAhead % 60).toString()]
         )
 
-        else -> localize("scheduleCountdownSeconds", listOf(secondsAhead.toString()))
+        else -> localize("scheduleCountdownSeconds", [secondsAhead.toString()])
     }
     return localize(
         "scheduleSet",
-        listOf(
+        [
             ScheduleTimeUtil.format(nowSecond, withSeconds = true),
             data.shortLabel,
-            localize(actionKey(action), emptyList()),
+            localize(actionKey(action), []),
             ScheduleTimeUtil.format(targetSecond, withSeconds = true),
             countdown,
-        ),
+        ],
     )
 }
 
-/** The i18n key for [action]'s localized verb phrase, used inside [scheduleSet]/[scheduleCurrentSet]. */
 private fun actionKey(action: PlaybackAction): String =
     if (action == PlaybackAction.PAUSE) "scheduleActionPause" else "scheduleActionPlay"

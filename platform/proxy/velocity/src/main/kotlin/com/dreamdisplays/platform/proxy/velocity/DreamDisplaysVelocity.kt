@@ -44,14 +44,7 @@ import org.slf4j.Logger
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-/**
- * `dreamdisplays:proxy` channel id, shared verbatim by the `BungeeCord` sibling
- * ([com.dreamdisplays.platform.proxy.bungeecord.DreamDisplaysBungeecord]) — both sides must agree on the
- * literal string, plugin-messaging channel ids are not otherwise unified across the two proxy APIs.
- */
 private const val PROXY_CHANNEL = "dreamdisplays:proxy"
-
-/** How often the stale-session sweep ([NetworkFullscreenManager.pruneStale]) runs. */
 private const val PRUNE_INTERVAL_MS = 5L * 60L * 1000L
 
 /** `Velocity` proxy coordinator plugin entry point; manages plugin messages and network state. */
@@ -84,7 +77,6 @@ class DreamDisplaysVelocity @Inject constructor(
             .schedule()
     }
 
-    /** Updates the known server list when `Velocity`'s roster changes. */
     private fun refreshKnownServers() {
         NetworkBackendRegistry.updateKnownServers(proxyServer.allServers.map { it.serverInfo.name })
     }
@@ -241,27 +233,23 @@ class DreamDisplaysVelocity @Inject constructor(
         sendTo(lastServer, PlayerLeftNetwork(event.player.uniqueId.toString(), lastServer))
     }
 
-    /** Sends [packet] to backend [serverName], if it's currently registered on this proxy. */
     private fun sendTo(serverName: String, packet: ProxyPacket) {
         proxyServer.getServer(serverName)
             .ifPresent { it.sendPluginMessage(channel, ProxyPacketRegistry.encode(packet)) }
     }
 
-    /** Closes a [ResolveDisplayToken] fan-out window and forwards the answer, if [NetworkTokenResolutions.settle] found exactly one. */
     private fun settleResolution(requestId: String) {
         NetworkTokenResolutions.settle(requestId)?.let { (origin, url) ->
             sendTo(origin, DisplayTokenResolved(requestId, origin, url))
         }
     }
 
-    /** Re-applies every network fullscreen session [serverName] is still owed, on a [PlayerReady]. */
     private fun retryPendingSessions(serverName: String) {
         NetworkFullscreenManager.pendingSessionsFor(serverName).forEach { session ->
             sendTo(serverName, NetworkFullscreenManager.toApplyPacket(session))
         }
     }
 
-    /** Re-applies all live sessions that match the server's scope to a newly-connected backend. */
     private fun resendLiveSessions(serverName: String) {
         NetworkFullscreenManager.liveSessionsApplicableTo(serverName, NetworkBackendRegistry.allServerNames())
             .forEach { session ->

@@ -58,7 +58,6 @@ class YtStream(
         isDefault = false,
     )
 
-    /** Returns a human-readable string representation of the stream, including all available metadata. */
     override fun toString(): String = buildString {
         append("YtStream{").append(mimeType)
         container?.let { append(" container=").append(it) }

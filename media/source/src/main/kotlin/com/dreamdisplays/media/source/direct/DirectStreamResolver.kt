@@ -21,23 +21,12 @@ import java.util.concurrent.TimeUnit
  * Plays a URL that already is the media: a video file, an HLS playlist, or a DASH manifest.
  */
 object DirectStreamResolver : MediaResolverService {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Above the extractor resolvers: when a URL really is media, no extractor should see it. */
     override val priority: Int = 20
 
-    /** Cap on a fetched playlist, which is text and never legitimately larger than this. */
     private const val MAX_PLAYLIST_BYTES = 1 * 1024 * 1024
-
-    /** Files and VOD manifests are stable; the cache exists mostly to absorb prefetch -> resolve. */
     private const val CACHE_MINUTES = 10L
-
-    /**
-     * Resolutions are cached by URL. Signed CDN links do expire, but well within [CACHE_MINUTES] a
-     * re-resolve would return the same URL anyway — the player re-enters this resolver on quality
-     * switches and stall recovery, and a fresh probe per restart is pure latency.
-     */
     private val cache: Cache<String, ResolvedMedia> = Caffeine.newBuilder()
         .maximumSize(64)
         .expireAfterWrite(CACHE_MINUTES, TimeUnit.MINUTES)
@@ -54,21 +43,11 @@ object DirectStreamResolver : MediaResolverService {
         .expireAfterWrite(CACHE_MINUTES, TimeUnit.MINUTES)
         .build()
 
-    /**
-     * Claims direct sources outright, and unrecognized remote URLs speculatively - for those the
-     * probe in [resolve] is the real test, and failing it hands the URL back to the chain.
-     */
     override fun canResolve(source: MediaSource): Boolean =
         source is MediaSource.DirectStream || source is MediaSource.Remote
 
-    /**
-     * Warms the probe cache; the registry already calls this off the caller's thread. Returns false
-     * for a speculative [MediaSource.Remote] the probe rejects — that URL belongs to an extractor,
-     * so the registry should carry on warming the resolver that will actually serve it.
-     */
     override fun prefetch(source: MediaSource): Boolean = runCatching { resolve(source) }.isSuccess
 
-    /** Probes [source] and builds its streams. */
     override fun resolve(source: MediaSource): ResolvedMedia {
         val url = source.toResolvableUrl()
             ?: throw UnsupportedOperationException("$source has no resolvable URL.")
@@ -132,10 +111,6 @@ object DirectStreamResolver : MediaResolverService {
         notDirect.invalidate(url)
     }
 
-    /**
-     * Refuses everything that is reachable but cannot become a picture on a display, with the
-     * reason spelled out. Each of these is a mistake a player can act on, unlike a decode error.
-     */
     private fun rejectNonVideo(
         probe: DirectMediaProbe.Result, declared: CustomMediaKind, effective: CustomMediaKind,
         firstParty: Boolean,
@@ -167,11 +142,6 @@ object DirectStreamResolver : MediaResolverService {
         }
     }
 
-    /**
-     * Reconciles what the URL looked like with what the server actually served. The `Content-Type`
-     * wins for manifests, because a playlist behind an extension-less or signed URL is common and
-     * must be parsed as a playlist rather than opened as a file.
-     */
     private fun effectiveKind(declared: CustomMediaKind, probe: DirectMediaProbe.Result): CustomMediaKind {
         val type = probe.contentType
         return when {
@@ -184,11 +154,6 @@ object DirectStreamResolver : MediaResolverService {
         }
     }
 
-    /**
-     * Builds the single muxed stream of a plain file, seekable when the server supports byte ranges
-     * (no ranges means no seeking, whatever the container says) and with the duration read straight
-     * out of the container header so the seek bar and scrub preview have a timeline to work with.
-     */
     private fun resolveFile(
         probe: DirectMediaProbe.Result,
         originalUrl: String,
@@ -208,7 +173,7 @@ object DirectStreamResolver : MediaResolverService {
             originalUrl.take(120), probe.contentType, probe.contentLength, probe.acceptsRanges, durationNanos,
         )
         return ResolvedMedia(
-            streams = listOf(muxedStream(probe.finalUrl)),
+            streams = [muxedStream(probe.finalUrl)],
             metadata = metadataFor(originalUrl, durationNanos, probe.fileName),
             // A file the server will not range-seek behaves like a stream: it can only play forward
             isLive = false,
@@ -216,11 +181,6 @@ object DirectStreamResolver : MediaResolverService {
         )
     }
 
-    /**
-     * Fetches the playlist and, when it is a master, exposes every rendition as its own stream so
-     * the quality slider works on a custom HLS link exactly as it does on a platform stream. A
-     * media playlist resolves to itself, live unless it declares an end.
-     */
     private fun resolveHls(playlistUrl: String): ResolvedMedia {
         val text = fetchPlaylist(playlistUrl)
             ?: throw DreamMediaException.Network("Could not read this playlist.")
@@ -240,7 +200,7 @@ object DirectStreamResolver : MediaResolverService {
 
         val streams =
             if (parsed.isMaster) masterStreams(parsed, seekByDecoding)
-            else listOf(muxedStream(playlistUrl, seekByDecoding))
+            else [muxedStream(playlistUrl, seekByDecoding)]
 
         // Summed from the rendition's own segment list. Without it the player has no timeline, and a
         // VOD with no timeline has no seek bar — the stream plays, but it cannot be scrubbed at all.
@@ -258,11 +218,6 @@ object DirectStreamResolver : MediaResolverService {
         )
     }
 
-    /**
-     * Reads one of [master]'s media playlists — the default audio rendition when the sound is
-     * separate, else the first variant. Null when it cannot be read, which is not fatal: the caller
-     * falls back to what the master alone implies, exactly as before this probe existed.
-     */
     private fun probeRendition(master: DirectHlsPlaylist.Parsed): DirectHlsPlaylist.Parsed? {
         val url = master.audioRenditions.firstOrNull()?.url
             ?: master.variants.firstOrNull()?.url
@@ -272,7 +227,6 @@ object DirectStreamResolver : MediaResolverService {
         return DirectHlsPlaylist.parse(text, safeUrl)
     }
 
-    /** Fetches a playlist body, capped at [MAX_PLAYLIST_BYTES]; null when it could not be read. */
     private fun fetchPlaylist(url: String): String? = runCatching {
         DreamHttpClient.executeLimited(
             url,
@@ -281,7 +235,6 @@ object DirectStreamResolver : MediaResolverService {
         ).bodyString()
     }.getOrNull()
 
-    /** * Turns a master playlist into the stream list the selector works on. */
     private fun masterStreams(parsed: DirectHlsPlaylist.Parsed, seekByDecoding: Boolean): List<MediaStream> {
         // Every rendition with its own playlist, not just the group of the variant that survived
         // de-duplication — otherwise a master that lists its languages as separate groups would keep
@@ -322,7 +275,6 @@ object DirectStreamResolver : MediaResolverService {
         return video + audio
     }
 
-    /** One muxed stream for [url]; dimensions stay unknown until the decoder opens it. */
     private fun muxedStream(url: String, seekByDecoding: Boolean = false): MediaStream = MediaStream(
         url = url,
         type = MediaStreamType.VIDEO_AUDIO,
@@ -336,10 +288,6 @@ object DirectStreamResolver : MediaResolverService {
         seekByDecoding = seekByDecoding,
     )
 
-    /**
-     * The only metadata a bare file can offer: a title (the server's `Content-Disposition` filename
-     * when it gave one, else the name derived from the URL) and its host as the "uploader".
-     */
     private fun metadataFor(url: String, durationNanos: Long?, fileName: String?): MediaMetadata =
         MediaMetadata.UNKNOWN.copy(
             title = fileName?.let(CustomMediaUrls::cleanFileName)?.takeIf { it.isNotBlank() }

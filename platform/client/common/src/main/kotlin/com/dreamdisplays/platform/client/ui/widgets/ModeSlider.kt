@@ -89,11 +89,6 @@ class ModeSlider<T : Any>(
         //?}
     }
 
-    /**
-     * Snaps to the mode at [mouseX]'s notch and applies it if it differs from the current one.
-     * Shared by click and drag so dragging tracks the cursor across notches exactly like a click
-     * would on each one, instead of being ignored mid-drag.
-     */
     private fun trySelect(mouseX: Double) {
         if (pendingMode != null) return
         val next = modeFromMouse(mouseX)
@@ -140,7 +135,6 @@ class ModeSlider<T : Any>(
         }
     }
 
-    /** Maps a click's x position to the mode whose notch it's closest to (mirrors the [draw] layout). */
     private fun modeFromMouse(mouseX: Double): T {
         val fraction = (mouseX - x) / (width - 8).toDouble()
         val idx = Math.round(fraction * (modes.size - 1)).toInt().coerceIn(0, modes.size - 1)

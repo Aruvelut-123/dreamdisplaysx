@@ -17,13 +17,10 @@ import net.minecraft.resources.Identifier
  * `:protocol` module.
  */
 data class V2Payload(val bytes: ByteArray) : CustomPacketPayload {
-    /** The payload type used by Minecraft's networking. */
     override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
 
-    /** Content-based equality over the envelope [bytes]. */
     override fun equals(other: Any?): Boolean = other is V2Payload && bytes.contentEquals(other.bytes)
 
-    /** Content-based hash over the envelope [bytes]. */
     override fun hashCode(): Int = bytes.contentHashCode()
 
     companion object {

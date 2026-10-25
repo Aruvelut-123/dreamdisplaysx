@@ -15,10 +15,8 @@ import java.util.*
 @PaperOnly
 @NullMarked
 class PaperDisplayData(
-    /** Unique identifier for the display. */
     override val id: UUID,
 
-    /** Unique identifier for the owner of the display. */
     override val ownerId: UUID,
 
     /** One corner of the display area. */
@@ -36,13 +34,11 @@ class PaperDisplayData(
     /** Direction the display is facing. Default is `NORTH`. */
     facing: BlockFace = BlockFace.NORTH,
 
-    /** Content rotation; only meaningful for floor / ceiling (`UP` / `DOWN`) facings. */
     override val rotation: DisplayRotation = DisplayRotation.NONE,
 
     /** True for the synthetic display backing a URL-only fullscreen broadcast. */
     virtual: Boolean = false,
 
-    /** True when the screen wraps slabs and stairs inside the box. */
     override val conforming: Boolean = false,
 ) : BaseDisplayData(virtual) {
     /** One corner of the display area. */
@@ -51,20 +47,16 @@ class PaperDisplayData(
     /** Opposite corner of the display area. */
     var pos2: Location = pos2; private set
 
-    /** Width of the display in blocks. */
     override var width: Int = width; private set
 
-    /** Height of the display in blocks. */
     override var height: Int = height; private set
 
     /** Direction the display is facing. */
     var facing: BlockFace = facing
         private set
 
-    /** Bounding box of the display area. */
     private var region = RegionUtil.calculateRegion(pos1, pos2)
 
-    /** Blocks the screen extends away from [facing]. Derived from the saved corners, so old rows stay one block deep. */
     override val depth: Int
         get() = when (facing) {
             BlockFace.NORTH, BlockFace.SOUTH -> (box.maxZ - box.minZ).toInt()

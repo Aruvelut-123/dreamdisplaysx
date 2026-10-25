@@ -19,7 +19,7 @@ object PipPinStore {
 
     /** Loads every persisted pin, or an empty list if none are saved yet. */
     fun load(): List<PipPinSession> =
-        jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), listSerializer, SCHEMA_VERSION, logger) ?: emptyList()
+        jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), listSerializer, SCHEMA_VERSION, logger) ?: []
 
     /** Overwrites the store with [records]. */
     fun save(records: List<PipPinSession>) {

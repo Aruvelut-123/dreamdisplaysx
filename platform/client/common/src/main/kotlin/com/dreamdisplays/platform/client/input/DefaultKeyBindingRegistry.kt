@@ -8,18 +8,13 @@ import java.util.concurrent.ConcurrentHashMap
  * can be redefined in one place.
  */
 class DefaultKeyBindingRegistry : KeyBindingRegistry {
-    /** Map of registered bindings by id. [ConcurrentHashMap] allows concurrent access and modification. */
     private val bindings = ConcurrentHashMap<String, KeyBinding>()
 
-    /** Registers [binding] under its id; re-registering an id returns the already-stored binding. */
     override fun register(binding: KeyBinding): KeyBinding = bindings.putIfAbsent(binding.id, binding) ?: binding
 
-    /** Snapshot of all registered bindings. */
     override fun getAll(): List<KeyBinding> = bindings.values.toList()
 
-    /** Returns the binding registered under [id], or null. */
     override fun findById(id: String): KeyBinding? = bindings[id]
 
-    /** Removes every registered binding. */
     override fun reset() = bindings.clear()
 }

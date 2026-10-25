@@ -7,13 +7,10 @@ import com.dreamdisplays.platform.client.input.*
 
 /** Installs display interaction, key binding, and input dispatch services. */
 object ClientInputModule : DreamDisplaysModule {
-    /** The ID of this module. */
     override val id: String = "dreamdisplays:client_input"
 
-    /** Dependencies of this module. */
-    override val dependencies: List<String> = listOf(CoreDisplayModule.id)
+    override val dependencies: List<String> = [CoreDisplayModule.id]
 
-    /** Installs the display interaction service, key binding registry, and input dispatch service. */
     override fun install(context: ModuleContext) {
         val services = context.services
         services.register<DisplayInteractionService>(MinecraftDisplayInteractionService)

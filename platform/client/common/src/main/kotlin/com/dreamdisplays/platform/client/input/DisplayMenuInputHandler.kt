@@ -16,7 +16,6 @@ import com.mojang.blaze3d.platform.InputConstants
  * Consumes the click and emits [DisplayInteraction.RightClicked] for other subscribers.
  */
 class DisplayMenuInputHandler : InputHandler {
-    /** Consumes a [InputAction.MouseClicked] matching the menu binding when sneaking at a display. */
     override fun handle(action: InputAction): Boolean {
         if (action !is InputAction.MouseClicked) return false
         val binding = DreamServices.registry.getOrNull<KeyBindingRegistry>()

@@ -20,10 +20,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
  * Rendered before [PipOverlayManager] in the HUD hooks so PiP stays on top.
  */
 object FullscreenOverlayManager {
-    /** Live plus still-fading-out overlays, in open order. */
     private val overlays = mutableListOf<FullscreenOverlay>()
-
-    /** Tracks whether a GUI screen was open last tick, for Esc (pause-screen) edge detection. */
     private var screenWasOpen = false
 
     /** The single non-closing overlay, or null when none is active. */

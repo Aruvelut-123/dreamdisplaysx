@@ -112,7 +112,6 @@ class DisplaysTable(prefix: String = "") : Table("${prefix}displays") {
     /** Wire ordinal of the [com.dreamdisplays.api.playback.model.PlaybackAction] [scheduledStart] will apply, or null. */
     val scheduledAction = integer("scheduledAction").nullable()
 
-    /** Primary key for the displays table, which is the unique identifier of the display. */
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -155,7 +154,6 @@ class StorageManager(
         isAutoCommit = false
     })
 
-    /** Exposed database connection. */
     private val db = Database.connect(dataSource)
 
     /**
@@ -200,7 +198,6 @@ class StorageManager(
     /** Deletes the display with the given [data] from the displays table. */
     fun deleteDisplay(data: DisplayData) = delete(data.id)
 
-    /** Converts a row from the displays table into a [PaperDisplayData] object, or null if the row */
     @PaperOnly
     private fun rowToPaper(row: ResultRow): PaperDisplayData? {
         val id = row[table.id].toUUID()
@@ -241,7 +238,6 @@ class StorageManager(
         )
     }
 
-    /** Converts a row from the displays table into a [VanillaDisplayData] object. */
     private fun rowToVanilla(row: ResultRow): VanillaDisplayData {
         val (x1, y1, z1) = unpackPos(row[table.pos1])
         val (x2, y2, z2) = unpackPos(row[table.pos2])
@@ -258,7 +254,6 @@ class StorageManager(
         ).applyCommon(row)
     }
 
-    /** Upserts the given display data into the displays table. */
     private fun upsert(data: DisplayData, worldName: String, p1: Long, p2: Long, facingOrd: Int) {
         transaction(db) {
             table.replace {
@@ -284,12 +279,10 @@ class StorageManager(
         }
     }
 
-    /** Deletes the display with the given [displayId] from the display table. */
     private fun delete(displayId: UUID) {
         transaction(db) { table.deleteWhere { id eq displayId.toBytes() } }
     }
 
-    /** Applies common properties from a row to a display data object, such as URL and playback mode. */
     private fun <T : DisplayData> T.applyCommon(row: ResultRow): T = apply {
         url = row[table.videoCode]
         val stored = PlaybackMode.fromWire(row[table.mode])

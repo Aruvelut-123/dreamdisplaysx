@@ -20,11 +20,10 @@ class AudioRenderChainTest {
         return AudioRenderChain(44100f, engine)
     }
 
-    /** Encodes one S16LE stereo frame (matches [AudioRenderChain]'s own decode / encode convention). */
-    private fun frame(l: Short, r: Short): ByteArray = byteArrayOf(
+    private fun frame(l: Short, r: Short): ByteArray = [
         (l.toInt() and 0xFF).toByte(), ((l.toInt() shr 8) and 0xFF).toByte(),
         (r.toInt() and 0xFF).toByte(), ((r.toInt() shr 8) and 0xFF).toByte(),
-    )
+    ]
 
     @Test
     fun `OFF tier applies exactly the legacy gain, bit for bit`() {
@@ -77,7 +76,7 @@ class AudioRenderChainTest {
 
     @Test
     fun `normalization brings a quiet and a loud source to about the same level`() {
-        for (quality in listOf(AcousticQuality.OFF, AcousticQuality.ADVANCED)) {
+        for (quality in [AcousticQuality.OFF, AcousticQuality.ADVANCED]) {
             val quiet = settledRms(quality, amplitude = 0.06)
             val loud = settledRms(quality, amplitude = 0.6)
             val apartDb = 20 * kotlin.math.log10(loud / quiet)

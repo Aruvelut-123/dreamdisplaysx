@@ -51,19 +51,19 @@ class AddonManagerTest {
 
     class NotAnAddon
 
-    private fun manager() = AddonManager(AddonSide.CLIENT, emptyList())
+    private fun manager() = AddonManager(AddonSide.CLIENT, [])
 
     @Test
     fun `an addon is enabled on start and disabled with its resources closed on stop`() {
         val manager = manager()
         manager.register(Lifecycle())
-        assertEquals(emptyList(), log)
+        assertEquals([], log)
 
         manager.start()
         assertEquals(setOf("lifecycle"), manager.enabledIds)
         manager.stop()
 
-        assertEquals(listOf("enable lifecycle CLIENT", "disable", "closed"), log)
+        assertEquals(["enable lifecycle CLIENT", "disable", "closed"], log)
         assertTrue(manager.enabledIds.isEmpty())
     }
 
@@ -157,7 +157,7 @@ class AddonManagerTest {
         }
     }
 
-    private fun clientManager() = AddonManager(AddonSide.CLIENT, listOf(ClientAddonBinder { displays }))
+    private fun clientManager() = AddonManager(AddonSide.CLIENT, [ClientAddonBinder { displays }])
 
     @Test
     fun `OnDisplay is called for existing and later displays`() {
@@ -166,7 +166,7 @@ class AddonManagerTest {
         manager.register(Handlers())
         manager.start()
         system.recordDisplay(info(2))
-        assertEquals(listOf("display ${id(1)}", "display ${id(2)}"), log.filter { it.startsWith("display") })
+        assertEquals(["display ${id(1)}", "display ${id(2)}"], log.filter { it.startsWith("display") })
     }
 
     @Test
@@ -176,7 +176,7 @@ class AddonManagerTest {
         manager.register(Handlers())
         manager.start()
         system.recordDisplay(info(1, DisplayState.Playing("s", 42, 100)))
-        assertEquals(listOf("playing ${id(1)} at 42"), log.filter { it.startsWith("playing") })
+        assertEquals(["playing ${id(1)} at 42"], log.filter { it.startsWith("playing") })
     }
 
     @Test

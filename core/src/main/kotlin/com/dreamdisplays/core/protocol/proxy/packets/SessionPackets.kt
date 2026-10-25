@@ -24,7 +24,7 @@ data class NetworkSessionInfo(
 /** Proxy -> backend: answers [ListNetworkSessions] with every live network fullscreen session. */
 @Serializable
 data class NetworkSessionList(
-    @ProtoNumber(1) val sessions: List<NetworkSessionInfo> = emptyList(),
+    @ProtoNumber(1) val sessions: List<NetworkSessionInfo> = [],
 ) : ProxyPacket
 
 /** Backend -> proxy: player finished v2 handshake, sent on every join / server switch. */
@@ -37,8 +37,8 @@ data class PlayerReady(
 @Serializable
 data class ReplayForPlayer(
     @ProtoNumber(1) val playerId: String = "",
-    @ProtoNumber(2) val sessionIds: List<String> = emptyList(),
-    @ProtoNumber(3) val minimizedSessionIds: List<String> = emptyList(),
+    @ProtoNumber(2) val sessionIds: List<String> = [],
+    @ProtoNumber(3) val minimizedSessionIds: List<String> = [],
 ) : ProxyPacket
 
 /** Proxy -> backend: player transferring from [from] to [to]. */

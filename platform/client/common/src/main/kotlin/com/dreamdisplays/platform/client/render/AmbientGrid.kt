@@ -9,15 +9,8 @@ import java.nio.ByteBuffer
  * Ambient grid.
  */
 object AmbientGrid {
-    /** Tiny "picture" resolution the source is averaged into before blurring. */
     private const val PIC_W = 24
     private const val PIC_H = 14
-
-    /**
-     * Box-blur passes applied to the tiny picture and their radius (cells). Deliberately huge relative
-     * to [PIC_W] / [PIC_H] — the goal is to destroy essentially all detail, leaving only a few soft,
-     * smoothly-blended color regions (repeated box blur converges to a Gaussian blur).
-     */
     private const val PIC_BLUR_PASSES = 5
     private const val PIC_BLUR_RADIUS = 6
 
@@ -25,7 +18,6 @@ object AmbientGrid {
     const val GRID_W = 96
     const val GRID_H = 54
 
-    /** Light polish pass on the upsampled result, mostly to hide any residual bilinear seams. */
     private const val FINAL_BLUR_PASSES = 1
     private const val FINAL_BLUR_RADIUS = 2
 
@@ -139,7 +131,6 @@ object AmbientGrid {
         return Grid(r, g, b)
     }
 
-    /** Bilinearly upsamples a [PIC_W] x [PIC_H] grid into [GRID_W] x [GRID_H]. */
     private fun bilinearUpsample(src: IntArray): IntArray {
         val dst = IntArray(GRID_W * GRID_H)
         for (oy in 0 until GRID_H) {
@@ -165,7 +156,6 @@ object AmbientGrid {
         return dst
     }
 
-    /** Separable box blur of a [gw] x [gh] single-channel grid, edge-clamped so borders don't darken. */
     private fun boxBlur(src: IntArray, gw: Int, gh: Int, radius: Int): IntArray {
         val tmp = IntArray(gw * gh)
         for (y in 0 until gh) {

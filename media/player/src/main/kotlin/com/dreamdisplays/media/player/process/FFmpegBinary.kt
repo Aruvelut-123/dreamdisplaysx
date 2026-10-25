@@ -44,10 +44,6 @@ object FFmpegBinary {
         }, "FFmpeg-prewarm").start()
     }
 
-    /**
-     * Checks the cache directory for an existing binary, downloads and extracts one if not found,
-     * and falls back to the system `FFmpeg` on any failure.
-     */
     private fun resolve(): String? {
         val p = detectPlatform() ?: run {
             logger.warn("No bundled binary URL for this OS / arch; trying system FFmpeg.")
@@ -80,7 +76,6 @@ object FFmpegBinary {
         }
     }
 
-    /** Downloads the archive for [p] to a temp file, extracts the binary to [destBinary], and cleans up the temp file. */
     @Throws(IOException::class)
     private fun downloadAndExtract(p: Platform, destBinary: File) {
         logger.info("Downloading ${p.url}...")
@@ -96,7 +91,6 @@ object FFmpegBinary {
         }
     }
 
-    /** Downloads [url] to [dest], following up to 10 HTTP redirects manually (GitHub releases use multiple hops). */
     @Throws(IOException::class)
     private fun downloadWithRedirects(url: String, dest: File) {
         DreamHttpClient.downloadToFile(
@@ -110,7 +104,6 @@ object FFmpegBinary {
         )
     }
 
-    /** Extracts the first ZIP entry whose name ends with [suffix] from [archive] to [dest]. */
     @Throws(IOException::class)
     private fun extractFromZip(archive: File, suffix: String, dest: File) {
         ZipInputStream(BufferedInputStream(FileInputStream(archive))).use { zis ->
@@ -127,7 +120,6 @@ object FFmpegBinary {
         throw IOException("'$suffix' not found in ${archive.name}.")
     }
 
-    /** Extracts the first tar.xz entry whose name ends with [suffix] from [archive] to [dest]. */
     @Throws(IOException::class)
     private fun extractFromTarXz(archive: File, suffix: String, dest: File) {
         BufferedInputStream(FileInputStream(archive)).use { fis ->
@@ -147,7 +139,6 @@ object FFmpegBinary {
         throw IOException("'$suffix' not found in ${archive.name}.")
     }
 
-    /** Scans well-known system paths for a working `ffmpeg` binary; returns null if none responds with exit 0. */
     private fun findSystemFfmpeg(): String? {
         val candidates = arrayOf("ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg")
         for (candidate in candidates) {
@@ -171,7 +162,6 @@ object FFmpegBinary {
         return null
     }
 
-    /** Returns a [Platform] descriptor for the current OS and architecture, or null if no bundled build is available. */
     private fun detectPlatform(): Platform? {
         val isArm = OsInfo.isArm
         return when {

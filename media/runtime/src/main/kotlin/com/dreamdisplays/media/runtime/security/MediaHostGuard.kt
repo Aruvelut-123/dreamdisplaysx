@@ -15,41 +15,19 @@ import java.util.concurrent.TimeUnit
  * and get called repeatedly.
  */
 object MediaHostGuard {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Escape hatch for operators who intentionally host media on a private network. */
     private val allowPrivate: Boolean =
         System.getProperty("dreamdisplays.allowPrivateUrls", "false").toBoolean()
 
-    /**
-     * How long a host's verdict is reused. Deliberately the same order as the JDK's own positive DNS
-     * cache (30 s by default), so memorizing here widens no rebinding window that resolving the host
-     * again would have closed anyway — the second lookup would have been served from that cache.
-     */
     private const val HOST_VERDICT_TTL_SECONDS = 30L
-
-    /**
-     * How long a *redirecting* URL's final destination is reused. Short, because that destination is
-     * often a signed, expiring link; long enough to cover one launch's repeated calls and the seeks
-     * that follow it.
-     */
     private const val REDIRECTED_TTL_NANOS = 60L * 1_000_000_000L
-
-    /**
-     * How long a URL known not to redirect is remembered. There is nothing to go stale — the
-     * mapping is the identity — so this only has to stay under the lifetime of the CDN URLs
-     * themselves, and it removes the probe from every restart within one viewing session.
-     */
     private const val IDENTITY_TTL_NANOS = 5L * 60L * 1_000_000_000L
-
-    /** Per-host public / non-public verdict; also collapses concurrent lookups for the same host. */
     private val hostVerdicts: Cache<String, Boolean> = Caffeine.newBuilder()
         .maximumSize(512)
         .expireAfterWrite(HOST_VERDICT_TTL_SECONDS, TimeUnit.SECONDS)
         .build()
 
-    /** A walked redirect chain: the URL handed to the media stack, plus how long it may be reused. */
     private class ResolvedUrl(@JvmField val url: String, @JvmField val ttlNanos: Long)
 
     private val resolvedUrls: Cache<String, ResolvedUrl> = Caffeine.newBuilder()
@@ -82,7 +60,6 @@ object MediaHostGuard {
         return hostVerdicts.get(host, ::resolvesToPublicAddresses)
     }
 
-    /** Uncached host check: resolves [host] and rejects it if any address is not public unicast. */
     private fun resolvesToPublicAddresses(host: String): Boolean {
         val addresses = runCatching {
             InetAddress.getAllByName(host)
@@ -148,11 +125,6 @@ object MediaHostGuard {
         throw IOException("Refusing to follow more than $maxRedirects media redirects.")
     }
 
-    /**
-     * Issues a redirect-less probe against [url] and returns its `Location` header, or null when
-     * the response is not a redirect (including when the probe itself fails, so a server that
-     * rejects the probe degrades to "trust the URL as-is" rather than blocking playback).
-     */
     private fun peekRedirectLocation(url: String): String? {
         return runCatching {
             DreamHttpClient.peekRedirectLocation(
@@ -172,13 +144,11 @@ object MediaHostGuard {
         url.trim().startsWith("https://", ignoreCase = true) &&
                 hostOf(url)?.lowercase()?.endsWith(".googlevideo.com") == true
 
-    /** Extracts the host from [url] (stripping IPv6 literal brackets), or null when it cannot be parsed. */
     private fun hostOf(url: String): String? =
         runCatching {
             URI(url.trim()).host?.removeSurrounding("[", "]")?.takeIf { it.isNotEmpty() }
         }.getOrNull()
 
-    /** True when [addr] is anything other than a public unicast address. */
     private fun isNonPublic(addr: InetAddress): Boolean {
         // Loopback (127/8, ::1), link-local (169.254/16, fe80::/10), site-local (10/8, 172.16/12,
         // 192.168/16), wildcard (0.0.0.0, ::) and multicast are all handled by the platform flags.
@@ -193,7 +163,6 @@ object MediaHostGuard {
         }
     }
 
-    /** Non-public IPv4 ranges the [InetAddress] flag checks miss (CGNAT, "this network", reserved). */
     private fun isNonPublicV4(bytes: ByteArray): Boolean {
         val o0 = bytes[0].toInt() and 0xff
         val o1 = bytes[1].toInt() and 0xff
@@ -202,7 +171,6 @@ object MediaHostGuard {
                 o0 >= 240                                // 240.0.0.0/4 reserved + 255.255.255.255 broadcast
     }
 
-    /** Non-public IPv6: unique-local fc00::/7, plus IPv4-mapped addresses re-checked as IPv4. */
     private fun isNonPublicV6(bytes: ByteArray): Boolean {
         if ((bytes[0].toInt() and 0xfe) == 0xfc) return true // fc00::/7 unique-local
         // IPv4-mapped (::ffff:a.b.c.d): the flag checks above don't unwrap it, so re-check the IPv4

@@ -92,7 +92,6 @@ class DisplayMenu private constructor(
     private lateinit var popoutButton: IconButton
     private lateinit var audioTrackButton: IconButton
     private lateinit var subtitleButton: IconButton
-
     private var lastSuggestedVideoId: String? = null
     private var prevQualityListSize = 0
     private var suggestionsRect: UiRect? = null
@@ -338,23 +337,22 @@ class DisplayMenu private constructor(
             )
         settings = SettingsSection(
             rows = settingsRows(qualityReset, brightnessReset, audio3dReset, syncReset, accessReset),
-            ownerActions = listOf(reportButton, deleteButton),
-            buttonTooltips = listOf(
+            ownerActions = [reportButton, deleteButton],
+            buttonTooltips = [
                 deleteButton to { buttonTooltip("dreamdisplays.button.delete") },
                 reportButton to { buttonTooltip("dreamdisplays.button.report") },
-            ),
+            ],
         )
         errorPanel = ErrorPanel(retryButton, deleteButton, reportButton) { ds.mediaError }
     }
 
-    /** Builds the settings rows with their tooltip content. */
     private fun settingsRows(
         qualityReset: IconButton,
         brightnessReset: IconButton, audio3dReset: IconButton, syncReset: IconButton,
         accessReset: IconButton,
     ): List<SettingsSection.Row> {
         val ds = displayScreen
-        return listOf(
+        return [
             SettingsSection.Row("dreamdisplays.button.quality", quality, qualityReset) {
                 val tip = mutableListOf(
                     tooltipTitle("dreamdisplays.button.quality.tooltip.1"),
@@ -371,15 +369,15 @@ class DisplayMenu private constructor(
                 tip
             },
             SettingsSection.Row("dreamdisplays.button.brightness", brightness, brightnessReset) {
-                listOf(
+                [
                     tooltipTitle("dreamdisplays.button.brightness.tooltip.1"),
                     tooltipBody("dreamdisplays.button.brightness.tooltip.2"),
                     Component.literal(""),
                     tooltipValue("dreamdisplays.button.brightness.tooltip.3", floor(brightness.value * 100).toInt()),
-                )
+                ]
             },
             SettingsSection.Row("dreamdisplays.button.audio3d", audio3d, audio3dReset) {
-                listOf(
+                [
                     tooltipTitle("dreamdisplays.button.audio3d.tooltip.1"),
                     tooltipBody("dreamdisplays.button.audio3d.tooltip.2"),
                     Component.literal(""),
@@ -391,10 +389,10 @@ class DisplayMenu private constructor(
                         "dreamdisplays.button.audio3d.tooltip.6",
                         Component.translatable(audio3dModeLabel(audio3d.mode)),
                     ),
-                )
+                ]
             },
             SettingsSection.Row("dreamdisplays.button.synchronization", sync, syncReset, extraGapBefore = 6) {
-                listOf(
+                [
                     tooltipTitle("dreamdisplays.button.synchronization.tooltip.1"),
                     tooltipBody("dreamdisplays.button.synchronization.tooltip.2"),
                     Component.literal(""),
@@ -406,7 +404,7 @@ class DisplayMenu private constructor(
                         "dreamdisplays.button.synchronization.tooltip.5",
                         Component.translatable(syncModeLabel(sync.mode)),
                     ),
-                )
+                ]
             },
             SettingsSection.Row("dreamdisplays.button.access", access, accessReset) {
                 buildList {
@@ -434,14 +432,9 @@ class DisplayMenu private constructor(
                     )
                 }
             },
-        )
+        ]
     }
 
-    /**
-     * "Pause in 4:32" / "Play in 4:32" for [displayScreen]'s pending scheduled action (see
-     * [com.dreamdisplays.platform.server.playback.ScheduledPlaybackManager]), or null when none is
-     * pending / it has already elapsed. Re-evaluated every frame against the live wall clock.
-     */
     private fun scheduleCountdownText(): String? {
         val at = displayScreen.scheduledStartEpochMillis.takeIf { it > 0 } ?: return null
         val remainingMs = at - System.currentTimeMillis()
@@ -463,20 +456,17 @@ class DisplayMenu private constructor(
     private fun tooltipValue(key: String, arg: Any): Component =
         Component.translatable(key, arg).withStyle { it.withColor(ChatFormatting.GOLD) }
 
-    /** Bullet line naming a playback mode ([modeKey], e.g. `dreamdisplays.mode.local`) plus its short [descKey]. */
     private fun tooltipModeBullet(modeKey: String, descKey: String): Component =
         Component.literal("• ").withStyle { it.withColor(ChatFormatting.GRAY) }
             .append(Component.translatable(modeKey).withStyle { it.withColor(ChatFormatting.GRAY) })
             .append(Component.literal(": ").withStyle { it.withColor(ChatFormatting.GRAY) })
             .append(Component.translatable(descKey).withStyle { it.withColor(ChatFormatting.GRAY) })
 
-    /** Two-line white/gray tooltip used by the delete and report buttons. */
-    private fun buttonTooltip(prefix: String): List<Component> = listOf(
+    private fun buttonTooltip(prefix: String): List<Component> = [
         tooltipTitle("$prefix.tooltip.1"),
         tooltipBody("$prefix.tooltip.2"),
-    )
+    ]
 
-    /** Requests [info] as the display video and reloads the related list once the intent is sent. */
     private fun onPickSuggested(info: MediaSearchResult) {
         val ds = displayScreen
         if (!ds.canSetVideoHere) return
@@ -542,7 +532,6 @@ class DisplayMenu private constructor(
         settings.renderTooltips(g, mouseX, mouseY, toRealX(mouseX), toRealY(mouseY))
     }
 
-    /** Re-syncs the quality slider position when the available quality list (re)appears. */
     private fun resyncQualitySlider() {
         val ds = displayScreen
         val qualityList = ds.qualityList
@@ -558,13 +547,11 @@ class DisplayMenu private constructor(
         }
     }
 
-    /** Keeps the synchronization mode slider aligned with server echoes and watch-party state. */
     private fun resyncModeSlider() {
         sync.syncToCurrent()
         access.syncToCurrent()
     }
 
-    /** Points the suggestions panel at the currently playing video when it changes. */
     private fun refreshRelatedVideos() {
         val ds = displayScreen
         val currentId = DreamServices.registry.getOrNull(MediaServices.SEARCH)?.extractVideoId(ds.videoUrl ?: "")
@@ -686,24 +673,16 @@ class DisplayMenu private constructor(
         super.removed()
     }
 
-    /**
-     * The menu needs roughly this much logical space for the normal (non-compact) layout — preview and
-     * settings side by side on top, suggestions strip below. On smaller windows (e.g. high GUI scale)
-     * [UiScreenBase] scales the whole menu down to fit instead of letting panels overflow.
-     */
     override fun minContentSize(): Pair<Int, Int> = MIN_CONTENT_W to MIN_CONTENT_H
 
-    /** The highest available quality within Broadcast's cap — what every client is actually pinned to. */
     private fun broadcastQuality(): Int {
         val ds = displayScreen
         val cap = ds.qualityCap
         return ds.qualityList.filter { it <= cap }.maxOrNull() ?: cap
     }
 
-    /** The slider step for [size] evenly spaced quality stops (1 per available option). */
     private fun qualityStep(size: Int): Double = 1.0 / max(1, size - 1)
 
-    /** Maps a quality string (e.g. "720") to its fractional position within the available quality list. */
     private fun qualityFraction(q: String): Double {
         val list = displayScreen.qualityList
         if (list.isEmpty()) return 0.0
@@ -712,7 +691,6 @@ class DisplayMenu private constructor(
         return list.indexOf(closest) / max(1, list.size - 1).toDouble()
     }
 
-    /** Maps a fractional slider position back to the nearest quality string from the available list. */
     private fun qualityFromFraction(v: Double): String {
         val list = displayScreen.qualityList
         if (list.isEmpty()) return "144"
@@ -723,11 +701,8 @@ class DisplayMenu private constructor(
     companion object {
         private const val SEEK_STEP_NANOS = 5_000_000_000L
         private const val VOLUME_STEP = 0.025
-
-        /** Shift-held steps: 15 s seek, 10% volume. */
         private const val SEEK_STEP_COARSE_NANOS = 15_000_000_000L
         private const val VOLUME_STEP_COARSE = 0.05
-
         private const val KEY_SPACE = InputConstants.KEY_SPACE
         private const val KEY_F = InputConstants.KEY_F
         private const val KEY_M = InputConstants.KEY_M
@@ -757,12 +732,9 @@ class DisplayMenu private constructor(
         //?} else
         /*private const val MOD_CONTROL = 0x2; private const val MOD_ALT = 0x4; private const val MOD_SUPER = 0x8
         private const val MOD_SHIFT = 0x1*/
-
-        /** Minimum logical canvas the normal layout is comfortable in; smaller windows scale down. */
         private const val MIN_CONTENT_W = 640
         private const val MIN_CONTENT_H = 410
 
-        /** Translation key for the compact mode label shown inside the sync slider. */
         private fun syncModeLabel(mode: PlaybackMode): String = when (mode) {
             PlaybackMode.LOCAL -> "dreamdisplays.mode.local"
             PlaybackMode.SYNCED -> "dreamdisplays.mode.synced"
@@ -770,27 +742,22 @@ class DisplayMenu private constructor(
             PlaybackMode.BROADCAST -> "dreamdisplays.mode.broadcast"
         }
 
-        /** The three tiers exposed by the 3D audio slider; BASIC stays an internal-only engine step. */
-        private val AUDIO_3D_MODES = listOf(AcousticQuality.OFF, AcousticQuality.ADVANCED, AcousticQuality.ULTRA)
-
-        /** Factory default the 3D audio row's reset button restores. */
+        private val AUDIO_3D_MODES = [AcousticQuality.OFF, AcousticQuality.ADVANCED, AcousticQuality.ULTRA]
         private val AUDIO_3D_DEFAULT = AcousticQuality.ADVANCED
 
-        /** Translation key for the compact mode label shown inside the 3D audio slider. */
         private fun audio3dModeLabel(quality: AcousticQuality): String = when (quality) {
             AcousticQuality.OFF -> "dreamdisplays.mode.audio_off"
             AcousticQuality.ULTRA -> "dreamdisplays.mode.audio_advanced"
             else -> "dreamdisplays.mode.audio_enhanced"
         }
 
-        /** The three sync-mode notches exposed by the playback-mode slider. */
-        private val SYNC_MODES = listOf(PlaybackMode.LOCAL, PlaybackMode.SYNCED, PlaybackMode.BROADCAST)
+        private val SYNC_MODES = [PlaybackMode.LOCAL, PlaybackMode.SYNCED, PlaybackMode.BROADCAST]
 
         private fun accessModesFor(ds: DisplayScreen): List<DisplayAccess> =
             if (ds.supportsRegionAccess || ds.access == DisplayAccess.REGION) {
-                listOf(DisplayAccess.EVERYONE, DisplayAccess.REGION, DisplayAccess.LOCKED)
+                [DisplayAccess.EVERYONE, DisplayAccess.REGION, DisplayAccess.LOCKED]
             } else {
-                listOf(DisplayAccess.EVERYONE, DisplayAccess.LOCKED)
+                [DisplayAccess.EVERYONE, DisplayAccess.LOCKED]
             }
 
         private fun accessLevelLabel(access: DisplayAccess): String = when (access) {

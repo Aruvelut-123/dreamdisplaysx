@@ -38,8 +38,8 @@ class SeekBar(
     private val previewFrame: ((Long) -> Identifier?)? = null,
     private val waitingLabel: (() -> String?)? = null,
     private val scheduleLabel: (() -> String?)? = null,
-    statusLabels: List<() -> String?> = emptyList(),
-    private val chapters: () -> List<MediaChapter> = { emptyList() },
+    statusLabels: List<() -> String?> = [],
+    private val chapters: () -> List<MediaChapter> = { [] },
     private val onSeek: (Long) -> Unit,
 ) : UiWidget(Component.empty()) {
 
@@ -50,15 +50,8 @@ class SeekBar(
     private var previewFade = 0f
 
 
-    /**
-     * A suffix behind the time label that grows in and shrinks away character by character. Its text
-     * is sampled every frame from [source]; a null sample retracts it rather than cutting it away, so
-     * the last text is kept around to shrink from.
-     */
     private class RevealingSuffix(private val source: (() -> String?)?) {
         private var lastText: String? = source?.invoke()
-
-        /** 0..1 reveal progress, eased toward the presence of a current sample in [advance]. */
         private var reveal = if (lastText != null) 1f else 0f
 
         /** Samples the source for this frame and eases the reveal toward it. */
@@ -82,14 +75,7 @@ class SeekBar(
         }
     }
 
-    /** Countdown to a scheduled start / pause. */
     private val scheduleSuffix = RevealingSuffix(scheduleLabel)
-
-    /**
-     * Transient "applying..." hints for changes that outlive the click that started them. One suffix
-     * per source rather than one shared slot, so concurrent changes stack up instead of hiding each
-     * other — several of these can genuinely be in flight at once.
-     */
     private val statusSuffixes = statusLabels.map { RevealingSuffix(it) }
 
     override fun handlesWholeWidgetCursor(): Boolean = false
@@ -157,14 +143,9 @@ class SeekBar(
         //?}
     }
 
-    /** The chapter covering [nanos], or null when the video has none. */
     private fun chapterAt(nanos: Long): MediaChapter? =
         chapters().lastOrNull { it.startSeconds * 1_000_000_000L <= nanos }
 
-    /**
-     * Draws the scrub-preview thumbnail above the bar, centered on [mouseX] and clamped to the screen.
-     * The on-screen timestamp tracks the hover position, with the chapter it lands in named above the frame.
-     */
     private fun drawPreview(
         g: GuiGraphicsCompat,
         texture: Identifier,
@@ -235,18 +216,15 @@ class SeekBar(
         g.drawText(font, label, labelX, frameY + DISPLAY_HEIGHT + 2, (labelAlpha shl 24) or 0xFFFFFF, false)
     }
 
-    /** Formats the current / total time as a colored text component for display on the bar. */
     private fun timeLabel(cur: Long, dur: Long): MutableComponent {
         val color = if (active) 0xFFFFFFFF.toInt() else 0xFFA0A0A0.toInt()
         return Component.literal("${UiText.formatTime(cur)} / ${UiText.formatTime(dur)}")
             .copy().withStyle { it.withColor(color) }
     }
 
-    /** Returns the track sprite, highlighted when the widget has keyboard focus. */
     private fun trackSprite(): Identifier =
         if (isFocused && !sliderFocused) TRACK_HIGHLIGHTED else TRACK
 
-    /** Returns the handle sprite, highlighted when hovered or dragging. */
     private fun handleSprite(): Identifier =
         if (!isHovered && !sliderFocused) HANDLE else HANDLE_HIGHLIGHTED
 
@@ -302,7 +280,6 @@ class SeekBar(
         return true
     }
 
-    /** Converts a mouse X coordinate to a playback position in nanoseconds within [dur]. */
     private fun positionFromMouse(mouseX: Double, dur: Long): Long {
         val pct = Mth.clamp((mouseX - (x + 4).toDouble()) / (width - 8).toDouble(), 0.0, 1.0)
         return (pct * dur).toLong()
@@ -325,7 +302,6 @@ class SeekBar(
         private const val FADE_SPEED = 0.35f
         private const val CHAPTER_LABEL_RGB = 0xAAAAAA
         private const val WAITING_COLOR = 0xFFA0A0A0.toInt()
-
         private val TRACK = Identifier.withDefaultNamespace("widget/slider")
         private val TRACK_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_highlighted")
         private val HANDLE = Identifier.withDefaultNamespace("widget/slider_handle")

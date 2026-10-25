@@ -30,23 +30,15 @@ import java.util.zip.GZIPInputStream
  */
 object DreamHttpClient {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private const val DEFAULT_CONNECT_TIMEOUT_MS = 10_000L
     private const val DEFAULT_READ_TIMEOUT_MS = 30_000L
     private const val MAX_UNLIMITED_BODY_BYTES = 64 * 1024 * 1024
-
     private const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-
     private const val THIRD_PARTY_HOST_CONCURRENCY = 4
     private const val THIRD_PARTY_QUEUE_TIMEOUT_MS = 15_000L
     private const val MAX_TRACKED_HOSTS = 256
-
     private val hostGates = ConcurrentHashMap<String, Semaphore>()
 
-    /**
-     * Runs [block] under this host's concurrency gate, or straight through for the platforms and
-     * for URLs with no host to key on.
-     */
     private fun <T> withHostGate(url: String, block: () -> T): T {
         if (MediaHosts.isFirstParty(url)) return block()
         val host = MediaHosts.hostOf(url) ?: return block()

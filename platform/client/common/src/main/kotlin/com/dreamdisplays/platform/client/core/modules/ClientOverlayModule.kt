@@ -13,10 +13,8 @@ import com.dreamdisplays.platform.client.ui.PipOverlayManager
 
 /** Installs overlay, crosshair, and popout services. */
 object ClientOverlayModule : DreamDisplaysModule {
-    /** The ID of this module. */
     override val id: String = "dreamdisplays:client_overlay"
 
-    /** Installs the overlay manager, crosshair policy, and popout manager. */
     override fun install(context: ModuleContext) {
         val services = context.services
         services.register<OverlayManager>(PipOverlayManager)

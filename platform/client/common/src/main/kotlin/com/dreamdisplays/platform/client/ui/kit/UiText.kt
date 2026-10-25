@@ -9,7 +9,6 @@ import net.minecraft.client.gui.Font
 object UiText {
     private const val ELLIPSIS = "..."
     private const val EMOJI_SEPARATOR = " • "
-
     private val MULTI_SPACE = Regex("\\s{2,}")
 
     /** Drops emoji the Minecraft font can't draw. */

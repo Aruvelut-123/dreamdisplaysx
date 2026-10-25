@@ -70,21 +70,18 @@ object TelemetryMetrics {
         })
     }
 
-    /** Returns a list of online players. */
     private fun onlinePlayers(plugin: PaperServer): List<Player> =
-        runCatching { plugin.server.onlinePlayers.toList() }.getOrDefault(emptyList())
+        runCatching { plugin.server.onlinePlayers.toList() }.getOrDefault([])
 
-    /** Returns a list of online player's client hello messages. */
     private fun onlineHellos(plugin: PaperServer): List<ClientHello> {
         val onlineIds = onlinePlayers(plugin).mapTo(HashSet()) { it.uniqueId }
-        if (onlineIds.isEmpty()) return emptyList()
+        if (onlineIds.isEmpty()) return []
         return V2PlayerTracker.snapshot()
             .filterKeys { it in onlineIds }
             .values
             .toList()
     }
 
-    /** Returns a map of online player's protocol version. */
     private fun protocolDistribution(plugin: PaperServer): Map<String, Int> {
         val online = onlinePlayers(plugin)
         if (online.isEmpty()) return emptyMap()
@@ -98,11 +95,9 @@ object TelemetryMetrics {
         return counts
     }
 
-    /** Returns a map of online player's client hello message. */
     private fun helloDistribution(plugin: PaperServer, keyOf: (ClientHello) -> String): Map<String, Int> =
         onlineHellos(plugin).countBy(keyOf)
 
-    /** Returns a map of online player's client capability. */
     private fun capabilityDistribution(plugin: PaperServer): Map<String, Int> {
         val counts = linkedMapOf<String, Int>()
         for (hello in onlineHellos(plugin)) {
@@ -115,7 +110,6 @@ object TelemetryMetrics {
         return counts
     }
 
-    /** Returns a map of display state. */
     private fun displayState(): Map<String, Int> {
         val counts = linkedMapOf<String, Int>()
         for (display in DisplayManager.getDisplays()) {
@@ -127,7 +121,6 @@ object TelemetryMetrics {
         return counts
     }
 
-    /** Returns a map of client render backend. */
     private fun videoFramePath(hello: ClientHello): String = when {
         hello.lavZeroCopyEnabled -> "lav_zero_copy"
         hello.lavInProcessEnabled -> "lav_in_process_i420"
@@ -137,7 +130,6 @@ object TelemetryMetrics {
         else -> "ffmpeg_process"
     }
 
-    /** Returns a map of client LAV status. */
     private fun lavStatus(hello: ClientHello): String = when {
         hello.lavZeroCopyEnabled -> "zero_copy_enabled"
         hello.lavSurfaceInteropAvailable -> "surface_interop_available"
@@ -146,7 +138,6 @@ object TelemetryMetrics {
         else -> "unavailable"
     }
 
-    /** Returns a bucket area string. */
     private fun bucketArea(area: Int): String = when {
         area <= 16 -> "1_16"
         area <= 64 -> "17_64"
@@ -154,14 +145,12 @@ object TelemetryMetrics {
         else -> "257_plus"
     }
 
-    /** Counts the occurrences of each item in the iterable by the given key. */
     private fun <T> Iterable<T>.countBy(keyOf: (T) -> String): Map<String, Int> {
         val counts = linkedMapOf<String, Int>()
         for (item in this) counts.increment(keyOf(item))
         return counts
     }
 
-    /** Increments the count of the given key in the map. */
     private fun MutableMap<String, Int>.increment(key: String) {
         this[key] = (this[key] ?: 0) + 1
     }

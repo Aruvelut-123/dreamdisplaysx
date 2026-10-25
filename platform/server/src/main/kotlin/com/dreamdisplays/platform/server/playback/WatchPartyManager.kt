@@ -20,10 +20,8 @@ object WatchPartyManager {
     private const val COUNTDOWN_MS = 3_000L
     private const val HOST_GRACE_MS = 30_000L
     private const val PERIODIC_BROADCAST_MS = 1_000L
-
     private val controlThrottle = ActionThrottle()
     private const val CONTROL_COOLDOWN_MS = 100L
-
     private lateinit var transport: PlaybackTransport
     private val sessions = ConcurrentHashMap<UUID, Session>()
 
@@ -293,10 +291,9 @@ object WatchPartyManager {
         }
     }
 
-    /** Players currently "nearby" the session: for a `virtual` network party, the proxy-assigned [Session.members] filtered to who's online. */
     private fun nearbyIds(session: Session): List<UUID> {
         if (session.virtual) return session.members.filter { it in transport.onlinePlayerIds() }
-        val display = DisplayManager.getDisplayData(session.displayId) ?: return emptyList()
+        val display = DisplayManager.getDisplayData(session.displayId) ?: return []
         return transport.nearbyPlayerIds(display)
     }
 

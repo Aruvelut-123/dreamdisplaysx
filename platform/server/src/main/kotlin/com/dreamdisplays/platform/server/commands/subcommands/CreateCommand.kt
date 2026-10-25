@@ -38,7 +38,6 @@ class CreateCommand : SubCommand {
     override val permission = PaperServer.config.permissions.create
     override val playerOnly = true
 
-    /** Command execution logic. */
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val player = (sender as? Player) ?: return
 
@@ -97,10 +96,6 @@ class CreateCommand : SubCommand {
         MessageUtil.sendMessage(player, "successfulCreation")
     }
 
-    /**
-     * Validates the player's current selection, enforces overlap and Y-range limits, and
-     * registers the resulting display.
-     */
     private fun validate(
         sel: PaperSelectionData,
         sendError: (String, Array<out Any>) -> Unit,
@@ -227,10 +222,6 @@ object VanillaCreateCommand {
         return 1
     }
 
-    /**
-     * Validates the player's current selection, enforces overlap and Y-range limits, and
-     * registers the resulting display.
-     */
     private fun validate(
         sel: VanillaSelectionData,
         server: MinecraftServer,
@@ -293,12 +284,6 @@ object VanillaCreateCommand {
     }
 }
 
-/**
- * Validates the region.
- *
- * @return whether the accepted screen wraps slabs and stairs,
- * or `null` when the selection is rejected and [sendError] has already been called.
- */
 private fun validateRegion(
     minY: Int,
     maxY: Int,

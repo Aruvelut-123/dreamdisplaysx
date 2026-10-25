@@ -98,24 +98,15 @@ class ProtectionListener : Listener {
     @EventHandler
     fun onPistonRetract(event: BlockPistonRetractEvent) = handlePiston(event.blocks, event)
 
-    /**
-     * Handles piston movements, checking if the piston is moving blocks protected by displays.
-     */
     private fun handlePiston(blocks: List<Block>, event: Cancellable) {
         if (event.isCancelled) return
         if (blocks.any { isLocationProtected(it.location) }) event.isCancelled = true
     }
 
-    /**
-     * Handles piston movements, checking if the piston is moving blocks protected by displays.
-     */
     private fun cancelIfProtected(loc: Location, event: Cancellable) {
         if (isLocationProtected(loc)) event.isCancelled = true
     }
 
-    /**
-     * Checks if a location is in a protected area, considering both existing displays and current selections.
-     */
     private fun isLocationProtected(loc: Location): Boolean =
         DisplayManager.isContains(loc) != null || SelectionManager.isLocationSelected(loc)
 }

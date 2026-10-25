@@ -74,7 +74,6 @@ object NeoForgeV2Networking {
         }*/
     }
 
-    /** Routes a decoded serverbound packet to the shared action handlers. */
     private fun dispatch(player: ServerPlayer, server: MinecraftServer, packet: DreamPacket) {
         when (packet) {
             is ClientHello -> handleHello(player, server, packet)
@@ -116,15 +115,11 @@ object NeoForgeV2Networking {
         }
     }
 
-    /**
-     * Marks [player] as a v2 peer, replies with the [ServerHello] and the display batch. Fullscreen re-delivery also
-     * runs here for reconnecting viewers.
-     */
     private fun handleHello(player: ServerPlayer, server: MinecraftServer, hello: ClientHello) {
         if (V2PlayerTracker.isV2(player.uuid)) return
         V2PlayerTracker.markV2(player.uuid, hello)
         send(
-            listOf(player),
+            [player],
             ServerHello(
                 isPremium = VanillaDisplayActions.isPremium(player),
                 isAdmin = VanillaDisplayActions.isAdmin(player),

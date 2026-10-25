@@ -50,10 +50,8 @@ import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
 
 class Client : ClientModInitializer, Mod {
-    /** If the `LevelRenderContext` has a `BufferSource` API, this is set to true. */
     private var customGeometryUnavailable = false
 
-    /** Called on client initialization. */
     override fun onInitializeClient() {
         // The Platform must be in the registry before onModInit so ClientStartupManager
         // can host the ClientApplication on top of it during bootstrap.
@@ -161,7 +159,6 @@ class Client : ClientModInitializer, Mod {
         ClientLifecycleEvents.CLIENT_STOPPING.register { Initializer.onStop() }
     }
 
-    /** Packet sender. */
     override fun sendPacket(packet: CustomPacketPayload) {
         ClientPlayNetworking.send(packet)
     }
@@ -170,21 +167,14 @@ class Client : ClientModInitializer, Mod {
         DisplayRegistry.getScreens().any { it.isInScreen(pos) }
 
     //? if >=26 {
-    /** Cached `SubmitNodeCollector$CustomGeometryRenderer` interface, resolved once. */
     private val customGeometryRendererClass: Class<*> by lazy {
         Class.forName("net.minecraft.client.renderer.SubmitNodeCollector\$CustomGeometryRenderer")
     }
 
-    /** Cached `LevelRenderContext.submitNodeCollector` accessor (the context's runtime class is stable). */
     private var submitNodeCollectorMethod: java.lang.reflect.Method? = null
-
-    /** Cached `SubmitNodeCollector.submitCustomGeometry(PoseStack, RenderType, CustomGeometryRenderer)`. */
     private var submitCustomGeometryMethod: java.lang.reflect.Method? = null
-
-    /** Whether the `LevelRenderContext` runtime class exposes `bufferSource` (probed once). */
     private var hasBufferSourceCache: Boolean? = null
 
-    /** Renders the screen using the `submitNodeCollector` API. */
     private fun renderSubmittedScreens(context: LevelRenderContext, mc: Minecraft) {
         val camera = mainCamera(mc)
         if (hasBufferSource(context)) {
@@ -216,7 +206,6 @@ class Client : ClientModInitializer, Mod {
         }
     }
 
-    /** Renders the screen using the `BufferSource` API. */
     private fun renderBufferedScreens(context: LevelRenderContext, mc: Minecraft) {
         if (!hasBufferSource(context)) {
             return
@@ -226,7 +215,6 @@ class Client : ClientModInitializer, Mod {
         renderWithBufferSource(context, camera)
     }
 
-    /** If the `LevelRenderContext` has a `BufferSource` API, returns true. */
     private fun hasBufferSource(context: LevelRenderContext): Boolean =
         hasBufferSourceCache
             ?: runCatching { context.javaClass.getMethod("bufferSource") }.isSuccess.also { hasBufferSourceCache = it }
@@ -235,7 +223,6 @@ class Client : ClientModInitializer, Mod {
     private var getBufferMethod: java.lang.reflect.Method? = null
     private var endBatchMethod: java.lang.reflect.Method? = null
 
-    /** Renders the screen using the `BufferSource` API. */
     private fun renderWithBufferSource(context: LevelRenderContext, camera: Camera) {
         val bufferSource = runCatching {
             val method = bufferSourceMethod?.takeIf { it.declaringClass.isAssignableFrom(context.javaClass) }
@@ -255,11 +242,6 @@ class Client : ClientModInitializer, Mod {
         endBatch.invoke(bufferSource)
     }
 
-    /**
-     * Submits custom geometry to the GPU. The renderer proxy is per-quad by design: the collector
-     * renders deferred, so each submission must capture its own [appendVertices] (the generated
-     * proxy class itself is cached by the JDK, so per-call instantiation is just an allocation).
-     */
     private fun submitCustomGeometry(
         stack: PoseStack,
         submitNodeCollector: Any,
@@ -282,7 +264,6 @@ class Client : ClientModInitializer, Mod {
     }
     //?}
 
-    /** Main camera accessor. */
     private fun mainCamera(mc: Minecraft): Camera {
         //? if >=26.2 {
         return mc.gameRenderer.mainCamera()
@@ -290,14 +271,12 @@ class Client : ClientModInitializer, Mod {
         /*return mc.gameRenderer.getMainCamera()*/
     }
 
-    /** World pose stack accessor. */
     private fun worldPoseStack(context: Any): PoseStack =
         runCatching { context.javaClass.getMethod("matrixStack") }
             .getOrElse { context.javaClass.getMethod("matrices") }
             .invoke(context) as PoseStack
 
     private companion object {
-        /** Logger. */
         private val logger = LoggerFactory.getLogger(javaClass)
     }
 }

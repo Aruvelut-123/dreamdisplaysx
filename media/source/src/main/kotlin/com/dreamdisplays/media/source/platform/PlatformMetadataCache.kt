@@ -19,7 +19,6 @@ class PlatformMetadataCache(
     private val fetch: (key: String) -> PlatformVideoMetadata?,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private val cache: Cache<String, PlatformVideoMetadata> = Caffeine.newBuilder()
         .maximumSize(500)
         .expireAfter(object : Expiry<String, PlatformVideoMetadata> {

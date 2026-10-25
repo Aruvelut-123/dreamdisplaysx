@@ -20,7 +20,6 @@ class ReloadCommand : SubCommand {
     override val name = "reload"
     override val permission = PaperServer.config.permissions.reload
 
-    /** Reloads `config.yml` from disk; replies with success or failure message. */
     override fun execute(sender: CommandSender, args: Array<String?>) =
         runCatching { PaperServer.config.reload() }.fold(
             onSuccess = {

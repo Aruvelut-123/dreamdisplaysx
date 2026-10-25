@@ -16,10 +16,7 @@ import java.util.Locale
  * isolate search caching from format resolution.
  */
 object YtDlpSearchCache {
-    /** Info cache TTL: 30 minutes is a good balance between freshness and avoiding repeated InnerTube calls. */
     private const val INFO_CACHE_TTL_MS: Long = 30L * 60L * 1_000L
-
-    /** In-memory cache of search results, keyed by lowercase query + limit. */
     private val searchMemo = AsyncMemo<String, List<MediaSearchResult>>(100, INFO_CACHE_TTL_MS, DreamCoroutines.clientIo, "search")
     private val relatedMemo = AsyncMemo<String, List<MediaSearchResult>>(200, INFO_CACHE_TTL_MS, DreamCoroutines.clientIo, "related")
 
@@ -56,7 +53,7 @@ object YtDlpSearchCache {
     /** Fetches the first page (up to [limit] results) matching [query] in [sortOrder]; a fresh network call each time (continuation isn't cacheable). */
     @Throws(IOException::class)
     fun searchPage(query: String, limit: Int, sortOrder: SortOrder = SortOrder.RELEVANCE): MediaSearchPage {
-        if (query.isBlank()) return MediaSearchPage(emptyList(), null)
+        if (query.isBlank()) return MediaSearchPage([], null)
         return YouTubeInnerTube.searchPage(query.trim(), limit.coerceIn(1, 25), sortOrder)
     }
 
@@ -68,7 +65,7 @@ object YtDlpSearchCache {
     /** Fetches the first page (up to [limit] results) related to [videoId]. */
     @Throws(IOException::class)
     fun relatedPage(videoId: String, limit: Int): MediaSearchPage {
-        if (videoId.isBlank()) return MediaSearchPage(emptyList(), null)
+        if (videoId.isBlank()) return MediaSearchPage([], null)
         return YouTubeInnerTube.relatedPage(videoId, limit.coerceIn(1, 25))
     }
 

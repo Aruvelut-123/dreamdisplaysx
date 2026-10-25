@@ -10,7 +10,6 @@ interface ClientModule : DreamDisplaysModule {
     /** Installs this module into the given [context]. This will only be called once, and only after all dependencies have been installed. */
     fun install(context: ClientContext)
 
-    /** Bridges the loader-neutral module contract to the richer client context. */
     override fun install(context: ModuleContext) {
         val clientContext = context as? ClientContext
             ?: error("Client module '$id' requires ClientContext, got ${context::class.java.name}.")

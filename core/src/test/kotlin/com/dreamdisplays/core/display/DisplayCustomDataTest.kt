@@ -87,6 +87,6 @@ class DisplayCustomDataTest {
 
         system.recordDisplay(info(mapOf("a:one" to byteArrayOf(1))))
 
-        assertEquals(listOf(setOf("a:one")), seen)
+        assertEquals([setOf("a:one")], seen)
     }
 }

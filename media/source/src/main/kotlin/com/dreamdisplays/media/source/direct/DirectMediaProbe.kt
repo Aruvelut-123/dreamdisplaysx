@@ -10,9 +10,7 @@ import java.util.*
  * A single cheap HTTP round trip that answers everything the direct resolver needs to know about a user-pasted URL.
  */
 internal object DirectMediaProbe {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private const val CONNECT_TIMEOUT_MS = 8_000L
     private const val READ_TIMEOUT_MS = 8_000L
     private const val SNIFF_BYTES = 512
@@ -42,13 +40,11 @@ internal object DirectMediaProbe {
         val isAudioType: Boolean get() = contentType?.startsWith("audio/") == true
     }
 
-    /** MIME types HLS / DASH manifests are served as. */
     private val MANIFEST_TYPES = setOf(
         "application/vnd.apple.mpegurl", "application/x-mpegurl", "audio/mpegurl",
         "application/dash+xml",
     )
 
-    /** Generic types a correctly-served media file is nonetheless often labeled with: object storage defaults to binary / octet-stream. */
     private val TOLERATED_TYPES = setOf("application/octet-stream", "binary/octet-stream")
 
     /**
@@ -76,18 +72,12 @@ internal object DirectMediaProbe {
         return base
     }
 
-    /** `HEAD` probe; null when the server refuses the method or the request fails. */
     private fun head(url: String): Result? = runCatching {
         val response = DreamHttpClient.execute(url, requestOptions("HEAD"))
         if (!response.isSuccessful) return@runCatching null
         response.toResult()
     }.onFailure { logger.debug("HEAD probe failed for {}: {}.", url.take(120), it.message) }.getOrNull()
 
-    /**
-     * Ranged `GET` fallback, returning both the [Result] and the bytes read. A `206 Partial Content`
-     * reply is itself proof of range support, and its `Content-Range` header carries the full length
-     * that `Content-Length` cannot.
-     */
     private fun rangedGet(url: String): Pair<Result, ByteArray>? = runCatching {
         val response = DreamHttpClient.executeLimited(
             url,
@@ -105,11 +95,6 @@ internal object DirectMediaProbe {
         result to response.body
     }.onFailure { logger.debug("Ranged GET probe failed for {}: {}.", url.take(120), it.message) }.getOrNull()
 
-    /**
-     * Reads the first [SNIFF_BYTES] bytes and infers a media content type from the container magic
-     * number, or null when the bytes are not recognizably media. Used only on the HEAD path; the
-     * ranged path sniffs from the bytes it already fetched.
-     */
     private fun sniffContentType(url: String): String? = runCatching {
         val response = DreamHttpClient.executeLimited(
             url, maxBytes = SNIFF_BYTES, options = requestOptions("GET", range = "bytes=0-${SNIFF_BYTES - 1}"),
@@ -144,16 +129,11 @@ internal object DirectMediaProbe {
         }
     }
 
-    /**
-     * True when the bytes carry the MPEG-TS sync byte at the start of two consecutive packets. One
-     * `0x47` alone is far too weak — plenty of text starts with a `G`.
-     */
     private fun isTransportStream(bytes: ByteArray): Boolean =
         bytes.size > TS_PACKET_BYTES &&
                 bytes[0] == 0x47.toByte() &&
                 bytes[TS_PACKET_BYTES] == 0x47.toByte()
 
-    /** True when a text head reads as the start of a DASH manifest, with or without an XML prolog. */
     private fun dashManifest(head: String): Boolean {
         val text = head.trimStart('﻿', ' ', '\n', '\r', '\t')
         return text.startsWith("<MPD", ignoreCase = true) ||
@@ -170,7 +150,6 @@ internal object DirectMediaProbe {
         followRedirects = false,
     )
 
-    /** Builds a [Result] from this response, letting the ranged path override length / range facts. */
     private fun DreamHttpClient.HttpResponse.toResult(
         contentLengthOverride: Long? = headerValue("content-length")?.toLongOrNull(),
         acceptsRangesOverride: Boolean = headerValue("accept-ranges")?.contains("bytes", ignoreCase = true) == true,
@@ -182,7 +161,6 @@ internal object DirectMediaProbe {
         fileName = fileNameFrom(headerValue("content-disposition")),
     )
 
-    /** Extracts a filename from a `Content-Disposition` header value, decoding `filename*` when present. */
     private fun fileNameFrom(disposition: String?): String? {
         if (disposition == null) return null
         // RFC 5987 extended form: filename*=UTF-8''percent%20encoded.mp4
@@ -196,7 +174,6 @@ internal object DirectMediaProbe {
         return null
     }
 
-    /** First value of header [name], matched case-insensitively as HTTP header names are. */
     private fun DreamHttpClient.HttpResponse.headerValue(name: String): String? =
         headers.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value?.firstOrNull()
 }

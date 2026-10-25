@@ -41,7 +41,6 @@ class ListCommand : SubCommand {
     override val name = "list"
     override val permission = PaperServer.config.permissions.list
 
-    /** Renders a paged, filterable listing of all displays, with `/tp` and URL buttons for players. */
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val displays = sortedDisplays()
         if (displays.isEmpty()) {
@@ -130,7 +129,6 @@ class ListCommand : SubCommand {
         }
     }
 
-    /** Builds tab-completion suggestions for each positional argument (filter keyword, value, page). */
     override fun complete(sender: CommandSender, args: Array<String?>): List<String> {
         val displays = sortedDisplays()
         val ownerNameCache = mutableMapOf<UUID, String?>()
@@ -144,7 +142,7 @@ class ListCommand : SubCommand {
             3 -> when (ListFilter.fromToken(args[1])) {
                 ListFilter.MINE -> {
                     if (sender !is Player) {
-                        emptyList()
+                        []
                     } else {
                         pageSuggestions(displays.count { it.ownerId == sender.uniqueId })
                     }
@@ -161,20 +159,19 @@ class ListCommand : SubCommand {
                     .distinct()
                     .sorted()
 
-                else -> emptyList()
+                else -> []
             }
 
             4 -> when (ListFilter.fromToken(args[1])) {
                 ListFilter.WORLD -> pageSuggestions(filterByWorld(displays, args[2].orEmpty()).size)
                 ListFilter.OWNER -> pageSuggestions(filterByOwner(displays, args[2].orEmpty(), ownerNameCache).size)
-                else -> emptyList()
+                else -> []
             }
 
-            else -> emptyList()
+            else -> []
         }
     }
 
-    /** Parses [args] into a filtered + paginated [ListQuery], or null when arguments are invalid. */
     private fun parseQuery(
         sender: CommandSender,
         args: Array<String?>,
@@ -225,7 +222,6 @@ class ListCommand : SubCommand {
         }
     }
 
-    /** Parses an optional page argument, defaulting to 1 when absent; sends an error when malformed. */
     private fun parseOptionalPage(sender: CommandSender, rawPage: String?): Int? {
         if (rawPage == null) return 1
         val page = rawPage.toIntOrNull()
@@ -236,12 +232,10 @@ class ListCommand : SubCommand {
         return page
     }
 
-    /** Returns displays whose world name matches [worldName] case-insensitively. */
     private fun filterByWorld(displays: List<PaperDisplayData>, worldName: String): List<PaperDisplayData> {
         return displays.filter { it.pos1.world?.name?.equals(worldName, ignoreCase = true) == true }
     }
 
-    /** Returns displays whose owner name or UUID matches [ownerName] case-insensitively. */
     private fun filterByOwner(
         displays: List<PaperDisplayData>,
         ownerName: String,
@@ -253,12 +247,10 @@ class ListCommand : SubCommand {
         }
     }
 
-    /** Resolves the offline player name for [ownerId], caching the result for this invocation. */
     private fun getOwnerName(ownerId: UUID, ownerNameCache: MutableMap<UUID, String?>): String? {
         return ownerNameCache.getOrPut(ownerId) { Bukkit.getOfflinePlayer(ownerId).name }
     }
 
-    /** Returns all displays sorted by world, X, Y, Z, and UUID for deterministic page order. */
     private fun sortedDisplays(): List<PaperDisplayData> {
         return DisplayManager.getDisplays()
             .filterIsInstance<PaperDisplayData>()
@@ -273,13 +265,10 @@ class ListCommand : SubCommand {
             )
     }
 
-    /** Returns the ceiling page count for [size] items at [PAGE_SIZE] per page (at least 1). */
     private fun pageCount(size: Int): Int = max(1, (size + PAGE_SIZE - 1) / PAGE_SIZE)
 
-    /** Returns page numbers `1..pageCount(size)` as strings for tab-completion. */
     private fun pageSuggestions(size: Int): List<String> = (1..pageCount(size)).map { it.toString() }
 
-    /** Sends the generic "wrong command" message and returns null so callers can short-circuit. */
     private fun wrong(sender: CommandSender): ListQuery? {
         MessageUtil.sendMessage(sender, "displayWrongCommand")
         return null
@@ -350,7 +339,6 @@ object VanillaListCommand {
         return 1
     }
 
-    /** Renders a single page of [displays] to the command source, substituting owner names and localized strings. */
     private fun sendPage(
         ctx: CommandContext<CommandSourceStack>,
         player: ServerPlayer?,
@@ -412,7 +400,6 @@ object VanillaListCommand {
         }
     }
 
-    /** Returns all `Fabric`/`NeoForge` displays sorted by world key, X, Y, Z, and UUID for deterministic page order. */
     private fun sortedDisplays(): List<VanillaDisplayData> =
         DisplayManager.getDisplays().filterIsInstance<VanillaDisplayData>().sortedWith(
             compareBy(
@@ -424,7 +411,6 @@ object VanillaListCommand {
             )
         )
 
-    /** Sends the localized message for [key] to [player] or falls back to the command source. */
     private fun sendMsg(ctx: CommandContext<CommandSourceStack>, player: ServerPlayer?, key: String) {
         val msg = MessageUtil.messageFor(player, key)
         if (player != null) {
@@ -434,7 +420,6 @@ object VanillaListCommand {
         }
     }
 
-    /** Sends a color-formatted [msg] to [player] or falls back to the command source as plain text. */
     private fun sendColoredMsg(ctx: CommandContext<CommandSourceStack>, player: ServerPlayer?, msg: String) {
         if (player != null) {
             MessageUtil.sendColoredMessage(player, msg)

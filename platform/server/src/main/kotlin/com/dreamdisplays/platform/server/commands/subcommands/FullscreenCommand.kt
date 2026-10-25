@@ -100,10 +100,6 @@ object FullscreenCommand {
         return FullscreenStartResult.Started(sessionId, reach)
     }
 
-    /**
-     * Clamps [requested] to [qualityCap] (0 or less means no cap): `auto` becomes a fixed height at the cap, and any
-     * explicit request above the cap is lowered to it.
-     */
     private fun clampQuality(requested: String?, qualityCap: Int): String {
         if (qualityCap <= 0) return requested ?: ""
         val height = VideoQuality.parse(requested).targetHeight
@@ -239,10 +235,6 @@ object PaperFullscreenCommand {
         reply(sender, result)
     }
 
-    /**
-     * Expands one `target` token to the players it refers to: `@a` / `@e` (everyone online), `@s` (the [sender] themselves,
-     * nobody when no player ran the command), `@p` (nearest to [origin] in its world), or a literal player name.
-     */
     private fun resolveTargetToken(sender: Player?, origin: Location, token: String): Set<UUID> = when {
         token.equals("@a", ignoreCase = true) || token.equals("@e", ignoreCase = true) ->
             Bukkit.getOnlinePlayers().map { it.uniqueId }.toSet()
@@ -272,7 +264,7 @@ object PaperFullscreenCommand {
     fun stop(sender: CommandSender, idOrAll: String) {
         val networkIds =
             if (idOrAll.equals("all", ignoreCase = true)) FullscreenCommand.list().map { it.sessionId }
-            else listOf(idOrAll)
+            else [idOrAll]
 
         val count = FullscreenCommand.stop(idOrAll)
 
@@ -492,7 +484,7 @@ object VanillaFullscreenCommand {
         val player = ctx.source.entity as? ServerPlayer
         val networkIds =
             if (idOrAll.equals("all", ignoreCase = true)) FullscreenCommand.list().map { it.sessionId }
-            else listOf(idOrAll)
+            else [idOrAll]
 
         val count = FullscreenCommand.stop(idOrAll)
 

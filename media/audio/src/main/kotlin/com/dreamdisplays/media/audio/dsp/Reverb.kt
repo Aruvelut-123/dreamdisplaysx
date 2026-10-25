@@ -65,7 +65,6 @@ class Reverb(sampleRate: Float) {
         allpassL.forEach { it.reset() }; allpassR.forEach { it.reset() }
     }
 
-    /** One damped feedback-comb: a delay line whose feedback is low-pass filtered by [damp]. */
     private class CombFilter(size: Int) {
         private val buf = FloatArray(size)
         private var idx = 0
@@ -88,7 +87,6 @@ class Reverb(sampleRate: Float) {
         }
     }
 
-    /** One Schröder all-pass: diffuses the comb output without coloring its magnitude response. */
     private class AllpassFilter(size: Int, private val feedback: Float) {
         private val buf = FloatArray(size)
         private var idx = 0

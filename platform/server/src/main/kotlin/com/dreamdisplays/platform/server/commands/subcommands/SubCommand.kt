@@ -22,5 +22,5 @@ interface SubCommand {
     fun execute(sender: CommandSender, args: Array<String?>)
 
     /** Returns tab-completion suggestions for [sender] given the current [args]. */
-    fun complete(sender: CommandSender, args: Array<String?>): List<String> = emptyList()
+    fun complete(sender: CommandSender, args: Array<String?>): List<String> = []
 }

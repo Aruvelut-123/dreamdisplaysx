@@ -13,11 +13,9 @@ data class YouTubeVideoId(val value: String) {
         require(isValid(value)) { "Invalid YouTube video id: $value." }
     }
 
-    /** To string representation of this YouTube video ID. */
     override fun toString(): String = value
 
     companion object {
-        /** Valid ID. */
         private val VALID_ID = Regex("^[A-Za-z0-9_-]{11}$")
 
         /** Parses a YouTube ID. */

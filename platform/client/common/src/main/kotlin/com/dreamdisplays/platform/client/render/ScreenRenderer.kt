@@ -83,10 +83,8 @@ object ScreenRenderer {
         ImmediateRenderCompat.flushBatch()
     }
 
-    /** Distance the [UnshadedDisplayPass] replay is lifted off the level-pass quad it repeats, in blocks. */
     private const val REPLAY_LIFT = 0.01f
 
-    /** Translates and rotates the pose for [displayScreen]'s facing direction, then renders the video or fallback color. */
     private fun renderScreenTexture(
         displayScreen: DisplayScreen, stack: PoseStack, replay: Boolean, drawQuad: QuadRenderer,
     ) {
@@ -161,7 +159,6 @@ object ScreenRenderer {
         addVertex(pose, builder, x0, y1, 0f, 255, 255, 255, 0f, 0f)
     }
 
-    /** Draws a unit quad using the screen's GPU texture, ramping up the first-appear fade. */
     private fun renderGpuTexture(drawQuad: QuadRenderer, displayScreen: DisplayScreen) {
         val appear = displayScreen.appearProgress()
         val base = if (displayScreen.isYuvTexture) displayScreen.brightness.coerceIn(0f, 1f) * 255f else 255f
@@ -171,13 +168,8 @@ object ScreenRenderer {
         }
     }
 
-    /** Depth-layer spacing between placeholder elements, in blocks toward the viewer (see [drawLayer]). */
     private const val OVERLAY_LIFT = 0.01f
 
-    /**
-     * Loading / error placeholder. Loading is a faintly breathing dark backdrop with an indeterminate progress bar;
-     * error swaps in a static red tint.
-     */
     private fun renderPlaceholder(
         stack: PoseStack, drawQuad: QuadRenderer, type: RenderType,
         facing: DisplayFacing, w: Int, h: Int, error: Boolean, lift: Float,
@@ -220,11 +212,6 @@ object ScreenRenderer {
         }
     }
 
-    /**
-     * Runs [body] with the screen transform applied and the layer lifted [lift] blocks toward the
-     * viewer (in world space, before the transform's z-flattening scale) so stacked overlay quads
-     * occupy distinct depths.
-     */
     private inline fun drawLayer(
         stack: PoseStack, facing: DisplayFacing, w: Int, h: Int, lift: Float, body: () -> Unit,
     ) {
@@ -235,10 +222,6 @@ object ScreenRenderer {
         stack.popPose()
     }
 
-    /**
-     * Appends a solid-color rectangle spanning [[x0], [y0] and [x1],[y1]] in unit-quad space (UV is ignored: the
-     * overlay type samples a 1x1 white texture). Wound CCW to match the video quad.
-     */
     private fun appendRect(
         pose: PoseStack.Pose, builder: VertexConsumer,
         x0: Float, y0: Float, x1: Float, y1: Float, r: Int, g: Int, b: Int,
@@ -252,7 +235,6 @@ object ScreenRenderer {
     private val baseU = floatArrayOf(0f, 1f, 1f, 0f)
     private val baseV = floatArrayOf(1f, 1f, 0f, 0f)
 
-    /** Appends a quad with the given [rotation] and color [[r], [g], [b] (0..255). */
     private fun appendQuad(
         pose: PoseStack.Pose,
         builder: VertexConsumer,
@@ -268,7 +250,6 @@ object ScreenRenderer {
         addVertex(pose, builder, 0f, 1f, 0f, r, g, b, baseU[(3 + rot) % 4], baseV[(3 + rot) % 4])
     }
 
-    /** Adds a vertex with the given [r,g,b] (0..255) and [u,v] (0..1) coordinates. */
     private fun addVertex(
         pose: PoseStack.Pose,
         builder: VertexConsumer,
@@ -284,12 +265,10 @@ object ScreenRenderer {
         builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, 255)
     }
 
-    /** Draws a quad using the given [type] and [appendVertices] function. A bit of a hack. */
     private fun drawImmediate(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
         ImmediateRenderCompat.draw(stack, type, appendVertices)
     }
 
-    /** Compatibility layer for the new immediate mode API. */
     private object ImmediateRenderCompat {
         fun beginBatch() {
             //? if >=26.2 {
@@ -324,16 +303,13 @@ object ScreenRenderer {
         }
 
         //? if >=26.2 {
-        /** Staged-buffer class and constructor for the 26.2+ draw path, resolved once. */
         private val stagedClass: Class<*> by lazy { Class.forName("net.minecraft.client.renderer.StagedVertexBuffer") }
         private val stagedCtor by lazy {
             stagedClass.getConstructor(java.util.function.Supplier::class.java, Int::class.javaPrimitiveType)
         }
 
-        /** Per-class method cache so the staged draw resolves each method once, not per quad per frame. */
         private val methodCache = java.util.concurrent.ConcurrentHashMap<String, java.lang.reflect.Method>()
 
-        /** Looks up a public method on [owner] through the cache. */
         private fun method(owner: Class<*>, name: String, vararg params: Class<*>): java.lang.reflect.Method =
             methodCache.computeIfAbsent("${owner.name}#$name") { owner.getMethod(name, *params) }
 

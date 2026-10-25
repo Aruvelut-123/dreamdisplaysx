@@ -20,7 +20,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 class ApiSignatureTest {
-    private val types = listOf(
+    private val types = [
         DreamDisplays::class.java, Display::class.java, Displays::class.java, Session::class.java,
         DisplayLifecycle::class.java, DisplayBudget::class.java, CommandResult::class.java,
         AddonContext::class.java, DreamDisplaysAddon::class.java,
@@ -34,7 +34,7 @@ class ApiSignatureTest {
         DisplayCustomData::class.java,
         MutableDisplayCustomData::class.java,
         DisplayCustomDataLimits::class.java,
-    )
+    ]
 
     @Test
     fun `addon-facing signatures contain no Kotlin runtime types`() {
@@ -47,7 +47,7 @@ class ApiSignatureTest {
     private fun isPublic(method: Method) = java.lang.reflect.Modifier.isPublic(method.modifiers) && !method.isSynthetic
 
     private fun offences(owner: Class<*>, method: Method): List<String> =
-        (listOf(method.genericReturnType) + method.genericParameterTypes)
+        ([method.genericReturnType] + method.genericParameterTypes)
             .filter { mentionsKotlin(it) }
             .map { "${owner.simpleName}.${method.name}: $it" }
             .filterNot { line -> allowed.any { line.startsWith("$it:") } }

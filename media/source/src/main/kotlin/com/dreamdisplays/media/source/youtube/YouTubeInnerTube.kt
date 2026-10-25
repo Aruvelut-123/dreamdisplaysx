@@ -21,29 +21,19 @@ import java.util.regex.Pattern
  * Direct client for YouTube's `InnerTube` API.
  */
 object YouTubeInnerTube {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Base URL for the `InnerTube` API. */
     private const val BASE_URL = "https://www.youtube.com/youtubei/v1"
-
-    /** Client metadata. */
     private const val CLIENT_NAME = "WEB"
-
-    /** Client version. */
     private const val CLIENT_VERSION = "2.20250501.00.00"
 
-    /** User-Agent header. */
     private const val UA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 
-    /** Pattern for parsing YouTube-style "age" strings (e.g. "2 years ago"). */
     private val AGE_PATTERN: Pattern = Pattern.compile(
         "(\\d+)\\s+(second|minute|hour|day|week|month|year)s?\\s+ago",
         Pattern.CASE_INSENSITIVE
     )
 
-    /** `InnerTube` API request structure. */
     @Serializable
     private data class InnerTubeRequest(
         val context: InnerTubeContext = InnerTubeContext(),
@@ -53,13 +43,11 @@ object YouTubeInnerTube {
         val params: String? = null,
     )
 
-    /** `InnerTube` API response structure. */
     @Serializable
     private data class InnerTubeContext(
         val client: InnerTubeClient = InnerTubeClient(),
     )
 
-    /** `InnerTube` API client structure. */
     @Serializable
     private data class InnerTubeClient(
         val clientName: String = CLIENT_NAME,
@@ -161,7 +149,6 @@ object YouTubeInnerTube {
         val isVerified: Boolean = false,
     )
 
-    /** Sends a POST request to the InnerTube [endpoint] with [body] and returns the parsed JSON response. */
     @Throws(IOException::class)
     private fun post(endpoint: String, body: InnerTubeRequest): JsonObject {
         val url = "$BASE_URL/$endpoint?prettyPrint=false"
@@ -193,7 +180,6 @@ object YouTubeInnerTube {
         }
     }
 
-    /** Walks the initial `InnerTube` search response JSON, collecting up to [limit] videos plus the next-page token. */
     private fun extractSearchPage(root: JsonObject, limit: Int): MediaSearchPage {
         val out = ArrayList<MediaSearchResult>()
         var token: String? = null
@@ -218,7 +204,6 @@ object YouTubeInnerTube {
         return MediaSearchPage(if (out.size > limit) out.subList(0, limit) else out, token)
     }
 
-    /** Walks a search continuation response (`appendContinuationItemsAction`), collecting up to [limit] videos plus the next token. */
     private fun extractSearchContinuationPage(root: JsonObject, limit: Int): MediaSearchPage {
         val out = ArrayList<MediaSearchResult>()
         var token: String? = null
@@ -248,11 +233,9 @@ object YouTubeInnerTube {
         return MediaSearchPage(if (out.size > limit) out.subList(0, limit) else out, token)
     }
 
-    /** Extracts the continuation token from a `continuationItemRenderer` object, or null if malformed. */
     private fun continuationToken(continuationItemRenderer: JsonObject): String? =
         continuationItemRenderer.obj("continuationEndpoint")?.obj("continuationCommand")?.optString("token")
 
-    /** Parses a single `videoRenderer` JSON object from search results; returns null for Shorts or missing IDs. */
     private fun parseVideoRenderer(vr: JsonObject): MediaSearchResult? {
         val id = vr.optString("videoId") ?: return null
         if (looksLikeShorts(vr)) return null
@@ -276,7 +259,6 @@ object YouTubeInnerTube {
         )
     }
 
-    /** Extracts title, channel, view count, and like count from a `next` endpoint response. */
     private fun extractWatchMetadata(root: JsonObject): MetaHolder? {
         return runCatching {
             val contents = path(
@@ -325,13 +307,12 @@ object YouTubeInnerTube {
     internal fun extractChapters(root: JsonObject): List<MediaChapter> {
         return runCatching { findChapters(root) }.getOrElse { e ->
             logger.debug("Chapter parse failed: ${e.message}")
-            emptyList()
+            []
         }
     }
 
-    /** Walks [root]'s engagement panels for the first non-empty `macroMarkersListRenderer` chapter list. */
     private fun findChapters(root: JsonObject): List<MediaChapter> {
-        val panels = root.array("engagementPanels") ?: return emptyList()
+        val panels = root.array("engagementPanels") ?: return []
         for (panel in panels) {
             val items = panel.asJsonObjectOrNull()
                 ?.obj("engagementPanelSectionListRenderer")
@@ -349,10 +330,9 @@ object YouTubeInnerTube {
             }
             if (chapters.isNotEmpty()) return chapters
         }
-        return emptyList()
+        return []
     }
 
-    /** Walks the initial `next` response's related-video sidebar, collecting up to [limit] videos. */
     private fun extractRelatedPage(root: JsonObject, limit: Int): MediaSearchPage {
         val out = ArrayList<MediaSearchResult>()
         var token: String? = null
@@ -379,11 +359,6 @@ object YouTubeInnerTube {
         return MediaSearchPage(out, token)
     }
 
-    /**
-     * Walks a related-video continuation response (`appendContinuationItemsAction` under
-     * `onResponseReceivedEndpoints`), collecting up to [limit] videos plus the next token. Continuation
-     * items are `lockupViewModel`s directly (no `itemSectionRenderer` wrapper, unlike search).
-     */
     private fun extractRelatedContinuationPage(root: JsonObject, limit: Int): MediaSearchPage {
         val out = ArrayList<MediaSearchResult>()
         var token: String? = null
@@ -409,7 +384,6 @@ object YouTubeInnerTube {
         return MediaSearchPage(out, token)
     }
 
-    /** Parses a `lockupViewModel` JSON object (the current related-video card shape); returns null for non-video content. */
     private fun parseLockupViewModel(lockup: JsonObject): MediaSearchResult? {
         val id = lockup.optString("contentId") ?: return null
         if (lockup.optString("contentType") != "LOCKUP_CONTENT_TYPE_VIDEO") return null
@@ -440,7 +414,6 @@ object YouTubeInnerTube {
         )
     }
 
-    /** Parses a `compactVideoRenderer` JSON object from the related-video sidebar; returns null for Shorts or missing IDs. */
     private fun parseCompactVideoRenderer(cvr: JsonObject): MediaSearchResult? {
         val id = cvr.optString("videoId") ?: return null
         if (looksLikeShorts(cvr)) return null
@@ -461,12 +434,10 @@ object YouTubeInnerTube {
         )
     }
 
-    /** Navigates the nested `viewCount.videoViewCountRenderer.viewCount` path in [vp]; returns null if absent. */
     private fun maybeViewCountText(vp: JsonObject): JsonObject? {
         return vp.obj("viewCount")?.obj("videoViewCountRenderer")?.obj("viewCount")
     }
 
-    /** Drills through the deeply nested like-button view model in [vp] to extract a numeric like count. */
     private fun extractLikeCount(vp: JsonObject): Long? {
         val topLevel = vp.obj("videoActions")?.obj("menuRenderer")?.array("topLevelButtons") ?: return null
         for (btn in topLevel) {
@@ -486,7 +457,6 @@ object YouTubeInnerTube {
         return null
     }
 
-    /** Returns true if [vr] appears to be a YouTube Shorts entry based on its navigation URL or JSON markers. */
     private fun looksLikeShorts(vr: JsonObject): Boolean {
         val webUrl = runCatching {
             vr.obj("navigationEndpoint")
@@ -499,7 +469,6 @@ object YouTubeInnerTube {
         return "\"label\":\"Shorts\"" in s || "shortsLockupViewModel" in s
     }
 
-    /** Traverses [obj] along [keys] and returns the element at the end, or an empty object if any step is missing. */
     private fun path(obj: JsonObject, vararg keys: String): JsonElement? {
         var cur: JsonElement? = obj
         for (k in keys) {
@@ -508,7 +477,6 @@ object YouTubeInnerTube {
         return cur
     }
 
-    /** Concatenates all `text` values from the `runs` array in [obj]; returns null if the array is absent or empty. */
     private fun runsText(obj: JsonObject?): String? {
         val runs = obj?.array("runs") ?: return null
         val sb = StringBuilder()
@@ -518,19 +486,16 @@ object YouTubeInnerTube {
         return if (sb.isEmpty()) null else sb.toString()
     }
 
-    /** Returns the `simpleText` field of [obj], falling back to [runsText] if absent. */
     private fun simpleText(obj: JsonObject?): String? {
         if (obj == null) return null
         return obj.optString("simpleText") ?: runsText(obj)
     }
 
-    /** Extracts the largest listed image URL from a `{thumbnails: [{url, width, height}, ...]}`-shaped [thumbnailContainer]. */
     private fun largestThumbnailUrl(thumbnailContainer: JsonObject?): String? {
         val thumbs = thumbnailContainer?.array("thumbnails") ?: return null
         return thumbs.lastOrNull()?.asJsonObjectOrNull()?.optString("url")
     }
 
-    /** Returns true if [badgesArray] contains a `metadataBadgeRenderer` whose style is a verified-channel badge. */
     private fun hasVerifiedBadge(badgesArray: JsonArray?): Boolean {
         val badges = badgesArray ?: return false
         return badges.any { badge ->
@@ -539,7 +504,6 @@ object YouTubeInnerTube {
         }
     }
 
-    /** Returns true if [badgesArray] contains a `metadataBadgeRenderer` marking the video as currently live. */
     private fun hasLiveBadge(badgesArray: JsonArray?): Boolean {
         val badges = badgesArray ?: return false
         return badges.any { badge ->
@@ -548,7 +512,6 @@ object YouTubeInnerTube {
         }
     }
 
-    /** Parses a colon-separated duration string (e.g. "1:23:45") into total seconds, or null on failure. */
     private fun parseDuration(s: String?): Long? {
         if (s == null) return null
         val parts = s.split(":")
@@ -559,7 +522,6 @@ object YouTubeInnerTube {
         }.getOrNull()
     }
 
-    /** Parses a human-readable view count string (e.g. "1.2M views", "45K") into a raw long, or null on failure. */
     private fun parseViews(s: String?): Long? {
         if (s == null) return null
         var t = s.lowercase().replace(",", "").replace("views", "").trim()
@@ -581,7 +543,6 @@ object YouTubeInnerTube {
         return runCatching { (t.trim().toDouble() * mult).toLong() }.getOrNull()
     }
 
-    /** Converts a relative age string (e.g. "3 days ago", "2 weeks ago") to an approximate day count, or null. */
     private fun parseDaysAgo(s: String?): Int? {
         if (s == null) return null
         val m = AGE_PATTERN.matcher(s)

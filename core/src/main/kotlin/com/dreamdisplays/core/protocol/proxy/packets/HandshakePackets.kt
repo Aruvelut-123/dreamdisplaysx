@@ -18,7 +18,7 @@ data class BackendHello(
 @Serializable
 data class ProxyWelcome(
     @ProtoNumber(1) val yourServerName: String = "",
-    @ProtoNumber(2) val allServerNames: List<String> = emptyList(),
+    @ProtoNumber(2) val allServerNames: List<String> = [],
     @ProtoNumber(3) val proxyNowMs: Long = 0L,
 ) : ProxyPacket
 

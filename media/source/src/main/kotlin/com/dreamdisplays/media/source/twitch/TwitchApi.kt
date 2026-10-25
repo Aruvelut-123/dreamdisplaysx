@@ -65,7 +65,6 @@ data class TwitchClipPlayback(
  */
 object TwitchApi {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private const val GQL_URL = "https://gql.twitch.tv/gql"
     private const val WEB_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 
@@ -141,7 +140,6 @@ object TwitchApi {
         )
     }
 
-    /** Fetches metadata from the public GQL endpoint; returns null on any failure. */
     private fun resolveViaGql(source: MediaSource.Twitch): TwitchMetadata? =
         runCatching {
             source.channel?.let { return@runCatching queryChannel(it) }
@@ -173,7 +171,7 @@ object TwitchApi {
                     """profileImageURL(width:70) user{displayName broadcastSettings{title} """ +
                     """stream{viewersCount previewImageURL(width:640,height:360) game{displayName}}}}}}}}}"""
         )
-        val edges = data.obj("searchSuggestions")?.array("edges")?.mapNotNull { it.asJsonObjectOrNull() } ?: return emptyList()
+        val edges = data.obj("searchSuggestions")?.array("edges")?.mapNotNull { it.asJsonObjectOrNull() } ?: return []
         return edges.mapNotNull { edge ->
             val content = edge.obj("node")?.obj("content") ?: return@mapNotNull null
             if (content.optString("__typename") != "SearchSuggestionChannel") return@mapNotNull null
@@ -210,7 +208,6 @@ object TwitchApi {
         return clipMetadata(clip)
     }
 
-    /** Maps a GQL `user` object (with `broadcastSettings` / `stream`) to [TwitchMetadata]. */
     private fun channelMetadata(user: JsonObject, login: String): TwitchMetadata {
         val stream = user.obj("stream")
         return TwitchMetadata(
@@ -224,7 +221,6 @@ object TwitchApi {
         )
     }
 
-    /** Maps a GQL `video` object to [TwitchMetadata]. */
     private fun videoMetadata(video: JsonObject): TwitchMetadata = TwitchMetadata(
         title = video.optString("title"),
         channelName = video.obj("owner")?.optString("displayName"),
@@ -235,7 +231,6 @@ object TwitchApi {
         channelAvatarUrl = video.obj("owner")?.optString("profileImageURL"),
     )
 
-    /** Maps a GQL `clip` object to [TwitchMetadata]. */
     private fun clipMetadata(clip: JsonObject): TwitchMetadata = TwitchMetadata(
         title = clip.optString("title"),
         channelName = clip.obj("broadcaster")?.optString("displayName"),
@@ -246,14 +241,12 @@ object TwitchApi {
         channelAvatarUrl = clip.obj("broadcaster")?.optString("profileImageURL"),
     )
 
-    /** Maps a GQL access-token object to [TwitchAccessToken]; null when either half is missing. */
     private fun JsonObject.toToken(): TwitchAccessToken? {
         val value = optString("value") ?: return null
         val signature = optString("signature") ?: return null
         return TwitchAccessToken(value, signature)
     }
 
-    /** Executes a GQL [query] and returns the `data` object; throws on transport or shape errors. */
     private fun gql(query: String): JsonObject {
         val payload = DreamJson.compact.encodeToString(
             JsonObject.serializer(),
@@ -274,10 +267,8 @@ object TwitchApi {
             ?: throw IllegalStateException("GQL response has no data object: ${response.take(500)}")
     }
 
-    /** Escapes a URL-derived value for safe embedding inside a GQL string literal. */
     private fun escape(value: String): String = value.replace("\\", "\\\\").replace("\"", "\\\"")
 
-    /** Fallback: derives metadata from the yt-dlp stream list's generic info-dict fields. */
     private fun resolveViaStreams(source: MediaSource.Twitch): TwitchMetadata? =
         runCatching {
             YtDlp.fetch(source.url).firstOrNull()?.let { first ->

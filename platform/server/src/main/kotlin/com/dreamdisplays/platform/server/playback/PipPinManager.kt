@@ -20,29 +20,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object PipPinManager {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private lateinit var transport: PlaybackTransport
-
-    /** Player id -> pinned display ids. */
     private val pins = ConcurrentHashMap<UUID, MutableSet<UUID>>()
-
-    /**
-     * Bounds how often one player's [pin] / [unpin] packets are honored — both are a client-triggered
-     * write, and without this a flood forces one full store rewrite per packet.
-     */
     private val throttle = ActionThrottle()
     private const val PIN_COOLDOWN_MS = 250L
-
-    /**
-     * Hard cap on live pins per player. A pin bypasses render distance forever, so unlike a normal
-     * display this cost doesn't self-limit by what the player can actually see.
-     */
     private const val MAX_PINS_PER_PLAYER = 16
-
-    /** How long a burst of [pin] / [unpin] calls is coalesced into a single debounced store write. */
     private const val PERSIST_DEBOUNCE_MS = 2_000L
-
-    /** Serializes the debounced writes so two in-flight saves can never race the same store file. */
     private val persistMutex = Mutex()
     private val persistScheduled = AtomicBoolean(false)
 
@@ -104,10 +87,6 @@ object PipPinManager {
         if (restored > 0) logger.info("Restored $restored persisted PiP pin(s).")
     }
 
-    /**
-     * Schedules a debounced store write, coalescing a burst of [pin] / [unpin] calls (e.g. a client flooding the throttle)
-     * into one disk write.
-     */
     private fun schedulePersist() {
         if (!persistScheduled.compareAndSet(false, true)) return
         ServerCoroutines.io.launch {
@@ -117,7 +96,6 @@ object PipPinManager {
         }
     }
 
-    /** Persists every pin, or clears the store when none remain. */
     private fun persistNow() {
         val records = pins.flatMap { (playerId, displayIds) ->
             displayIds.map { displayId -> PipPinSession(playerId.toString(), displayId.toString()) }

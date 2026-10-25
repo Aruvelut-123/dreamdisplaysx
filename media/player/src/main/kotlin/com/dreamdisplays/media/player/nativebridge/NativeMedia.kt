@@ -13,13 +13,8 @@ import java.nio.ByteBuffer
  * Java FFM bridge to optional `dreamdisplays_native` Rust library (`FFmpeg`, NV12 -> RGB, brightness).
  */
 object NativeMedia {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Must match `ABI_VERSION` in `native/src/lib.rs`. */
     private const val ABI_VERSION = 1
-
-    /** Must match `LAV_ABI_VERSION` in `native/lav/src/lib.rs`. */
     private const val LAV_ABI_VERSION = 5
 
     const val READ_OK = 0
@@ -66,9 +61,7 @@ object NativeMedia {
     private var videoExitCode: MethodHandle? = null
     private var videoKill: MethodHandle? = null
     private var videoClose: MethodHandle? = null
-
     private val nativeProbe = lazy { runCatching { init() }.getOrDefault(false) }
-
     private val lavProbe = lazy { isAvailable && runCatching { initLav() }.getOrDefault(false) }
 
     /** True once the library has been located, loaded, bound, and ABI-checked. */
@@ -147,7 +140,6 @@ object NativeMedia {
 
     data class LavSurfaceReadResult(val code: Int, val descriptor: LavSurfaceDescriptor?)
 
-    /** Reusable native out-param slot for lavReadFrameI420WithPts (per session, freed in lavClose). */
     private class PtsScratch {
         val arena: Arena = Arena.ofShared()
         val segment: MemorySegment = arena.allocate(ValueLayout.JAVA_LONG)
@@ -341,10 +333,6 @@ object NativeMedia {
         videoClose!!.invoke(handle)
     }
 
-    /**
-     * Performs the one-time gate checks and binds all downcall handles.
-     * Any failure leaves the bridge unavailable; this must never throw past [isAvailable].
-     */
     private fun init(): Boolean {
         if (!System.getProperty("dreamdisplays.native", "true").toBoolean()) {
             logger.info("Native pipeline disabled via -Ddreamdisplays.native=false.")
@@ -418,11 +406,6 @@ object NativeMedia {
         }
     }
 
-    /**
-     * Binds the optional in-process libav library (`dreamdisplays_lav`). It links FFmpeg
-     * shared libraries, so loading can legitimately fail when they are neither bundled beside
-     * the cdylib nor installed system-wide; any failure just leaves the in-process path unavailable.
-     */
     private fun initLav(): Boolean {
         val lib = locateLibrary(LAV_BASE_NAME) ?: run {
             logger.info("In-process libav library not found; in-process decode unavailable.")
@@ -490,11 +473,6 @@ object NativeMedia {
         }
     }
 
-    /**
-     * Portable LAV bundles may place FFmpeg shared libraries next to `dreamdisplays_lav`.
-     * Loading them first lets Linux resolve SONAMEs from the extracted cache and helps Windows
-     * layouts where DLL search does not include the extracted directory early enough.
-     */
     private fun preloadLavDependencies(dir: File?) {
         if (dir == null || !dir.isDirectory) return
         val libraries =
@@ -561,10 +539,6 @@ object NativeMedia {
         )
     }
 
-    /**
-     * Locates the platform library: explicit `-Ddreamdisplays.native.path`, then the
-     * game-dir cache, then a bundled jar resource extracted into that cache.
-     */
     private fun locateLibrary(baseName: String = LIB_BASE_NAME): File? {
         val explicitPathProperty = when (baseName) {
             LIB_BASE_NAME -> "dreamdisplays.native.path"
@@ -604,7 +578,6 @@ object NativeMedia {
         return null
     }
 
-    /** Platform key matching the layout used by the FFmpeg binary cache. */
     private fun platformKey(): String = when {
         OsInfo.isWindows -> if (OsInfo.isArm) "windows-aarch64" else "windows-x64"
         OsInfo.isMac -> if (OsInfo.isArm) "macos-aarch64" else "macos-x64"

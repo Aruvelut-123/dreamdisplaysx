@@ -26,7 +26,6 @@ class DeleteCommand : SubCommand {
     override val permission: String? = null
     override val playerOnly = true
 
-    /** Deletes the display named by `this` (looked-at, within 32 blocks) or a remote id / prefix. */
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val player = (sender as? Player) ?: return
         val token = args.getOrNull(0) ?: "this"

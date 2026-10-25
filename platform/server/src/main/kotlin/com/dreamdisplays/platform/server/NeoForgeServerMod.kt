@@ -49,7 +49,6 @@ class NeoForgeServer(modEventBus: IEventBus) {
         logger.info("Server-side initialization complete.")
     }
 
-    /** Registers all custom payload types for clientbound and serverbound play channels. */
     private fun registerPayloads(event: RegisterPayloadHandlersEvent) {
         val registrar = event.registrar(Initializer.MOD_ID).optional().versioned("1")
         NeoForgeV2Networking.registerReceivers(registrar)

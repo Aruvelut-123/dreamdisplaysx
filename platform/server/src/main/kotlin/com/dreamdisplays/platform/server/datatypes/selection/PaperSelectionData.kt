@@ -24,16 +24,12 @@ class PaperSelectionData(player: Player) : BaseSelectionData() {
     /** Opposite corner of the selected area. */
     var pos2: Location? = null
 
-    /** Block face the player is facing at first-point time; orients wall content. */
     private var face: BlockFace? = null
-
-    /** Player's horizontal look cardinal at first-point time; orients floor / ceiling content. */
     private var horizontal: BlockFace = BlockFace.NORTH
 
     /** True when the selection contains slabs or stairs and the screen should wrap them. */
     var conforming: Boolean = false
 
-    /** Unique identifier for the player making the selection. */
     private val playerId: UUID = player.uniqueId
 
     /** Sets the facing direction of the future display. */
@@ -49,7 +45,6 @@ class PaperSelectionData(player: Player) : BaseSelectionData() {
     /** Returns the stored facing direction, or [NORTH] if none was set. */
     fun getFace(): BlockFace = face ?: BlockFace.NORTH
 
-    /** Resets the selection state. */
     override fun reset() {
         pos1 = null
         pos2 = null
@@ -88,7 +83,6 @@ class PaperSelectionData(player: Player) : BaseSelectionData() {
         )
     }
 
-    /** Maps this face to the shared horizontal [Cardinal], defaulting to [Cardinal.NORTH]. */
     private fun BlockFace.toCardinal(): Cardinal = when (this) {
         BlockFace.NORTH -> Cardinal.NORTH
         BlockFace.EAST -> Cardinal.EAST

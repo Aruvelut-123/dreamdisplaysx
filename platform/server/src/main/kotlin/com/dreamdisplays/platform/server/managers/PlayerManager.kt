@@ -15,23 +15,15 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @NullMarked
 object PlayerManager {
-    /** Map of player UUIDs to their reported mod versions. */
     private val versions: MutableMap<UUID, Semver?> = ConcurrentHashMap()
-
-    /** Set of player UUIDs for which displays are disabled. */
     private val displaysDisabled: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
-
-    /** One-way "already notified this session" bits per player, kept for the server's lifetime (see [removePlayer] for cleanup on disconnect). */
     private val notifiedFlags: MutableMap<UUID, Int> = ConcurrentHashMap()
-
     private const val MOD_UPDATE_NOTIFIED = 1
     private const val PLUGIN_UPDATE_NOTIFIED = 1 shl 1
     private const val MOD_REQUIRED_NOTIFIED = 1 shl 2
 
-    /** Returns true if [flag] is set for [uuid]. */
     private fun hasNotifiedFlag(uuid: UUID, flag: Int): Boolean = (notifiedFlags[uuid] ?: 0) and flag != 0
 
-    /** Sets or clears [flag] for [uuid]; drops the map entry entirely once no flags remain set. */
     private fun setNotifiedFlag(uuid: UUID, flag: Int, notified: Boolean) {
         notifiedFlags.compute(uuid) { _, bits ->
             val current = bits ?: 0

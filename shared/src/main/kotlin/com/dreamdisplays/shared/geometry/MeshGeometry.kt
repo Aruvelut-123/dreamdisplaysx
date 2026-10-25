@@ -9,18 +9,15 @@ import kotlin.math.min
 
 private const val EPS = 1.0e-4
 private const val EPS_F = 1.0e-4f
-
 private const val S = 0
 private const val T = 1
 private const val N = 2
-
 private const val DRAPE_GRID = 0.25
 private const val DRAPE_GRID_COARSE = 0.5
 private const val DRAPE_MAX_FINE_CELLS = 24_000
 private const val DRAPE_ANCHOR = 1.0e-4
 private const val DRAPE_MAX_ITERATIONS = 4_000
 private const val DRAPE_TOLERANCE = 1.0e-10
-
 private val TANGENTS = arrayOf(intArrayOf(T, N), intArrayOf(S, N), intArrayOf(S, T))
 
 /**
@@ -85,7 +82,7 @@ data class ConformQuad(
     val nz: Float,
 ) {
     /** The four corners in winding order. */
-    val vertices: List<ConformVertex> get() = listOf(v0, v1, v2, v3)
+    val vertices: List<ConformVertex> get() = [v0, v1, v2, v3]
 
     /** Returns a copy with `u` and `v` replaced on every corner. */
     fun mapUv(transform: (u: Float, v: Float) -> Pair<Float, Float>): ConformQuad {
@@ -123,7 +120,7 @@ fun buildConformingMesh(
     facing: DisplayFacing,
     quarterTurns: Int = 0,
 ): List<ConformQuad> {
-    if (width <= 0 || height <= 0 || depth <= 0 || blocks.isEmpty()) return emptyList()
+    if (width <= 0 || height <= 0 || depth <= 0 || blocks.isEmpty()) return []
     val frame = ScreenFrame(facing, width, height, depth)
     val boxes = blocks.flatMap { block -> block.boxes.map { frame.box(it.translated(block.x, block.y, block.z)) } }
 
@@ -131,7 +128,7 @@ fun buildConformingMesh(
         .flatMap(::facesOf)
         .filter { !frame.isRimOrBack(it) }
         .flatMap { visiblePart(it, boxes) }
-    if (faces.isEmpty()) return emptyList()
+    if (faces.isEmpty()) return []
 
     val turns = Math.floorMod(quarterTurns, 4)
     // Nothing but surfaces facing the viewer (a flat wall, a lone slab): the plain projection is exact
@@ -145,14 +142,14 @@ fun buildConformingMesh(
  */
 @Unstable
 fun clipToUvRect(quad: ConformQuad, minU: Float, minV: Float, maxU: Float, maxV: Float): List<ConformQuad> {
-    if (maxU - minU <= EPS_F || maxV - minV <= EPS_F) return emptyList()
+    if (maxU - minU <= EPS_F || maxV - minV <= EPS_F) return []
     var poly = quad.vertices
     poly = clipHalf(poly, { it.u >= minU }) { a, b -> lerp(a, b, (minU - a.u) / (b.u - a.u)) }
     poly = clipHalf(poly, { it.u <= maxU }) { a, b -> lerp(a, b, (maxU - a.u) / (b.u - a.u)) }
     poly = clipHalf(poly, { it.v >= minV }) { a, b -> lerp(a, b, (minV - a.v) / (b.v - a.v)) }
     poly = clipHalf(poly, { it.v <= maxV }) { a, b -> lerp(a, b, (maxV - a.v) / (b.v - a.v)) }
-    if (poly.size < 3) return emptyList()
-    if (poly.size == 4) return listOf(quad.copy(v0 = poly[0], v1 = poly[1], v2 = poly[2], v3 = poly[3]))
+    if (poly.size < 3) return []
+    if (poly.size == 4) return [quad.copy(v0 = poly[0], v1 = poly[1], v2 = poly[2], v3 = poly[3])]
     return (1 until poly.size - 1).map { i ->
         quad.copy(v0 = poly[0], v1 = poly[i], v2 = poly[i + 1], v3 = poly[i + 1])
     }
@@ -231,7 +228,7 @@ private fun facesOf(box: Span): List<Face> {
 }
 
 private fun visiblePart(face: Face, boxes: List<Span>): List<Face> {
-    var parts = listOf(face)
+    var parts = [face]
     for (box in boxes) {
         val cut = shadowOf(box, face) ?: continue
         parts = parts.flatMap { subtract(it, cut) }
@@ -262,7 +259,7 @@ private fun subtract(face: Face, cut: Span): List<Face> {
     val a1 = min(span.hi[a], cut.hi[a])
     val b0 = max(span.lo[b], cut.lo[b])
     val b1 = min(span.hi[b], cut.hi[b])
-    if (a1 - a0 <= EPS || b1 - b0 <= EPS) return listOf(face)
+    if (a1 - a0 <= EPS || b1 - b0 <= EPS) return [face]
     val out = ArrayList<Face>(4)
     fun piece(fromA: Double, toA: Double, fromB: Double, toB: Double) {
         if (toA - fromA > EPS && toB - fromB > EPS) out += face.with(a, fromA, toA).with(b, fromB, toB)
@@ -288,12 +285,12 @@ private fun projected(faces: List<Face>, frame: ScreenFrame, quarterTurns: Int):
     wound(vertices, normal)
 }
 
-private fun cornersOf(face: Face, a: Int, b: Int): List<DoubleArray> = listOf(
+private fun cornersOf(face: Face, a: Int, b: Int): List<DoubleArray> = [
     face.span.lo[a] to face.span.lo[b],
     face.span.hi[a] to face.span.lo[b],
     face.span.hi[a] to face.span.hi[b],
     face.span.lo[a] to face.span.hi[b],
-).map { (pa, pb) -> DoubleArray(3).also { it[face.axis] = face.plane; it[a] = pa; it[b] = pb } }
+].map { (pa, pb) -> DoubleArray(3).also { it[face.axis] = face.plane; it[a] = pa; it[b] = pb } }
 
 private fun wound(vertices: List<ConformVertex>, normal: DoubleArray): ConformQuad {
     val w = if (facesAlong(vertices, normal)) vertices else vertices.asReversed()
@@ -523,7 +520,7 @@ private fun clipHalf(
     inside: (ConformVertex) -> Boolean,
     cross: (ConformVertex, ConformVertex) -> ConformVertex?,
 ): List<ConformVertex> {
-    if (poly.isEmpty()) return emptyList()
+    if (poly.isEmpty()) return []
     val out = ArrayList<ConformVertex>(poly.size + 1)
     var prev = poly.last()
     var prevIn = inside(prev)

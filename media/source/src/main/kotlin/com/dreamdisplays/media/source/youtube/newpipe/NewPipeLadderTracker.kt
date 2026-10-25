@@ -9,23 +9,13 @@ import kotlinx.atomicfu.atomic
  * measured rather than assumed.
  */
 object NewPipeLadderTracker {
-    /** Kill switch for the overlapped fallback (see [shouldOverlapFallback]). */
     private val OVERLAP_FALLBACK_ENABLED: Boolean =
         System.getProperty("dreamdisplays.resolve.overlapFallback", "true").toBoolean()
 
-    /** Resolutions observed before the ladder rate is trusted enough to stop speculating. */
     private const val MIN_LADDER_SAMPLES = 4
-
-    /** Walled share of recent resolutions at which the `yt-dlp` fallback is worth starting early. */
     private const val OVERLAP_MISS_PERCENT = 34
-
-    /** Halve the counters past this many samples, so the rate tracks YouTube's current behavior. */
     private const val LADDER_DECAY_AT = 64
-
-    /** How often recent YouTube resolutions came back with a real adaptive ladder. */
     private val ladderHits = atomic(0)
-
-    /** How often recent YouTube resolutions came back walled, with only a single muxed 360p stream. */
     private val ladderMisses = atomic(0)
 
     /** Whether to start `yt-dlp` fallback alongside extraction instead of after. */

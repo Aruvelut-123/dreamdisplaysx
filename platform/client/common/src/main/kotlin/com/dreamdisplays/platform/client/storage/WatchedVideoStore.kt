@@ -9,20 +9,13 @@ import org.slf4j.LoggerFactory
  * Local client-only record of watched video IDs, powers suggestions panel's recency and uniqueness.
  */
 object WatchedVideoStore {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private const val FILE_NAME = "watched-videos.json"
     private const val SCHEMA_VERSION = 1
     private const val MAX_ENTRIES = 2000
-
     private val jsonFiles = JsonFileStore()
     private val idsSerializer = ListSerializer(String.serializer())
-
-    /** Insertion order = watch recency; [LinkedHashSet] provides cheap dedup + reordering on re-watch. Guarded by lock. */
     private val watched = LinkedHashSet<String>()
-
-    /** Guards every access to [watched]; disk I / O deliberately happens outside it. */
     private val lock = Any()
 
     /** Loads the watched-ID list from disk into memory, replacing any current state. */
@@ -35,7 +28,6 @@ object WatchedVideoStore {
         }
     }
 
-    /** Persists an already-taken [snapshot] of the watched-ID list to disk. */
     private fun save(snapshot: List<String>) {
         if (!jsonFiles.ensureDir(logger)) return
         jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), idsSerializer, snapshot, SCHEMA_VERSION, logger)

@@ -31,18 +31,12 @@ internal class VideoFramePipe(
         const val PARK_POLL_MS = 10L
     }
 
-    /** Updated by the reader thread on every frame; used by the watchdog to detect stalls. */
     override val lastFrameReceivedNanos = AtomicLong(0)
 
     @Volatile
     private var rawPopoutFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
-
     private val lastFrame = LastFrameCache()
 
-    /**
-     * Set by the popout window to receive raw RGB frames. Called on the reader thread. Replays the last cached frame
-     * immediately so the popout isn't blank until the next frame arrives.
-     */
     override var popoutFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
         get() = rawPopoutFrameSink
         set(value) {
@@ -61,39 +55,21 @@ internal class VideoFramePipe(
     @Volatile
     private var activePrebuffer: FramePrebuffer? = null
 
-    /**
-     * When set and true, the reader idles between frames while keeping the process and pipe open — the
-     * full pipe back-pressures `FFmpeg` into a warm standstill, so a subsequent un-park resumes immediately
-     * without a new process launch or connection.
-     */
     @Volatile
     private var parked: AtomicBoolean? = null
 
-    /**
-     * Returns true once a frame is available for upload or has already been uploaded to the GPU texture.
-     */
     override fun textureFilled(): Boolean = surface.textureFilled()
 
-    /**
-     * Uploads the ready frame to [texture] if one is available. [actualW] / [actualH] must match the dimensions the
-     * texture was allocated with.
-     */
     override fun updateFrame(texture: GpuTextureRef, actualW: Int, actualH: Int): Boolean =
         surface.updateFrame(texture, actualW, actualH, expectedW, expectedH)
 
-    /** Discards the current ready frame. Call when stopping or seeking. */
     override fun clear() = surface.clear()
 
-    /** Drops parked raw buffers while preserving the already-uploaded GPU texture. */
     override fun trimForPark() {
         activePrebuffer?.trimForPark()
         surface.clear()
     }
 
-    /**
-     * Releases the PBO ring. Must be called from the render thread when this pipe is permanently
-     * discarded (i.e., the owning [MediaPlayer] is being stopped for good).
-     */
     override fun cleanup() = surface.cleanup()
 
     /** Starts the video reader thread and returns it (already running). */
@@ -138,9 +114,6 @@ internal class VideoFramePipe(
         ).also { it.start() }
     }
 
-    /**
-     * Main loop of the video reader thread. Reads raw RGB frames from [proc], applies brightness, and fills the ready buffer.
-     */
     private fun read(
         proc: Process, w: Int, h: Int, frameNs: Long, seekOffsetNanos: Long, stopFlag: AtomicBoolean,
         terminated: AtomicBoolean, getAudioClock: () -> Long, onFirstFrame: () -> Unit, getBrightness: () -> Double,
@@ -296,7 +269,6 @@ internal class VideoFramePipe(
         }
     }
 
-    /** Feeds [buf] (position 0, [w] x [h] RGB24) to the popout sink, if any, caching a copy for [lastFrame]. */
     private fun feedSink(buf: ByteBuffer, w: Int, h: Int) {
         val sink = popoutFrameSink ?: return
         lastFrame.store(buf, w, h, w * h * 3, FramePixelFormat.RGB24)
@@ -304,7 +276,6 @@ internal class VideoFramePipe(
         buf.rewind()
     }
 
-    /** Scans [input] forward until the PPM magic `P6` is consumed (followed by whitespace). Returns false on EOF. */
     private fun skipToP6(input: InputStream): Boolean {
         var state = 0 // 0: looking for 'P', 1: saw 'P', expecting '6'
         while (true) {
@@ -322,7 +293,6 @@ internal class VideoFramePipe(
         }
     }
 
-    /** Reads an ASCII unsigned int from PPM header, skipping leading whitespace and `#` comments. */
     private fun readAsciiInt(input: InputStream): Int {
         var b = input.read()
         while (b >= 0) {
@@ -345,7 +315,6 @@ internal class VideoFramePipe(
 
     private fun isWhitespace(b: Int): Boolean = b == ' '.code || b == '\t'.code || b == '\n'.code || b == '\r'.code
 
-    /** Reads exactly [size] bytes from [input] into [dst] using [tmp] as a scratch buffer. Returns false on premature EOF. */
     private fun readFully(input: InputStream, dst: ByteBuffer, tmp: ByteArray, size: Int): Boolean {
         if (dst.remaining() < size) {
             logger.warn("$debugLabel Frame buffer is too small: remaining=${dst.remaining()} required=$size.")
@@ -366,9 +335,6 @@ internal class VideoFramePipe(
         return true
     }
 
-    /**
-     * Applies brightness adjustment in-place to the RGB frame in [buf]. [brightness] is a multiplier where 1.0 means no change, <1.0 is darker, and >1.0 is brighter.
-     */
     private fun applyBrightness(buf: ByteBuffer, size: Int, brightness: Double) {
         val factor = brightness.coerceIn(0.0, 2.0)
         if (factor == 1.0) return
@@ -384,7 +350,6 @@ internal class VideoFramePipe(
         buf.position(savedPosition)
     }
 
-    /** Drops exactly [size] bytes from [input]. Returns false on premature EOF. */
     private fun skipBytes(input: InputStream, size: Long): Boolean {
         var remaining = size
         while (remaining > 0) {

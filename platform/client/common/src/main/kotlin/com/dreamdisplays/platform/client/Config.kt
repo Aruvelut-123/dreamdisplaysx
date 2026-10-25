@@ -8,7 +8,6 @@ import kotlin.math.roundToInt
 
 /** Client configuration loaded from and persisted to `config.yml`. */
 class Config(private val baseDir: File) {
-    /** The backing `config.yml` file on disk. */
     private val file = File(baseDir, "config.yml")
 
     /** Whether to mute all displays while the game window is not focused. */
@@ -62,10 +61,6 @@ class Config(private val baseDir: File) {
     /** Re-reads values from disk, replacing any in-memory state. */
     fun reload() = load()
 
-    /**
-     * Loads the configuration from disk, applying default values for missing or malformed entries.
-     * If the configuration file does not exist, it will be created with default values.
-     */
     private fun load() {
         if (!file.exists()) {
             save(); return
@@ -141,7 +136,6 @@ class Config(private val baseDir: File) {
             System.setProperty("file.encoding", "UTF-8")
         }
 
-        /** Wraps the string in single quotes if it is empty or contains YAML-special characters. */
         private fun String.yamlQuoted(): String =
             if (isEmpty() || any { it in ":#{}[]|>&!*'\",\n\r\t" })
                 "'${replace("'", "''")}'"

@@ -9,7 +9,7 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder
 import java.util.concurrent.CompletableFuture
 import com.mojang.brigadier.suggestion.Suggestion as BrigadierSuggestion
 
-internal data class Suggestion(val text: String, val tooltip: String? = null, val args: List<String> = emptyList())
+internal data class Suggestion(val text: String, val tooltip: String? = null, val args: List<String> = [])
 
 internal fun interface Tooltips<S> {
     fun of(source: S, key: String, vararg args: String): String

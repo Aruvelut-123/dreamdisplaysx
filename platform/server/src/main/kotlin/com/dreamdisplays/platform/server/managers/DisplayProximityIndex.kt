@@ -9,10 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
  * scheduler task, then read back by the global coordinator in [DisplayManager].
  */
 internal class DisplayProximityIndex {
-    /** Cached nearby player ids for each display id. */
     private val nearbyPlayersByDisplay: MutableMap<UUID, MutableSet<UUID>> = ConcurrentHashMap()
-
-    /** Cached nearby display ids for each player id. */
     private val nearbyDisplaysByPlayer: MutableMap<UUID, Set<UUID>> = ConcurrentHashMap()
 
     /** Removes a display from the cached proximity index. */
@@ -30,7 +27,7 @@ internal class DisplayProximityIndex {
 
     /** Cached nearby player ids for [displayId], safe to read from the global coordinator. */
     fun trackedNearbyPlayerIds(displayId: UUID): List<UUID> =
-        nearbyPlayersByDisplay[displayId]?.toList() ?: emptyList()
+        nearbyPlayersByDisplay[displayId]?.toList() ?: []
 
     /** Updates the cached index after [playerId]'s entity task computed their nearby displays. */
     fun update(playerId: UUID, nearbyDisplayIds: Set<UUID>) {

@@ -70,9 +70,8 @@ class ErrorPanel(
         deleteButton.place(UiRect(bx, by, BUTTON_SIZE, BUTTON_SIZE))
     }
 
-    /** Word-wraps the raw failure [message] to [maxW], capped at [MAX_DETAIL_LINES] (the last gets an ellipsis). */
     private fun detailLines(font: Font, message: String?, maxW: Int): List<String> {
-        val text = message?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
+        val text = message?.trim()?.takeIf { it.isNotEmpty() } ?: return []
         val lines = ArrayList<String>()
         var line = ""
         for (word in text.split(Regex("\\s+"))) {
@@ -94,7 +93,6 @@ class ErrorPanel(
         private const val BUTTON_GAP = 6
         private const val MAX_DETAIL_LINES = 3
 
-        /** Maps a failure [kind] to its short headline translation key. */
         private fun headlineKey(kind: MediaFailureKind?): String = when (kind) {
             MediaFailureKind.NETWORK -> "dreamdisplays.error.kind.network"
             MediaFailureKind.DECODE -> "dreamdisplays.error.kind.decode"

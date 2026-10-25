@@ -54,13 +54,8 @@ import java.util.function.Consumer
  */
 @NullMarked
 object DisplayManager {
-    /** In-memory registry of all displays, keyed by UUID. */
     private val displays: MutableMap<UUID, DisplayData> = ConcurrentHashMap()
-
-    /** Throttles reports to prevent spam. */
     private val reportThrottle = ReportThrottle()
-
-    /** Proximity index for tracking nearby players in `Folia`. */
     private val proximityIndex = DisplayProximityIndex()
 
     /** Returns the display registered under [id], or null if none exists. */
@@ -101,7 +96,6 @@ object DisplayManager {
         delete(data)
     }
 
-    /** Returns true when [x,y,z] is within [maxRender] blocks of the axis-aligned box defined by the given bounds. */
     private fun isInRangeImpl(
         x: Int, y: Int, z: Int,
         minX: Int, minY: Int, minZ: Int,
@@ -114,10 +108,6 @@ object DisplayManager {
         return dx * dx + dy * dy + dz * dz <= maxRender * maxRender
     }
 
-    /**
-     * Removes every display in [toRemove] from the in-memory registry (and its playback/timeline/
-     * watch-party state, same as [delete]), invokes [delete] for each, and returns the removed UUIDs.
-     */
     private fun removeDisplays(toRemove: List<DisplayData>, delete: (DisplayData) -> Unit): List<UUID> {
         return toRemove.map { display ->
             displays.remove(display.id)
@@ -169,13 +159,12 @@ object DisplayManager {
     /** Returns the players currently in range of [display] in its world. */
     @PaperOnly
     fun getReceivers(display: PaperDisplayData): List<Player> =
-        display.pos1.world?.players?.filter { it.isInRange(display) } ?: emptyList()
+        display.pos1.world?.players?.filter { it.isInRange(display) } ?: []
 
     /** True if [player] is currently within render range of [display] — the same predicate that decides who receives its frames. */
     @PaperOnly
     fun isPlayerInRange(player: Player, display: PaperDisplayData): Boolean = player.isInRange(display)
 
-    /** Returns true if this location lies within the world's view or simulation distance, whichever is shorter, of the [display]'s box. */
     @PaperOnly
     private fun Location.isInRange(display: PaperDisplayData): Boolean =
         isInRangeImpl(
@@ -188,7 +177,6 @@ object DisplayManager {
             ) * 16).toDouble(),
         )
 
-    /** Returns true if [player] is in [display]'s world and within render range. Must run on the player's thread on `Folia`. */
     @PaperOnly
     private fun Player.isInRange(display: PaperDisplayData): Boolean {
         return display.pos1.world == world && location.isInRange(display)
@@ -232,7 +220,7 @@ object DisplayManager {
     fun broadcastUpdate(display: PaperDisplayData) {
         if (PlatformUtil.isFolia) {
             Scheduler.forEachTrackedPlayer { player ->
-                if (player.isInRange(display)) sendUpdate(display, listOf(player))
+                if (player.isInRange(display)) sendUpdate(display, [player])
             }
         } else {
             sendUpdate(display, getReceivers(display))
@@ -244,7 +232,7 @@ object DisplayManager {
     fun broadcastDelete(display: PaperDisplayData) {
         if (PlatformUtil.isFolia) {
             Scheduler.forEachTrackedPlayer { player ->
-                if (player.isInRange(display)) PacketUtil.sendDelete(listOf(player), display.id)
+                if (player.isInRange(display)) PacketUtil.sendDelete([player], display.id)
             }
         } else {
             PacketUtil.sendDelete(getReceivers(display), display.id)
@@ -258,7 +246,7 @@ object DisplayManager {
             val visible = displays.values.filterIsInstance<PaperDisplayData>()
                 .filter { player.isInRange(it) }
             proximityIndex.update(player.uniqueId, visible.mapTo(mutableSetOf()) { it.id })
-            visible.forEach { display -> sendUpdate(display, listOf(player)) }
+            visible.forEach { display -> sendUpdate(display, [player]) }
         }
     }
 
@@ -267,7 +255,7 @@ object DisplayManager {
     fun sendV2ToTrackedNearbyPlayers(display: PaperDisplayData, packet: DreamPacket) {
         Scheduler.forEachTrackedPlayer { player ->
             if (V2PlayerTracker.isV2(player.uniqueId) && player.isInRange(display)) {
-                PaperV2Networking.send(listOf(player), packet)
+                PaperV2Networking.send([player], packet)
             }
         }
     }
@@ -419,7 +407,6 @@ object DisplayManager {
     fun isPlayerInRange(player: ServerPlayer, display: VanillaDisplayData): Boolean =
         RegionUtil.getPlayerLevelKey(player) == display.worldKey && player.blockPosition().isInRange(display)
 
-    /** Returns true if this block position lies within the server's view or simulation distance, whichever is shorter, of the [display]'s box. */
     private fun BlockPos.isInRange(display: VanillaDisplayData): Boolean =
         isInRangeImpl(
             x, y, z,

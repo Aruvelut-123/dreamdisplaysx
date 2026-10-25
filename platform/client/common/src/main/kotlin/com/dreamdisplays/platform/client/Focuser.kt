@@ -12,7 +12,6 @@ class Focuser : Thread() {
         name = "window-focus-mute-thread"
     }
 
-    /** Polls window focus every 250 ms and mutes or unmutes all screens when `mute-on-alt-tab` is enabled. */
     override fun run() {
         while (true) {
             if (ClientStateManager.config.muteOnAltTab) {

@@ -27,7 +27,6 @@ object VanillaPermissions {
             Fallback.NOBODY -> false
         }
 
-    /** `LuckPerms` verdict for [node], or null when LuckPerms is unavailable or the node is undefined. */
     private fun checkLuckPerms(playerId: UUID, node: String): Boolean? {
         if (luckPermsState == ABSENT) return null
         if (luckPermsState == UNKNOWN) {
@@ -47,10 +46,6 @@ object VanillaPermissions {
     }
 }
 
-/**
- * The only class that links against `LuckPerms` types; loaded exclusively behind the
- * [VanillaPermissions] `Class.forName` probe so servers without `LuckPerms` never touch it.
- */
 private object LuckPermsBridge {
     /** True / false when the node is set for the user, null while `LuckPerms` is still initializing or the node is undefined. */
     fun check(playerId: UUID, node: String): Boolean? {

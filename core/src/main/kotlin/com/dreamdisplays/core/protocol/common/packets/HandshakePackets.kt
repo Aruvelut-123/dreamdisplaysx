@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import java.util.*
 
-/** Client -> server hello; replaces the legacy `version` packet and advertises capabilities. */
+/** Client -> server hello; advertises the client's capabilities. */
 @Serializable
 data class ClientHello(
     @ProtoNumber(1) val protocolVersion: Int = ProtocolVersion.CURRENT,
@@ -19,7 +19,7 @@ data class ClientHello(
     @ProtoNumber(4) val supportsHardwareDecode: Boolean = false,
     @ProtoNumber(5) val supportsHighResolution: Boolean = false,
     @ProtoNumber(6) val maxTextureSize: Int = 4096,
-    @ProtoNumber(7) val supportedCodecs: List<String> = emptyList(),
+    @ProtoNumber(7) val supportedCodecs: List<String> = [],
     @ProtoNumber(8) val supportsPip: Boolean = false,
     @ProtoNumber(9) val supportsAudio: Boolean = true,
     @ProtoNumber(10) val renderBackend: String = "",
@@ -50,7 +50,7 @@ data class ServerHello(
     @ProtoNumber(3) val isAdmin: Boolean = false,
     @ProtoNumber(4) val isReportingEnabled: Boolean = false,
     @ProtoNumber(6) val maxDisplays: Int = -1,
-    @ProtoNumber(7) val allowedFeatures: List<String> = emptyList(),
+    @ProtoNumber(7) val allowedFeatures: List<String> = [],
     @EncodeDefault
     @ProtoNumber(8) val defaultVolume: Float = -1f,
 ) : DreamPacket
@@ -58,5 +58,5 @@ data class ServerHello(
 /** Server tells the client to evict the listed displays from local caches. */
 @Serializable
 data class ClearCache(
-    @ProtoNumber(1) val ids: List<@Serializable(UuidSerializer::class) UUID> = emptyList(),
+    @ProtoNumber(1) val ids: List<@Serializable(UuidSerializer::class) UUID> = [],
 ) : DreamPacket

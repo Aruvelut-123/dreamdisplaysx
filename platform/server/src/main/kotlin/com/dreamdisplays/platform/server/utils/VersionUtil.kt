@@ -8,10 +8,7 @@ import org.semver4j.Semver
  * enforces one itself before any regex work runs.
  */
 object VersionUtil {
-    /** Comfortably above any real version string; caps the work a single malformed packet can trigger. */
     private const val MAX_VERSION_LENGTH = 64
-
-    /** Regex for disallowed characters in version strings. */
     private val DISALLOWED_CHARS = "[^0-9A-Za-z+.-]".toRegex()
 
     /** Returns the parsed [Semver], or null if [raw] is empty, oversized, or not coercible to a version. */

@@ -58,7 +58,6 @@ object VanillaBootstrap {
         VanillaServerState.storage?.disconnect()
     }
 
-    /** Starts repeating coroutines for display updates and update checking on [ServerCoroutines.io]. */
     private fun startRepeatingTasks(server: MinecraftServer) {
         val settings = VanillaServerState.config.settings
 

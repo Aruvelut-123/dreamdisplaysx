@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory
  */
 @FabricOnly
 object FabricProxyNetworking {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /** Registers the single proxy envelope receiver. */

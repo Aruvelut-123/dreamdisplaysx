@@ -11,16 +11,12 @@ import java.util.concurrent.TimeUnit
  */
 internal object FFmpegCapabilities {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private val filterCache = ConcurrentHashMap<String, Set<String>>()
-
-    /** Filters we may want to use; only these are looked for in the probe output. */
     private val PROBED_FILTERS = setOf("scale_vt", "scale_cuda", "scale_vaapi")
 
     /** True when [ffmpeg] supports filter [name] (e.g. `scale_vt`). */
     fun hasFilter(ffmpeg: String, name: String): Boolean = probedFilters(ffmpeg).contains(name)
 
-    /** Returns the probed subset of [PROBED_FILTERS] available in [ffmpeg], caching per path. */
     private fun probedFilters(ffmpeg: String): Set<String> =
         filterCache.computeIfAbsent(ffmpeg) { bin ->
             runCatching {

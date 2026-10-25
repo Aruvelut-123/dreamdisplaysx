@@ -19,19 +19,14 @@ object TimelineManager {
     private const val PERIODIC_BROADCAST_MS = 5_000L
     private const val MAX_DURATION_MS = 24L * 60 * 60 * 1_000
     private const val MIN_DURATION_MS = 2_000L
-
     private val reportDurationThrottle = ActionThrottle()
     private const val REPORT_DURATION_COOLDOWN_MS = 2_000L
-
     private val commandThrottle = ActionThrottle()
     private const val COMMAND_COOLDOWN_MS = 100L
-
     private lateinit var transport: PlaybackTransport
-
     private val timelines = ConcurrentHashMap<UUID, Timeline>()
     private val lastBroadcast = ConcurrentHashMap<UUID, Long>()
     private val startHolds = ConcurrentHashMap<UUID, Long>()
-
     private const val START_HOLD_MS = 5_000L
 
     internal const val MAX_SEEK_MS = 24L * 60 * 60 * 1_000

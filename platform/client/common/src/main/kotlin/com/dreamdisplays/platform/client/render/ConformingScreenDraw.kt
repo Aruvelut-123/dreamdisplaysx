@@ -26,7 +26,6 @@ internal object ConformingScreenDraw {
     private class Clip(val source: List<ConformQuad>, val rect: FloatArray, val pieces: List<ConformQuad>)
 
     private val clips = WeakHashMap<DisplayScreen, Array<Clip?>>()
-
     private const val SLOT_SUBTITLE = 0
     private const val SLOT_TRACK = 1
 

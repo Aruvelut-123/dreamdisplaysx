@@ -11,10 +11,8 @@ import java.util.*
  * Vanilla implementation of [DisplayData], shared by `Fabric` and `NeoForge`.
  */
 class VanillaDisplayData(
-    /** Unique identifier for the display. */
     override val id: UUID,
 
-    /** Unique identifier for the owner of the display. */
     override val ownerId: UUID,
 
     /** Unique identifier for the world the display is in. */
@@ -35,13 +33,11 @@ class VanillaDisplayData(
     /** Direction the display is facing. Default is `NORTH`. */
     facing: Direction,
 
-    /** Content rotation; only meaningful for floor / ceiling (`UP` / `DOWN`) facings. */
     override val rotation: DisplayRotation = DisplayRotation.NONE,
 
     /** True for the synthetic display backing a URL-only fullscreen broadcast. */
     virtual: Boolean = false,
 
-    /** True when the screen wraps slabs and stairs inside the box. */
     override val conforming: Boolean = false,
 ) : BaseDisplayData(virtual) {
     /** Unique identifier for the world the display is in. */
@@ -53,16 +49,13 @@ class VanillaDisplayData(
     /** Opposite corner of the display area. */
     var pos2: BlockPos = pos2; private set
 
-    /** Width of the display in blocks. */
     override var width: Int = width; private set
 
-    /** Height of the display in blocks. */
     override var height: Int = height; private set
 
     /** Direction the display is facing. */
     var facing: Direction = facing; private set
 
-    /** Bounding box of the display area. */
     private var region = RegionUtil.calculateRegion(pos1, pos2)
 
     /** Region. */
@@ -73,7 +66,6 @@ class VanillaDisplayData(
     var maxY = region.maxY; private set
     var maxZ = region.maxZ; private set
 
-    /** Blocks the screen extends away from [facing]. Derived from the saved corners, so old rows stay one block deep. */
     override val depth: Int
         get() = when (facing) {
             Direction.NORTH, Direction.SOUTH -> maxZ - minZ + 1

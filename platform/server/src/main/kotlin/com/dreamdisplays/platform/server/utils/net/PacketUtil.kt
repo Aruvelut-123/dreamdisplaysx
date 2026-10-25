@@ -98,7 +98,7 @@ object PacketUtil {
         )
         if (access == DisplayAccess.REGION && isRegionMember != null) {
             recipients.forEach { player ->
-                PaperV2Networking.send(listOf(player), info.copy(viewerInRegion = isRegionMember(player)))
+                PaperV2Networking.send([player], info.copy(viewerInRegion = isRegionMember(player)))
             }
         } else {
             PaperV2Networking.send(recipients, info)
@@ -112,7 +112,7 @@ object PacketUtil {
 
     /** Pushes the global displays-enabled flag for [player] to the client. */
     fun sendDisplayEnabled(player: Player, isEnabled: Boolean) {
-        PaperV2Networking.send(v2Players(listOf(player)), SetDisplaysEnabled(isEnabled))
+        PaperV2Networking.send(v2Players([player]), SetDisplaysEnabled(isEnabled))
     }
 
     /** Tells [players] to evict the listed display UUIDs from any local caches. */
@@ -121,11 +121,9 @@ object PacketUtil {
         PaperV2Networking.send(v2Players(players), ClearCache(displayUuids))
     }
 
-    /** The recipients that negotiated protocol v2. */
     private fun v2Players(players: List<Player?>): List<Player> =
         players.filterNotNull().filter { V2PlayerTracker.isV2(it.uniqueId) }
 
-    /** Maps a [BlockFace] to its wire value; faces not in the protocol fall back to north. */
     private fun BlockFace.toPacketByte(): Int = when (this) {
         BlockFace.NORTH -> 0
         BlockFace.EAST -> 1

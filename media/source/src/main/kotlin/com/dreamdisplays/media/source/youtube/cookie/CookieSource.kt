@@ -26,8 +26,6 @@ enum class CookieSource(val browserName: String?) {
 
     companion object {
         private const val DISABLED_TOKEN = "none"
-
-        /** Config values, besides an empty string, that explicitly disable cookie export. */
         private val DISABLED_ALIASES = setOf(DISABLED_TOKEN, "off", "disabled", "auto")
 
         /**

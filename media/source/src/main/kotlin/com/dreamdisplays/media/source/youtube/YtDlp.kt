@@ -25,9 +25,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-/**
- * "Has race been abandoned" flag shared between hedge coroutine and abort path.
- */
 private class AbandonFlag {
     private val flag = atomic(false)
     val isAbandoned: Boolean get() = flag.value
@@ -42,27 +39,20 @@ private class AbandonFlag {
  * [YtFormatCache]), and exposes YouTube search (via [YtDlpSearchCache]).
  */
 object YtDlp {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Head start (ms) for `NewPipeExtractor` before `yt-dlp` subprocess (skips spawn if full ladder). */
     private val HEDGE_DELAY_MS: Long =
         System.getProperty("dreamdisplays.ytdlpHedgeMs")?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
 
-    /** All `yt-dlp` background work runs on [DreamCoroutines.clientIo] scope. */
     private val cookies = YtCookieManager()
-
-    /** Races `yt-dlp` clients for a single fetch; see [fetchUncached]. */
     private val clientRace = YtDlpClientRace(cookies)
-
-    /** In-memory / disk cache in front of [fetchUncached]. */
     private val formatCache = YtFormatCache(resolve = ::fetchUncached)
 
     /** Returns stream list for videoUrl (in-memory -> disk -> `yt-dlp`). */
     @Throws(IOException::class)
     fun fetch(videoUrl: String): List<YtStream> {
         if (!MediaUrlPolicy.isAllowed(videoUrl)) {
-            return emptyList()
+            return []
         }
         return formatCache.fetch(videoUrl)
     }
@@ -124,21 +114,17 @@ object YtDlp {
     /** Returns a cached YouTube cookie header string for use by HTTP clients other than `yt-dlp`. */
     fun getPublicCookieHeader(): String? = cookies.header()
 
-    /**
-     * Resolves streams for [videoUrl]: races the in-process [NewPipeResolver] fast path against the `yt-dlp` subprocess
-     * (via [clientRace]) and returns whichever first offers a full quality ladder.
-     */
     @Throws(IOException::class)
     private suspend fun fetchUncached(videoUrl: String): List<YtStream> {
         val ytProcesses = CopyOnWriteArrayList<Process>()
         val abandoned = AbandonFlag()
         val ytdlp = DreamCoroutines.clientIo.async {
             if (HEDGE_DELAY_MS > 0) delay(HEDGE_DELAY_MS.milliseconds)
-            if (abandoned.isAbandoned) return@async emptyList()
+            if (abandoned.isAbandoned) return@async []
             clientRace.resolve(videoUrl) { proc ->
                 ytProcesses.add(proc)
                 if (abandoned.isAbandoned) Processes.destroyTree(proc)
-            } ?: emptyList()
+            } ?: []
         }
 
         // Aborts the parallel yt-dlp branch and reaps any subprocess it managed to spawn
@@ -156,7 +142,7 @@ object YtDlp {
                 }
                 logger.debug("NewPipe resolve failed for {}: {}.", videoUrl, e.message?.take(200))
             }
-            .getOrElse { emptyList() }
+            .getOrElse { [] }
 
         if (YtStreams.usable(viaNewPipe) && YtStreams.offersQualityLadder(viaNewPipe) &&
             viaNewPipe.none { it.isLive }
@@ -177,7 +163,7 @@ object YtDlp {
         }.onFailure { e ->
             abandonYtDlp()
             logger.debug("yt-dlp resolve did not settle for {}: {}.", videoUrl, e.message?.take(200))
-        }.getOrElse { emptyList() }
+        }.getOrElse { [] }
 
         return when {
             YtStreams.usable(viaYtDlp) && YtStreams.offersQualityLadder(viaYtDlp) -> viaYtDlp

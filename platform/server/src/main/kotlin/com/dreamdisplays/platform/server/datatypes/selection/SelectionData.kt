@@ -19,6 +19,5 @@ interface SelectionData {
  * platform subclasses only need to declare their own coordinate fields and [reset] the rest.
  */
 abstract class BaseSelectionData : SelectionData {
-    /** Whether the selection is complete and ready to be used to create a display. */
     override var isReady: Boolean = false
 }

@@ -10,10 +10,7 @@ object MinecraftScreenUtil {
     //? if >=26 {
     // NeoForge 26.1.x keeps mc.screen as a public field; Fabric 26.2+ moved it to mc.gui.screen().
     // Detect once at startup to avoid per-frame exception overhead.
-    /** Get the current screen, or null if none. */
     private val getScreen: (Minecraft) -> Screen?
-
-    /** Set the current screen, or null to close the current screen. */
     private val setScreenFn: (Minecraft, Screen?) -> Unit
 
     /** Initialize the screen getter and setter. */
@@ -54,10 +51,6 @@ object MinecraftScreenUtil {
         /*mc.setScreen(screen)*/
     }
 
-    /**
-     * Simple names of vanilla screens that show blocking status text during a world / server
-     * transition.
-     */
     private val TRANSIENT_LOADING_SCREENS = setOf(
         "LevelLoadingScreen", "ReceivingLevelScreen", "GenericMessageScreen", "GenericWaitingScreen",
     )

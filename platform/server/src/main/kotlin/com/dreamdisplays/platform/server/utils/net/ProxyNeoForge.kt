@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory
  */
 @NeoForgeOnly
 object NeoForgeProxyNetworking {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**

@@ -10,7 +10,6 @@ import java.util.concurrent.TimeUnit
  * (e.g. re-resolving a new video URL).
  */
 internal class ActionThrottle(maxEntries: Long = 20_000L) {
-    /** Last-acted timestamp (ms) per key. */
     private val lastActionMs: Cache<Any, Long> = Caffeine.newBuilder()
         .maximumSize(maxEntries)
         .expireAfterWrite(1, TimeUnit.MINUTES)

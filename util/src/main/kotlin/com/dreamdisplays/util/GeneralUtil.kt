@@ -4,13 +4,8 @@ import kotlinx.io.IOException
 
 /** General utility functions for the mod. */
 object GeneralUtil {
-    /** Developer version. */
     private val DEV_VERSION = Regex("""^([0-9]+(?:\.[0-9]+)*)-dev$""")
-
-    /** Preview version (uses .1, .2, etc. index) */
     private val PREVIEW_VERSION = Regex("""^([0-9]+(?:\.[0-9]+)*)-preview\.([0-9]+)$""")
-
-    /** Release version */
     private val RELEASE_VERSION = Regex("""^[0-9]+(?:\.[0-9]+)*$""")
 
     /** Reads the classpath resource at [resourcePath] and returns its content as a UTF-8 string. */

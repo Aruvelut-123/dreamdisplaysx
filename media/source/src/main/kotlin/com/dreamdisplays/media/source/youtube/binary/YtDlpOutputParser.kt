@@ -16,10 +16,7 @@ import java.util.regex.Pattern
  * detection, and resolution extraction.
  */
 internal object YtDlpOutputParser {
-    /** Matches an explicit progressive-style resolution token (e.g. "720p") within a candidate string. */
     private val RESOLUTION_P_PATTERN: Pattern = Pattern.compile("(\\d{3,4})p")
-
-    /** Matches a bare 3-4 digit height token within a candidate string, used as a fallback. */
     private val RESOLUTION_DIGITS_PATTERN: Pattern = Pattern.compile("(\\d{3,4})")
 
     /** Parses the JSON output of `yt-dlp -J` into a flat list of [YtStream] descriptors. */
@@ -79,18 +76,15 @@ internal object YtDlpOutputParser {
         return result
     }
 
-    /** Returns true if the `yt-dlp` output object indicates a live or upcoming stream. */
     private fun isLive(obj: JsonObject): Boolean {
         return obj.optBoolean("is_live") || LiveStatus.fromWire(obj.optString("live_status")).isLiveLike
     }
 
-    /** Reads the `duration` field and converts seconds to nanoseconds; returns 0 for live or missing values. */
     private fun durationNanos(obj: JsonObject): Long {
         val durationSeconds = obj.optDouble("duration") ?: return 0L
         return Durations.secondsToNanos(durationSeconds)
     }
 
-    /** Returns true if the stream protocol (or fallback URL extension) is one we can pipe through FFmpeg. */
     private fun isSupportedProtocol(protocol: String?, url: String): Boolean {
         if (protocol.isNullOrBlank()) return true
         if (protocol.startsWith("http")) return true
@@ -100,7 +94,6 @@ internal object YtDlpOutputParser {
         return ".m3u8" in lowerUrl || ".mpd" in lowerUrl
     }
 
-    /** Tries each [candidates] string in order, returning the first one that contains a parseable resolution (e.g. "720p"). */
     private fun extractResolution(vararg candidates: String?): String? {
         for (candidate in candidates) {
             if (candidate.isNullOrBlank()) continue

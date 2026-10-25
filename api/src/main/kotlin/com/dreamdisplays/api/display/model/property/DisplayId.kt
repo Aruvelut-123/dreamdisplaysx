@@ -10,7 +10,6 @@ import java.util.*
  */
 @Unstable
 data class DisplayId(val uuid: UUID) {
-    /** Returns the string representation of the display ID. */
     override fun toString(): String = uuid.toString()
 
     companion object {

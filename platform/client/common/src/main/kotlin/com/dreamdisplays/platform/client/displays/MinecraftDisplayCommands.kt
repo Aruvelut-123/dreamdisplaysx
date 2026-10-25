@@ -20,7 +20,6 @@ import com.dreamdisplays.platform.client.storage.ClientSettingsStore
  * display is not present locally).
  */
 class MinecraftDisplayCommands : DisplayExecutor {
-    /** Applies a full [settings] snapshot to the display, optionally swapping in a URL override. */
     override fun updateSettings(id: DisplayId, settings: DisplaySettings): DisplayInfo? {
         val screen = DisplayRegistry.screens[id.uuid] ?: return null
         screen.volume = settings.volume
@@ -37,7 +36,6 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
-    /** Plays [url] (with optional audio [lang]) on the display; no-op when [url] is blank. */
     override fun setUrl(id: DisplayId, url: String?, lang: String?): DisplayInfo? {
         val screen = DisplayRegistry.screens[id.uuid] ?: return null
         if (url.isNullOrBlank()) return screen.toDisplay()
@@ -45,7 +43,6 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
-    /** Sets who may use the display and informs the server. */
     @Deprecated("Scheduled for removal in 2.0.0")
     override fun setAccess(id: DisplayId, access: DisplayAccess): DisplayInfo? {
         val screen = DisplayRegistry.screens[id.uuid] ?: return null
@@ -57,7 +54,6 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
-    /** Deletes the display locally, removes its persisted data, and notifies the server. */
     override fun delete(id: DisplayId): Boolean {
         val screen = DisplayRegistry.screens[id.uuid] ?: return false
         DisplayStorage.removeDisplay(id.uuid)
@@ -66,67 +62,54 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return true
     }
 
-    /** Reports the display's current video to the server for moderation. */
     override fun report(id: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[id.uuid] ?: return null
         Initializer.sendPacket(ReportDisplay(id.uuid))
         return screen.toDisplay()
     }
 
-    /** Resumes playback. */
     override fun play(displayId: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.setPaused(false)
         return screen.toDisplay()
     }
 
-    /** Pauses playback. */
     override fun pause(displayId: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.setPaused(true)
         return screen.toDisplay()
     }
 
-    /** Stops the display, unregistering it from the registry. */
     override fun stop(displayId: DisplayId): Boolean {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return false
         DisplayRegistry.unregisterScreen(screen)
         return true
     }
 
-    /** Seeks to an absolute [positionMs] in the current video. */
     override fun seek(displayId: DisplayId, positionMs: Long): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.seekToMillis(positionMs)
         return screen.toDisplay()
     }
 
-    /** Seeks by a signed [deltaMs] relative to the current position. */
     override fun seekRelative(displayId: DisplayId, deltaMs: Long): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.seekVideoRelative(deltaMs / 1000.0)
         return screen.toDisplay()
     }
 
-    /** Sets the playback [volume] (`0.0`..`1.0`). */
     override fun setVolume(displayId: DisplayId, volume: Float): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.volume = volume
         return screen.toDisplay()
     }
 
-    /** Sets the requested video [quality]. */
     override fun setQuality(displayId: DisplayId, quality: VideoQuality): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.setQualityByViewer(quality)
         return screen.toDisplay()
     }
 
-    /**
-     * Sets the active audio track by its resolved stream [trackUrl]; remembers the track's language so
-     * [DisplayScreen] can re-apply the same pick once the same display resolves audio tracks again
-     * (e.g. after rejoining).
-     */
     override fun setAudioTrack(displayId: DisplayId, trackUrl: String): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.audioTrack = trackUrl
@@ -135,10 +118,6 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
-    /**
-     * Sets the subtitle track by [lang] (null turns subtitles off) and persists the pick so
-     * [DisplayScreen] can re-apply it once the same display resolves subtitle tracks again.
-     */
     override fun setSubtitleTrack(displayId: DisplayId, lang: String?): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.subtitleTrack = lang
@@ -146,21 +125,18 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
-    /** Sets the display [brightness]. */
     override fun setBrightness(displayId: DisplayId, brightness: Float): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.brightness = brightness
         return screen.toDisplay()
     }
 
-    /** Mutes or unmutes the display's audio. */
     override fun mute(displayId: DisplayId, muted: Boolean): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.mute(muted)
         return screen.toDisplay()
     }
 
-    /** Reloads the current video from the start; no-op where seeking is not allowed. */
     override fun restart(displayId: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         if (!screen.canSeekHere) return screen.toDisplay()
@@ -169,21 +145,18 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
-    /** Requests a switch to the given playback [mode] (Local / Synced / Watch Party / Broadcast). */
     override fun setMode(displayId: DisplayId, mode: PlaybackMode): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.requestMode(mode)
         return screen.toDisplay()
     }
 
-    /** Retries a failed video load. */
     override fun retry(displayId: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.retryVideo()
         return screen.toDisplay()
     }
 
-    /** Starts a watch party on the display, defaulting to its current video when [url] is omitted. */
     override fun startWatchParty(displayId: DisplayId, url: String?): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         if (!screen.canStartWatchPartyHere) return null
@@ -191,35 +164,30 @@ class MinecraftDisplayCommands : DisplayExecutor {
         return screen.toDisplay()
     }
 
-    /** Marks the local participant ready / not-ready in the active watch party. */
     override fun setWatchPartyReady(displayId: DisplayId, ready: Boolean): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.setWatchPartyReady(ready)
         return screen.toDisplay()
     }
 
-    /** Host action: begins the watch-party countdown. */
     override fun beginWatchParty(displayId: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.beginWatchParty()
         return screen.toDisplay()
     }
 
-    /** Host action: ends the active watch party. */
     override fun endWatchParty(displayId: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.endWatchParty()
         return screen.toDisplay()
     }
 
-    /** Host action: restarts an ended watch party. */
     override fun restartWatchParty(displayId: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.restartWatchParty()
         return screen.toDisplay()
     }
 
-    /** Closes the watch party, returning the display to its base mode. */
     override fun closeWatchParty(displayId: DisplayId): DisplayInfo? {
         val screen = DisplayRegistry.screens[displayId.uuid] ?: return null
         screen.closeWatchParty()

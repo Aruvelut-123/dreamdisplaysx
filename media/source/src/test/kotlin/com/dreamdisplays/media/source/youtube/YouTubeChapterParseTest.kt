@@ -8,7 +8,6 @@ import kotlin.test.assertTrue
 
 class YouTubeChapterParseTest {
 
-    /** Parses [json] the way [YouTubeInnerTube.metadata] does before handing it to the chapter reader. */
     private fun chaptersOf(json: String) =
         YouTubeInnerTube.extractChapters(DreamJson.compact.parseToJsonElement(json).asJsonObjectOrNull()!!)
 

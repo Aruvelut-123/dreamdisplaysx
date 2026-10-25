@@ -79,7 +79,7 @@ internal class VanillaServerDisplay(
 
 /** Lazy view over `Fabric` / `NeoForge` displays. */
 internal class VanillaServerDisplays(
-    filters: List<(VanillaDisplayData) -> Boolean> = emptyList(),
+    filters: List<(VanillaDisplayData) -> Boolean> = [],
 ) : ServerDisplaysBase<VanillaDisplayData>(filters) {
     override fun all(): List<VanillaDisplayData> = DisplayManager.getDisplays().filterIsInstance<VanillaDisplayData>()
     override fun wrap(data: VanillaDisplayData): ServerDisplay = VanillaServerApi.wrap(data)
@@ -121,7 +121,6 @@ internal class VanillaServerDisplays(
     }
 }
 
-/** Maps the public facing to vanilla's. */
 private fun DisplayFacing.toDirection(): Direction = when (this) {
     DisplayFacing.NORTH -> Direction.NORTH
     DisplayFacing.EAST -> Direction.EAST

@@ -12,22 +12,17 @@ internal class StatsReporter(
     private val debugLabel: String,
     private val intervalMs: Long = 2000L,
 
-    /** Called every interval; must return and reset the three counters atomically. */
     private val pollCounters: () -> Snapshot,
     private val getPositionMs: () -> Long,
     private val isLive: () -> Boolean,
 ) {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /** Raw counter values sampled at one reporting interval. */
     data class Snapshot(val samplesIn: Long, val framesToGpu: Long, val framesDropped: Long)
 
-    /** Periodic reporting task. */
     @Volatile
     private var job: Job? = null
-
-    /** Coroutine scope for the reporting task. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("MediaPlayer-stats"))
 
     /** Starts the periodic reporting task. No-op if already running. */
@@ -48,7 +43,6 @@ internal class StatsReporter(
         job = null
     }
 
-    /** Samples the current frame counters, formats a one-line stats string, and logs it. */
     private fun report() {
         runCatching {
             val (inN, outN, dropN) = pollCounters()

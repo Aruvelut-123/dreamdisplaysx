@@ -24,7 +24,7 @@ data class ResolvedMedia(
     val isSeekable: Boolean,
 
     /** Selectable subtitle / caption tracks, if the resolver exposed any. Empty for most sources. */
-    val subtitles: List<SubtitleTrack> = emptyList(),
+    val subtitles: List<SubtitleTrack> = [],
 ) {
     /** Streams that contain video. */
     val videoStreams: List<MediaStream> get() = streams.filter { it.type.hasVideo }

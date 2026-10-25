@@ -16,11 +16,9 @@ import java.util.concurrent.TimeUnit
  */
 object TwitchMetadataCache {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private const val LIVE_TTL_SECONDS = 60L
     private const val VOD_TTL_MINUTES = 30L
     private const val IN_FLIGHT_TTL_MINUTES = 2L
-
     private val CACHE: Cache<String, TwitchMetadata> = Caffeine.newBuilder()
         .maximumSize(500)
         .expireAfter(object : Expiry<String, TwitchMetadata> {

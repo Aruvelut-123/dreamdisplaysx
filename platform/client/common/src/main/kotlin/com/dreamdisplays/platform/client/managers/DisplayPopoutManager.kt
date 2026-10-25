@@ -19,25 +19,12 @@ import java.nio.ByteBuffer
 class DisplayPopoutManager(
     private val displayScreen: DisplayScreen,
 ) {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** The separate `GLFW` popout window, or `null` when none has been created. */
     private var popoutWindow: VideoPopoutWindow? = null
-
-    /** True while the window is meant to receive frames; window open/close is async, so [VideoPopoutWindow.isOpen] lags. */
     private var windowActive = false
-
-    /** The in-game PiP overlay, or `null` when none is active. */
     private var pipOverlay: PipOverlay? = null
-
-    /** The fullscreen overlay, or `null` when none is active. */
     private var fullscreenOverlay: FullscreenOverlay? = null
-
-    /** The player currently feeding the popout surfaces, kept for sink re-wiring. */
     private var currentPlayer: MediaPlayer? = null
-
-    /** Supplier of the current video content aspect, captured on attach / activate. */
     private var contentAspect: () -> Double = { 16.0 / 9.0 }
 
     /** True while a window, PiP overlay, or fullscreen overlay is active. */
@@ -54,7 +41,6 @@ class DisplayPopoutManager(
         rewireSink()
     }
 
-    /** Rebuilds the player's single popout sink to fan frames out to every active surface. */
     private fun rewireSink() {
         val player = currentPlayer ?: return
         val aspect = contentAspect
@@ -205,7 +191,6 @@ class DisplayPopoutManager(
         }
     }
 
-    /** Starts the PiP close animation and announces the closure; no-op when no PiP is open. */
     private fun closePipOverlay() {
         val overlay = pipOverlay ?: return
         overlay.startClose()
@@ -213,7 +198,6 @@ class DisplayPopoutManager(
         emit(PopoutEvent.Closed(displayScreen.uuid.toString()))
     }
 
-    /** Starts the fullscreen close animation and announces the closure; no-op when none is open. */
     private fun closeFullscreenOverlay() {
         val overlay = fullscreenOverlay ?: return
         overlay.startClose()
@@ -221,7 +205,6 @@ class DisplayPopoutManager(
         emit(PopoutEvent.Closed(displayScreen.uuid.toString()))
     }
 
-    /** Publishes [event] through the registered [PopoutManager]; silently skipped before bootstrap. */
     private fun emit(event: PopoutEvent) {
         DreamServices.registry.getOrNull<PopoutManager>()?.emit(event)
     }

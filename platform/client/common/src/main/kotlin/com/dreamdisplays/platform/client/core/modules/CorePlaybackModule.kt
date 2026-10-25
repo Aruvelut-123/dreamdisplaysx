@@ -13,13 +13,10 @@ import com.dreamdisplays.core.services.DefaultWatchPartyService
 
 /** Installs playback and watch-party services backed by the core display ports. */
 object CorePlaybackModule : DreamDisplaysModule {
-    /** The ID of this module. */
     override val id: String = "dreamdisplays:core_playback"
 
-    /** Dependencies of this module. */
-    override val dependencies: List<String> = listOf(CoreDisplayModule.id)
+    override val dependencies: List<String> = [CoreDisplayModule.id]
 
-    /** Installs the playback service and the `Watch party` service. */
     override fun install(context: ModuleContext) {
         val services = context.services
         val playbackService = DefaultPlaybackService(services.get<PlaybackPort>())

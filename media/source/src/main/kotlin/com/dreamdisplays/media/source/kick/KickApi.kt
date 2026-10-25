@@ -21,10 +21,8 @@ data class KickPlayback(
 
 /** Resolves Kick channels and VODs through Kick's public site API — the same JSON the website uses, no API key or auth required. */
 object KickApi {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** Cloudflare turns away requests that do not look like a browser, so send browser headers. */
     private val HEADERS = DreamHttpClient.headersOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "Accept" to "application/json",
@@ -59,7 +57,7 @@ object KickApi {
         )
         // Offline channels have no playback URL; still return the metadata so the card can say so
         if (!isLive || playbackUrl == null) {
-            return KickPlayback(streams = emptyList(), metadata = metadata, durationSec = null, isSeekable = false)
+            return KickPlayback(streams = [], metadata = metadata, durationSec = null, isSeekable = false)
         }
         return KickPlayback(
             streams = hlsStreams(playbackUrl),
@@ -93,11 +91,6 @@ object KickApi {
         )
     }
 
-    /**
-     * Turns an HLS master URL into the rendition ladder so the quality slider works, falling back to
-     * the single master URL when the master cannot be fetched or is a plain media playlist (the
-     * decoder still opens that and auto-selects a variant).
-     */
     private fun hlsStreams(masterUrl: String): List<MediaStream> {
         val parsed = runCatching {
             val text = DreamHttpClient.readText(
@@ -108,7 +101,7 @@ object KickApi {
         }.getOrNull()
 
         val variants = parsed?.variants.orEmpty()
-        if (variants.isEmpty()) return listOf(muxed(masterUrl))
+        if (variants.isEmpty()) return [muxed(masterUrl)]
         return variants.map { v ->
             MediaStream(
                 url = v.url,
@@ -130,7 +123,6 @@ object KickApi {
         audioTrackName = null, audioTrackLang = null,
     )
 
-    /** GETs [url] and parses it as a JSON object, or null on any failure (offline, blocked, 404). */
     private fun getJson(url: String): JsonObject? = runCatching {
         val body = DreamHttpClient.readText(
             url,

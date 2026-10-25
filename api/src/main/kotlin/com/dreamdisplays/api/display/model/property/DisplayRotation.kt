@@ -22,7 +22,6 @@ enum class DisplayRotation(val quarterTurns: Int) {
     LEFT(3);
 
     companion object {
-        /** By quarter turns lookup table. */
         private val byQuarterTurns = entries.associateBy { it.quarterTurns }
 
         /** Decodes a rotation from persisted quarter turns, wrapping out-of-range values. */

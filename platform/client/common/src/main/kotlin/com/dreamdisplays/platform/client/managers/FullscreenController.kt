@@ -19,20 +19,11 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object FullscreenController {
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** How long a state waits for its display to load before being given up on. */
     private const val PENDING_TIMEOUT_MS = 5_000L
-
-    /**
-     * How long a delivery waits for the world to finish loading before being shown anyway. Waiting
-     * avoids the visible seek a mid-load start causes.
-     */
     private const val READY_GRACE_MS = 3_000L
 
-    /** [deadlineMs] of 0 means the give-up clock hasn't started — see [onClientTick]. */
     private class Pending(val state: FullscreenState, val queuedAtMs: Long, var deadlineMs: Long = 0L)
 
-    /** States whose display hasn't loaded yet, keyed by display id. */
     private val pending = ConcurrentHashMap<UUID, Pending>()
 
     /** Applies [state]: opens the fullscreen overlay when active, tears it down otherwise. */
@@ -78,10 +69,6 @@ object FullscreenController {
         }
     }
 
-    /**
-     * Whether the world around the viewer is actually up. A fullscreen delivery that lands mid-terrain-load would fail
-     * silently, so pending states wait until the player's chunk is loaded.
-     */
     private fun isClientReady(): Boolean = runCatching {
         val mc = Minecraft.getInstance()
         val player = mc.player ?: return@runCatching false
@@ -89,11 +76,6 @@ object FullscreenController {
         level.isLoaded(player.blockPosition())
     }.getOrDefault(false)
 
-    /**
-     * Activates the overlay, applies the volume / quality hints, and acknowledges delivery.
-     * A [FullscreenState.minimized] delivery is still activated first and then collapsed, so PiP
-     * takes over the same live player rather than starting a second one.
-     */
     private fun apply(screen: DisplayScreen, state: FullscreenState) {
         if (screen.lastFullscreenState == state) {
             val action = if (state.minimized) FullscreenAckAction.MINIMIZED else FullscreenAckAction.SHOWN

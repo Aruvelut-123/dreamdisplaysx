@@ -17,7 +17,6 @@ object KickUrls {
     )
 
     private val UUID_RE = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
     private val SLUG_RE = Regex("^[A-Za-z0-9_]{2,25}$")
 
     /** True when [url] points at a Kick channel or video. */

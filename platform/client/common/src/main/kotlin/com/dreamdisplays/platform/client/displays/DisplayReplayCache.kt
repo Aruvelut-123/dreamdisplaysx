@@ -11,16 +11,10 @@ import kotlin.math.abs
 
 /** In-memory LRU of native video replay snapshots retained across soft display unloads. */
 internal object DisplayReplayCache {
-    /** Default TTL for replay snapshots in milliseconds. */
     private const val DEFAULT_TTL_MS = 5L * 60L * 1000L
-
-    /** Default JVM-side memory cap for retained replay snapshots. */
     private const val DEFAULT_MAX_BYTES = 512L * 1024L * 1024L
-
-    /** Maximum allowed difference between requested and actual replay position. */
     private const val POSITION_TOLERANCE_NS = 1_000_000_000L
 
-    /** One retained replay snapshot: the encoded video bytes, optional audio PCM, and resolved streams. */
     @Suppress("ArrayInDataClass")
     private data class Entry(
         val url: String,
@@ -30,18 +24,14 @@ internal object DisplayReplayCache {
         val prepared: PreparedMedia?,
     )
 
-    /** Snapshot time-to-live in milliseconds. */
     private val ttlMs: Long =
         System.getProperty("dreamdisplays.cache.ttlMs")?.toLongOrNull()?.coerceAtLeast(0L) ?: DEFAULT_TTL_MS
 
-    /** Total JVM-side memory cap for retained replay snapshots. */
     private val maxBytes: Long =
         System.getProperty("dreamdisplays.cache.jvmMaxBytes")?.toLongOrNull()?.coerceAtLeast(0L)
             ?: WarmParkPolicy.replayCacheBudgetBytes.coerceAtMost(DEFAULT_MAX_BYTES)
 
     private val cacheEnabled = ttlMs > 0L && maxBytes > 0L
-
-    /** Snapshots by UUID; TTL and byte-weighted eviction. */
     private val entries: Cache<UUID, Entry> = Caffeine.newBuilder()
         .maximumWeight(if (cacheEnabled) maxBytes else 0L)
         .weigher { _: UUID, entry: Entry -> entryBytes(entry).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() }
@@ -73,7 +63,6 @@ internal object DisplayReplayCache {
             .also { it.prepared = entry.prepared }
     }
 
-    /** Total retained bytes for an entry (video snapshot + optional cached audio PCM). */
     private fun entryBytes(e: Entry): Long = e.snapshot.size.toLong() + (e.audioPcm?.size?.toLong() ?: 0L)
 
     /** Drops any retained snapshot for [uuid]. */

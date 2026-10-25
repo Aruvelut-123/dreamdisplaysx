@@ -8,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap
  * so the proxy needs its own cross-backend view.
  */
 object NetworkDisplayIndex {
-    /** Backend name -> (display id -> url). */
     private val byServer = ConcurrentHashMap<String, Map<String, String>>()
 
     /** Replaces [serverName]'s advertised displays with [index]. */

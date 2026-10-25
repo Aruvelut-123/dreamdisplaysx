@@ -23,7 +23,6 @@ class ParametricBinaural(private val sampleRate: Float) {
 
     private val delayLine = FractionalDelayLine(64)
     private val shadowFilter = Biquad().apply { configure(Biquad.Type.LOW_PASS, sampleRate, OPEN_CUTOFF_HZ, 0.7f) }
-
     private var itdSamples = 0f
     private var farIsRight = true
     private var farGain = 1f

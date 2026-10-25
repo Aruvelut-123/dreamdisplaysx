@@ -32,10 +32,5 @@ interface Session : AutoCloseable {
      */
     fun <T : AutoCloseable> own(resource: T): T
 
-    /**
-     * Ends every subscription of this session.
-     *
-     * Safe to call twice.
-     */
     override fun close()
 }

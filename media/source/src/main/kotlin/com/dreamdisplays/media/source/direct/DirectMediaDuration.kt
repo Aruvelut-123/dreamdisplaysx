@@ -12,16 +12,9 @@ import java.nio.ByteOrder
 internal object DirectMediaDuration {
 
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Cap on top-level boxes walked before giving up, so a malformed file cannot loop us. */
     private const val MAX_BOX_HOPS = 24
-
-    /** How much of a Matroska file's head is scanned for the `Info` element. */
     private const val MATROSKA_HEAD_BYTES = 96 * 1024
-
-    /** Bytes read at the `moov` offset; `mvhd` is its first child and is at most ~120 bytes. */
     private const val MOOV_HEAD_BYTES = 256
-
     private const val NANOS_PER_SECOND = 1_000_000_000.0
 
     /**
@@ -36,11 +29,6 @@ internal object DirectMediaDuration {
         }
     }.onFailure { logger.debug("Duration probe failed for {}: {}", url.take(120), it.message) }.getOrNull()
 
-    /**
-     * Walks the top-level box list, hopping straight from one box header to the next, until `moov`
-     * turns up. Each hop is a 16-byte ranged read, so even a non-faststart file whose `moov` sits
-     * behind a multi-gigabyte `mdat` costs a couple of requests rather than a download.
-     */
     private fun isoBmff(url: String, contentLength: Long?): Long? {
         var offset = 0L
         repeat(MAX_BOX_HOPS) {
@@ -73,11 +61,6 @@ internal object DirectMediaDuration {
         return null
     }
 
-    /**
-     * Finds the `mvhd` box among the `moov` payload's children and reads the movie duration from it.
-     * `mvhd` is usually the first child, but a muxer is free to put a `udta` / `meta` box before it,
-     * so the children are walked rather than assuming a position.
-     */
     private fun mvhdDuration(moov: ByteArray): Long? {
         var cursor = 0
         while (cursor + 8 <= moov.size) {
@@ -92,7 +75,6 @@ internal object DirectMediaDuration {
         return null
     }
 
-    /** Reads timescale and duration from an `mvhd` box whose payload starts at [payloadStart]. */
     private fun readMvhd(moov: ByteArray, payloadStart: Int): Long? {
         if (payloadStart + 4 > moov.size) return null
         val buffer = ByteBuffer.wrap(moov, payloadStart, moov.size - payloadStart).order(ByteOrder.BIG_ENDIAN)
@@ -118,11 +100,6 @@ internal object DirectMediaDuration {
         return (duration.toDouble() / timescale * NANOS_PER_SECOND).toLong()
     }
 
-    /**
-     * Finds the `Segment Info` element in the head of the file and reads `Duration` (a float, in
-     * `TimecodeScale` units) out of it. Muxers put `Info` right after the segment header, well
-     * inside [MATROSKA_HEAD_BYTES], because a player needs it before the first frame too.
-     */
     private fun matroska(url: String): Long? {
         val head = range(url, 0, MATROSKA_HEAD_BYTES - 1L) ?: return null
         val infoAt = indexOf(head, byteArrayOf(0x15, 0x49.toByte(), 0xA9.toByte(), 0x66)) ?: return null
@@ -155,13 +132,8 @@ internal object DirectMediaDuration {
         return (seconds * timecodeScale).toLong()
     }
 
-    /** An EBML variable-length integer: its numeric [value] and how many [width] bytes it occupied. */
     private data class Vint(val value: Long, val width: Int)
 
-    /**
-     * Reads an EBML variable-length integer at [offset]. Element ids keep their length marker bit
-     * (that is what makes an id unique), element sizes have it stripped — hence [stripMarker].
-     */
     private fun readVint(data: ByteArray, offset: Int, stripMarker: Boolean): Vint? {
         if (offset >= data.size) return null
         val first = data[offset].toInt() and 0xFF
@@ -178,14 +150,12 @@ internal object DirectMediaDuration {
         return Vint(value, width)
     }
 
-    /** Reads a big-endian unsigned integer of [length] bytes. */
     private fun readUnsigned(data: ByteArray, offset: Int, length: Int): Long {
         var value = 0L
         for (i in 0 until length) value = (value shl 8) or (data[offset + i].toLong() and 0xFF)
         return value
     }
 
-    /** Reads an EBML float, which is either 4 or 8 bytes wide. */
     private fun readFloat(data: ByteArray, offset: Int, length: Int): Double? {
         val buffer = ByteBuffer.wrap(data, offset, length).order(ByteOrder.BIG_ENDIAN)
         return when (length) {
@@ -195,7 +165,6 @@ internal object DirectMediaDuration {
         }
     }
 
-    /** Index of [pattern] in [data], or null when absent. */
     private fun indexOf(data: ByteArray, pattern: ByteArray): Int? {
         outer@ for (i in 0..data.size - pattern.size) {
             for (j in pattern.indices) if (data[i + j] != pattern[j]) continue@outer
@@ -204,10 +173,6 @@ internal object DirectMediaDuration {
         return null
     }
 
-    /**
-     * Fetches bytes [first]..[last] of [url], or null when the server would not serve the range. The read is hard-capped
-     * to the requested window size.
-     */
     private fun range(url: String, first: Long, last: Long): ByteArray? = runCatching {
         val window = (last - first + 1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         if (window <= 0) return@runCatching null

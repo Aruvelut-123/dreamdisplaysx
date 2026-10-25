@@ -30,12 +30,6 @@ import java.io.File
  */
 @FabricOnly
 class Server : ModInitializer {
-    /**
-     * Initializes the server-side mod. It registers all necessary event listeners, packet handlers, and commands.
-     * Also sets up repeating tasks for display updates and update checking.
-     *
-     * This method is called by the `Fabric` loader when the mod is loaded.
-     */
     override fun onInitialize() {
         logger.info("Initializing server-side mod...")
 
@@ -74,7 +68,6 @@ class Server : ModInitializer {
         logger.info("Server-side initialization complete.")
     }
 
-    /** Registers all custom payload types for clientbound and serverbound play channels. */
     private fun registerPayloadTypes() {
         runCatching {
             payloadRegistry("clientboundPlay", "playS2C").let { clientbound ->
@@ -131,7 +124,6 @@ class Server : ModInitializer {
         val server: MinecraftServer?; get() = VanillaServerState.server
         val storage: StorageManager?; get() = VanillaServerState.storage
 
-        /** Copies the pre-1.8.1 global `SQLite DB` into [worldDataDir] on first startup for this world. */
         @Deprecated("Scheduled for removal in 2.0.0")
         // TODO: scheduled for removal in 2.0.0
         private fun migrateGlobalDb(worldDataDir: File) {

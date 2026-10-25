@@ -38,16 +38,8 @@ import org.slf4j.LoggerFactory
  */
 object VanillaDisplayActions {
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /**
-     * Bounds how often one display's video can be changed — each call persists to disk, broadcasts to
-     * every viewer, and makes every viewer's client re-resolve the new URL, so unlike the cheap
-     * per-packet sync state this genuinely amplifies.
-     */
     private val setVideoThrottle = ActionThrottle()
     private const val SET_VIDEO_COOLDOWN_MS = 250L
-
-    /** Bounds how often one player may request a catch-up snapshot for one display. */
     private val requestSyncThrottle = ActionThrottle()
     private const val REQUEST_SYNC_COOLDOWN_MS = 250L
 
@@ -103,12 +95,12 @@ object VanillaDisplayActions {
         val batchSize = 5
         displays.chunked(batchSize).forEachIndexed { index, batch ->
             if (index == 0) {
-                batch.forEach { VanillaPacketUtil.sendDisplayInfo(listOf(player), it) }
+                batch.forEach { VanillaPacketUtil.sendDisplayInfo([player], it) }
             } else {
                 val delayTicks = (index * 2).toLong()
                 VanillaServerScheduler.runLater(server, delayTicks) {
                     if (server.playerList.players.contains(player)) {
-                        batch.forEach { VanillaPacketUtil.sendDisplayInfo(listOf(player), it) }
+                        batch.forEach { VanillaPacketUtil.sendDisplayInfo([player], it) }
                     }
                 }
             }
@@ -263,14 +255,11 @@ object VanillaDisplayActions {
         TimelineManager.onDurationReported(displayData, player.uuid, durationMs)
     }
 
-    /** Builds the permission context for [player] acting on [display]. */
     private fun context(display: VanillaDisplayData, player: ServerPlayer) =
         PlaybackContexts.of(display, player.uuid, isAdmin(player))
 
-    /** Same as [context]; kept separate because lock toggling additionally requires the `lock` node (see [setAccess]). */
     private fun lockContext(display: VanillaDisplayData, player: ServerPlayer) = context(display, player)
 
-    /** Checks if [player] has permission to access the specified [mode]. */
     private fun canAccessMode(player: ServerPlayer, mode: PlaybackMode): Boolean {
         val perms = VanillaServerState.config.permissions
         val node = when (mode) {

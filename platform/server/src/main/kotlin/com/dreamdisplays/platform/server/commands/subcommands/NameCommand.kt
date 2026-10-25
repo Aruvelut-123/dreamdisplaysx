@@ -31,7 +31,6 @@ class NameCommand : SubCommand {
     override val permission = PaperServer.config.permissions.name
     override val playerOnly = true
 
-    /** Renames the targeted display, after validating ownership and the name's shape/uniqueness. */
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val player = (sender as? Player) ?: return
         val token = args.getOrNull(0) ?: "this"
@@ -68,7 +67,6 @@ class NameCommand : SubCommand {
     }
 }
 
-/** Canonical, storage-safe form of [raw], or null when it can't be used as a display alias. */
 private val DISPLAY_NAME_PATTERN = Regex("^[A-Za-z0-9_-]{1,32}$")
 
 private fun normalizeDisplayName(raw: String?): String? {

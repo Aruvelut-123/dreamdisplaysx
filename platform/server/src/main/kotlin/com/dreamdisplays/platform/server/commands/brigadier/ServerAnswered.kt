@@ -52,7 +52,7 @@ private fun <S> CommandDispatcher<S>.complete(source: S, outer: SuggestionsBuild
 private fun inOrder(input: String, parts: List<Suggestions>): Suggestions {
     val seen = HashSet<String>()
     val entries = parts.flatMap { it.list }.filter { seen.add(it.text) }
-    if (entries.isEmpty()) return Suggestions(StringRange.at(input.length), emptyList())
+    if (entries.isEmpty()) return Suggestions(StringRange.at(input.length), [])
     val range = entries.map(Suggestion::getRange).reduce(StringRange::encompassing)
     return Suggestions(range, entries.map { it.expand(input, range) })
 }

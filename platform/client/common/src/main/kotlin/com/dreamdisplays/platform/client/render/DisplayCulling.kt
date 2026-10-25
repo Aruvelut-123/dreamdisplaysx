@@ -16,13 +16,10 @@ import kotlin.math.tan
  */
 internal object DisplayCulling {
     private val enabled: Boolean = System.getProperty("dreamdisplays.render.cull")?.toBooleanStrictOrNull() ?: true
-
     private const val FOV_HEADROOM = 1.5
     private const val SPHERE_MARGIN = 1.0
     private const val MAX_FOV_DEGREES = 179.0
-
     private var active = false
-
     private var camX = 0.0
     private var camY = 0.0
     private var camZ = 0.0

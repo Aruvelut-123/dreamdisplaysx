@@ -20,7 +20,6 @@ class StatsCommand : SubCommand {
     override val name = "stats"
     override val permission = PaperServer.config.permissions.stats
 
-    /** Prints a per-mod-version count of currently connected players that have reported a version. */
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val versions = PlayerManager.getVersions()
         val counts = versions.values

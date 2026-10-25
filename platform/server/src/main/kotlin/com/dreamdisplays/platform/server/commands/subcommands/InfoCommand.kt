@@ -26,7 +26,6 @@ class InfoCommand : SubCommand {
     override val permission = PaperServer.config.permissions.info
     override val playerOnly = true
 
-    /** Prints the owner, UUID, region, size and media metadata of the targeted display. */
     override fun execute(sender: CommandSender, args: Array<String?>) {
         val player = sender as? Player ?: return
         val token = args.getOrNull(0) ?: "this"

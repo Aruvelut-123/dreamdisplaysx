@@ -55,7 +55,6 @@ object NetworkWatchPartyManager {
     /** Stops and forgets [partyId]; returns the removed party, or null if it wasn't live. */
     fun stop(partyId: String): Party? = parties.remove(partyId)
 
-    /** Same 8-character shape as a fullscreen network session id, for consistency across `/display` output. */
     private fun generatePartyId(): String {
         var id: String
         do id = UUID.randomUUID().toString().take(8) while (parties.containsKey(id))

@@ -13,8 +13,6 @@ import java.util.zip.ZipInputStream
 /** Downloads and unpacks `FFmpeg` shared libraries from BtbN for the in-process libav backend. */
 object LavFfmpeg {
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** BtbN latest release API; keep the branch suffix in sync with `.github/workflows/_build.yml`. */
     private const val LATEST_RELEASE_API = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest"
     private const val FFMPEG_BRANCH_SUFFIX = "9.0"
 
@@ -50,7 +48,6 @@ object LavFfmpeg {
         }
     }
 
-    /** True once at least the core decode library is present in [dir]. */
     private fun hasFfmpeg(dir: File): Boolean =
         dir.listFiles()
             ?.any { it.isFile && it.name.lowercase().let { n -> "avcodec" in n && isSharedLibrary(n) } } == true
@@ -58,7 +55,6 @@ object LavFfmpeg {
     private fun isSharedLibrary(name: String): Boolean =
         name.endsWith(".dll") || name.endsWith(".dylib") || ".so" in name
 
-    /** Resolves the prebuilt shared build for this platform, or null when none is available. */
     private fun source(): Source? = when {
         OsInfo.isMac -> null
         OsInfo.isWindows -> {
@@ -91,7 +87,6 @@ object LavFfmpeg {
             ?: throw IOException("No BtbN FFmpeg asset matched ${source.assetNameRegex.pattern}.")
     }
 
-    /** Extracts every shared library (and the LICENSE) under `<root>/[libDir]/` from a zip into [dir]. */
     @Throws(IOException::class)
     private fun extractZipLibs(archive: File, libDir: String, dir: File): Int {
         var count = 0
@@ -109,7 +104,6 @@ object LavFfmpeg {
         return count
     }
 
-    /** Extracts every shared library (and the LICENSE) under `<root>/[libDir]/` from a tar.xz into [dir]. */
     @Throws(IOException::class)
     private fun extractTarXzLibs(archive: File, libDir: String, dir: File): Int {
         var count = 0
@@ -132,7 +126,6 @@ object LavFfmpeg {
         return count
     }
 
-    /** Matches `<root>/<libDir>/<sharedLibrary>` entries plus a top-level LICENSE file. */
     private fun wantedEntry(entryName: String, libDir: String): Boolean {
         val parts = entryName.split('/')
         val leaf = parts.last()
@@ -145,7 +138,6 @@ object LavFfmpeg {
         BufferedOutputStream(FileOutputStream(dest)).use { out -> input.transferTo(out) }
     }
 
-    /** Downloads [url] to [dest] with periodic progress log lines (every 10 %). */
     @Throws(IOException::class)
     private fun downloadWithProgress(url: String, dest: File) {
         var announced = false
@@ -176,7 +168,6 @@ object LavFfmpeg {
         }
     }
 
-    /** Reads the BtbN latest-release API response, following up to 10 redirect hops. */
     @Throws(IOException::class)
     private fun readLatestReleaseJson(): String {
         return DreamHttpClient.readText(

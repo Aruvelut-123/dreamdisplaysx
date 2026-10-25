@@ -30,7 +30,6 @@ import java.util.*
  */
 object DisplayLifecycleManager {
     private val logger = LoggerFactory.getLogger(javaClass)
-
     private const val MAX_DISPLAY_BLOCKS = 256
     private const val BUDGET_HYSTERESIS_BLOCKS = 4
 
@@ -86,11 +85,6 @@ object DisplayLifecycleManager {
         }
     }
 
-    /**
-     * Stashes an out-of-range [packet] as an unloaded-screen snapshot (viewer's saved volume / quality /
-     * etc. merged in, matching a normal [DisplayScreen.toFullDisplayData] capture), so it restores from
-     * the local cache instead of needing another server broadcast once the player is back in range.
-     */
     private fun cacheUnloadedDisplay(
         packet: DisplayInfo, facing: FacingUtil, mode: PlaybackMode, dimensionKey: String,
     ) {
@@ -185,7 +179,6 @@ object DisplayLifecycleManager {
     //?} else
     /*level.dimension().location().toString()*/
 
-    /** Rebuilds a [DisplayScreen] from persisted [data] and re-registers it. */
     private fun restoreScreen(data: DisplayData) {
         if (!isValidDisplaySize(data.width, data.height, data.depth)) {
             logger.warn("Skipping cached display ${data.uuid}: invalid size ${data.width}x${data.height}x${data.depth}.")
@@ -215,11 +208,9 @@ object DisplayLifecycleManager {
         }
     }
 
-    /** Distance from [playerPos] to the persisted display [data]'s bounding box. */
     private fun distanceToData(data: DisplayData, playerPos: BlockPos) =
         distanceToScreen(data.uuid, data.x, data.y, data.z, data.width, data.height, data.facing, playerPos, data.depth)
 
-    /** Shortest distance from [playerPos] to the screen's block bounding box (facing-aware). */
     private fun distanceToScreen(
         id: UUID, x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, playerPos: BlockPos,
         depth: Int = 1,
@@ -229,7 +220,6 @@ object DisplayLifecycleManager {
                 playerPos.x, playerPos.y, playerPos.z, x, y, z, width, height, facing, depth.coerceAtLeast(1),
             )
 
-    /** True if every dimension is within `1..`[MAX_DISPLAY_BLOCKS]. */
     private fun isValidDisplaySize(width: Int, height: Int, depth: Int = 1): Boolean =
         width in 1..MAX_DISPLAY_BLOCKS && height in 1..MAX_DISPLAY_BLOCKS && depth in 1..MAX_DISPLAY_BLOCKS
 }

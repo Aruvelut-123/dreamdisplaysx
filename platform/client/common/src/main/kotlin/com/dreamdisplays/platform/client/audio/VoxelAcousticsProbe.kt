@@ -33,8 +33,7 @@ object VoxelAcousticsProbe {
     private const val MAX_OCCLUSION = 3.0f
     private const val MAX_REFLECTIVITY = 1.5f
     private const val MAX_REVERB_PIERCE_STEPS = 6
-
-    private val TRANSPARENT_TAGS: Set<TagKey<Block>> = setOf(BlockTags.LEAVES)
+    private val TRANSPARENT_TAGS: Set<TagKey<Block>> = [BlockTags.LEAVES]
 
     private fun isTransparent(state: BlockState): Boolean = TRANSPARENT_TAGS.any { state.`is`(it) }
 

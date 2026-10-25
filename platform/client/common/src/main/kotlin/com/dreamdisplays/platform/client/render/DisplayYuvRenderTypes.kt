@@ -28,7 +28,6 @@ import net.minecraft.resources.Identifier
  */
 object DisplayYuvRenderTypes {
     //? if >=1.21.11 {
-    /** Shared linear / clamp sampler used by all video planes. */
     private var sharedPlaneSampler: GpuSampler? = null
 
     /**
@@ -44,7 +43,6 @@ object DisplayYuvRenderTypes {
             1, java.util.OptionalDouble.empty(),
         ).also { sharedPlaneSampler = it }
 
-    /** Sampler names bound to the Y / U / V planes. */
     private const val SAMPLER_Y = "Sampler0"
     private const val SAMPLER_U = "Sampler1"
     private const val SAMPLER_V = "Sampler3"
@@ -81,7 +79,6 @@ object DisplayYuvRenderTypes {
         if (isSupported) VideoPlaneTexture(label, width, height)
         else Yuv262Reflect.createPlaneTexture(label, width, height)
 
-    /** Compiled lazily by the backend on first draw; shared by every YUV display. */
     private val pipeline: RenderPipeline by lazy {
         if (!isSupported) return@lazy Yuv262Reflect.createPipeline()
         RenderPipelineCompat.createDisplayPipeline(
@@ -96,7 +93,7 @@ object DisplayYuvRenderTypes {
                 "_rp"
                 //?} else
                 /*""*/),
-            listOf(SAMPLER_Y, SAMPLER_U, SAMPLER_V),
+            [SAMPLER_Y, SAMPLER_U, SAMPLER_V],
         )
     }
 
@@ -112,7 +109,6 @@ object DisplayYuvRenderTypes {
         )
     )
 
-    /** Shared 1x1 white texture used for the loading / error quads in YUV mode. */
     private var whiteTextureId: Identifier? = null
 
     /**
@@ -134,7 +130,6 @@ object DisplayYuvRenderTypes {
         return DisplayUnlitRenderTypes.create("dream-displays-fallback", id)
     }
 
-    /** Shared flat solid-color render type (a 1 x 1 white texture modulated by the vertex color). */
     @Volatile
     private var sharedSolidType: RenderType? = null
 

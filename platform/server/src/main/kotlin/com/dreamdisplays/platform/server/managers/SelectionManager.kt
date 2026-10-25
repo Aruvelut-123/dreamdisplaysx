@@ -106,7 +106,6 @@ object SelectionManager {
     /** Clears [player]'s current selection. */
     fun resetSelection(player: ServerPlayer) = resetSelection(player.uuid)
 
-    /** Returns true if [loc] is inside the bounding box defined by this selection. */
     @PaperOnly
     private fun PaperSelectionData.contains(loc: Location): Boolean {
         val p1 = pos1 ?: return false

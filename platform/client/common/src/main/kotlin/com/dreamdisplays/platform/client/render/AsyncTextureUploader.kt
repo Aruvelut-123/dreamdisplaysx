@@ -34,7 +34,6 @@ import java.nio.ByteBuffer
  * which the fences also make safe.
  */
 class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderService {
-    /** One ring entry: a PBO with its allocated size, guarding fence and optional persistent mapping. */
     private class Slot {
         /** GL buffer id (0 until created). */
         var pbo: Int = 0
@@ -49,22 +48,12 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         var persistent: ByteBuffer? = null
     }
 
-    /** [PBO_COUNT] ring slots rotated through on each upload. */
     private val slots: Array<Slot> = Array(PBO_COUNT) { Slot().apply { pbo = GL15.glGenBuffers() } }
-
-    /** Index of the slot to write into; advanced on each upload. */
     private var ringIndex: Int = 0
-
-    /** Managed texture ID and size. */
     private var managedTexId: Int = -1
-
-    /** Managed texture size (width). */
     private var managedTexW: Int = -1
-
-    /** Managed texture size (height). */
     private var managedTexH: Int = -1
 
-    /** True when immutable persistently-mapped buffer storage is available on this context. */
     private val persistentMapSupported: Boolean by lazy {
         runCatching {
             val caps = GL.getCapabilities()
@@ -72,13 +61,10 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         }.getOrDefault(false)
     }
 
-    /** Async support. */
     override val supportsAsync: Boolean = true
 
-    /** Maximum texture size. This should not be changed. */
     override val maxTextureSize: Int = 8192
 
-    /** Upload texture. */
     override fun upload(frame: DecodedVideoFrame): TextureHandle {
         if (managedTexId == -1) {
             managedTexId = GL11.glGenTextures()
@@ -106,7 +92,6 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         return TextureHandle(managedTexId)
     }
 
-    /** Releases the texture. */
     override fun release(handle: TextureHandle) {
         if (handle.id == managedTexId && managedTexId != -1) {
             GL11.glDeleteTextures(managedTexId)
@@ -114,7 +99,6 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         }
     }
 
-    /** Releases the texture and cleans up `PBO`s. */
     override fun close() {
         if (managedTexId != -1) {
             GL11.glDeleteTextures(managedTexId)
@@ -232,11 +216,6 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         }
     }
 
-    /**
-     * Blocks (briefly) until the GPU has finished the last copy issued from [slot]'s PBO.
-     * With [PBO_COUNT] frames of latency the fence is almost always already signaled, making this
-     * a zero-cost check in the steady state; the wait only kicks in when the GPU genuinely lags.
-     */
     private fun waitSlotFence(slot: Slot) {
         val fence = slot.fence
         if (fence == 0L) return
@@ -249,10 +228,6 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         slot.fence = 0L
     }
 
-    /**
-     * (Re)allocates the currently bound PBO so it can hold [size] bytes. Persistent storage is
-     * immutable, so growing a persistently-mapped slot recreates the buffer object.
-     */
     private fun ensureCapacity(slot: Slot, size: Int) {
         if (size <= slot.capacity) return
 
@@ -283,20 +258,16 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         slot.capacity = size
     }
 
-    /** Binds a buffer to the specified target. */
     private fun bindBuffer(target: Int = GL21.GL_PIXEL_UNPACK_BUFFER, id: Int) {
         if (stateCache) GlStateManager._glBindBuffer(target, id) else GL15.glBindBuffer(target, id)
     }
 
-    /** Binds a 2D texture. Always issues a real `glBindTexture` - see [bindTexture2D]. */
     private fun bindTexture(id: Int) = bindTexture2D(stateCache, id)
 
-    /** Sets pixel storage parameters. */
     private fun pixelStore(name: Int, value: Int) {
         if (stateCache) GlStateManager._pixelStore(name, value) else GL11.glPixelStorei(name, value)
     }
 
-    /** Copies [size] bytes from [src] straight into the slot's persistent coherent mapping. */
     private fun copyIntoPersistentPbo(src: ByteBuffer, dst: ByteBuffer, size: Int) {
         if (src.isDirect) {
             MemoryUtil.memCopy(
@@ -319,10 +290,6 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         GL42.glMemoryBarrier(GL44.GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT)
     }
 
-    /**
-     * Copies data from the currently bound `PBO` to the texture.
-     * The offset parameter (0L) indicates that data is taken from the `PBO` buffer, not RAM.
-     */
     private fun copyIntoMappedPbo(src: ByteBuffer, size: Int) {
         val savedLimit = src.limit()
         val savedPos = src.position()
@@ -352,7 +319,6 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         src.position(savedPos)
     }
 
-    /** Texture sub-image 2D sourcing from the bound `PBO` at byte [offset]. */
     private fun texSubImage2DFromPbo(w: Int, h: Int, glFormat: Int, offset: Long) {
         if (stateCache) {
             GlStateManager._texSubImage2D(
@@ -366,10 +332,7 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
     }
 
     companion object {
-        /** Number of `PBO`s in the ring. */
         private const val PBO_COUNT = 3
-
-        /** Upper bound on a fence wait when the GPU is genuinely behind (100 ms). */
         private const val FENCE_TIMEOUT_NS = 100_000_000L
     }
 }

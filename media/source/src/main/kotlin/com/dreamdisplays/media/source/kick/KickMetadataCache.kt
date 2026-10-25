@@ -30,7 +30,6 @@ object KickMetadataCache {
         else -> null
     }
 
-    /** Reconstructs the [MediaSource.Kick] the fetch needs from a [cacheKey]. */
     private fun sourceFor(key: String): MediaSource.Kick {
         val value = key.substringAfter(':')
         return if (key.startsWith("video:")) {

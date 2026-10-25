@@ -20,13 +20,8 @@ import kotlin.time.Instant
  * One-shot scheduled play / pause, set via `/display schedule`.
  */
 object ScheduledPlaybackManager {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Live platform transport, injected at startup. */
     private lateinit var transport: PlaybackTransport
-
-    /** Pending countdown jobs, keyed by display id. */
     private val jobs = ConcurrentHashMap<UUID, Job>()
 
     /** Wires the platform transport. */
@@ -82,7 +77,6 @@ object ScheduledPlaybackManager {
         }
     }
 
-    /** Launches the countdown coroutine that fires [display]'s scheduled action at [at]. */
     private fun launchCountdown(displayId: UUID, at: Instant): Job =
         ServerCoroutines.io.launch {
             val remaining = at - Clock.System.now()
@@ -90,7 +84,6 @@ object ScheduledPlaybackManager {
             transport.runOnMainThread { fire(displayId) }
         }
 
-    /** Runs on the main thread: clears the schedule and applies its action, if the display still exists. */
     private fun fire(displayId: UUID) {
         jobs.remove(displayId)
         val display = DisplayManager.getDisplayData(displayId) ?: return

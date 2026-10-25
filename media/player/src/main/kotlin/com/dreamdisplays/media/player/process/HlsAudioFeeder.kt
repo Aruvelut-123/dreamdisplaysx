@@ -40,7 +40,6 @@ internal class HlsAudioFeeder(
         @JvmField val discontinuity: Boolean,
     )
 
-    /** Parsed live media playlist: the sliding segment window plus the tags the feeder needs. */
     private class MediaPlaylist(
         @JvmField val mediaSequence: Long,
         @JvmField val targetDurationMs: Long,
@@ -150,7 +149,6 @@ internal class HlsAudioFeeder(
         }
     }
 
-    /** Extracts the media sequence, target duration, segments, and end marker from [body]. */
     private fun parse(body: String): MediaPlaylist {
         var mediaSequence = 0L
         var targetDurationMs = 2_000L
@@ -186,10 +184,6 @@ internal class HlsAudioFeeder(
         return MediaPlaylist(mediaSequence, targetDurationMs, segments, endList)
     }
 
-    /**
-     * Scans a raw MPEG-TS [segment] for the first audio PES header (stream ids `0xC0`..`0xDF`; Twitch's `timed_id3`
-     * stream is skipped) and returns its PTS in nanos, or -1 when there is none.
-     */
     private fun tsFirstAudioPtsNanos(segment: ByteArray): Long {
         var i = 0
         while (i + TS_PACKET_SIZE <= segment.size) {

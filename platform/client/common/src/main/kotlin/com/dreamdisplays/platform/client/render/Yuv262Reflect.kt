@@ -26,26 +26,20 @@ internal object Yuv262Reflect {
         }.isSuccess
     }
 
-    /** Cached `BindGroupLayout` class handle. */
     private val bglClass: Class<*> by lazy { Class.forName("com.mojang.blaze3d.pipeline.BindGroupLayout") }
-
-    /** Cached `GpuFormat` class handle. */
     private val gpuFormatClass: Class<*> by lazy { Class.forName("com.mojang.blaze3d.GpuFormat") }
 
-    /** The `GpuFormat.R8_UNORM` enum constant, resolved reflectively. */
     private val gpuFormatR8: Any by lazy {
         RenderPipelineCompat.reflectiveEnumValue(gpuFormatClass, "R8_UNORM")
     }
 
-    /** Looks up a vanilla [net.minecraft.client.renderer.BindGroupLayouts] constant. */
     private fun vanillaLayout(name: String): Any =
         Class.forName("net.minecraft.client.renderer.BindGroupLayouts").getField(name).get(null)
 
-    /** Builds the BindGroupLayout holding the three plane samplers. */
     private fun samplerLayout(): Any {
         val builder = bglClass.getMethod("builder").invoke(null)
         val withSampler = builder.javaClass.getMethod("withSampler", String::class.java)
-        for (name in listOf("Sampler0", "Sampler1", "Sampler3")) {
+        for (name in ["Sampler0", "Sampler1", "Sampler3"]) {
             withSampler.invoke(builder, name)
         }
         return builder.javaClass.getMethod("build").invoke(builder)

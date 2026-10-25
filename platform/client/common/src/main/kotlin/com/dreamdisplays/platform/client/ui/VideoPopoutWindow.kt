@@ -75,7 +75,6 @@ class VideoPopoutWindow(
     override val width: Int get() = impl.width
     override val height: Int get() = impl.height
 
-    /** Opens the window using dimensions from [config] and returns a [VideoFrameSink] for pushing frames. */
     override fun open(config: WindowConfig): VideoFrameSink {
         impl.open(config.initialWidth, config.initialHeight)
         emitEvent(PopoutEvent.Opened(displayId))
@@ -113,7 +112,6 @@ class VideoPopoutWindow(
         if (!wasOpen) emitEvent(PopoutEvent.Opened(displayId))
     }
 
-    /** Closes the window. Safe to call from any thread. */
     override fun close() = impl.close()
 
     private interface PopoutBackend {
@@ -127,12 +125,10 @@ class VideoPopoutWindow(
     }
 
     //? if <26.3 {
-    /** GLFW backend: [open] / [close] go to render thread, [updateFrame] is thread-safe. */
     private class GlfwBackend(private val onClose: () -> Unit) : PopoutBackend {
 
         @Volatile
         private var frontBuf: ByteBuffer = EMPTY_DIRECT
-
         private var backBuf: ByteBuffer = EMPTY_DIRECT
 
         @Volatile
@@ -146,22 +142,18 @@ class VideoPopoutWindow(
 
         @Volatile
         private var contentAspect = 0.0
-
         private val frameVersion = atomic(0L)
         private var uploadedVersion = 0L
 
         @Volatile
         private var windowHandle = 0L
-
         private val winW = atomic(0)
         private val winH = atomic(0)
-
         private var renderer: QuadRenderer? = null
         private var popoutCaps: GLCapabilities? = null
 
         @Volatile
         private var fullscreen = false
-
         private var savedX = 0
         private var savedY = 0
         private var savedW = 0
@@ -337,12 +329,6 @@ class VideoPopoutWindow(
     //?}
 
     //? if >=26.3 {
-    /**
-     * SDL backend for 26.3+ macOS.
-     *
-     * AWT deadlocks the SDL / Metal game window, so we don't use GLFW.
-     * Uploads CPU frames through SDL's renderer (Metal / software) so we never share GL / Vulkan.
-     */
     private class SdlBackend(private val onClose: () -> Unit) : PopoutBackend {
         @Volatile
         private var frontBuf: ByteBuffer = EMPTY_DIRECT
@@ -359,7 +345,6 @@ class VideoPopoutWindow(
 
         @Volatile
         private var contentAspect = 0.0
-
         private val frameVersion = atomic(0L)
         private var uploadedVersion = 0L
 
@@ -370,13 +355,11 @@ class VideoPopoutWindow(
         private var textureW = 0
         private var textureH = 0
         private var textureFormat = 0
-
         private val winW = atomic(0)
         private val winH = atomic(0)
 
         @Volatile
         private var fullscreen = false
-
         private var eventFilter: SDL_EventFilter? = null
 
         override val isOpen: Boolean get() = windowHandle != 0L
@@ -579,7 +562,6 @@ class VideoPopoutWindow(
     }
     //?}
 
-    /** Thread model: [open] / [close] dispatch to AWT Event Dispatch Thread via [SwingUtilities.invokeLater]. */
     private class AwtBackend(private val onClose: () -> Unit) : PopoutBackend {
 
         @Volatile
@@ -587,10 +569,8 @@ class VideoPopoutWindow(
 
         @Volatile
         private var contentAspect = 0.0
-
         private var frame: JFrame? = null
         private var panel: VideoPanel? = null
-
         private val logger = LoggerFactory.getLogger(javaClass)
 
         override val isOpen: Boolean get() = frame?.isDisplayable == true

@@ -7,16 +7,10 @@ import org.slf4j.LoggerFactory
  * against.
  */
 internal class AudioMasterClock(
-    /** Debug label. */
     private val debugLabel: String,
 
-    /** Monotonic time source; injectable so the stall / takeover behavior is testable without sleeping. */
     private val nowNanos: () -> Long = System::nanoTime,
 
-    /**
-     * Asks the audio side to discard this many nanos of pending sound so a line that stalled rejoins
-     * the picture instead of trailing it for the rest of the session (see [nanos]).
-     */
     private val requestAudioResync: (gapNanos: Long) -> Unit = {},
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -97,7 +91,6 @@ internal class AudioMasterClock(
         }
     }
 
-    /** Starts driving the clock from wall time because it has stopped moving on its own. Caller holds [lock]. */
     private fun beginTakeover(sample: AudioSink.ClockSample, now: Long) {
         val stalledForMs = (now - lastOutAdvanceNanos) / 1_000_000
         takeover = true
@@ -110,7 +103,6 @@ internal class AudioMasterClock(
         )
     }
 
-    /** Leaves the wall-time takeover now that the line clock is moving again. Caller holds [lock]. */
     private fun reconcileTakeover(sample: AudioSink.ClockSample, now: Long) {
         val ramp = takeoverAnchorOut + (now - takeoverAnchorWall)
         val behind = ramp - (sample.nanos + bias)

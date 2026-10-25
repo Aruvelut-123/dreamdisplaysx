@@ -20,7 +20,6 @@ import java.util.function.Consumer
  */
 @Unstable
 object DreamDisplaysServer {
-    /** The live implementation; throws while the server API is not loaded yet. */
     private val backend: ServerBackend
         get() = ServerHolder.current
             ?: error("Dream Displays server API is not available yet. Use DreamDisplaysServer.onReady { ... }.")

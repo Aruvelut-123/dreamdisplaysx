@@ -76,9 +76,9 @@ private object WorldGuardBridge {
     }
 
     private fun applicableRegions(location: Location): Iterable<com.sk89q.worldguard.protection.regions.ProtectedRegion> {
-        val world = location.world ?: return emptyList()
+        val world = location.world ?: return []
         val container = com.sk89q.worldguard.WorldGuard.getInstance().platform.regionContainer
-        val regions = container[com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(world)] ?: return emptyList()
+        val regions = container[com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(world)] ?: return []
         val point = com.sk89q.worldedit.bukkit.BukkitAdapter.asBlockVector(location)
         return regions.getApplicableRegions(point)
     }

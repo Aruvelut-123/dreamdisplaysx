@@ -32,7 +32,6 @@ internal object PlacedDisplays {
         /*return mc.timer.getGameTimeDeltaPartialTick(false)*/
     }
 
-    /** The display's blocks in local space: the anchor of [transform] is their minimum corner. */
     private fun localOrigin(transform: PlacementTransform) = BlockPos(transform.anchorX, transform.anchorY, transform.anchorZ)
 
     /** The block that holds the display's blocks' minimum corner: the placement's anchor, or [stored] when unplaced. */

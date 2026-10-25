@@ -38,7 +38,6 @@ object VanillaServerPacketHandler {
         }
     }
 
-    /** Asks a v1-only client to update; v2 players already negotiated and are ignored. */
     private fun onLegacyVersion(player: ServerPlayer) {
         if (V2PlayerTracker.isV2(player.uuid)) return
         VanillaDisplayActions.notifyOutdatedClient(player)

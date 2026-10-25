@@ -23,8 +23,6 @@ internal class FrameSurface(
     private val pixelFormat: FramePixelFormat = FramePixelFormat.RGB24,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    /** Platform GPU upload sink for this channel; holds persistent upload state (e.g. a PBO ring). */
     private val uploader: FrameUploader = uploaderFactory.create()
 
     companion object {
@@ -35,7 +33,6 @@ internal class FrameSurface(
         const val MAX_DISPLAY_QUEUE = 4
     }
 
-    /** Pool retention cap; raised by the prebuffer so its in-flight buffers are reused, not churned. */
     @Volatile
     private var maxReusableBuffers = MAX_REUSABLE_FRAME_BUFFERS
 
@@ -53,12 +50,10 @@ internal class FrameSurface(
 
     @Volatile
     private var displayToleranceNs = 0L
-
     private val textureReady = AtomicBoolean(false)
     private val readyDrops = AtomicLong()
     private val reusableFrameBuffers = ConcurrentLinkedQueue<ByteBuffer>()
     private val reusableCount = AtomicInteger()
-
     private var uploadTotalNs = 0L
     private var uploadMinNs = Long.MAX_VALUE
     private var uploadMaxNs = 0L

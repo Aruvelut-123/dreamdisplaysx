@@ -25,13 +25,11 @@ import java.util.concurrent.TimeUnit
  * binary.
  */
 object YtDlpBinary {
-    /** Logger. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /** Directory holding the bundled binary and its cookie files; shared with [YtCookieManager]. */
     val bundledDir: Path = Path.of("libs", "yt-dlp")
 
-    /** Well-known paths to probe for a system-installed `yt-dlp` binary, in preference order. */
     private val CANDIDATE_PATHS = arrayOf(
         "yt-dlp",
         "/opt/homebrew/bin/yt-dlp",
@@ -40,45 +38,26 @@ object YtDlpBinary {
         "C:\\Program Files\\yt-dlp\\yt-dlp.exe",
     )
 
-    /** Official GitHub release download base URL for `yt-dlp` assets. */
     private const val DOWNLOAD_BASE = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/"
-
-    /** GitHub asset name of the lightweight Python zipapp variant, and its local filename. */
     private const val ZIPAPP_ASSET = "yt-dlp"
-
-    /** Local filename of the lightweight Python zipapp variant. */
     private const val ZIPAPP_NAME = "yt-dlp.pyz"
-
-    /** `yt-dlp` requires CPython >= 3.9; older interpreters are rejected so the zipapp never runs on one. */
     private const val MIN_PYTHON_MINOR = 9
 
-    /** Interpreters probed for the zipapp fast path, in preference order (version-checked before use). */
     private val PYTHON_CANDIDATES: Array<String> =
         if (OsInfo.isWindows) arrayOf("python", "python3", "py")
         else arrayOf("python3", "/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3", "python")
 
-    /**
-     * Re-run `yt-dlp -U` on the bundled binary once it is older than this; a stale binary is a top
-     * cause of "not a bot" / extraction failures since it never self-updates otherwise.
-     */
     private const val BINARY_REFRESH_MS: Long = 1L * 24L * 60L * 60L * 1_000L
 
-    /** Cached resolved binary path, or null if not yet resolved. */
     @Volatile
     private var resolved: String? = null
-
-    /** True when the bundled binary has been checked for self-update this session. */
     private val updateChecked = atomic(false)
 
-    /** Cached full launch prefix (e.g. `[python3, .../yt-dlp.pyz]` or `[binaryPath]`); see [resolveCommand]. */
     @Volatile
     private var resolvedCommand: List<String>? = null
 
-    /** Probed interpreter for the zipapp path: `null` = not yet probed, `""` = none usable. */
     @Volatile
     private var pythonProbe: String? = null
-
-    /** True when the zipapp has been checked for refresh this session. */
     private val zipappUpdateChecked = atomic(false)
 
     /**
@@ -125,28 +104,25 @@ object YtDlpBinary {
         synchronized(this) {
             resolvedCommand?.let { return it }
             val zipapp = if (hasOverride()) null else zipappCommand()
-            val command = zipapp ?: listOf(resolve())
+            val command = zipapp ?: [resolve()]
             resolvedCommand = command
             return command
         }
     }
 
-    /** True when the user pinned a specific binary via `-Ddreamdisplays.ytdlp` / `DREAMDISPLAYS_YTDLP`. */
     private fun hasOverride(): Boolean {
         var o = System.getProperty("dreamdisplays.ytdlp")
         if (o.isNullOrEmpty()) o = System.getenv("DREAMDISPLAYS_YTDLP")
         return !o.isNullOrEmpty()
     }
 
-    /** Builds the `[python, zipapp]` launch prefix, or null when no interpreter / zipapp is available. */
     private fun zipappCommand(): List<String>? {
         val python = usablePython() ?: return null
         val pyz = provisionZipapp() ?: return null
         logger.info("yt-dlp fast path active: {} {}.", python, pyz.fileName)
-        return listOf(python, pyz.toString())
+        return [python, pyz.toString()]
     }
 
-    /** Returns the first CPython >= 3.[MIN_PYTHON_MINOR] from [PYTHON_CANDIDATES], cached; null if none. */
     private fun usablePython(): String? {
         pythonProbe?.let { return it.ifEmpty { null } }
         for (candidate in PYTHON_CANDIDATES) {
@@ -159,7 +135,6 @@ object YtDlpBinary {
         return null
     }
 
-    /** Runs `<exe> --version` and returns true when it reports CPython >= 3.[MIN_PYTHON_MINOR]. */
     private fun pythonVersionOk(exe: String): Boolean {
         return runCatching {
             val p = ProcessBuilder(exe, "--version").redirectErrorStream(true).start()
@@ -180,7 +155,6 @@ object YtDlpBinary {
         }.getOrDefault(false)
     }
 
-    /** Returns the local zipapp path, provisioning it (existing copy or GitHub download) on first use; null on failure. */
     private fun provisionZipapp(): Path? {
         val pyz = bundledDir.resolve(ZIPAPP_NAME)
         if (Files.isRegularFile(pyz)) {
@@ -195,11 +169,6 @@ object YtDlpBinary {
         }.getOrNull()
     }
 
-    /**
-     * Re-downloads the zipapp once per session when it is older than [BINARY_REFRESH_MS]. A stale
-     * yt-dlp is a top cause of extraction failures; the cheap ~3 MB re-download keeps it current
-     * (the binary path has its own `-U` in [maybeSelfUpdate]). Runs in the background, never blocking.
-     */
     private fun maybeRefreshZipapp(pyz: Path) {
         if (!zipappUpdateChecked.compareAndSet(expect = false, update = true)) return
         val age = runCatching {
@@ -217,10 +186,6 @@ object YtDlpBinary {
         }
     }
 
-    /**
-     * If the bundled binary at [bundled] is older than [BINARY_REFRESH_MS], runs `yt-dlp -U` on [executor] to pull the
-     * latest release in the background.
-     */
     private fun maybeSelfUpdate(bundled: Path) {
         if (!updateChecked.compareAndSet(expect = false, update = true)) return
         val age = runCatching {
@@ -246,10 +211,8 @@ object YtDlpBinary {
         }
     }
 
-    /** Returns the expected filename of the bundled binary for the current OS (e.g. `yt-dlp.exe` on Windows). */
     private fun bundledBinaryName(): String = if (OsInfo.isWindows) "yt-dlp.exe" else "yt-dlp"
 
-    /** Returns the GitHub release asset name to download for the current OS and architecture. */
     private fun downloadAssetName(): String = when {
         OsInfo.isWindows -> "yt-dlp.exe"
         OsInfo.isMac -> "yt-dlp_macos"
@@ -258,7 +221,6 @@ object YtDlpBinary {
         else -> "yt-dlp_linux"
     }
 
-    /** Downloads the OS-appropriate `yt-dlp` binary from GitHub to [target] and returns its path. */
     @Throws(IOException::class)
     private fun download(target: Path): String {
         downloadAsset(target, downloadAssetName(), executable = true)
@@ -266,11 +228,6 @@ object YtDlpBinary {
         return target.toString()
     }
 
-    /**
-     * Downloads release [asset] from GitHub to [target] via a temp file + atomic move. When
-     * [executable] is true (native binaries) the file is marked runnable and de-quarantined on
-     * macOS; the zipapp is fetched with it false since it is run through the Python interpreter.
-     */
     @Throws(IOException::class)
     private fun downloadAsset(target: Path, asset: String, executable: Boolean) {
         Files.createDirectories(target.parent)
@@ -296,7 +253,6 @@ object YtDlpBinary {
         }
     }
 
-    /** Returns true if [path] refers to a file that can be executed (or a command on PATH that exits 0). */
     private fun canExecute(path: String): Boolean {
         return runCatching {
             val f = File(path)

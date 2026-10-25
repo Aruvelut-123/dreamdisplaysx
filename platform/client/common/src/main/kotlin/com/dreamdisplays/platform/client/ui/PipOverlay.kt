@@ -49,7 +49,6 @@ class PipOverlay(
 ) : Overlay {
     @Volatile
     private var frontBuf: ByteBuffer = EMPTY_DIRECT
-
     private var backBuf: ByteBuffer = EMPTY_DIRECT
 
     @Volatile
@@ -66,9 +65,7 @@ class PipOverlay(
 
     @Volatile
     private var frameFormat = UploadPixelFormat.RGB24
-
     private var uploadedVersion = 0L
-
     private var dynamicTexture: DynamicTexture? = null
     private var textureId: Identifier? = null
     private var texW = 0;
@@ -84,7 +81,6 @@ class PipOverlay(
     private var targetX: Float = 0f
     private var targetY: Float = 0f
     private var posInitialized = false
-
     private var layoutW = 0
     private var layoutH = 0
 
@@ -100,7 +96,6 @@ class PipOverlay(
         private set
 
     private var lastRenderNanos = 0L
-
     private var wasLeftPressed = false
     private var pressed = false
     private var pressedInBody = false
@@ -113,7 +108,6 @@ class PipOverlay(
     private var dragOffsetX = 0
     private var dragOffsetY = 0
     private var resizeStartFrac = 0f
-
     private var hovering = false
     private var hoveringResize = false
     private var hoveringClose = false
@@ -121,13 +115,10 @@ class PipOverlay(
     val isFinished: Boolean get() = closing && animProgress < 0.01f
     val isDragging: Boolean get() = dragging
 
-    /** Stable identity usable with [Overlay] / [OverlayManager] contracts. */
     override val displayId: DisplayId get() = DisplayId(displayScreen.uuid)
 
-    /** Visible until the close animation has fully played out. */
     override val isVisible: Boolean get() = !isFinished
 
-    /** Current screen-space bounds, valid only after the first [render] call. */
     override val bounds: OverlayBounds
         get() = OverlayBounds(
             x = lastPipX.toFloat(),
@@ -136,21 +127,11 @@ class PipOverlay(
             height = lastPipH.toFloat(),
         )
 
-    /**
-     * [Overlay] contract entry point. Bridges the platform-agnostic call into the existing
-     * Minecraft render path by unwrapping a [MinecraftOverlayRenderContext]; a context of any other
-     * type is ignored (this overlay can only draw through Minecraft's HUD).
-     */
     override fun render(context: OverlayRenderContext) {
         val mc = context as? MinecraftOverlayRenderContext ?: return
         render(mc.mc, mc.graphics, mc.mouseX, mc.mouseY, mc.leftPressed, context.partialTick)
     }
 
-    /**
-     * [Overlay] contract input hook. PiP input is otherwise polled from the render context
-     * (see [handleMouseInput]); this only handles the explicit close request.
-     * @return true if the event was consumed.
-     */
     override fun onEvent(event: OverlayEvent): Boolean = when (event) {
         is OverlayEvent.CloseRequested -> {
             startClose(); true
@@ -477,7 +458,6 @@ class PipOverlay(
         }
     }
 
-    /** Returns the (x, y) top-left position of the resize handle in PiP-local coords. */
     private fun handlePixelPos(pipW: Int, pipH: Int): Pair<Int, Int> {
         val (sx, sy) = anchor.centerFacingCorner()
         val x = when {
@@ -493,7 +473,6 @@ class PipOverlay(
         return x to y
     }
 
-    /** Returns the (x, y) top-left position of the close button, in the corner opposite the resize handle. */
     private fun closeButtonPixelPos(pipW: Int, pipH: Int): Pair<Int, Int> {
         val (cfx, cfy) = anchor.centerFacingCorner()
         val sx = -cfx
@@ -511,7 +490,6 @@ class PipOverlay(
         return x to y
     }
 
-    /** Draws the close ("cross") icon at ([hx], [hy]), tinted red on hover. */
     private fun renderCloseButton(g: GuiGraphicsCompat, hx: Int, hy: Int, alpha: Float) {
         val tint = scaleAlpha(if (hoveringClose) UiTheme.ACCENT_UPDATE else 0xFFFFFFFF.toInt(), alpha)
         val margin = 2
@@ -581,7 +559,6 @@ class PipOverlay(
 
     companion object {
         private val EMPTY_DIRECT: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
-
         private const val MARGIN = 12
         private const val DRAG_THRESHOLD = 4
         private const val MIN_SIZE_FRAC = 0.12f
@@ -592,18 +569,15 @@ class PipOverlay(
         private const val SNAP_LERP_SPEED = 8f
         private const val PIP_Z = 1_000.0
 
-        /** The anchor [ds]'s PiP was last left at, or null when the viewer never moved it. */
         private fun savedAnchor(ds: DisplayScreen): PipAnchor? {
             val name = ClientSettingsStore.getSettings(ds.uuid).pipAnchor ?: return null
             return PipAnchor.entries.firstOrNull { it.name == name }
         }
 
-        /** The size [ds]'s PiP was last left at, or null when the viewer never resized it. */
         private fun savedSizeFraction(ds: DisplayScreen): Float? =
             ClientSettingsStore.getSettings(ds.uuid).pipSizeFraction.takeIf { it > 0f }
     }
 
-    /** Remembers where and how big the viewer just left this PiP. */
     private fun persistGeometry() {
         val settings = ClientSettingsStore.getSettings(displayScreen.uuid)
         settings.pipAnchor = anchor.name
