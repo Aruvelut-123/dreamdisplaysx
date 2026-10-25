@@ -27,7 +27,7 @@ const val V2_CHANNEL: String = "dreamdisplays:v2"
 /**
  * Protocol-v2 networking for the Paper flavor: receives envelope frames on [V2_CHANNEL], answers
  * the [ClientHello] handshake, and sends v2 packets to negotiated players. Business logic is
- * shared with the frozen-v1 path through [DisplayActions].
+ * shared with the other receivers through [DisplayActions].
  */
 @PaperOnly
 @NullMarked

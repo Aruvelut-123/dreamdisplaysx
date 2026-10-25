@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory
 
 /**
  * Protocol-v2 networking for the `Fabric` flavor: one envelope payload in both directions.
- * Business logic is shared with the frozen-v1 receivers through [VanillaDisplayActions].
+ * Business logic is shared with the other receivers through [VanillaDisplayActions].
  */
 @FabricOnly
 object FabricV2Networking {

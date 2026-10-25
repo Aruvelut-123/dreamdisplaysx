@@ -9,79 +9,35 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Instant
 
-/**
- * Shared display data.
- *
- * Per-platform concrete classes ([PaperDisplayData], [VanillaDisplayData]) carry platform-specific
- * position / box types; shared state and identity live on this interface.
- */
+/** Shared display data. */
 interface DisplayData {
-    /** Identifier of the display. */
     val id: UUID
-
-    /** Identifier of the display owner. */
     val ownerId: UUID
-
-    /** Display [width] in blocks. */
     val width: Int
-
-    /** Display [height] in blocks. */
     val height: Int
-
-    /**
-     * How many blocks the screen extends away from the clicked face. `1` for a flat wall.
-     * A staircase of slabs or stairs is deeper, and the client wraps the picture over that volume.
-     */
     val depth: Int get() = 1
-
-    /** True when the screen hugs slabs and stairs instead of a single flat quad. Old rows leave this false. */
     val conforming: Boolean get() = false
-
-    /** Content rotation; only meaningful for floor / ceiling (`UP` / `DOWN`) facings. */
     val rotation: DisplayRotation
-
-    /** True for synthetic displays backing a URL-only fullscreen broadcast; the world position is a placeholder. */
     val virtual: Boolean
-
-    /** The display's URL. */
     var url: String
-
-    /** Data addons keep on this display. */
     val customData: MutableMap<String, ByteArray>
-
-    /** Video's language code. */
     var lang: String
-
-    /** Optional, space-free alias usable anywhere a display ID is accepted. */
     var name: String?
-
-    /** The persistent base playback mode. Source of truth; never [PlaybackMode.WATCH_PARTY]. */
     var mode: PlaybackMode
-
-    /**
-     * Who may change this display. Region membership behind [DisplayAccess.REGION] is resolved live
-     * against the display's location on every permission check, never stored — a stored snapshot goes
-     * stale the moment a region is created, resized, or has its member list edited.
-     */
     var access: DisplayAccess
 
-    /** Legacy mirror of [access] for frozen-v1 peers, which only knew locked / unlocked. */
+    /** Boolean view of [access]: `true` unless everyone may use the display. */
     var isLocked: Boolean
         get() = access != DisplayAccess.EVERYONE
         set(value) {
             access = DisplayAccess.fromLegacyLocked(value)
         }
 
-    /** Duration of the video. */
     var duration: Long?
-
-    /** Pending scheduled-playback start; null when no schedule is set. One-shot, cleared once it fires. */
     var scheduledStart: Instant?
-
-    /** The action ([PlaybackAction.PLAY] / [PlaybackAction.PAUSE]) [scheduledStart] will apply. */
     var scheduledAction: PlaybackAction?
 
-    /** Legacy mirror of [mode] for frozen-v1 peers; true only when the mode is [PlaybackMode.SYNCED]. */
+    /** Boolean view of [mode]: `true` only when the mode is [PlaybackMode.SYNCED]. */
     val isSync: Boolean get() = mode == PlaybackMode.SYNCED
 
     /** Max video height clients must not exceed (0 = uncapped, 360 for [PlaybackMode.BROADCAST]). */
@@ -94,35 +50,14 @@ interface DisplayData {
  */
 val DisplayData.shortLabel: String get() = name ?: id.toString().take(8)
 
-/**
- * Base shared by [PaperDisplayData] and [VanillaDisplayData], holding the mutable playback /
- * content fields common to both so platform subclasses only add their position types.
- */
 abstract class BaseDisplayData(override val virtual: Boolean = false) : DisplayData {
-    /** The display's URL. */
     override var url: String = ""
-
-    /** Data addons keep on this display. */
     override val customData: MutableMap<String, ByteArray> = ConcurrentHashMap()
-
-    /** Video's language code. */
     override var lang: String = ""
-
-    /** Optional, space-free alias usable anywhere a display id is accepted. */
     override var name: String? = null
-
-    /** The persistent base playback mode. */
     override var mode: PlaybackMode = PlaybackMode.LOCAL
-
-    /** Who may change this display. */
     override var access: DisplayAccess = DisplayAccess.DEFAULT
-
-    /** Duration of the video. */
     override var duration: Long? = null
-
-    /** Pending scheduled-playback start; null when no schedule is set. */
     override var scheduledStart: Instant? = null
-
-    /** The action [scheduledStart] will apply. */
     override var scheduledAction: PlaybackAction? = null
 }

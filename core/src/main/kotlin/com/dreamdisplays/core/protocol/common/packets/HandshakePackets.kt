@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import java.util.*
 
-/** Client -> server hello; replaces the legacy `version` packet and advertises capabilities. */
+/** Client -> server hello; advertises the client's capabilities. */
 @Serializable
 data class ClientHello(
     @ProtoNumber(1) val protocolVersion: Int = ProtocolVersion.CURRENT,
