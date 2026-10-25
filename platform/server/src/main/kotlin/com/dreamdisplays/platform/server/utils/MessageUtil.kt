@@ -8,11 +8,13 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.serializer.json.JSONComponentSerializer
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+import net.minecraft.ChatFormatting
 import net.minecraft.core.registries.BuiltInRegistries
 //? if >=1.21.11 {
 import net.minecraft.data.AtlasIds
 //?}
 import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.Style
 //? if >=1.21.11 {
 import net.minecraft.network.chat.contents.objects.AtlasSprite
 import net.minecraft.resources.Identifier
@@ -369,8 +371,30 @@ object MessageUtil {
         player.sendSystemMessage(root)
     }
 
-    private fun parseAmpersandLegacy(text: String): NmsComponent =
-        NmsComponent.literal(text.replace(Regex("&[0-9a-fA-FrRlLoOnNmMkK]"), ""))
+    internal fun parseAmpersandLegacy(text: String): NmsComponent {
+        val root = NmsComponent.literal("")
+        val segment = StringBuilder()
+        var style = Style.EMPTY
+        fun flush() {
+            if (segment.isEmpty()) return
+            root.append(NmsComponent.literal(segment.toString()).withStyle(style))
+            segment.clear()
+        }
+
+        var i = 0
+        while (i < text.length) {
+            val format = if (text[i] == '&' && i + 1 < text.length) ChatFormatting.getByCode(text[i + 1].lowercaseChar()) else null
+            if (format == null) {
+                segment.append(text[i++])
+                continue
+            }
+            flush()
+            style = style.applyLegacyFormat(format)
+            i += 2
+        }
+        flush()
+        return root
+    }
 }
 
 /** Sends this message to [target]; shorthand for [MessageUtil.sendMessage]. */
