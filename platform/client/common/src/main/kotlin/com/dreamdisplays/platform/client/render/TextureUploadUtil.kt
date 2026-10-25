@@ -59,6 +59,7 @@ object TextureUploadUtil {
 
     //? if >=1.21.11 {
     /** Uploads a raw RGB24 video frame to a Minecraft texture. */
+    @Suppress("UNUSED")
     fun uploadRgb(
         texture: GpuTexture,
         src: ByteBuffer,

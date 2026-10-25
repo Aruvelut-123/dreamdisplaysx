@@ -11,6 +11,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline
  * Applies the display pipelines' translucent blend and default depth state across Minecraft versions.
  * 26.x exposes typed builder methods; older versions fall back to reflection.
  */
+@Suppress("UNUSED")
 internal fun RenderPipelineBuilder.withDisplayColorAndDepth(): RenderPipelineBuilder {
     val builderClass = javaClass
     val colorTargetState = runCatching { Class.forName("com.mojang.renderpearl.api.pipeline.ColorTargetState") }.getOrNull()

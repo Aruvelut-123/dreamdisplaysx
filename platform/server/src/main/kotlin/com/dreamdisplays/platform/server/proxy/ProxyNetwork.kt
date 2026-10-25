@@ -14,9 +14,6 @@ object ProxyNetwork {
     /** Last `NetworkSessionList` the proxy sent, for `/display fullscreen list` to merge in. */
     private val lastSessions = AtomicReference<List<NetworkSessionInfo>>(emptyList())
 
-    /** This backend's own name, as assigned by the proxy — null until a [ProxyWelcome] arrives. */
-    fun ownServerName(): String? = ownName.get()
-
     /** Every backend name currently known to the proxy, refreshed on each `ProxyWelcome`. */
     fun serverNames(): Set<String> = names.get()
 

@@ -22,9 +22,4 @@ object ServerVersion {
     val isAtLeast_1_21_11: Boolean by lazy {
         current?.isGreaterThanOrEqualTo("1.21.11") ?: false
     }
-
-    /** True on Minecraft 26.x and newer. */
-    val isAtLeast_26: Boolean by lazy {
-        (current?.major ?: 0) >= 26
-    }
 }

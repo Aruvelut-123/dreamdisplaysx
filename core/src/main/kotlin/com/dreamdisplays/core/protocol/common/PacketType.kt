@@ -63,7 +63,5 @@ enum class PacketType(
         init {
             require(byId.size == entries.size) { "Duplicate protocol packet type ids." }
         }
-
-        fun fromId(id: Int): PacketType? = byId[id]
     }
 }

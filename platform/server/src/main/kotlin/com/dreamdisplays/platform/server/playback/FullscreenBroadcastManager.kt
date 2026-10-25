@@ -173,16 +173,6 @@ object FullscreenBroadcastManager {
         return true
     }
 
-    /** Stops every session hosted on [displayId] (real display only); used when the display itself is deleted. */
-    fun stopByDisplay(displayId: UUID) {
-        sessions.values.filter { !it.virtual && it.display.id == displayId }.forEach { stop(it.sessionId) }
-    }
-
-    /** Stops every live session, e.g. on server shutdown when persistence isn't desired for this run. */
-    fun stopAll() {
-        sessions.keys.toList().forEach(::stop)
-    }
-
     /** Snapshot of live sessions for the `list` subcommand: (sessionId, display id, title, reach count). */
     fun list(): List<FullscreenSessionInfo> = sessions.values.map { session ->
         FullscreenSessionInfo(

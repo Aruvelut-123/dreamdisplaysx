@@ -51,9 +51,6 @@ object ProxyClock {
     /** This backend's best current estimate of the proxy's wall clock. */
     fun proxyNow(): Long = System.currentTimeMillis() + offsetMs.get()
 
-    /** Whether at least one [ClockReply] has been accepted yet. */
-    fun hasSample(): Boolean = lastRttMs.get() != NO_SAMPLE
-
     /** Resets to the unsynced state — called when the proxy connection is (re)initialized. */
     fun reset() {
         offsetMs.set(0L)

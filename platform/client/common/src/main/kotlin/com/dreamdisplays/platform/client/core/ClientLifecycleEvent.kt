@@ -20,15 +20,6 @@ sealed interface ClientLifecycleEvent {
     /** Called when the client is shutting down. */
     data object ShuttingDown : ClientLifecycleEvent
 
-    /** Emitted when the client's display configuration changes, such as when a new monitor is connected or disconnected. */
-    data class LevelLoaded(val levelId: String) : ClientLifecycleEvent
-
-    /** Signifies that a level has been unloaded. */
-    data class LevelUnloaded(val levelId: String) : ClientLifecycleEvent
-
     /** Emitted on every tick of the client's main loop, with the current tick count. */
     data class Tick(val tickCount: Long) : ClientLifecycleEvent
-
-    /** Emitted when the client's focus state changes, with `focused` indicating whether the client is now focused or not. */
-    data class FocusChanged(val focused: Boolean) : ClientLifecycleEvent
 }
