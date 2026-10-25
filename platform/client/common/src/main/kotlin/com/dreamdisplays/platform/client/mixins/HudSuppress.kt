@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 /** Mixin that cancels individual vanilla HUD pieces. */
 @Suppress("NonJavaMixin")
 @Pseudo
-//? if >=26 {
+//? if >=26.2 {
 @Mixin(targets = ["net.minecraft.client.gui.Hud"])
 //?} else
 /*@Mixin(targets = ["net.minecraft.client.gui.Gui"])*/

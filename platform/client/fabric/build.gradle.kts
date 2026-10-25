@@ -86,9 +86,11 @@ val sourceClassTweaker = project(":platform:client:common").file("src/main/resou
 val classTweakerNamespace = if (isLegacyObfuscated) "named" else "official"
 val generatedClassTweaker = layout.buildDirectory.file("generated/classtweaker/dreamdisplays.classtweaker").get().asFile
 run {
-    val rewritten = sourceClassTweaker.readText().lineSequence().joinToString("\n") { line ->
-        if (line.startsWith("classTweaker v1 ")) "classTweaker v1 $classTweakerNamespace" else line
-    }
+    val rewritten = sourceClassTweaker.readText().lineSequence()
+        .filter { hasRenderTypePackage || "net/minecraft/client/renderer/rendertype/" !in it }
+        .joinToString("\n") { line ->
+            if (line.startsWith("classTweaker v1 ")) "classTweaker v1 $classTweakerNamespace" else line
+        }
     if (!generatedClassTweaker.exists() || generatedClassTweaker.readText() != rewritten) {
         generatedClassTweaker.parentFile.mkdirs()
         generatedClassTweaker.writeText(rewritten)
