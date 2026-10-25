@@ -46,7 +46,7 @@ object DreamDisplaysServer {
 
     /**
      * Registers an addon: an instance of a class annotated with `@Addon` (and optionally implementing
-     * `DreamDisplaysAddon`).
+     * `AddonLifecycle`).
      *
      * It is enabled when the API is ready and disabled when the plugin shuts down.
      */

@@ -4,6 +4,7 @@ import com.dreamdisplays.api.Display
 import com.dreamdisplays.api.addon.Addon
 import com.dreamdisplays.api.addon.AddonContext
 import com.dreamdisplays.api.addon.AddonSide
+import com.dreamdisplays.api.addon.AddonLifecycle
 import com.dreamdisplays.api.addon.DreamDisplaysAddon
 import com.dreamdisplays.api.addon.OnDisplay
 import com.dreamdisplays.api.addon.OnFailed
@@ -28,7 +29,7 @@ class AddonManagerTest {
     private val log = mutableListOf<String>()
 
     @Addon(id = "lifecycle", name = "Lifecycle")
-    private inner class Lifecycle : DreamDisplaysAddon {
+    private inner class Lifecycle : AddonLifecycle {
         override fun onEnable(context: AddonContext) {
             log += "enable ${context.id} ${context.side}"
             context.own(AutoCloseable { log += "closed" })
@@ -40,13 +41,53 @@ class AddonManagerTest {
     }
 
     @Addon(id = "broken")
-    private class Broken : DreamDisplaysAddon {
+    private class Broken : AddonLifecycle {
         override fun onEnable(context: AddonContext) = error("boom")
     }
 
     @Addon(id = "server-only", side = AddonSide.SERVER)
-    private class ServerOnly : DreamDisplaysAddon {
+    private class ServerOnly : AddonLifecycle {
         override fun onEnable(context: AddonContext) = error("must not run on the client")
+    }
+
+    @Suppress("DEPRECATION")
+    @Addon(id = "legacy")
+    private inner class Legacy : DreamDisplaysAddon {
+        override fun onEnable(context: AddonContext) {
+            log += "legacy enable"
+        }
+    }
+
+    @Addon(id = "base")
+    private inner class Base : AddonLifecycle {
+        override fun onEnable(context: AddonContext) { log += "base enable" }
+        override fun onDisable() { log += "base disable" }
+    }
+
+    @Addon(id = "dependent", dependsOn = ["base"])
+    private inner class Dependent : AddonLifecycle {
+        override fun onEnable(context: AddonContext) { log += "dependent enable" }
+        override fun onDisable() { log += "dependent disable" }
+    }
+
+    @Addon(id = "orphan", dependsOn = ["missing"])
+    private class Orphan : AddonLifecycle {
+        override fun onEnable(context: AddonContext) = error("must not run without its dependency")
+    }
+
+    @Addon(id = "ping", dependsOn = ["pong"])
+    private class Ping : AddonLifecycle {
+        override fun onEnable(context: AddonContext) = error("must not run in a cycle")
+    }
+
+    @Addon(id = "pong", dependsOn = ["ping"])
+    private class Pong : AddonLifecycle {
+        override fun onEnable(context: AddonContext) = error("must not run in a cycle")
+    }
+
+    @Addon(id = "needs-broken", dependsOn = ["broken"])
+    private class NeedsBroken : AddonLifecycle {
+        override fun onEnable(context: AddonContext) = error("must not run after a failed dependency")
     }
 
     class NotAnAddon
@@ -64,6 +105,52 @@ class AddonManagerTest {
         manager.stop()
 
         assertEquals(["enable lifecycle CLIENT", "disable", "closed"], log)
+        assertTrue(manager.enabledIds.isEmpty())
+    }
+
+    @Test
+    fun `an addon still implementing the deprecated DreamDisplaysAddon gets its hooks`() {
+        val manager = manager()
+        manager.register(Legacy())
+        manager.start()
+        assertEquals(["legacy enable"], log)
+    }
+
+    @Test
+    fun `dependencies are enabled first and disabled last whatever the registration order`() {
+        val manager = manager()
+        manager.register(Dependent())
+        manager.register(Base())
+        manager.start()
+        assertEquals(setOf("base", "dependent"), manager.enabledIds)
+        manager.stop()
+        assertEquals(["base enable", "dependent enable", "dependent disable", "base disable"], log)
+    }
+
+    @Test
+    fun `an addon whose dependency is missing or in a cycle stays disabled`() {
+        val manager = manager()
+        listOf(Orphan(), Ping(), Pong(), Lifecycle()).forEach(manager::register)
+        manager.start()
+        assertEquals(setOf("lifecycle"), manager.enabledIds)
+    }
+
+    @Test
+    fun `an addon waits for a dependency that is registered while running`() {
+        val manager = manager()
+        manager.start()
+        manager.register(Dependent())
+        assertTrue(manager.enabledIds.isEmpty())
+        manager.register(Base())
+        assertEquals(setOf("base", "dependent"), manager.enabledIds)
+    }
+
+    @Test
+    fun `an addon is not enabled when its dependency failed`() {
+        val manager = manager()
+        manager.register(Broken())
+        manager.register(NeedsBroken())
+        manager.start()
         assertTrue(manager.enabledIds.isEmpty())
     }
 

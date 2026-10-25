@@ -3,27 +3,10 @@ package com.dreamdisplays.api.addon
 import com.dreamdisplays.api.Unstable
 
 /**
- * Where an addon runs.
- *
- * @since 1.10.x
- */
-@Unstable
-enum class AddonSide {
-    /** In the game client (`Fabric` / `NeoForge`). */
-    CLIENT,
-
-    /** On the server (`Paper` plugin). */
-    SERVER,
-
-    /** On both; it is enabled wherever `Dream Displays` runs. */
-    BOTH,
-}
-
-/**
  * Marks a class as a `Dream Displays` addon.
  *
  * Register an instance with `DreamDisplays.register(...)` on the client or
- * `DreamDisplaysServer.register(...)` on the server; the class may also implement [DreamDisplaysAddon].
+ * `DreamDisplaysServer.register(...)` on the server; the class may also implement [AddonLifecycle].
  * ```
  * @Addon(
  *     id = "my-addon",
@@ -58,4 +41,12 @@ annotation class Addon(
 
     /** Where the addon runs. */
     val side: AddonSide = AddonSide.BOTH,
+
+    /**
+     * IDs of addons that must be enabled first.
+     *
+     * This addon is enabled after them and disabled before them; if one is
+     * missing, fails or does not run on the same side, this addon stays disabled.
+     */
+    val dependsOn: Array<String> = [],
 )

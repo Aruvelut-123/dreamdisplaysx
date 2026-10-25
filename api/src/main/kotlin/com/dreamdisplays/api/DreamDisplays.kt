@@ -8,6 +8,7 @@ import com.dreamdisplays.api.media.search.MediaSearchService
 import com.dreamdisplays.api.media.source.MediaResolverRegistry
 import com.dreamdisplays.api.platform.identity.Platform
 import com.dreamdisplays.api.watchparty.WatchPartyService
+import com.dreamdisplays.api.addon.AddonLifecycle
 
 /**
  * Entry point of the `Dream Displays` API.
@@ -40,7 +41,7 @@ object DreamDisplays {
 
     /**
      * Registers an addon: an instance of a class annotated with `@Addon` (and optionally implementing
-     * `DreamDisplaysAddon`).
+     * [AddonLifecycle]).
      *
      * It is enabled when the API is ready and disabled when `Dream Displays` shuts down.
      */
