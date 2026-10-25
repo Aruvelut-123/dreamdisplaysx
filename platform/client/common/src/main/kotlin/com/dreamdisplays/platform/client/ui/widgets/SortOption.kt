@@ -1,17 +1,18 @@
 package com.dreamdisplays.platform.client.ui.widgets
 
+import com.dreamdisplays.platform.client.ui.ClientMessage
 import com.dreamdisplays.api.media.search.SortOrder
 import net.minecraft.network.chat.Component
 
 /** Sort / filter choices offered by the suggestions panel's sort dropdown. [RELEVANCE] / [POPULARITY] / [NEWEST] / [STREAMS] re-query; the rest filter locally. */
 enum class SortOption(val labelKey: String, val networkSort: SortOrder) {
-    RELEVANCE("dreamdisplays.sort.relevance", SortOrder.RELEVANCE),
-    POPULARITY("dreamdisplays.sort.popularity", SortOrder.VIEW_COUNT),
-    NEWEST("dreamdisplays.sort.newest", SortOrder.UPLOAD_DATE),
-    STREAMS("dreamdisplays.sort.streams", SortOrder.LIVE),
-    UNWATCHED("dreamdisplays.sort.unwatched", SortOrder.RELEVANCE),
-    WATCHED("dreamdisplays.sort.watched", SortOrder.RELEVANCE),
-    MY_LINKS("dreamdisplays.sort.my_links", SortOrder.RELEVANCE);
+    RELEVANCE(ClientMessage.SORT_RELEVANCE.key, SortOrder.RELEVANCE),
+    POPULARITY(ClientMessage.SORT_POPULARITY.key, SortOrder.VIEW_COUNT),
+    NEWEST(ClientMessage.SORT_NEWEST.key, SortOrder.UPLOAD_DATE),
+    STREAMS(ClientMessage.SORT_STREAMS.key, SortOrder.LIVE),
+    UNWATCHED(ClientMessage.SORT_UNWATCHED.key, SortOrder.RELEVANCE),
+    WATCHED(ClientMessage.SORT_WATCHED.key, SortOrder.RELEVANCE),
+    MY_LINKS(ClientMessage.SORT_MY_LINKS.key, SortOrder.RELEVANCE);
 
     /** True when picking this option should re-run the current search against `YouTube`'s own sort. */
     val refetches: Boolean get() = this == RELEVANCE || this == POPULARITY || this == NEWEST || this == STREAMS

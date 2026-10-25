@@ -50,7 +50,7 @@ import kotlin.math.roundToInt
  */
 class DisplayMenu private constructor(
     val displayScreen: DisplayScreen,
-) : UiScreenBase(Component.translatable("dreamdisplays.ui.title")) {
+) : UiScreenBase(ClientMessage.UI_TITLE.component()) {
 
     private val modLabel = ModTitleLabel()
     private val popout = DreamServices.registry.get<PopoutManager>()
@@ -286,7 +286,7 @@ class DisplayMenu private constructor(
                         key?.let { ScrubPreview.frameAt(it, nanos) }
                     }
                 },
-                waitingLabel = { if (!ds.isVideoStarted) Component.translatable("dreamdisplays.ui.waiting").string else null },
+                waitingLabel = { if (!ds.isVideoStarted) ClientMessage.UI_WAITING.component().string else null },
                 scheduleLabel = { scheduleCountdownText() },
                 chapters = { DisplayChapters.of(ds) },
             ) { nanos ->
@@ -339,8 +339,8 @@ class DisplayMenu private constructor(
             rows = settingsRows(qualityReset, brightnessReset, audio3dReset, syncReset, accessReset),
             ownerActions = [reportButton, deleteButton],
             buttonTooltips = [
-                deleteButton to { buttonTooltip("dreamdisplays.button.delete") },
-                reportButton to { buttonTooltip("dreamdisplays.button.report") },
+                deleteButton to { buttonTooltip(ClientMessage.BUTTON_DELETE.key) },
+                reportButton to { buttonTooltip(ClientMessage.BUTTON_REPORT.key) },
             ],
         )
         errorPanel = ErrorPanel(retryButton, deleteButton, reportButton) { ds.mediaError }
@@ -353,80 +353,80 @@ class DisplayMenu private constructor(
     ): List<SettingsSection.Row> {
         val ds = displayScreen
         return [
-            SettingsSection.Row("dreamdisplays.button.quality", quality, qualityReset) {
+            SettingsSection.Row(ClientMessage.BUTTON_QUALITY.key, quality, qualityReset) {
                 val tip = mutableListOf(
-                    tooltipTitle("dreamdisplays.button.quality.tooltip.1"),
-                    tooltipBody("dreamdisplays.button.quality.tooltip.2"),
+                    tooltipTitle(ClientMessage.BUTTON_QUALITY_TOOLTIP_1.key),
+                    tooltipBody(ClientMessage.BUTTON_QUALITY_TOOLTIP_2.key),
                     Component.literal(""),
-                    tooltipValue("dreamdisplays.button.quality.tooltip.4", qualityFromFraction(quality.value)),
+                    tooltipValue(ClientMessage.BUTTON_QUALITY_TOOLTIP_4.key, qualityFromFraction(quality.value)),
                 )
                 if ((ds.quality.targetHeight ?: 0) > 1080) {
                     tip.add(
-                        Component.translatable("dreamdisplays.button.quality.tooltip.5")
+                        ClientMessage.BUTTON_QUALITY_TOOLTIP_5.component()
                             .withStyle { it.withColor(ChatFormatting.YELLOW) },
                     )
                 }
                 tip
             },
-            SettingsSection.Row("dreamdisplays.button.brightness", brightness, brightnessReset) {
+            SettingsSection.Row(ClientMessage.BUTTON_BRIGHTNESS.key, brightness, brightnessReset) {
                 [
-                    tooltipTitle("dreamdisplays.button.brightness.tooltip.1"),
-                    tooltipBody("dreamdisplays.button.brightness.tooltip.2"),
+                    tooltipTitle(ClientMessage.BUTTON_BRIGHTNESS_TOOLTIP_1.key),
+                    tooltipBody(ClientMessage.BUTTON_BRIGHTNESS_TOOLTIP_2.key),
                     Component.literal(""),
-                    tooltipValue("dreamdisplays.button.brightness.tooltip.3", floor(brightness.value * 100).toInt()),
+                    tooltipValue(ClientMessage.BUTTON_BRIGHTNESS_TOOLTIP_3.key, floor(brightness.value * 100).toInt()),
                 ]
             },
-            SettingsSection.Row("dreamdisplays.button.audio3d", audio3d, audio3dReset) {
+            SettingsSection.Row(ClientMessage.BUTTON_AUDIO3D.key, audio3d, audio3dReset) {
                 [
-                    tooltipTitle("dreamdisplays.button.audio3d.tooltip.1"),
-                    tooltipBody("dreamdisplays.button.audio3d.tooltip.2"),
+                    tooltipTitle(ClientMessage.BUTTON_AUDIO3D_TOOLTIP_1.key),
+                    tooltipBody(ClientMessage.BUTTON_AUDIO3D_TOOLTIP_2.key),
                     Component.literal(""),
-                    tooltipModeBullet("dreamdisplays.mode.audio_off", "dreamdisplays.button.audio3d.tooltip.3"),
-                    tooltipModeBullet("dreamdisplays.mode.audio_enhanced", "dreamdisplays.button.audio3d.tooltip.4"),
-                    tooltipModeBullet("dreamdisplays.mode.audio_advanced", "dreamdisplays.button.audio3d.tooltip.5"),
+                    tooltipModeBullet(ClientMessage.MODE_AUDIO_OFF.key, ClientMessage.BUTTON_AUDIO3D_TOOLTIP_3.key),
+                    tooltipModeBullet(ClientMessage.MODE_AUDIO_ENHANCED.key, ClientMessage.BUTTON_AUDIO3D_TOOLTIP_4.key),
+                    tooltipModeBullet(ClientMessage.MODE_AUDIO_ADVANCED.key, ClientMessage.BUTTON_AUDIO3D_TOOLTIP_5.key),
                     Component.literal(""),
                     tooltipValue(
-                        "dreamdisplays.button.audio3d.tooltip.6",
+                        ClientMessage.BUTTON_AUDIO3D_TOOLTIP_6.key,
                         Component.translatable(audio3dModeLabel(audio3d.mode)),
                     ),
                 ]
             },
-            SettingsSection.Row("dreamdisplays.button.synchronization", sync, syncReset, extraGapBefore = 6) {
+            SettingsSection.Row(ClientMessage.BUTTON_SYNCHRONIZATION.key, sync, syncReset, extraGapBefore = 6) {
                 [
-                    tooltipTitle("dreamdisplays.button.synchronization.tooltip.1"),
-                    tooltipBody("dreamdisplays.button.synchronization.tooltip.2"),
+                    tooltipTitle(ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_1.key),
+                    tooltipBody(ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_2.key),
                     Component.literal(""),
-                    tooltipModeBullet("dreamdisplays.mode.local", "dreamdisplays.button.synchronization.tooltip.3"),
-                    tooltipModeBullet("dreamdisplays.mode.synced", "dreamdisplays.button.synchronization.tooltip.4"),
-                    tooltipModeBullet("dreamdisplays.mode.broadcast", "dreamdisplays.button.synchronization.tooltip.6"),
+                    tooltipModeBullet(ClientMessage.MODE_LOCAL.key, ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_3.key),
+                    tooltipModeBullet(ClientMessage.MODE_SYNCED.key, ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_4.key),
+                    tooltipModeBullet(ClientMessage.MODE_BROADCAST.key, ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_6.key),
                     Component.literal(""),
                     tooltipValue(
-                        "dreamdisplays.button.synchronization.tooltip.5",
+                        ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_5.key,
                         Component.translatable(syncModeLabel(sync.mode)),
                     ),
                 ]
             },
-            SettingsSection.Row("dreamdisplays.button.access", access, accessReset) {
+            SettingsSection.Row(ClientMessage.BUTTON_ACCESS.key, access, accessReset) {
                 buildList {
-                    add(tooltipTitle("dreamdisplays.button.access.tooltip.1"))
-                    add(tooltipBody("dreamdisplays.button.access.tooltip.2"))
+                    add(tooltipTitle(ClientMessage.BUTTON_ACCESS_TOOLTIP_1.key))
+                    add(tooltipBody(ClientMessage.BUTTON_ACCESS_TOOLTIP_2.key))
                     add(Component.literal(""))
-                    add(tooltipModeBullet("dreamdisplays.access.everyone", "dreamdisplays.button.access.tooltip.3"))
+                    add(tooltipModeBullet(ClientMessage.ACCESS_EVERYONE.key, ClientMessage.BUTTON_ACCESS_TOOLTIP_3.key))
                     if (ds.supportsRegionAccess) {
-                        add(tooltipModeBullet("dreamdisplays.access.region", "dreamdisplays.button.access.tooltip.4"))
+                        add(tooltipModeBullet(ClientMessage.ACCESS_REGION.key, ClientMessage.BUTTON_ACCESS_TOOLTIP_4.key))
                     }
-                    add(tooltipModeBullet("dreamdisplays.access.locked", "dreamdisplays.button.access.tooltip.5"))
+                    add(tooltipModeBullet(ClientMessage.ACCESS_LOCKED.key, ClientMessage.BUTTON_ACCESS_TOOLTIP_5.key))
                     if (ds.supportsRegionAccess && !ds.inRegion) {
                         add(Component.literal(""))
                         add(
-                            Component.translatable("dreamdisplays.button.access.tooltip.no_region")
+                            ClientMessage.BUTTON_ACCESS_TOOLTIP_NO_REGION.component()
                                 .withStyle { it.withColor(ChatFormatting.YELLOW) },
                         )
                     }
                     add(Component.literal(""))
                     add(
                         tooltipValue(
-                            "dreamdisplays.button.access.tooltip.6",
+                            ClientMessage.BUTTON_ACCESS_TOOLTIP_6.key,
                             Component.translatable(accessLevelLabel(access.mode)),
                         ),
                     )
@@ -440,9 +440,9 @@ class DisplayMenu private constructor(
         val remainingMs = at - System.currentTimeMillis()
         if (remainingMs <= 0) return null
         val key = if (displayScreen.scheduledAction == PlaybackAction.PAUSE.wire) {
-            "dreamdisplays.ui.schedule_pause"
+            ClientMessage.UI_SCHEDULE_PAUSE.key
         } else {
-            "dreamdisplays.ui.schedule_play"
+            ClientMessage.UI_SCHEDULE_PLAY.key
         }
         return Component.translatable(key, UiText.formatTime(remainingMs * 1_000_000L)).string
     }
@@ -509,8 +509,8 @@ class DisplayMenu private constructor(
         val layout = MenuLayout.compute(width, height, font.lineHeight)
         suggestionsRect = layout.suggestions
 
-        g.drawPanel(font, layout.preview, Component.translatable("dreamdisplays.ui.preview").string)
-        g.drawPanel(font, layout.settings, Component.translatable("dreamdisplays.ui.settings").string)
+        g.drawPanel(font, layout.preview, ClientMessage.UI_PREVIEW.component().string)
+        g.drawPanel(font, layout.settings, ClientMessage.UI_SETTINGS.component().string)
         preview.render(g, layout.preview, mouseX, mouseY)
         settings.render(g, layout.settings)
 
@@ -736,19 +736,19 @@ class DisplayMenu private constructor(
         private const val MIN_CONTENT_H = 410
 
         private fun syncModeLabel(mode: PlaybackMode): String = when (mode) {
-            PlaybackMode.LOCAL -> "dreamdisplays.mode.local"
-            PlaybackMode.SYNCED -> "dreamdisplays.mode.synced"
-            PlaybackMode.WATCH_PARTY -> "dreamdisplays.mode.watch_party"
-            PlaybackMode.BROADCAST -> "dreamdisplays.mode.broadcast"
+            PlaybackMode.LOCAL -> ClientMessage.MODE_LOCAL.key
+            PlaybackMode.SYNCED -> ClientMessage.MODE_SYNCED.key
+            PlaybackMode.WATCH_PARTY -> ClientMessage.MODE_WATCH_PARTY.key
+            PlaybackMode.BROADCAST -> ClientMessage.MODE_BROADCAST.key
         }
 
         private val AUDIO_3D_MODES = [AcousticQuality.OFF, AcousticQuality.ADVANCED, AcousticQuality.ULTRA]
         private val AUDIO_3D_DEFAULT = AcousticQuality.ADVANCED
 
         private fun audio3dModeLabel(quality: AcousticQuality): String = when (quality) {
-            AcousticQuality.OFF -> "dreamdisplays.mode.audio_off"
-            AcousticQuality.ULTRA -> "dreamdisplays.mode.audio_advanced"
-            else -> "dreamdisplays.mode.audio_enhanced"
+            AcousticQuality.OFF -> ClientMessage.MODE_AUDIO_OFF.key
+            AcousticQuality.ULTRA -> ClientMessage.MODE_AUDIO_ADVANCED.key
+            else -> ClientMessage.MODE_AUDIO_ENHANCED.key
         }
 
         private val SYNC_MODES = [PlaybackMode.LOCAL, PlaybackMode.SYNCED, PlaybackMode.BROADCAST]
@@ -761,9 +761,9 @@ class DisplayMenu private constructor(
             }
 
         private fun accessLevelLabel(access: DisplayAccess): String = when (access) {
-            DisplayAccess.EVERYONE -> "dreamdisplays.access.everyone"
-            DisplayAccess.REGION -> "dreamdisplays.access.region"
-            DisplayAccess.LOCKED -> "dreamdisplays.access.locked"
+            DisplayAccess.EVERYONE -> ClientMessage.ACCESS_EVERYONE.key
+            DisplayAccess.REGION -> ClientMessage.ACCESS_REGION.key
+            DisplayAccess.LOCKED -> ClientMessage.ACCESS_LOCKED.key
         }
 
         /** Opens the menu for [displayScreen]. */

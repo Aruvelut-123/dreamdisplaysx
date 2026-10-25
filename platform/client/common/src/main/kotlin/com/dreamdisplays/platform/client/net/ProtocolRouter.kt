@@ -1,12 +1,12 @@
 package com.dreamdisplays.platform.client.net
 
+import com.dreamdisplays.platform.client.ui.ClientMessage
 import com.dreamdisplays.shared.protocol.PacketDirection
 import com.dreamdisplays.core.protocol.common.PacketRegistry
 import com.dreamdisplays.core.protocol.common.packets.*
 import com.dreamdisplays.platform.client.managers.ClientPacketManager
 import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
-import net.minecraft.network.chat.Component
 import org.slf4j.LoggerFactory
 
 /**
@@ -59,7 +59,7 @@ object ProtocolRouter {
         logger.warn("Server runs a Dream Displays version that only supports protocol v1; displays are disabled.")
         val mc = Minecraft.getInstance()
         mc.execute {
-            val message = Component.translatable("dreamdisplays.message.outdated_server")
+            val message = ClientMessage.MESSAGE_OUTDATED_SERVER.component()
                 .withStyle(ChatFormatting.RED)
             //? if >=26.2 {
             mc.gui.chatListener().handleSystemMessage(message, false)

@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.ui.menu
 
+import com.dreamdisplays.platform.client.ui.ClientMessage
 import com.dreamdisplays.api.media.model.DreamMediaException
 import com.dreamdisplays.api.media.model.MediaFailureKind
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
@@ -35,14 +36,14 @@ class ErrorPanel(
         val ex = error()
         val headline = Component.translatable(headlineKey(ex?.kind)).withStyle { it.withColor(ChatFormatting.RED) }
         val detailLines = detailLines(font, ex?.message, textW)
-        val hint = Component.translatable("dreamdisplays.error.loadingerror.hint")
+        val hint = ClientMessage.ERROR_LOADINGERROR_HINT.component()
             .withStyle { it.withColor(ChatFormatting.GRAY) }
         val headerH = UiTheme.PANEL_PADDING_Y + lh + 6
         val detailH = if (detailLines.isEmpty()) 0 else detailLines.size * (lh + 2) + 8
         val contentH = 8 + lh + 8 + detailH + lh + 12 + BUTTON_SIZE
         val panelH = headerH + contentH + UiTheme.PANEL_PADDING_Y
         val panel = UiRect(screenW / 2 - panelW / 2, screenH / 2 - panelH / 2, panelW, panelH)
-        g.drawPanel(font, panel, Component.translatable("dreamdisplays.ui.error").string)
+        g.drawPanel(font, panel, ClientMessage.UI_ERROR.component().string)
 
         var y = panel.y + headerH + 8
         g.drawText(font, headline, screenW / 2 - font.width(headline) / 2, y, UiTheme.TEXT_PRIMARY, false)
@@ -94,12 +95,12 @@ class ErrorPanel(
         private const val MAX_DETAIL_LINES = 3
 
         private fun headlineKey(kind: MediaFailureKind?): String = when (kind) {
-            MediaFailureKind.NETWORK -> "dreamdisplays.error.kind.network"
-            MediaFailureKind.DECODE -> "dreamdisplays.error.kind.decode"
-            MediaFailureKind.NOT_FOUND -> "dreamdisplays.error.kind.notfound"
-            MediaFailureKind.GEO_BLOCKED -> "dreamdisplays.error.kind.geoblocked"
-            MediaFailureKind.TIMEOUT -> "dreamdisplays.error.kind.timeout"
-            else -> "dreamdisplays.error.kind.unknown"
+            MediaFailureKind.NETWORK -> ClientMessage.ERROR_KIND_NETWORK.key
+            MediaFailureKind.DECODE -> ClientMessage.ERROR_KIND_DECODE.key
+            MediaFailureKind.NOT_FOUND -> ClientMessage.ERROR_KIND_NOTFOUND.key
+            MediaFailureKind.GEO_BLOCKED -> ClientMessage.ERROR_KIND_GEOBLOCKED.key
+            MediaFailureKind.TIMEOUT -> ClientMessage.ERROR_KIND_TIMEOUT.key
+            else -> ClientMessage.ERROR_KIND_UNKNOWN.key
         }
     }
 }

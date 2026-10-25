@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.ui.widgets
 
+import com.dreamdisplays.platform.client.ui.ClientMessage
 import com.dreamdisplays.api.media.search.MediaSearchResult
 import com.dreamdisplays.platform.client.input.MouseButtons
 import com.dreamdisplays.platform.client.render.Thumbnails
@@ -42,7 +43,7 @@ import kotlin.math.roundToInt
 class SuggestionsPanel(
     private val onPick: (MediaSearchResult) -> Unit,
     private val controller: SuggestionsController,
-) : UiWidget(Component.translatable("dreamdisplays.button.suggestions")) {
+) : UiWidget(ClientMessage.BUTTON_SUGGESTIONS.component()) {
 
     init {
         controller.onResults = { scrollOffset = 0; scrollOffsetF = 0f; targetScroll = 0 }
@@ -83,9 +84,9 @@ class SuggestionsPanel(
         val f = Minecraft.getInstance().font
         searchBox = EditBox(
             f, 0, 0, 100, SEARCH_H,
-            Component.translatable("dreamdisplays.suggestions.search"),
+            ClientMessage.SUGGESTIONS_SEARCH.component(),
         )
-        searchBox.setHint(Component.translatable("dreamdisplays.suggestions.search"))
+        searchBox.setHint(ClientMessage.SUGGESTIONS_SEARCH.component())
         searchBox.setMaxLength(200)
         clearButton = IconButton(icon = { IconButton.modIcon("cross") }, margin = 4) {
             searchBox.value = ""
@@ -184,7 +185,7 @@ class SuggestionsPanel(
         g.drawText(f, message, x + 10, y + 10, UiTheme.TEXT_PRIMARY, false)
 
         if (!available()) {
-            val notice = Component.translatable("dreamdisplays.suggestions.unavailable").string
+            val notice = ClientMessage.SUGGESTIONS_UNAVAILABLE.component().string
             g.drawText(f, notice, x + 10, stripTop() + 6, UiTheme.TEXT_SECONDARY, false)
             return
         }
@@ -433,7 +434,7 @@ class SuggestionsPanel(
             info.isRecent(7) -> drawCardTag(
                 g,
                 f,
-                Component.translatable("dreamdisplays.ui.new").string,
+                ClientMessage.UI_NEW.component().string,
                 UiTheme.ACCENT_NEW_TAG,
                 UiTheme.TEXT_PRIMARY,
                 thumbX,

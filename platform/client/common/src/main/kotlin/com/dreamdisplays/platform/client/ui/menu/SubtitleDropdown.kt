@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.ui.menu
 
+import com.dreamdisplays.platform.client.ui.ClientMessage
 import com.dreamdisplays.api.media.stream.SubtitleTrack
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplays.platform.client.ui.drawText
@@ -12,7 +13,6 @@ import com.mojang.blaze3d.platform.cursor.CursorTypes
 //?}
 import net.minecraft.client.Minecraft
 import net.minecraft.client.resources.sounds.SimpleSoundInstance
-import net.minecraft.network.chat.Component
 import net.minecraft.sounds.SoundEvents
 import kotlin.math.abs
 import kotlin.math.max
@@ -63,7 +63,7 @@ class SubtitleDropdown(
     private fun maxScrollIndex(): Int = (items.size - MAX_VISIBLE).coerceAtLeast(0)
 
     private fun label(track: SubtitleTrack?): String =
-        track?.displayName ?: track?.lang ?: Component.translatable("dreamdisplays.ui.subtitles_off").string
+        track?.displayName ?: track?.lang ?: ClientMessage.UI_SUBTITLES_OFF.component().string
 
     fun draw(g: GuiGraphicsCompat, anchorCenterX: Int, anchorY: Int, mouseX: Int, mouseY: Int) {
         val now = System.nanoTime()

@@ -1,6 +1,7 @@
 package com.dreamdisplays.platform.client.ui.menu
 
 //? if >=1.21.11 {
+import com.dreamdisplays.platform.client.ui.ClientMessage
 import net.minecraft.client.renderer.RenderPipelines
 //?}
 //? if >=1.21.11 {
@@ -392,7 +393,7 @@ class PreviewSection(
 
     private fun watchOrViewCount(count: Long?, isLive: Boolean): String = count?.let {
         formatCompactCount(it) + " " + Component.translatable(
-            if (isLive) "dreamdisplays.ui.watching" else "dreamdisplays.ui.views_short",
+            if (isLive) ClientMessage.UI_WATCHING.key else ClientMessage.UI_VIEWS_SHORT.key,
         ).string
     } ?: ""
 
@@ -419,7 +420,7 @@ class PreviewSection(
         val badge = PlatformBadge.forPlatform(info.platform)
         val tagText = when {
             badge != null -> Component.translatable(badge.labelKey).string
-            info.isNew -> Component.translatable("dreamdisplays.ui.new").string
+            info.isNew -> ClientMessage.UI_NEW.component().string
             else -> null
         }
         if (tagText != null) {
@@ -441,7 +442,7 @@ class PreviewSection(
         }
         if (info.likes.isNotEmpty()) {
             if (parts.isNotEmpty()) parts.append(" • ")
-            parts.append(info.likes).append(" ").append(Component.translatable("dreamdisplays.ui.likes").string)
+            parts.append(info.likes).append(" ").append(ClientMessage.UI_LIKES.component().string)
         }
         if (!info.published.isNullOrEmpty()) {
             if (parts.isNotEmpty()) parts.append(" • ")

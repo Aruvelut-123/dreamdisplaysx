@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.ui.widgets
 
+import com.dreamdisplays.platform.client.ui.ClientMessage
 import com.dreamdisplays.core.services.keys.MediaServices
 import com.dreamdisplays.api.media.search.MediaSearchResult
 import com.dreamdisplays.api.media.source.YouTubeUrls
@@ -618,10 +619,10 @@ class SuggestionsController {
         /** Results fetched per page; the panel loads another page as the user scrolls near the end. */
         const val PAGE_SIZE = 15
 
-        private const val KEY_LOADING = "dreamdisplays.suggestions.loading"
-        private const val KEY_ERROR = "dreamdisplays.suggestions.error"
-        private const val KEY_EMPTY = "dreamdisplays.suggestions.empty"
-        private const val KEY_NO_LINKS = "dreamdisplays.suggestions.no_links"
+        private val KEY_LOADING = ClientMessage.SUGGESTIONS_LOADING.key
+        private val KEY_ERROR = ClientMessage.SUGGESTIONS_ERROR.key
+        private val KEY_EMPTY = ClientMessage.SUGGESTIONS_EMPTY.key
+        private val KEY_NO_LINKS = ClientMessage.SUGGESTIONS_NO_LINKS.key
         private val logger = LoggerFactory.getLogger(javaClass)
         private val TWITCH_LOGIN_RE = Regex("^[A-Za-z0-9_]{3,25}$")
         private val CHINESE_CHAR_RE = Regex("[一-鿿]")
