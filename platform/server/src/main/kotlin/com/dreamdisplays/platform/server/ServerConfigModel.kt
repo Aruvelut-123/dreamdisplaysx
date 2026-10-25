@@ -39,6 +39,9 @@ data class SettingsSection(
     val particlesEnabled get() = display.particles
     val particleRenderDelay = 2
 
+    val particleColorRgb: Int
+        get() = display.particles_color.trim().removePrefix("#").takeIf { it.length == 6 }?.toIntOrNull(16) ?: 0x00FFFF
+
     // Mod detection
     val modDetectionEnabled get() = display.mod_detection_enabled
 

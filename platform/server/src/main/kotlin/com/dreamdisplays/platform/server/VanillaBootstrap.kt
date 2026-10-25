@@ -3,6 +3,7 @@ package com.dreamdisplays.platform.server
 import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.managers.StorageManager
+import com.dreamdisplays.platform.server.managers.VanillaSelectionVisualizer
 import com.dreamdisplays.platform.server.meta.ServerCoroutines
 import com.dreamdisplays.platform.server.meta.Updater
 import com.dreamdisplays.platform.server.playback.*
@@ -72,6 +73,15 @@ object VanillaBootstrap {
                         FullscreenBroadcastManager.tick()
                         VanillaProxyBridge.tick(server)
                     }
+                }
+            }
+        }
+
+        if (settings.particlesEnabled) {
+            ServerCoroutines.io.launch {
+                while (!server.isStopped) {
+                    delay((settings.particleRenderDelay * 50L).milliseconds)
+                    runCatching { server.execute { VanillaSelectionVisualizer.tick(server) } }
                 }
             }
         }

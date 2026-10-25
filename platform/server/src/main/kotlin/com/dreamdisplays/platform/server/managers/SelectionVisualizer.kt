@@ -29,7 +29,7 @@ object SelectionVisualizer {
                 val player = Bukkit.getPlayer(playerId) ?: return@forEach
                 val p1 = sel.pos1 ?: return@forEach
                 val p2 = sel.pos2 ?: return@forEach
-                showOutline(player, p1, p2)
+                showOutline(player, p1, p2, config.settings.particleColorRgb)
             }
         }, 0L, config.settings.particleRenderDelay.toLong())
     }
