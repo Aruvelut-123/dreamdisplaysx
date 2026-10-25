@@ -84,6 +84,10 @@ sourceSets.create("vendoredLibraries") {
 }
 
 val isLegacyObfuscated = scVersion("minecraft.version").startsWith("1.")
+
+// The rendertype package only exists from 1.21.11.
+val hasRenderTypePackage = (scVersion("minecraft.version").split(".").map { it.toIntOrNull() ?: 0 } + listOf(0, 0, 0))
+    .let { (major, minor, patch) -> major * 1_000_000 + minor * 1_000 + patch >= 1_021_011 }
 if (isLegacyObfuscated) {
     evaluationDependsOn(":platform:client:fabric")
 }
@@ -201,10 +205,12 @@ tasks.processResources {
     val neoForgeLoaderRange = scVersion("neoforge.loader.range")
     val minecraftRange = scVersion("neoforge.minecraft.range")
     val javaVersion = scVersion("java.version")
+    val stripOitMixin = !hasRenderTypePackage
     inputs.property("version", projectVersion)
     inputs.property("neoforgeLoaderRange", neoForgeLoaderRange)
     inputs.property("minecraftRange", minecraftRange)
     inputs.property("javaVersion", javaVersion)
+    inputs.property("stripOitMixin", stripOitMixin)
     filesMatching("META-INF/neoforge.mods.toml") {
         expand(
             mapOf(
@@ -216,6 +222,7 @@ tasks.processResources {
     }
     filesMatching(listOf("dreamdisplays.mixins.json", "dreamdisplays.server.mixins.json")) {
         expand(mapOf("javaVersion" to javaVersion))
+        if (stripOitMixin) filter { line -> if ("\"DisplayOitPhase\"" in line) "" else line }
     }
     filesMatching("assets/dreamdisplays/version.txt") {
         expand(mapOf("version" to projectVersion))

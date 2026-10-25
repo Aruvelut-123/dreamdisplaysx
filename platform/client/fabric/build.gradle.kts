@@ -49,6 +49,10 @@ fun scVersion(name: String): String = scVersions.get(name)
 // year-versioned (deobfuscated) targets resolve the source set directly with plain implementation.
 val isLegacyObfuscated = scVersion("minecraft.version").startsWith("1.")
 
+// The rendertype package only exists from 1.21.11
+val hasRenderTypePackage = (scVersion("minecraft.version").split(".").map { it.toIntOrNull() ?: 0 } + listOf(0, 0, 0))
+    .let { (major, minor, patch) -> major * 1_000_000 + minor * 1_000 + patch >= 1_021_011 }
+
 fun fancyModLoaderVersion(neoForgeVersion: String): String = when (neoForgeVersion) {
     "21.1.233" -> "4.0.42"
     "21.11.42" -> "10.0.36"
@@ -193,17 +197,17 @@ tasks.processResources {
     val projectVersion = project.version.toString()
     val fabricMcVer = scVersion("fabric.minecraft.dependency")
     val javaVersion = scVersion("java.version")
+    val stripOitMixin = !hasRenderTypePackage
     inputs.property("version", projectVersion)
     inputs.property("minecraftVersion", fabricMcVer)
     inputs.property("javaVersion", javaVersion)
+    inputs.property("stripOitMixin", stripOitMixin)
     filesMatching("fabric.mod.json") {
-        expand(mapOf("version" to projectVersion, "minecraftVersion" to fabricMcVer, "javaVersion" to javaVersion))
-    }
-    filesMatching("quilt.mod.json") {
         expand(mapOf("version" to projectVersion, "minecraftVersion" to fabricMcVer, "javaVersion" to javaVersion))
     }
     filesMatching(listOf("dreamdisplays.mixins.json", "dreamdisplays.server.mixins.json")) {
         expand(mapOf("javaVersion" to javaVersion))
+        if (stripOitMixin) filter { line -> if ("\"DisplayOitPhase\"" in line) "" else line }
     }
     filesMatching("assets/dreamdisplays/version.txt") {
         expand(mapOf("version" to projectVersion))
