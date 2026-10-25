@@ -1,7 +1,6 @@
 package com.dreamdisplays.platform.client.ui.menu
 
 //? if >=1.21.11 {
-import com.dreamdisplays.platform.client.ui.ClientMessage
 import net.minecraft.client.renderer.RenderPipelines
 //?}
 //? if >=1.21.11 {
@@ -9,6 +8,7 @@ import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
 import com.dreamdisplays.core.services.keys.MediaServices
+import com.dreamdisplays.platform.client.ui.ClientMessage
 import com.dreamdisplays.api.media.source.CustomMediaUrls
 import com.dreamdisplays.api.media.source.MediaPlatform
 import com.dreamdisplays.api.media.source.MediaSource
