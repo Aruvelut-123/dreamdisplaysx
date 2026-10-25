@@ -25,13 +25,9 @@ object BilibiliUrls {
     /** True when [url] points at a BIlibili VOD, live room, or short link. */
     fun isBilibili(url: String): Boolean = parse(url) != null
 
-    /**
-     * Parses [url] into a [com.dreamdisplays.api.media.source.MediaSource.Bilibili], or null if not recognizable. A `b23.tv` short link
-     * is recognized but left unresolved (no bvid / avid / roomId) — following its redirect needs a
-     * network call, which belongs in [com.dreamdisplays.media.source.bilibili.BilibiliApi], not here.
-     */
+    /** Parses [url] into a Bilibili, or `null` if not recognizable. */
     fun parse(url: String): MediaSource.Bilibili? {
-        val parsed = com.dreamdisplays.api.media.source.MediaHttpUrl.parse(url) ?: com.dreamdisplays.api.media.source.MediaHttpUrl.parse("https://${url.trim()}") ?: return null
+        val parsed = MediaHttpUrl.parse(url) ?: MediaHttpUrl.parse("https://${url.trim()}") ?: return null
         val host = parsed.uri.host?.lowercase(Locale.ROOT)?.removePrefix("www.")?.removePrefix("m.") ?: return null
 
         val normalized = parsed.value
@@ -74,7 +70,6 @@ object BilibiliUrls {
         return null
     }
 
-    /** Returns the value of the `p` (part index) query parameter in [rawQuery], or null when absent. */
     private fun partQueryParam(rawQuery: String?): String? =
         rawQuery?.split('&')?.firstNotNullOfOrNull { pair ->
             val idx = pair.indexOf('=')

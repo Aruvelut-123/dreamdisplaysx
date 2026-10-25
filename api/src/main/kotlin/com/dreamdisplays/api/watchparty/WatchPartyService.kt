@@ -11,8 +11,10 @@ import com.dreamdisplays.api.display.model.property.DisplayId
 @Unstable
 interface WatchPartyService {
     /**
-     * Requests a watch party on [displayId] with [url] (or the display's current video when null),
-     * making the local player host. Returns false if the local client knows it isn't allowed.
+     * Requests a watch party on [displayId] with [url] (or the display's current video when `null`),
+     * making the local player host.
+     *
+     * @return `false` if the local client knows it isn't allowed.
      */
     fun start(displayId: DisplayId, url: String? = null): Boolean
 
@@ -31,6 +33,6 @@ interface WatchPartyService {
     /** Host / owner / admin: closes the session, returning the display to its base mode. */
     fun close(displayId: DisplayId)
 
-    /** The live session on [displayId], or null when none is running. */
+    /** The live session on [displayId], or `null` when none is running. */
     fun getSession(displayId: DisplayId): WatchPartySession?
 }

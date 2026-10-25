@@ -36,6 +36,6 @@ interface Platform {
     /** Platform-specific config, cache, data, and mod paths. */
     val paths: PlatformPaths
 
-    /** True when running in a development environment. */
+    /** `true` when running in a development environment. */
     val isDevEnvironment: Boolean
 }

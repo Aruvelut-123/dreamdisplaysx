@@ -15,10 +15,10 @@ sealed interface VideoQuality {
     /** A specific target height in pixels (e.g. 720, 1080). [height] is always positive. */
     data class Fixed(val height: Int) : VideoQuality
 
-    /** Target height in pixels, or null for [Auto]. */
+    /** Target height in pixels, or `null` for [Auto]. */
     val targetHeight: Int? get() = (this as? Fixed)?.height
 
-    /** Serializes to the persisted/label form: "auto" for [Auto], or the bare height for [Fixed]. */
+    /** Serializes to the persisted / label form. */
     fun serialize(): String = when (this) {
         Auto -> AUTO_LABEL
         is Fixed -> height.toString()
@@ -31,7 +31,7 @@ sealed interface VideoQuality {
         /** Client default when nothing is persisted. */
         val DEFAULT: VideoQuality = Fixed(1080)
 
-        /** Parses a label into [VideoQuality]: null / "auto" -> Auto, digits -> Fixed, else Auto. */
+        /** Parses a label into [VideoQuality]. */
         fun parse(raw: String?): VideoQuality {
             if (raw == null) return Auto
             val trimmed = raw.trim()

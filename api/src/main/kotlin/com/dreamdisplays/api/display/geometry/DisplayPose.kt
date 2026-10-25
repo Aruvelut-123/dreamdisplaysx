@@ -5,7 +5,7 @@ import com.dreamdisplays.api.Unstable
 /**
  * Where a display is and which way it faces.
  *
- * @since 1.10.2
+ * @since 1.10.x
  */
 @Unstable
 data class DisplayPose(

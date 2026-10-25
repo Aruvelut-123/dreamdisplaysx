@@ -4,8 +4,7 @@ import com.dreamdisplays.api.Unstable
 import kotlinx.serialization.Serializable
 
 /**
- * How a display drives its playback timeline. This protocol-v2 enum travels on the wire as its
- * [ordinal] int ([wire] / [fromWire]); ordinals are append-only - never reorder or remove an entry.
+ * How a display drives its playback timeline.
  *
  * @since 1.8.x
  */
@@ -44,12 +43,7 @@ enum class PlaybackMode {
 }
 
 /**
- * Who may change a display's playback and settings. Travels on the wire as its [ordinal] int
- * ([wire] / [fromWire]); ordinals are append-only.
- *
- * The display's owner and server admins always keep access, at every level. [REGION] is resolved
- * live against the `WorldGuard` region the display stands in, so it follows the region's member
- * list as it changes (and grants nobody extra where there is no region).
+ * Who may change a display's playback and settings.
  *
  * @since 1.10.x
  */
@@ -73,13 +67,10 @@ enum class DisplayAccess {
     companion object {
         private val byWire = entries.associateBy { it.ordinal }
 
-        /** The level a display starts at when it is not created inside a region. */
         val DEFAULT: DisplayAccess = LOCKED
 
-        /** The level for [wire], or [DEFAULT] for unknown values (forward-compat with newer peers). */
         fun fromWire(wire: Int): DisplayAccess = byWire[wire] ?: DEFAULT
 
-        /** Maps the frozen-v1 boolean (which only knew locked / unlocked) onto a level. */
         fun fromLegacyLocked(locked: Boolean): DisplayAccess = if (locked) LOCKED else EVERYONE
     }
 }
@@ -143,18 +134,25 @@ enum class PlaybackAction {
 /** A watch-party control sent by a participant ([READY]/[UNREADY]) or the host (everything else). */
 @Unstable
 enum class WatchPartyAction {
-    READY, UNREADY, BEGIN, PAUSE, RESUME, SEEK, END, RESTART, CLOSE;
+    READY,
+    UNREADY,
+    BEGIN,
+    PAUSE,
+    RESUME,
+    SEEK,
+    END,
+    RESTART,
+    CLOSE;
 
     /** The append-only wire value for this action. */
     val wire: Int get() = ordinal
 
-    /** True if any nearby participant (not just the host) may send this action. */
+    /** `true` if any nearby participant (not just the host) may send this action. */
     val isParticipantAction: Boolean get() = this == READY || this == UNREADY
 
     companion object {
         private val byWire = entries.associateBy { it.ordinal }
 
-        /** The action for [wire], or null for unknown values (ignore unknown controls). */
         fun fromWire(wire: Int): WatchPartyAction? = byWire[wire]
     }
 }

@@ -41,7 +41,6 @@ enum class DisplayFacing(val byte: Byte) {
         }
 
     companion object {
-        /** Decodes a [DisplayFacing] from its [byte] wire value; errors on an unknown byte. */
         fun fromByte(byte: Byte): DisplayFacing =
             entries.firstOrNull { it.byte == byte } ?: error("Unknown facing byte: $byte.")
     }

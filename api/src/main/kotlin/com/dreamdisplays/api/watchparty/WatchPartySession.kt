@@ -11,7 +11,7 @@ import com.dreamdisplays.api.playback.model.WatchPartySessionState
  */
 @Unstable
 data class WatchPartySession(
-    /** Short server-assigned id, stable for the lifetime of this session. */
+    /** Short server-assigned ID, stable for the lifetime of this session. */
     val sessionId: String,
 
     /** Current lifecycle state. */
@@ -32,7 +32,7 @@ data class WatchPartySession(
     /** Current playback position in milliseconds. */
     val positionMs: Long,
 
-    /** Milliseconds left in the countdown, or null when not counting down. */
+    /** Milliseconds left in the countdown, or `null` when not counting down. */
     val countdownRemainingMs: Long?,
 ) {
     /** True while the session is counting down to its synchronized start. */

@@ -26,7 +26,7 @@ enum class CommandResult {
      */
     REFUSED;
 
-    /** True when the request was accepted. */
+    /** `true` when the request was accepted. */
     val isOk: Boolean get() = this == OK
 
     /** Runs [action] when the display no longer exists. */

@@ -24,7 +24,6 @@ enum class PlatformId(override val wire: String) : WireEnum {
     UNKNOWN("unknown");
 
     companion object {
-        /** Returns the enum value corresponding to the given wire value, or [UNKNOWN] if not found. */
         fun fromWire(raw: String?): PlatformId = wireEnumValueOf(raw, UNKNOWN, entries)
     }
 }

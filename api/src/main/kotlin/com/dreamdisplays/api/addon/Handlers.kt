@@ -12,6 +12,7 @@ import com.dreamdisplays.api.Unstable
 @Unstable
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.FUNCTION)
+@MustBeDocumented
 annotation class OnDisplay
 
 /**
@@ -24,6 +25,7 @@ annotation class OnDisplay
 @Unstable
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.FUNCTION)
+@MustBeDocumented
 annotation class OnPlaying
 
 /**
@@ -36,6 +38,7 @@ annotation class OnPlaying
 @Unstable
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.FUNCTION)
+@MustBeDocumented
 annotation class OnFailed
 
 /**
@@ -48,6 +51,7 @@ annotation class OnFailed
 @Unstable
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.FUNCTION)
+@MustBeDocumented
 annotation class OnDisplayCreated
 
 /**
@@ -60,6 +64,7 @@ annotation class OnDisplayCreated
 @Unstable
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.FUNCTION)
+@MustBeDocumented
 annotation class OnDisplayRemoved
 
 /**
@@ -72,4 +77,5 @@ annotation class OnDisplayRemoved
 @Unstable
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.FUNCTION)
+@MustBeDocumented
 annotation class OnUrlChanged

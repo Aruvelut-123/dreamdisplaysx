@@ -32,7 +32,11 @@ interface DisplayCustomData {
  */
 @Unstable
 interface MutableDisplayCustomData : DisplayCustomData {
-    /** Stores [value] under [key]. [CommandResult.REFUSED] when the key or the size is not allowed, nothing changes. */
+    /**
+     * Stores [value] under [key].
+     *
+     * [CommandResult.REFUSED] when the key or the size is not allowed, nothing changes.
+     */
     operator fun set(key: String, value: ByteArray): CommandResult
 
     /** Removes [key]. [CommandResult.OK] even when it was not there. */

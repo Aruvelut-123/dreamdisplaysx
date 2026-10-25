@@ -78,17 +78,12 @@ sealed interface MediaSource {
     }
 
     companion object {
-        /**
-         * Parses [url] into a typed source: platform hosts first, then [CustomMediaUrls] for direct streams, else [Remote].
-         */
         fun from(url: String): MediaSource {
             YouTubeUrls.extractVideoId(url)?.let { return YouTube(it) }
 
-            val parsed = com.dreamdisplays.api.media.source.MediaHttpUrl.parse(url) ?: com.dreamdisplays.api.media.source.MediaHttpUrl.parse("https://${url.trim()}")
+            val parsed = MediaHttpUrl.parse(url) ?: MediaHttpUrl.parse("https://${url.trim()}")
             val host = parsed?.uri?.host?.lowercase(Locale.ROOT)
             if (parsed != null && (host == "twitch.tv" || host?.endsWith(".twitch.tv") == true)) {
-                // Store the scheme-normalized URL, never the raw paste: a scheme-less "twitch.tv/x"
-                // would otherwise be rejected by the server's http(s)-only URL policy.
                 val twitchUrl = parsed.value
                 val segments = parsed.uri.path?.split('/')?.filter { it.isNotBlank() } ?: emptyList()
                 when {

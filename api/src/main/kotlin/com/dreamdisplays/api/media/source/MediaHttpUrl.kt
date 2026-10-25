@@ -12,7 +12,7 @@ import java.util.*
 @Unstable
 data class MediaHttpUrl(val value: String) {
     init {
-        require(parseUri(value) != null) { "Invalid HTTP media URL: $value" }
+        require(parseUri(value) != null) { "Invalid HTTP media URL: $value." }
     }
 
     /** Parsed URI view of [value]. */

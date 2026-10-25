@@ -12,11 +12,7 @@ data class Timeline(
     val positionMs: Long,
     val serverTimeMs: Long,
     val paused: Boolean,
-
-    /** Total media duration in ms; 0 means live / unknown. */
     val durationMs: Long = 0,
-
-    /** When true, [positionAt] wraps around [durationMs] forever (Broadcast). */
     val loop: Boolean = false,
 ) {
     /** Position at server-time [nowMs]: advances when running, wraps by [durationMs] when [loop]. */

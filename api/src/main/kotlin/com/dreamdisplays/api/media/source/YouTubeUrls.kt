@@ -16,35 +16,34 @@ import java.util.*
 object YouTubeUrls {
     private val VIDEO_PATH_PREFIXES = setOf("shorts", "embed", "live", "v")
 
-    /** Returns the watch-page URL for [videoId]. */
-    fun watchUrl(videoId: YouTubeVideoId): String = "https://www.youtube.com/watch?v=${videoId.value}"
+    private fun watchUrl(videoId: YouTubeVideoId): String = "https://www.youtube.com/watch?v=${videoId.value}"
 
-    /** Returns the watch-page URL for [videoId]. */
+    /** @return the watch-page URL for [videoId]. */
     fun watchUrl(videoId: String): String = watchUrl(YouTubeVideoId.require(videoId))
 
-    /** Returns the high-quality (480x360) thumbnail URL for [videoId]; always available, unlike sd / maxres. */
+    /** @return the high-quality (480 x 360) thumbnail URL for [videoId]; always available, unlike sd / maxres. */
     fun thumbnailUrl(videoId: YouTubeVideoId): String = "https://i.ytimg.com/vi/${videoId.value}/hqdefault.jpg"
 
-    /** Returns the high-quality (480x360) thumbnail URL for [videoId]; always available, unlike sd / maxres. */
+    /** @return the high-quality (480 x 360) thumbnail URL for [videoId]; always available, unlike sd / maxres. */
     fun thumbnailUrl(videoId: String): String = thumbnailUrl(YouTubeVideoId.require(videoId))
 
-    /** Returns the compact (320x180) thumbnail URL for [videoId]; clean 16:9 and always available. */
+    /** @return the compact (320 x 180) thumbnail URL for [videoId]; clean 16:9 and always available. */
     fun mqThumbnailUrl(videoId: YouTubeVideoId): String = "https://i.ytimg.com/vi/${videoId.value}/mqdefault.jpg"
 
-    /** Returns the compact (320x180) thumbnail URL for [videoId]; clean 16:9 and always available. */
+    /** @return the compact (320 x 180) thumbnail URL for [videoId]; clean 16:9 and always available. */
     fun mqThumbnailUrl(videoId: String): String = mqThumbnailUrl(YouTubeVideoId.require(videoId))
 
-    /** Returns max-res thumbnail URL; verify response since YouTube 200s with placeholder if missing. */
+    /** @return max-res thumbnail URL; verify response since YouTube 200s with placeholder if missing. */
     fun maxResThumbnailUrl(videoId: YouTubeVideoId): String =
         "https://i.ytimg.com/vi/${videoId.value}/maxresdefault.jpg"
 
-    /** Returns the max-resolution thumbnail URL for [videoId]; see the [YouTubeVideoId] overload for caveats. */
+    /** @return the max-resolution thumbnail URL for [videoId]; see the [YouTubeVideoId] overload for caveats. */
     fun maxResThumbnailUrl(videoId: String): String = maxResThumbnailUrl(YouTubeVideoId.require(videoId))
 
     /** Extracts video ID from URL (youtube.com/watch, youtu.be, shorts, embed, live) or bare ID. */
     fun extractVideoId(url: String?): String? = extractVideoIdTyped(url)?.value
 
-    /** Extracts typed video ID from full/schemeless URL or bare ID. */
+    /** Extracts typed video ID from full / schemeless URL or bare ID. */
     fun extractVideoIdTyped(input: String?): YouTubeVideoId? {
         val value = input?.trim() ?: return null
         if (value.isEmpty()) return null
@@ -79,18 +78,15 @@ object YouTubeUrls {
         return null
     }
 
-    /** Parse input as a URI, falling back to https if no scheme is specified. */
     private fun parseInputUri(input: String): URI? {
         val direct = runCatching { URI(input) }.getOrNull()
         if (direct?.scheme != null) return direct
         return runCatching { URI("https://$input") }.getOrNull()
     }
 
-    /** Returns true if [host] is either [root] or [root]."com". */
     private fun isHost(host: String, root: String): Boolean =
         host == root || host.endsWith(".$root")
 
-    /** Returns the `v` (video id) query parameter value in [rawQuery], or null if not found. */
     private fun videoIdQueryParameter(rawQuery: String?): String? =
         rawQuery
             ?.split('&')
@@ -102,7 +98,6 @@ object YouTubeUrls {
                 decode(rawValue)
             }
 
-    /** Decodes [value] using UTF-8. */
     private fun decode(value: String): String =
         runCatching { URLDecoder.decode(value, StandardCharsets.UTF_8.name()) }.getOrDefault(value)
 }

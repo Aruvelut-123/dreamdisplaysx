@@ -7,7 +7,7 @@ import com.dreamdisplays.api.playback.model.PlaybackMode
 import java.util.*
 
 /**
- * Display abstraction for [com.dreamdisplays.media.player.MediaPlayer]; platform-side implementation.
+ * Display abstraction for media player; platform-side implementation.
  *
  * @since 1.8.x
  */

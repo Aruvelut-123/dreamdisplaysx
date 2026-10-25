@@ -15,10 +15,10 @@ interface ServerDisplays : Iterable<ServerDisplay> {
     /** Number of displays in this view. */
     val size: Int
 
-    /** The display with [id], or null. */
+    /** The display with [id], or `null`. */
     operator fun get(id: UUID): ServerDisplay?
 
-    /** The display called [name], or null. */
+    /** The display called [name], or `null`. */
     fun byName(name: String): ServerDisplay?
 
     /** Keeps only displays owned by [owner]. */
