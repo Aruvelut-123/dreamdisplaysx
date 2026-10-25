@@ -1,3 +1,46 @@
+# 1.10.4 Release
+
+## Highlights
+
+- Selection particles now work on `Fabric` and `NeoForge` servers too
+- Fixed `Quilt` support, both single-player and server
+- Fixed missing chat colors in single-player
+- Minor codebase, API improvements and other fixes
+
+## Client
+
+### Features
+
+- API: added `dependsOn` to `@Addon`: an addon is enabled after the addons it depends on and disabled before them
+
+### Improvements
+
+- Updated dependencies
+- Minor codebase improvements
+- Minor improvements in API docs
+
+### Fixes
+
+- Fixed `Dream Displays`' single-player not working on `Quilt`
+- Fixed the crosshair and HUD not hiding when looking at a display on `26.1.2`
+- Removed a harmless "missing class" warning at startup on 1.21.1
+- Fixed `Dream Displays` chat messages losing their colors in single-player
+
+## Server
+
+### Features
+
+- Selection particles now also work on `Fabric` and `NeoForge` servers
+
+### Improvements
+
+- Minor codebase improvements
+
+### Fixes
+
+- Fixed `Dream Displays`' server side not starting on `Quilt`
+- Fixed `particles_color` being ignored: the selection outline was always cyan
+
 # 1.10.3 Release
 
 ## Highlights
