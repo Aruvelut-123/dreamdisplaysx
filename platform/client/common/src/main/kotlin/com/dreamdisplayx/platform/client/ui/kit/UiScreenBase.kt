@@ -185,17 +185,21 @@ abstract class UiScreenBase(title: Component) : Screen(title) {
     //?} else
     /*final override fun render(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) =
         renderScaled(g, mouseX, mouseY, delta)
+
     protected fun drawScreenBackground(g: GuiGraphicsCompat) = renderTransparentBackground(g)
+
     protected fun drawChildren(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, delta: Float) =
         super.render(g, mouseX, mouseY, delta)*/
     //? if <1.21.11 {
     /** 1.21.1 has no `renderTransparentBackground`; a translucent fill over the whole screen matches it. */
     private fun renderTransparentBackground(g: GuiGraphics) =
         g.fillGradient(0, 0, width, height, -1072689136, -804253680)
-    //?}
+
+    /** Hides the vanilla screen background; the signature differs before 1.20.2. */
     //? if <1.20.2 {
-    /** 1.20.1 takes only the graphics argument here; the mouse/delta parameters came later. */
     override fun renderBackground(g: GuiGraphics) {}
     //?} else
     /*override fun renderBackground(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) {}*/
+    //?}
+    //?}
 }
