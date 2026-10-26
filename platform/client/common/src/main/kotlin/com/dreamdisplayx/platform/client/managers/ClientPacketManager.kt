@@ -12,7 +12,6 @@ import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.slf4j.LoggerFactory
 
 /**
@@ -36,7 +35,7 @@ object ClientPacketManager {
     }
 
     /** Sends a raw payload through the platform networking implementation. */
-    fun send(packet: CustomPacketPayload) {
+    fun send(packet: com.dreamdisplayx.platform.client.OutgoingPayload) {
         mod.sendPacket(packet)
     }
 
