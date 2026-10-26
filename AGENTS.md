@@ -7,10 +7,41 @@
 ## Key Architecture
 
 ### Multi-Version Build
-- Uses **Stonecutter** for multi-version builds (1.21.1, 1.21.11, 26.1.2, 26.2, 26.3)
+- Uses **Stonecutter** for multi-version builds (1.20.1, 1.21.1, 1.21.11, 26.1.2, 26.2, 26.3)
 - Active version in `versions/active.txt`
 - Version gates: `//? if >=1.21.11 {}`, `//? if >=26 {}`, `//? if >=26.2 {}`
 - Chisel generates per-version sources into `build/<ver>/generated/chisel/`
+
+### Minecraft 1.20.1 (Fabric only)
+- 1.20.1 predates NeoForge (whose first release targets 1.20.2) and predates the Loom plugin-id split,
+  so it is a **Fabric-only** target driven by **classic Loom 1.10.5** instead of `moddev`. `_build.yml`
+  detects `version_key < (1,21,1)` and skips the NeoForge job for it.
+- **Legacy override source sets**: `platform/<module>/src/legacy/1.20/kotlin/`. A file with the same
+  relative path replaces the `src/main/kotlin` one wholesale; legacy-only files are compiled too. The
+  directory name is matched with `minecraftVersion.startsWith(it.name)`.
+- **Why overrides and `//?` both exist**: PlatformWeaver strips `@PaperOnly` / `@NeoForgeOnly` in
+  `PlatformIrTransformer`, an `IrGenerationExtension` — that is the **IR phase**, long after front-end
+  imports are resolved. So even code that will be stripped must still *parse and resolve*. Any
+  `net.neoforged.*` / `io.papermc.paper.command.brigadier.*` / `com.sk89q.*` reference that 1.20.1's
+  classpath cannot supply needs either a `//? if >=1.21.1` gate on the import **and** the declaration,
+  or a legacy stand-in file. Never re-add a bare import for those packages in shared files.
+- **Never enable the classic-Loom `remapJar`.** Classic Loom is applied to both
+  `:platform:client:common` and `:platform:client:fabric`; `TinyRemapperService` resolves
+  `LoomGradleExtension` through the plugin classloader of whichever module reaches it first, so the
+  second fails with `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`. 1.20.1
+  disables `common`'s remap tasks and treats `fabric:shadowJar` as the shippable artifact (built
+  straight into `build/libs` under the final name). Every other target keeps `devlibs` → `remapJar`.
+- **1.20.1 API differences worth remembering**: no `CustomPacketPayload` / `PayloadTypeRegistry`
+  (`PacketType.create` self-registers and `PlayPacketHandler.receive` takes 3 args:
+  payload, player, sender); no `DataComponents` (`ItemStack.tag` instead); no `ResourceLocation.parse`
+  (`tryParse`); `TextColor.parseColor` returns a nullable `TextColor`; `ServerPlayer.clientInformation()`
+  only exists from 1.20.2; Paper has no `LifecycleEvents.COMMANDS`, no `Particle.DUST` (`REDSTONE`), no
+  `ItemMeta.setEnchantmentGlintOverride`; `paper-api:1.20.1` has no
+  `io.papermc.paper.command.brigadier` package at all.
+- `fabric.mod.json`'s `fabricloader` floor is templated from `fabric.loader.version` — 1.20.1 builds
+  against loader 0.16.x, so a hardcoded `>=0.19` makes the mod unloadable there.
+- The classic-Loom Minecraft artifact does not re-export brigadier, hence
+  `brigadier.version: "1.1.8"` in `versions.json` plus a `compileOnly("com.mojang:brigadier:…")`.
 
 ### Module Structure
 - `api/` — Common API (serializable models, settings, services)
