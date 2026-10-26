@@ -4,6 +4,7 @@ import com.dreamdisplayx.platform.client.DreamIdentifiers
 
 import com.dreamdisplayx.api.media.search.model.MediaChapter
 import com.dreamdisplayx.platform.client.render.ScrubPreview
+import com.dreamdisplayx.platform.client.ui.blitSpriteCompat
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
 import com.dreamdisplayx.platform.client.ui.kit.UiText
@@ -110,12 +111,12 @@ class SeekBar(
         //? if >=1.21.11 {
         g.blitSprite(RenderPipelines.GUI_TEXTURED, trackSprite(), x, y, width, height)
         //?} else
-        /*g.blitSprite(trackSprite(), x, y, width, height)*/
+        /*g.blitSpriteCompat(trackSprite(), x, y, width, height)*/
         val handleX = x + (value * (width - 8).toDouble()).toInt()
         //? if >=1.21.11 {
         g.blitSprite(RenderPipelines.GUI_TEXTURED, handleSprite(), handleX, y, 8, height)
         //?} else
-        /*g.blitSprite(handleSprite(), handleX, y, 8, height)*/
+        /*g.blitSpriteCompat(handleSprite(), handleX, y, 8, height)*/
 
         if (hoverFade > 0.01f) {
             val hoverPct = Mth.clamp((mouseX - (x + 4).toDouble()) / (width - 8).toDouble(), 0.0, 1.0)
@@ -131,7 +132,7 @@ class SeekBar(
                 ARGB.white(GHOST_HANDLE_ALPHA * hoverFade)
             )
             //?} else
-            /*g.blitSprite(HANDLE, hoverX, y, 8, height)*/
+            /*g.blitSpriteCompat(HANDLE, hoverX, y, 8, height)*/
         }
 
         scheduleSuffix.advance()

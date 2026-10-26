@@ -523,7 +523,7 @@ class PipOverlay(
             hx + margin, hy + margin, CLOSE_SZ - margin * 2, CLOSE_SZ - margin * 2, tint,
         )
         //?} else
-        /*g.blitSprite(IconButton.modIcon("cross"), hx + margin, hy + margin, CLOSE_SZ - margin * 2, CLOSE_SZ - margin * 2)*/
+        /*g.blitSpriteCompat(IconButton.modIcon("cross"), hx + margin, hy + margin, CLOSE_SZ - margin * 2, CLOSE_SZ - margin * 2)*/
     }
 
     private fun renderResizeHandle(g: GuiGraphicsCompat, hx: Int, hy: Int, alpha: Float) {

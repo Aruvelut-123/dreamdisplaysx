@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client.ui.widgets
 
 import com.dreamdisplayx.platform.client.DreamIdentifiers
 
+import com.dreamdisplayx.platform.client.ui.blitSpriteCompat
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
 import com.dreamdisplayx.platform.client.ui.widgets.ModeSlider.Companion.PENDING_TIMEOUT_NANOS
@@ -75,13 +76,13 @@ class ModeSlider<T : Any>(
         //? if >=1.21.11 {
         g.blitSprite(RenderPipelines.GUI_TEXTURED, trackSprite(), x, y, width, height)
         //?} else
-        /*g.blitSprite(trackSprite(), x, y, width, height)*/
+        /*g.blitSpriteCompat(trackSprite(), x, y, width, height)*/
         val idx = modes.indexOf(mode).coerceAtLeast(0)
         val handleX = x + ((width - 8) * idx / (modes.size - 1).toDouble()).toInt()
         //? if >=1.21.11 {
         g.blitSprite(RenderPipelines.GUI_TEXTURED, handleSprite(), handleX, y, 8, height)
         //?} else
-        /*g.blitSprite(handleSprite(), handleX, y, 8, height)*/
+        /*g.blitSpriteCompat(handleSprite(), handleX, y, 8, height)*/
         val color = if (active) 0xFFFFFF else 0xA0A0A0
         drawScrollingLabel(g, label(mode).copy().withStyle { it.withColor(color) }, 2)
         //? if >=1.21.11 {

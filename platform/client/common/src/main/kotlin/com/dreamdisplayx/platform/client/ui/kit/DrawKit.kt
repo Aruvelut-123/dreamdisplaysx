@@ -4,6 +4,7 @@ import com.dreamdisplayx.platform.client.DreamIdentifiers
 
 import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
+import com.dreamdisplayx.platform.client.ui.blitSpriteCompat
 import com.dreamdisplayx.platform.client.ui.drawText
 import net.minecraft.client.gui.Font
 //? if >=26 {
@@ -144,7 +145,7 @@ fun GuiGraphicsCompat.drawPanelSprite(r: UiRect, sprite: Identifier = PANEL_SPRI
     //? if >=1.21.11 {
     blitSprite(RenderPipelines.GUI_TEXTURED, sprite, r.x, r.y, r.w, r.h, ARGB.white(alpha))
     //?} else
-    /*blitSprite(sprite, r.x, r.y, r.w, r.h)*/
+    /*blitSpriteCompat(sprite, r.x, r.y, r.w, r.h)*/
 }
 
 /** Draws a nine-slice panel background filling [r] and [title] in the top-left padding corner. */

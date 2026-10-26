@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client.ui.widgets
 
 import com.dreamdisplayx.platform.client.DreamIdentifiers
 
+import com.dreamdisplayx.platform.client.ui.blitSpriteCompat
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
 //? if >=1.21.11 {
@@ -76,8 +77,8 @@ class ValueSlider(
             x + (value * (width - 8).toDouble()).toInt(), y, 8, height,
         )
         //?} else
-        /*g.blitSprite(trackSprite(), x, y, width, height)
-        g.blitSprite(handleSprite(), x + (value * (width - 8).toDouble()).toInt(), y, 8, height)*/
+        /*g.blitSpriteCompat(trackSprite(), x, y, width, height)
+        g.blitSpriteCompat(handleSprite(), x + (value * (width - 8).toDouble()).toInt(), y, 8, height)*/
         val color = if (active) 0xFFFFFF else 0xA0A0A0
         drawScrollingLabel(g, label(value).copy().withStyle { it.withColor(color) }, 2)
         //? if >=1.21.11 {
