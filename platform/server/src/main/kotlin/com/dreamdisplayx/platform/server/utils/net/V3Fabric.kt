@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 @FabricOnly
 object FabricV3Networking {
     fun registerReceivers() {
+        //? if >=1.21 {
         ServerPlayNetworking.registerGlobalReceiver(V3Payload.TYPE) { payload, context ->
             runCatching {
                 PacketRegistry.decodeV3(payload.bytes, PacketDirection.CLIENT_TO_SERVER).forEach {
@@ -17,5 +18,13 @@ object FabricV3Networking {
                 }
             }
         }
+        //?} else
+        /*ServerPlayNetworking.registerGlobalReceiver(V3Payload.TYPE) { payload, player, _ ->
+            runCatching {
+                PacketRegistry.decodeV3(payload.bytes, PacketDirection.CLIENT_TO_SERVER).forEach {
+                    FabricV2Networking.dispatch(player, player.server, it)
+                }
+            }
+        }*/
     }
 }
