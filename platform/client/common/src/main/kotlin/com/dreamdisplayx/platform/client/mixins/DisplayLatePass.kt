@@ -1,7 +1,9 @@
 package com.dreamdisplayx.platform.client.mixins
 
 import com.dreamdisplayx.platform.client.render.UnshadedDisplayPass
+//? if >=1.21.11 {
 import net.minecraft.client.DeltaTracker
+//?}
 import net.minecraft.client.renderer.GameRenderer
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
@@ -20,7 +22,12 @@ open class DisplayLatePass {
         at = [At(value = "CONSTANT", args = ["stringValue=hand"])],
         require = 0,
     )
+    //? if >=1.21.11 {
     open fun onLevelRendered(deltaTracker: DeltaTracker, ci: CallbackInfo) {
         UnshadedDisplayPass.drawPending()
     }
+    //?} else
+    /*open fun onLevelRendered(deltaTracker: Float, ci: CallbackInfo) {
+        UnshadedDisplayPass.drawPending()
+    }*/
 }

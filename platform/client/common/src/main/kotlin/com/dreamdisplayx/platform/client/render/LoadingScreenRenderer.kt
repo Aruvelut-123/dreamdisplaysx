@@ -162,8 +162,10 @@ internal object LoadingScreenRenderer {
     }
 
     private fun vertex(pose: PoseStack.Pose, builder: VertexConsumer, x: Float, y: Float, z: Float, u: Float, v: Float, rgb: Int, alpha: Float) {
-        builder.addVertex(pose, x, y, z).setUv(u, v).setColor(
-            (rgb shr 16) and 255, (rgb shr 8) and 255, rgb and 255, (alpha.coerceIn(0f, 1f) * 255f).toInt(),
+        builder.vertexCompat(
+            pose, x, y, z, u, v,
+            (rgb shr 16) and 255, (rgb shr 8) and 255, rgb and 255,
+            (alpha.coerceIn(0f, 1f) * 255f).toInt(),
         )
     }
 }

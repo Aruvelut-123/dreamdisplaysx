@@ -577,7 +577,17 @@ class SuggestionsPanel(
         /*g.blit(id, x, y, 0f, 0f, w, h, w, h)*/
     }
 
+    //? if >=1.20.2 {
     override fun mouseScrolled(mouseX: Double, mouseY: Double, dx: Double, dy: Double): Boolean {
+        return handleScroll(mouseX, mouseY, dx, dy)
+    }
+    //?} else
+    /*override fun mouseScrolled(mouseX: Double, mouseY: Double, dy: Double): Boolean {
+        return handleScroll(mouseX, mouseY, 0.0, dy)
+    }*/
+
+    /** Shared scroll body for both the two-axis (1.20.2+) and single-axis (1.20.1) hooks. */
+    private fun handleScroll(mouseX: Double, mouseY: Double, dx: Double, dy: Double): Boolean {
         if (!available()) return false
         if (!isMouseOver(mouseX, mouseY)) return false
         val stripTop = stripTop()

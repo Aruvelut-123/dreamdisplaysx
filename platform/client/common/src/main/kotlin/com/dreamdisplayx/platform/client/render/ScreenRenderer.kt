@@ -6,6 +6,9 @@ package com.dreamdisplayx.platform.client.render
 //? if >=26.2 {
 //?} else
 /*import com.mojang.blaze3d.vertex.Tesselator*/
+//? if <1.20.2 {
+import com.mojang.blaze3d.vertex.BufferUploader
+//?}
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.rendertype.RenderType
 //?} else
@@ -502,9 +505,8 @@ object ScreenRenderer : ClientRenderService {
         u: Float,
         v: Float,
     ) {
-        builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, 255)
+        builder.vertexCompat(pose, x, y, z, u, v, r, g, b, 255)
     }
-
     /** Adds a textured vertex with an explicit alpha for transparent danmaku glyphs. */
     private fun addTexturedVertex(
         pose: PoseStack.Pose,
@@ -519,7 +521,7 @@ object ScreenRenderer : ClientRenderService {
         v: Float,
         opacity: Float,
     ) {
-        builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, (opacity.coerceIn(0f, 1f) * 255f).toInt())
+        builder.vertexCompat(pose, x, y, z, u, v, r, g, b, (opacity.coerceIn(0f, 1f) * 255f).toInt())
     }
 
     /** Draws a quad using the given [type] and [appendVertices] function. A bit of a hack. */
@@ -530,22 +532,39 @@ object ScreenRenderer : ClientRenderService {
     /** Compatibility layer for the new immediate mode API. */
     private object ImmediateRenderCompat {
         fun draw(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
+            drawImmediateCompat(stack, type, appendVertices)
+        }
+
+        /** Immediate-mode entry: staged buffers on 26.2+, the shared builder before that. */
+        private fun drawImmediateCompat(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
             //? if >=26.2 {
             draw262(stack, type, appendVertices)
             //?} else
             /*run {
-                //? if <1.21.11 {
                 RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
-                //?}
                 try {
-                    val builder = Tesselator.getInstance().begin(type.mode(), type.format())
-                    appendVertices(stack.last(), builder)
-                    type.draw(builder.buildOrThrow())
+                    drawImmediatePre202(appendVertices, stack, type)
                 } finally {
-                    //? if <1.21.11 {
                     RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
-                    //?}
                 }
+            }*/
+        }
+
+        /** Immediate draw for every version below 26.2, keeping the 1.20.1 builder path separate. */
+        private fun drawImmediatePre202(appendVertices: QuadAppender, stack: PoseStack, type: RenderType) {
+            //? if >=1.20.2 {
+            val builder = Tesselator.getInstance().begin(type.mode(), type.format())
+            appendVertices(stack.last(), builder)
+            type.draw(builder.buildOrThrow())
+            //?} else
+            /*type.setupRenderState()
+            try {
+                val builder = Tesselator.getInstance().builder
+                builder.begin(type.mode(), type.format())
+                appendVertices(stack.last(), builder)
+                BufferUploader.drawWithShader(builder.end())
+            } finally {
+                type.clearRenderState()
             }*/
         }
 

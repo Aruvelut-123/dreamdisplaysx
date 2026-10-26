@@ -157,12 +157,18 @@ abstract class UiScreenBase(title: Component) : Screen(title) {
     protected open fun onMouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean =
         false
 
+    //? if >=1.20.2 {
     final override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
         val mx = mouseX / uiScale
         val my = mouseY / uiScale
         return onMouseScrolled(mx, my, scrollX, scrollY) || super.mouseScrolled(mx, my, scrollX, scrollY)
     }
-
+    //?} else
+    /*final override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollY: Double): Boolean {
+        val mx = mouseX / uiScale
+        val my = mouseY / uiScale
+        return onMouseScrolled(mx, my, 0.0, scrollY) || super.mouseScrolled(mx, my, scrollY)
+    }*/
     final override fun mouseMoved(mouseX: Double, mouseY: Double) =
         super.mouseMoved(mouseX / uiScale, mouseY / uiScale)
 
@@ -179,17 +185,17 @@ abstract class UiScreenBase(title: Component) : Screen(title) {
     //?} else
     /*final override fun render(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) =
         renderScaled(g, mouseX, mouseY, delta)
-
-    // Draws the standard translucent screen background.
     protected fun drawScreenBackground(g: GuiGraphicsCompat) = renderTransparentBackground(g)
-
-    // Renders all registered child widgets (the vanilla `super` pass).
     protected fun drawChildren(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, delta: Float) =
-        super.render(g, mouseX, mouseY, delta)
-
+        super.render(g, mouseX, mouseY, delta)*/
     //? if <1.21.11 {
-    // 1.21.1 strange background remover
-    override fun renderBackground(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) {}
+    /** 1.21.1 has no `renderTransparentBackground`; a translucent fill over the whole screen matches it. */
+    private fun renderTransparentBackground(g: GuiGraphics) =
+        g.fillGradient(0, 0, width, height, -1072689136, -804253680)
     //?}
-    */
+    //? if <1.20.2 {
+    /** 1.20.1 takes only the graphics argument here; the mouse/delta parameters came later. */
+    override fun renderBackground(g: GuiGraphics) {}
+    //?} else
+    /*override fun renderBackground(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) {}*/
 }

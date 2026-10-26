@@ -181,13 +181,17 @@ internal object ConformingScreenDraw {
         b: Int,
         alpha: Int,
     ) {
-        builder.addVertex(
+        builder.vertexCompat(
             pose,
             vertex.x + vertex.ox * clearance,
             vertex.y + vertex.oy * clearance,
             vertex.z + vertex.oz * clearance,
+            vertex.u,
+            vertex.v,
+            r,
+            g,
+            b,
+            alpha.coerceIn(0, 255),
         )
-            .setUv(vertex.u, vertex.v)
-            .setColor(r, g, b, alpha.coerceIn(0, 255))
     }
 }
