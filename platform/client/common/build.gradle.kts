@@ -1,18 +1,34 @@
+import net.fabricmc.loom.api.LoomGradleExtensionAPI
 import support.stonecutter.StonecutterVersions
 
 plugins {
-    id("net.neoforged.moddev")
+    // Both Minecraft provider plugins are declared `apply false` so their jars land on the build
+    // classpath; exactly one of them is applied below depending on the target Minecraft version.
+    id("fabric-loom") apply false
+    id("net.neoforged.moddev") apply false
     id("dreamdisplayx.kotlin-conventions")
-}
-
-repositories {
-    mavenCentral()
-    maven("https://jitpack.io")
-    maven("https://prmaven.neoforged.net/NeoForge/pr3403")
 }
 
 val scVersions = gradle.extensions.getByType<StonecutterVersions>()
 fun scVersion(name: String): String = scVersions.get(name)
+
+/**
+ * Minecraft 1.20.1 predates NeoForge (its first release targets 1.20.2 and its loader was still
+ * published as `net.neoforged:forge`), so the `moddev` plugin cannot supply Minecraft classes for
+ * that target. Classic Fabric Loom can, so 1.20.1 swaps the Minecraft provider while every other
+ * version keeps using `moddev`. The plugin is applied here, before any accessor is touched, because
+ * `apply false` only puts the jar on the classpath and the extension does not exist until the plugin
+ * is actually applied.
+ */
+val isClassicLoomTarget = scVersion("minecraft.version").startsWith("1.20")
+apply(plugin = if (isClassicLoomTarget) "fabric-loom" else "net.neoforged.moddev")
+
+repositories {
+    mavenCentral()
+    maven("https://jitpack.io")
+    maven("https://maven.fabricmc.net/")
+    maven("https://prmaven.neoforged.net/NeoForge/pr3403")
+}
 
 dependencies {
     api(project(":core"))
@@ -42,20 +58,36 @@ dependencies {
         compileOnly("org.lwjgl:lwjgl-sdl:3.4.3")
         compileOnly("org.lwjgl:lwjgl-opengl:3.4.3")
     }
+    if (isClassicLoomTarget) {
+        "minecraft"("com.mojang:minecraft:${scVersion("fabric.minecraft.version")}")
+        "mappings"(
+            project.extensions.getByType(LoomGradleExtensionAPI::class.java).layered {
+                officialMojangMappings()
+                parchment(
+                    scVersions.getOrNull("parchment.dependency")
+                        ?: "org.parchmentmc.data:parchment:${scVersion("minecraft.version")}+build.3"
+                )
+            }
+        )
+        "modImplementation"("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")
+        "modImplementation"("net.fabricmc.fabric-api:fabric-api:${scVersion("fabric.api.version")}")
+    }
 }
 
-neoForge {
-    enable {
-        val neoForm = scVersions.getOrNull("neoform.version")
-        if (neoForm != null) {
-            neoFormVersion = neoForm
-        } else {
-            version = scVersion("neoforge.version")
+if (!isClassicLoomTarget) {
+    configure<net.neoforged.moddevgradle.dsl.NeoForgeExtension> {
+        enable {
+            val neoForm = scVersions.getOrNull("neoform.version")
+            if (neoForm != null) {
+                neoFormVersion = neoForm
+            } else {
+                version = scVersion("neoforge.version")
+            }
         }
+        accessTransformers.from(
+            project(":platform:client:neoforge").file("src/main/resources/META-INF/accesstransformer.cfg"),
+        )
     }
-    accessTransformers.from(
-        project(":platform:client:neoforge").file("src/main/resources/META-INF/accesstransformer.cfg"),
-    )
 }
 
 kotlin {

@@ -9,7 +9,7 @@
 
 Dream DisplaysX 可以把视频、直播和更多媒体直接放进游戏里的显示器，与朋友一起观看。
 
-创建显示器、粘贴链接，就可以开始播放喵~
+创建显示器、粘贴链接，就可以开始播放啦~
 
 [English README](README.en.md) · [项目主页](https://github.com/Aruvelut-123/dreamdisplaysx)
 

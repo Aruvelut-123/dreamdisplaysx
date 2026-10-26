@@ -260,7 +260,10 @@ object NativesDownloader {
     private fun extractTarGz(archive: File, destDir: File) {
         GzipCompressorInputStream(FileInputStream(archive).buffered()).use { gz ->
             TarArchiveInputStream(gz).use { tar ->
-                var entry: TarArchiveEntry? = tar.nextEntry
+                // `nextEntry` is a typed `TarArchiveEntry?` property on commons-compress 1.26+, while
+                // 1.22 (used by the 1.20.1 target) only exposes the untyped `getNextEntry()`. The
+                // explicit cast keeps one source line valid for both.
+                var entry: TarArchiveEntry? = tar.nextEntry as TarArchiveEntry?
                 while (entry != null) {
                     if (entry.isDirectory) {
                         val dir = File(destDir, entry.name)
@@ -270,7 +273,7 @@ object NativesDownloader {
                         file.parentFile.mkdirs()
                         file.outputStream().buffered().use { out -> tar.transferTo(out) }
                     }
-                    entry = tar.nextEntry
+                    entry = tar.nextEntry as TarArchiveEntry?
                 }
             }
         }

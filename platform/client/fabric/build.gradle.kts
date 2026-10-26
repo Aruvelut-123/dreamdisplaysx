@@ -4,8 +4,12 @@ import support.shadow.relocateDreamDisplaysXSharedPackages
 import support.stonecutter.StonecutterVersions
 
 plugins {
-    id("net.fabricmc.fabric-loom") apply false
-    id("net.fabricmc.fabric-loom-remap") apply false
+    // Single-segment `fabric-loom` id is the only one present in every Loom line we build against:
+    // classic 1.10.5 (1.20.1) exports just LoomGradlePlugin, while 1.17.x additionally exports
+    // `net.fabricmc.fabric-loom` / `net.fabricmc.fabric-loom-remap` from the same jar. Declaring
+    // this one `apply false` only puts the jar on the build classpath; the actual plugin is
+    // selected at runtime below.
+    id("fabric-loom") apply false
     id("maven-publish")
     id("dreamdisplayx.kotlin-conventions")
     id("dreamdisplayx.native-resources")
@@ -14,14 +18,20 @@ plugins {
 }
 
 // Loom plugin id depends on whether the target Minecraft is obfuscated.
-// Legacy releases (1.21.11 and older) ship obfuscated -> fabric-loom-remap.
-// Year-versioned releases (26.x) ship deobfuscated -> fabric-loom.
+// Legacy releases (1.21.1 / 1.21.11) ship obfuscated -> fabric-loom-remap.
+// Year-versioned releases (26.x) ship deobfuscated -> net.fabricmc.fabric-loom.
+// Minecraft 1.20.1 predates the id split entirely: classic Loom 1.10.5 publishes only the
+// single-segment `fabric-loom` id (LoomGradlePlugin) and has no remap variant.
 // The plugin version is supplied per Stonecutter version via settings.gradle.kts resolutionStrategy.
 run {
     val mcVersion = gradle.extensions.getByType<StonecutterVersions>().get("minecraft.version")
     val isLegacyObfuscated = mcVersion.startsWith("1.")
-    if (isLegacyObfuscated) apply(plugin = "net.fabricmc.fabric-loom-remap")
-    else apply(plugin = "net.fabricmc.fabric-loom")
+    val isClassicLoomOnly = mcVersion.startsWith("1.20")
+    when {
+        isClassicLoomOnly -> apply(plugin = "fabric-loom")
+        isLegacyObfuscated -> apply(plugin = "net.fabricmc.fabric-loom-remap")
+        else -> apply(plugin = "net.fabricmc.fabric-loom")
+    }
 }
 
 repositories {
@@ -80,9 +90,18 @@ tasks.matching { it.name == "sourcesJar" }.configureEach {
 val sourceClassTweaker = project(":platform:client:common").file("src/main/resources/dreamdisplayx.classtweaker")
 val classTweakerNamespace = if (isLegacyObfuscated) "named" else "official"
 val generatedClassTweaker = layout.buildDirectory.file("generated/classtweaker/dreamdisplayx.classtweaker").get().asFile
+// Minecraft 1.20.1 targets the pre-split Loom line (1.10.x), which predates the `classTweaker v1`
+// format and its parser still insists on a plain `accessWidener v1 <namespace>` header. None of the
+// widened members the newer targets need exist in 1.20.1 (the render pipeline API is not there at
+// all), so the classic variant ships a header-only file; the runtime loader accepts that.
+val isClassicLoom = scVersion("minecraft.version").startsWith("1.20")
 run {
-    val rewritten = sourceClassTweaker.readText().lineSequence().joinToString("\n") { line ->
-        if (line.startsWith("classTweaker v1 ")) "classTweaker v1 $classTweakerNamespace" else line
+    val rewritten = if (isClassicLoom) {
+        "accessWidener v1 $classTweakerNamespace\n"
+    } else {
+        sourceClassTweaker.readText().lineSequence().joinToString("\n") { line ->
+            if (line.startsWith("classTweaker v1 ")) "classTweaker v1 $classTweakerNamespace" else line
+        }
     }
     if (!generatedClassTweaker.exists() || generatedClassTweaker.readText() != rewritten) {
         generatedClassTweaker.parentFile.mkdirs()
