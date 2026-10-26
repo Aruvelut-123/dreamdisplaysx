@@ -1,11 +1,11 @@
 package com.dreamdisplayx.platform.client.render
 
-//? if >=26 {
-//?} else
-/*import com.mojang.blaze3d.systems.RenderSystem*/
-//? if >=26.2 {
-//?} else
-/*import com.mojang.blaze3d.vertex.Tesselator*/
+//? if <26 {
+import com.mojang.blaze3d.systems.RenderSystem
+//?}
+//? if <26.2 {
+import com.mojang.blaze3d.vertex.Tesselator
+//?}
 //? if <1.20.2 {
 import com.mojang.blaze3d.vertex.BufferUploader
 //?}

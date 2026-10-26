@@ -2,7 +2,9 @@ package com.dreamdisplayx.platform.client.ui.widgets
 
 import com.dreamdisplayx.platform.client.DreamIdentifiers
 
+//? if <1.21.11 {
 import com.dreamdisplayx.platform.client.ui.blitSpriteCompat
+//?}
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
 import com.dreamdisplayx.platform.client.ui.widgets.ModeSlider.Companion.PENDING_TIMEOUT_NANOS

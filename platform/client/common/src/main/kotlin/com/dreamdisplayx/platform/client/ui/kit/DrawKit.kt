@@ -4,7 +4,9 @@ import com.dreamdisplayx.platform.client.DreamIdentifiers
 
 import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
+//? if <1.21.11 {
 import com.dreamdisplayx.platform.client.ui.blitSpriteCompat
+//?}
 import com.dreamdisplayx.platform.client.ui.drawText
 import net.minecraft.client.gui.Font
 //? if >=26 {

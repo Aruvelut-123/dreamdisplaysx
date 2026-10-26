@@ -4,7 +4,9 @@ import com.dreamdisplayx.platform.client.DreamIdentifiers
 
 import com.dreamdisplayx.api.media.search.model.MediaChapter
 import com.dreamdisplayx.platform.client.render.ScrubPreview
+//? if <1.21.11 {
 import com.dreamdisplayx.platform.client.ui.blitSpriteCompat
+//?}
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
 import com.dreamdisplayx.platform.client.ui.kit.UiText
