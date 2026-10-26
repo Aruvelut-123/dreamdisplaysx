@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import support.chisel.chiselSource
 import support.stonecutter.StonecutterVersions
+import java.io.File
 import java.util.*
 
 /** `Stonecutter` conventions for Kotlin projects. */
@@ -135,21 +136,52 @@ run {
     val sourceDir = layout.projectDirectory.dir("src/main/kotlin").asFile
     val chiselDir = layout.buildDirectory.dir("generated/chisel/main/kotlin")
 
-    val chiselSource = tasks.register("chiselSource") {
+    /*
+     * Legacy source overlay.
+     *
+     * Some Minecraft targets predate APIs the shared source is written against (1.20.1 has no
+     * `CustomPacketPayload` / `StreamCodec` / registry-backed `FriendlyByteBuf`, and no
+     * `RenderPipeline` at all). Rewriting `src/main/kotlin` for those targets would either break the
+     * modern builds or force an unreadable thicket of `//? if` directives into every file, so a
+     * target can instead ship a complete replacement for individual files under
+     * `src/legacy/<version-prefix>/kotlin/`. A file present there wins over its `src/main/kotlin`
+     * counterpart for matching versions only, and files that exist *only* there (a legacy-only
+     * class with no modern equivalent) are emitted too. Directories that no active version matches
+     * are never read, so every modern target compiles the exact same source it did before.
+     */
+    val legacyRoot = layout.projectDirectory.dir("src/legacy").asFile
+    val legacySourceDir = legacyRoot.listFiles()
+        ?.filter { it.isDirectory && minecraftVersion.startsWith(it.name) }
+        ?.map { File(it, "kotlin") }
+        ?.firstOrNull { it.isDirectory }
+
+    val chiselSourceTask = tasks.register("chiselSource") {
         val outDir = chiselDir.get().asFile
         if (sourceDir.exists()) {
             inputs.dir(sourceDir).withPathSensitivity(PathSensitivity.RELATIVE)
         }
+        legacySourceDir?.let { inputs.dir(it).withPathSensitivity(PathSensitivity.RELATIVE) }
         inputs.property("minecraftVersion", minecraftVersion)
         outputs.dir(chiselDir)
         doLast {
             outDir.deleteRecursively()
             outDir.mkdirs()
-            if (!sourceDir.exists()) return@doLast
-            sourceDir.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file ->
-                val target = outDir.resolve(file.relativeTo(sourceDir).path)
+            val overlay = legacySourceDir
+            fun emit(file: java.io.File, relative: String) {
+                val target = outDir.resolve(relative)
                 target.parentFile.mkdirs()
                 target.writeText(chiselSource(file.readLines(), minecraftVersion))
+            }
+            if (sourceDir.exists()) {
+                sourceDir.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file ->
+                    val relative = file.relativeTo(sourceDir).path
+                    emit(overlay?.resolve(relative)?.takeIf { it.isFile } ?: file, relative)
+                }
+            }
+            // Legacy-only classes have no `src/main/kotlin` counterpart to be replaced.
+            overlay?.walkTopDown()?.filter { it.isFile && it.extension == "kt" }?.forEach { file ->
+                val relative = file.relativeTo(overlay).path
+                if (!File(sourceDir, relative).isFile) emit(file, relative)
             }
         }
     }
@@ -167,7 +199,7 @@ run {
         val mainSourceDirs = kotlinExtension.sourceSets.getByName("main").kotlin.srcDirs
         val otherDirs = mainSourceDirs.filterNot { it.absolutePath == sourceDir.absolutePath }
         tasks.named<KotlinCompile>("compileKotlin") {
-            dependsOn(chiselSource)
+            dependsOn(chiselSourceTask)
             setSource(listOf(chiselDir) + otherDirs)
         }
     }
