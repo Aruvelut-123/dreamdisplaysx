@@ -166,12 +166,24 @@ class Client : ClientModInitializer, Mod {
                 deltaTracker.getGameTimeDeltaPartialTick(false)
             )
         }
-        //?} else
-        /*HudRenderCallback.EVENT.register { graphics, deltaTracker ->
+        //?}
+        // 1.21/1.21.1 keep HudRenderCallback but already hand over a DeltaTracker.
+        //? if >=1.21 && <1.21.11 {
+        HudRenderCallback.EVENT.register { graphics, deltaTracker ->
+            Initializer.onRenderHud(
+                Minecraft.getInstance(), graphics,
+                deltaTracker.getGameTimeDeltaPartialTick(false)
+            )
+        }
+        //?}
+        // 1.20.1 still passes a raw partial tick as a float.
+        //? if <1.21 {
+        HudRenderCallback.EVENT.register { graphics, deltaTracker ->
             Initializer.onRenderHud(
                 Minecraft.getInstance(), graphics, deltaTracker
             )
-        }*/
+        }
+        //?}
 
         ClientTickEvents.END_CLIENT_TICK.register { Initializer.onEndTick(it) }
 

@@ -13,7 +13,7 @@ import net.minecraft.network.chat.TextColor
 object TextColorCompat {
     @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
     fun parse(value: String): TextColor? =
-//? if >=1.21.11 {
+//? if >=1.21 {
         TextColor.parseColor(value).result().orElse(null)
 //?} else
         /*TextColor.parseColor(value)*/
