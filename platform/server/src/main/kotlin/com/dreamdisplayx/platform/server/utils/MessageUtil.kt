@@ -246,7 +246,7 @@ object MessageUtil {
     private fun MutableComponent.withJsonStyle(value: Map<*, *>): MutableComponent = withStyle { base ->
         var style = base
         value.string("color")?.let { color ->
-            val parsedColor = net.minecraft.network.chat.TextColor.parseColor(color).result().orElse(null)
+            val parsedColor = TextColorCompat.parse(color)
             if (parsedColor != null) style = style.withColor(parsedColor)
         }
         value.bool("bold")?.let { style = style.withBold(it) }
@@ -316,7 +316,7 @@ object MessageUtil {
             if (textBefore.isNotEmpty()) root.append(parseAmpersandLegacy(textBefore))
             val index = match.groupValues[1].toIntOrNull()
             if (index != null && index < materialKeys.size) {
-                val itemId = Identifier.parse(materialKeys[index])
+                val itemId = DreamIdentifiers.parse(materialKeys[index])
                 val spriteComponent =
                     //? if >=1.21.11 {
                     run {

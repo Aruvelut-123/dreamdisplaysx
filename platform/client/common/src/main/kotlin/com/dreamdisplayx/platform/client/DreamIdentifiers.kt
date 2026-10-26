@@ -19,6 +19,19 @@ object DreamIdentifiers {
 
     /** Builds `minecraft:path`. */
     fun vanilla(path: String): Identifier = construct("minecraft", path)
+
+    /**
+     * Parses `namespace:path` (or a bare `path`, which implies `minecraft`).
+     *
+     * 1.21 replaced the string-splitting `ResourceLocation` constructor with the
+     * `Identifier.parse` factory; 1.20.1 only has the constructor that rejects a missing namespace,
+     * so the split happens here once instead of at every call site.
+     */
+    fun parse(value: String): Identifier {
+        val separator = value.indexOf(':')
+        return if (separator >= 0) construct(value.substring(0, separator), value.substring(separator + 1))
+        else construct("minecraft", value)
+    }
 }
 
 /** Constructs an identifier from a namespace and a path (spelling differs by Minecraft era). */

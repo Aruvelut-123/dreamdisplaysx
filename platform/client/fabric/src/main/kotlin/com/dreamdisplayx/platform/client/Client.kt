@@ -56,7 +56,9 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
+//? if >=1.21 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
+//?}
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
 
@@ -82,6 +84,7 @@ class Client : ClientModInitializer, Mod {
         // which runs on both integrated and dedicated servers, before the client entrypoint.
 
         // Protocol v2: every packet arrives as one opaque envelope payload
+        //? if >=1.21 {
         ClientPlayNetworking.registerGlobalReceiver(V2Payload.TYPE) { payload, _ ->
             Initializer.onV2Packet(payload.bytes)
         }
@@ -93,6 +96,17 @@ class Client : ClientModInitializer, Mod {
         ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID) { _, _ ->
             Initializer.onLegacyServerDetected()
         }
+        //?} else
+        /*ClientPlayNetworking.registerGlobalReceiver(V2Payload.TYPE) { payload, _, _ ->
+            Initializer.onV2Packet(payload.bytes)
+        }
+        ClientPlayNetworking.registerGlobalReceiver(V3Payload.TYPE) { payload, _, _ ->
+            Initializer.onV3Packet(payload.bytes)
+        }
+
+        ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID) { _, _, _, _ ->
+            Initializer.onLegacyServerDetected()
+        }*/
 
         //? if >=26 {
         LevelRenderEvents.BEFORE_GIZMOS.register { context ->
@@ -154,8 +168,7 @@ class Client : ClientModInitializer, Mod {
         //?} else
         /*HudRenderCallback.EVENT.register { graphics, deltaTracker ->
             Initializer.onRenderHud(
-                Minecraft.getInstance(), graphics,
-                deltaTracker.getGameTimeDeltaPartialTick(false)
+                Minecraft.getInstance(), graphics, deltaTracker
             )
         }*/
 
@@ -242,7 +255,7 @@ class Client : ClientModInitializer, Mod {
     /*private fun clientLiteral(name: String) = ClientCommandManager.literal(name)*/
 
     /** Packet sender. */
-    override fun sendPacket(packet: CustomPacketPayload) {
+    override fun sendPacket(packet: OutgoingPayload) {
         ClientPlayNetworking.send(packet)
     }
 

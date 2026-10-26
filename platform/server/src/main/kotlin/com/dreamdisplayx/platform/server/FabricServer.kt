@@ -83,6 +83,7 @@ class Server : ModInitializer {
 
     /** Registers all custom payload types for clientbound and serverbound play channels. */
     private fun registerPayloadTypes() {
+        //? if >=1.21 {
         runCatching {
             payloadRegistry("clientboundPlay", "playS2C").let { clientbound ->
                 registerPayload(clientbound, V2Payload.TYPE, V2Payload.CODEC)
@@ -90,7 +91,6 @@ class Server : ModInitializer {
                 registerPayload(clientbound, ProxyPayload.TYPE, ProxyPayload.CODEC)
                 registerPayload(clientbound, LegacyProbe.Premium.PACKET_ID, LegacyProbe.Premium.PACKET_CODEC)
             }
-
             payloadRegistry("serverboundPlay", "playC2S").let { serverbound ->
                 registerPayload(serverbound, V2Payload.TYPE, V2Payload.CODEC)
                 registerPayload(serverbound, V3Payload.TYPE, V3Payload.CODEC)
@@ -101,8 +101,11 @@ class Server : ModInitializer {
             logger.error("Failed to register payload types.", e)
             throw e
         }
+        //?} else
+        /*Unit*/
     }
 
+    //? if >=1.21 {
     private fun payloadRegistry(vararg methodNames: String): Any {
         val type = PayloadTypeRegistry::class.java
         val method = methodNames.firstNotNullOfOrNull { name ->
@@ -117,6 +120,7 @@ class Server : ModInitializer {
         }
         register.invoke(registry, packetId, packetCodec)
     }
+    //?}
 
     companion object {
         /** Logger. */
