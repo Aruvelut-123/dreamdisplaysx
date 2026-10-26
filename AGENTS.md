@@ -42,6 +42,25 @@
   against loader 0.16.x, so a hardcoded `>=0.19` makes the mod unloadable there.
 - The classic-Loom Minecraft artifact does not re-export brigadier, hence
   `brigadier.version: "1.1.8"` in `versions.json` plus a `compileOnly("com.mojang:brigadier:…")`.
+- **Gates must key off the release that actually changed the API, not the next LTS.** Two bugs in this
+  port came from pinning `>=1.21.11` when the break happened earlier, silently making 1.21.1 compile the
+  newer spelling:
+  - `TextColor.parseColor(String)` returns `DataResult<TextColor>` from **1.21**, not 1.21.11; 1.20.1
+    still returns a nullable `TextColor`.
+  - Fabric's `HudRenderCallback.onHudRender` second parameter is `float` in 1.20.1 and already a
+    `DeltaTracker` in **1.21/1.21.1** (0.92.6 vs 0.116.12 `fabric-rendering-v1`); `HudElementRegistry`
+    only arrives at 1.21.11. So the HUD hook needs three flat scopes:
+    `>=1.21.11` → `HudElementRegistry`, `>=1.21 && <1.21.11` → `HudRenderCallback` +
+    `getGameTimeDeltaPartialTick(false)`, `<1.21` → `HudRenderCallback` + raw float.
+  Verify with `javap` against the cached merged jars under
+  `~/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-merged/<ver>-*/` before gating.
+- **`org.gradle.configuration-cache=true` breaks the classic-Loom targets in CI.** `remapJar`
+  serializes `__tinyRemapperServiceOptions__`, which resolves `LoomGradleExtension` through the plugin
+  classloader of whichever module reached it first — the second one fails with
+  `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`. Setting
+  `enabled = false` on the task does **not** skip the property serialization, and `tasks.remove()` is
+  rejected by Gradle. `_build.yml` therefore appends `--no-configuration-cache` for Fabric-only targets
+  and local 1.20.1 builds must pass it too.
 
 ### Module Structure
 - `api/` — Common API (serializable models, settings, services)
