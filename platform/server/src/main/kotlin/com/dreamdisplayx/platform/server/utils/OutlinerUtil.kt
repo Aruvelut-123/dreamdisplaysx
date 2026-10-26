@@ -139,7 +139,10 @@ object OutlinerUtil {
             val z = from.z + (to.z - from.z) * t
 
             player.spawnParticle(
+                //? if >=1.21 {
                 Particle.DUST,
+                //?} else
+                /*Particle.REDSTONE,*/
                 x, y, z,
                 1, 0.0, 0.0, 0.0, 0.0,
                 dustOptions

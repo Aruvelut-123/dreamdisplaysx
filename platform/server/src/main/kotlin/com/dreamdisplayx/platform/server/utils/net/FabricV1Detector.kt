@@ -15,6 +15,7 @@ object FabricV1Detector {
     private val notified = ConcurrentHashMap.newKeySet<java.util.UUID>()
 
     fun register() {
+        //? if >=1.21 {
         ServerPlayNetworking.registerGlobalReceiver(LegacyProbe.Version.PACKET_ID) { _, context ->
             val player = context.player()
             if (V2PlayerTracker.isV2(player.uuid)) return@registerGlobalReceiver
@@ -22,5 +23,12 @@ object FabricV1Detector {
                 MessageUtil.sendMessage(player, "outdatedClient")
             }
         }
+        //?} else
+        /*ServerPlayNetworking.registerGlobalReceiver(LegacyProbe.Version.PACKET_ID) { _, player, _ ->
+            if (V2PlayerTracker.isV2(player.uuid)) return@registerGlobalReceiver
+            if (notified.add(player.uuid)) {
+                MessageUtil.sendMessage(player, "outdatedClient")
+            }
+        }*/
     }
 }

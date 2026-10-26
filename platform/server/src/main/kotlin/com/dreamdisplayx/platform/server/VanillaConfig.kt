@@ -101,7 +101,12 @@ class VanillaConfig(private val configDir: File) {
     }
 
     fun getMessageForPlayer(player: ServerPlayer?, key: String): Any? {
-        val locale = player?.clientInformation()?.language() ?: "en"
+        var locale = "en"
+        //? if >=1.20.2 {
+        locale = player?.clientInformation()?.language ?: "en"
+        //?} else
+        /*// 1.20.1 has no client-language accessor: ServerboundClientInformationPacket only
+        // gained the `language` field in 1.20.2, so the server cannot know the client locale.*/
         return langStore.getMessage(locale, language.default_language, key)
     }
 }

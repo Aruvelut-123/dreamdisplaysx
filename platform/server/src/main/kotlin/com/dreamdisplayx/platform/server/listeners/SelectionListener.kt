@@ -17,14 +17,16 @@ import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.InteractionResult
-import net.neoforged.bus.api.SubscribeEvent
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.Action.*
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.EquipmentSlot
+//? if >=1.21.1 {
+import net.neoforged.bus.api.SubscribeEvent
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent as NeoForgePlayerInteractEvent
+//?}
 
 /**
  * Listener for player interactions to manage selection points for display creation. Players can set selection points via item interaction.
@@ -141,6 +143,7 @@ object FabricSelectionListener {
     }
 }
 
+//? if >=1.21.1 {
 /** `NeoForge` event adapter for [VanillaSelectionListener]. */
 @NeoForgeOnly
 object NeoForgeSelectionListener {
@@ -166,3 +169,4 @@ object NeoForgeSelectionListener {
         if (VanillaSelectionListener.handleRightClick(player, world, event.pos)) event.setCanceled(true)
     }
 }
+//?}

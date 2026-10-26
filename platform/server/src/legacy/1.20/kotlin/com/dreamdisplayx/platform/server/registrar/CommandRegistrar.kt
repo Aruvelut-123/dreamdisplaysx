@@ -12,4 +12,12 @@ package com.dreamdisplayx.platform.server.registrar
  * for the front end. Keeping the file as an empty shell is what makes that possible.
  */
 @Deprecated("Unavailable on 1.20.1; Paper 1.20.1 has no io.papermc.paper.command.brigadier API")
-object CommandRegistrar
+object CommandRegistrar {
+    /**
+     * Bukkit-era command registration: 1.20.1 has no `LifecycleEvents.COMMANDS`, so the plugin
+     * declares `/display` in `plugin.yml` and the executor is attached in `onLoad`.
+     * Unused in this fork (1.20.1 ships Fabric only), kept for source compatibility.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun registerBukkit(plugin: Any) = Unit
+}

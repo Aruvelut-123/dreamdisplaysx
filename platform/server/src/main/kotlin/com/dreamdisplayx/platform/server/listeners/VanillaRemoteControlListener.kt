@@ -17,8 +17,10 @@ import net.minecraft.world.InteractionResult
 import net.minecraft.world.item.Items
 import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.fabricmc.fabric.api.event.player.UseItemCallback
+//? if >=1.21.1 {
 import net.neoforged.bus.api.SubscribeEvent
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent
+//?}
 
 /** Experimental cross-loader remote-control stick behavior. */
 @ModLoaderOnly
@@ -78,6 +80,7 @@ object FabricVanillaRemoteControlListener {
     }
 }
 
+//? if >=1.21.1 {
 /** NeoForge adapters for block and air right-clicks. */
 @NeoForgeOnly
 @ModLoaderOnly
@@ -96,3 +99,4 @@ object NeoForgeVanillaRemoteControlListener {
         if (VanillaRemoteControlListener.handle(player, level)) event.cancellationResult = InteractionResult.SUCCESS
     }
 }
+//?}

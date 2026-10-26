@@ -82,7 +82,10 @@ object RegionUtil {
 
     /** Resolves a [ServerLevel] from a dimension key string like `"minecraft:overworld"`. */
     fun getLevelByKey(server: MinecraftServer, worldKey: String): ServerLevel? {
+        //? if >=1.21 {
         val rl = runCatching { Identifier.parse(worldKey) }.getOrNull() ?: return null
+        //?} else
+        /*val rl = Identifier.tryParse(worldKey) ?: return null*/
         val key = ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, rl)
         return server.getLevel(key)
     }

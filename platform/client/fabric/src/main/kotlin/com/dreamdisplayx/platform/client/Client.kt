@@ -104,7 +104,8 @@ class Client : ClientModInitializer, Mod {
             Initializer.onV3Packet(payload.bytes)
         }
 
-        ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID) { _, _, _, _ ->
+        // Protocol v1 is unsupported; a v1 reply only tells us the server is outdated
+        ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID) { _, _, _ ->
             Initializer.onLegacyServerDetected()
         }*/
 

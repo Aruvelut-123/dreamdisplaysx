@@ -62,7 +62,11 @@ class RemoteControlListener(private val plugin: PaperServer) : Listener {
         val meta = item.itemMeta ?: return
         meta.persistentDataContainer.set(key, PersistentDataType.STRING, display.id.toString())
         meta.displayName(Component.text("Display Remote — ${display.name ?: display.id.toString().take(8)}"))
+        //? if >=1.21 {
         meta.setEnchantmentGlintOverride(true)
+        //?} else
+        /*org.bukkit.enchantments.Enchantment.getByName("DURABILITY")
+            ?.let { meta.addEnchant(it, 1, true) }*/
         item.itemMeta = meta
     }
 

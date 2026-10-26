@@ -17,7 +17,9 @@ import com.dreamdisplayx.platform.server.registrar.ListenerRegistrar
 import com.dreamdisplayx.platform.server.storage.StorageBackend
 import com.dreamdisplayx.platform.server.utils.net.PaperV2Networking
 import io.github.arnodoelinger.platformweaver.PaperOnly
+//? if >=1.21 {
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
+//?}
 import org.bstats.bukkit.Metrics
 import org.bukkit.plugin.java.JavaPlugin
 import org.jspecify.annotations.NullMarked
@@ -42,9 +44,12 @@ class PaperServer : JavaPlugin() {
     override fun onLoad() {
         instance = this
         Companion.config = Config(this)
+        //? if >=1.21 {
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(CommandRegistrar.buildDisplayCommand(), "Main Dream DisplaysX command")
         }
+        //?} else
+        /*CommandRegistrar.registerBukkit(this)*/
     }
 
     /** Standard `Bukkit` hook, delegates to [doEnable] so reload commands can reuse the logic. */
