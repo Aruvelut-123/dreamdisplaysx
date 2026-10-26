@@ -18,6 +18,7 @@
       "neoforge.version": "1.20.1-47.1.106",
       "paper.api.version": "1.20.1-R0.1-SNAPSHOT",
       "paper.minecraft.api": "1.20.1",
+      "brigadier.version": "1.1.8",
       "neoforge.loader.range": "[47,)",
       "neoforge.minecraft.range": "[1.20.1]"
     },

@@ -1,3 +1,4 @@
+import org.gradle.api.attributes.java.TargetJvmVersion
 import support.shadow.excludeDreamDisplaysXSqliteNativeExtras
 import support.shadow.includeDreamDisplaysXSharedContents
 import support.shadow.relocateDreamDisplaysXSharedPackages
@@ -127,6 +128,21 @@ configurations.register("mappedFabricApiElements") {
     extendsFrom(configurations.getByName("modCompileClasspathMapped"))
 }
 
+// Several compile-time-only dependencies (platformweaver-annotations, Paper, NeoForge, LuckPerms,
+// WorldGuard) are published as Java 21+ bytecode, while this module's toolchain follows the Minecraft
+// target's `java.version` (17 for 1.20.1). Gradle's variant matching then rejects those modules
+// outright instead of merely warning, so a Java 17 target cannot resolve them at all. They must stay
+// resolvable: PlatformWeaver's annotations drive the Kotlin IR plugin, and the rest are the server
+// platforms' own API stubs whose sources this module compiles. Declaring a Java 25 consumer on the
+// compile classpath makes every module resolvable while `options.release` / `jvmTarget` still emit
+// Java 17 bytecode.
+if (isClassicLoom) {
+    listOf("compileClasspath", "testCompileClasspath").forEach { name ->
+        configurations.findByName(name)?.attributes {
+            attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 25)
+        }
+    }
+}
 dependencies {
     compileOnly(libs.platformweaverAnnotations)
     compileOnly(libs.luckpermsApi)
@@ -141,14 +157,20 @@ dependencies {
         compileOnly("me.shedaniel.cloth:cloth-config-fabric:${scVersion("cloth.config.version")}")
     }
     compileOnly("io.papermc.paper:paper-api:${scVersion("paper.api.version")}")
-    compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
     compileOnly("net.neoforged:bus:8.0.5")
     compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
-    compileOnly(libs.worldguardApi) {
-        exclude(group = "com.google.guava", module = "guava")
-        exclude(group = "com.google.code.gson", module = "gson")
-        exclude(group = "com.google.code.findbugs", module = "jsr305")
-        exclude(module = "fastutil")
+    if (isClassicLoom) {
+        // Classic targets see the server sources through the chiseled output below, whose command tree
+        // needs brigadier. Non-classic targets receive it transitively through NeoForge/Paper.
+        compileOnly("com.mojang:brigadier:${scVersion("brigadier.version")}")
+    } else {
+        compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
+        compileOnly(libs.worldguardApi) {
+            exclude(group = "com.google.guava", module = "guava")
+            exclude(group = "com.google.code.gson", module = "gson")
+            exclude(group = "com.google.code.findbugs", module = "jsr305")
+            exclude(module = "fastutil")
+        }
     }
     implementation(libs.bstats)
     implementation(libs.tomlj)
