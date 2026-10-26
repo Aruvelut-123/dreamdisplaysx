@@ -535,37 +535,45 @@ object ScreenRenderer : ClientRenderService {
             drawImmediateCompat(stack, type, appendVertices)
         }
 
-        /** Immediate-mode entry: staged buffers on 26.2+, the shared builder before that. */
+        /**
+         * Immediate-mode entry: staged buffers on 26.2+, the shared builder below that, and the
+         * pre-1.20.2 `Tesselator`/`BufferUploader` pair on 1.20.1.
+         *
+         * Note: the `//?} else` arms in this repo's chisel must stay comment-free — a nested
+         * `/* … */` would terminate `takeCommentedElse` early — so every branch below uses plain
+         * `//? if` scopes instead of nesting commented arms.
+         */
         private fun drawImmediateCompat(stack: PoseStack, type: RenderType, appendVertices: QuadAppender) {
             //? if >=26.2 {
             draw262(stack, type, appendVertices)
-            //?} else
-            /*run {
-                RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
-                try {
-                    drawImmediatePre202(appendVertices, stack, type)
-                } finally {
-                    RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
-                }
-            }*/
-        }
-
-        /** Immediate draw for every version below 26.2, keeping the 1.20.1 builder path separate. */
-        private fun drawImmediatePre202(appendVertices: QuadAppender, stack: PoseStack, type: RenderType) {
+            //?}
             //? if >=1.20.2 {
-            val builder = Tesselator.getInstance().begin(type.mode(), type.format())
-            appendVertices(stack.last(), builder)
-            type.draw(builder.buildOrThrow())
-            //?} else
-            /*type.setupRenderState()
+            //? if <26.2 {
+            //? if <1.21.11 {
+            RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
+            //?}
             try {
-                val builder = Tesselator.getInstance().builder
-                builder.begin(type.mode(), type.format())
+                val builder = Tesselator.getInstance().begin(type.mode(), type.format())
                 appendVertices(stack.last(), builder)
-                BufferUploader.drawWithShader(builder.end())
+                type.draw(builder.buildOrThrow())
+            } finally {
+                //? if <1.21.11 {
+                RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
+                //?}
+            }
+            //?}
+            //?}
+            //? if <1.20.2 {
+            type.setupRenderState()
+            try {
+                val legacyBuilder = Tesselator.getInstance().builder
+                legacyBuilder.begin(type.mode(), type.format())
+                appendVertices(stack.last(), legacyBuilder)
+                BufferUploader.drawWithShader(legacyBuilder.end())
             } finally {
                 type.clearRenderState()
-            }*/
+            }
+            //?}
         }
 
         //? if >=26.2 {

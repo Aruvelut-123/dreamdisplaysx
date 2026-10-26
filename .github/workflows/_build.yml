@@ -364,7 +364,8 @@ jobs:
           ./gradlew \
             :platform:client:fabric:publishJar \
             --no-daemon \
-            --parallel
+            --parallel \
+            ${{ contains(fromJSON(needs.metadata.outputs.fabric_only_versions), matrix.mc) && '--no-configuration-cache' || '' }}
         env:
           GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Xmx4G
       # 1.20.1 is a Fabric-only target: there is no NeoForge module for it, so the loader build
