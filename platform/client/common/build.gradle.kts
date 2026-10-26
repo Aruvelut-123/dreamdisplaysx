@@ -95,3 +95,18 @@ kotlin {
         freeCompilerArgs.addAll("-jvm-default=enable")
     }
 }
+
+/**
+ * Classic Loom (1.20.1) applies to this module *and* to `:platform:client:fabric`, which is the
+ * only consumer that produces an artifact. Loom's `remapJar` resolves its `TinyRemapper` service
+ * through the plugin's isolated classloader; when the task is reached through another module's
+ * `shadow(project(...))` dependency, the service lookup happens across two plugin classloaders and
+ * dies with `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`. Both Loom
+ * copies then remap the same classes a second time down in `:platform:client:fabric:remapJar`
+ * anyway, so the intermediate remap is redundant: skip it for the 1.20.1 target only.
+ */
+if (isClassicLoomTarget) {
+    tasks.matching { it.name == "remapJar" || it.name == "remapSourcesJar" }.configureEach {
+        enabled = false
+    }
+}

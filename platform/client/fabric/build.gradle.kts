@@ -231,11 +231,23 @@ tasks.processResources {
     val projectVersion = project.version.toString()
     val fabricMcVer = scVersion("fabric.minecraft.dependency")
     val javaVersion = scVersion("java.version")
+    // 1.20.1 builds against Fabric Loader 0.16.x, older versions need newer loaders; keep the
+    // declared floor in step with the loader each target actually compiles against.
+    val fabricLoaderVersion = scVersion("fabric.loader.version")
+    val minFabricLoader = if (fabricLoaderVersion.startsWith("0.16.")) ">=0.16" else ">=0.19"
     inputs.property("version", projectVersion)
     inputs.property("minecraftVersion", fabricMcVer)
     inputs.property("javaVersion", javaVersion)
+    inputs.property("fabricLoaderVersion", minFabricLoader)
     filesMatching("fabric.mod.json") {
-        expand(mapOf("version" to projectVersion, "minecraftVersion" to fabricMcVer, "javaVersion" to javaVersion))
+        expand(
+            mapOf(
+                "version" to projectVersion,
+                "minecraftVersion" to fabricMcVer,
+                "javaVersion" to javaVersion,
+                "fabricLoaderVersion" to minFabricLoader,
+            )
+        )
     }
     filesMatching("quilt.mod.json") {
         expand(mapOf("version" to projectVersion, "minecraftVersion" to fabricMcVer, "javaVersion" to javaVersion))
@@ -262,8 +274,15 @@ tasks.shadowJar {
     archiveBaseName.set("dreamdisplayx-fabric")
     archiveVersion.set("$activeStonecutterVersion-${rootProject.version}")
     if (isLegacyObfuscated) {
-        archiveClassifier.set("dev-shadow")
-        destinationDirectory.set(layout.buildDirectory.dir("devlibs"))
+        // 1.20.1 (classic Loom) has no usable remapJar — see the note below — so its shadow jar IS the
+        // shippable artifact: build it straight into build/libs, under the final name.
+        if (isClassicLoom) {
+            archiveClassifier.set("")
+            destinationDirectory.set(rootProject.layout.buildDirectory.dir("libs"))
+        } else {
+            archiveClassifier.set("dev-shadow")
+            destinationDirectory.set(layout.buildDirectory.dir("devlibs"))
+        }
     }
     includeDreamDisplaysXSharedContents()
     relocateDreamDisplaysXSharedPackages()
@@ -272,7 +291,13 @@ tasks.shadowJar {
 
 // If it's a legacy version (like 1.21.11 where the shadow jar is obfuscated), we need to remap the shadow jar with
 // loom's remapJar task to get proper mappings in the final artifact.
-if (isLegacyObfuscated) {
+// Minecraft 1.20.1 is excluded: classic Loom 1.10.5 is applied to this module *and* to
+// :platform:client:common, and its TinyRemapperService resolves the LoomGradleExtension through the
+// plugin classloader of whichever module reaches it first — the second module's extension then fails
+// the cast (`LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`). The 1.20.1
+// shadow jar is already produced in named mappings by the same Loom mapping set the game runs with,
+// so it is the shippable artifact and remapping it again would be a no-op anyway.
+if (isLegacyObfuscated && !isClassicLoom) {
     tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
         dependsOn(tasks.shadowJar)
         inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
@@ -283,10 +308,15 @@ if (isLegacyObfuscated) {
         destinationDirectory.set(rootProject.layout.buildDirectory.dir("libs"))
     }
 }
-
 tasks.register("publishJar") {
     description = "Publish the final jar to the local Maven repository."
-    dependsOn(if (isLegacyObfuscated) "remapJar" else "shadowJar")
+    dependsOn(
+        when {
+            isClassicLoom -> "shadowJar"
+            isLegacyObfuscated -> "remapJar"
+            else -> "shadowJar"
+        }
+    )
 }
 
 tasks.withType<AbstractArchiveTask>().configureEach {

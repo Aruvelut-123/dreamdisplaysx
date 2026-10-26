@@ -29,7 +29,7 @@
   ],
   "accessWidener": "dreamdisplayx.classtweaker",
   "depends": {
-    "fabricloader": ">=0.19",
+    "fabricloader": "${fabricLoaderVersion}",
     "fabric-api": "*",
     "minecraft": "${minecraftVersion}",
     "java": ">=${javaVersion}"
