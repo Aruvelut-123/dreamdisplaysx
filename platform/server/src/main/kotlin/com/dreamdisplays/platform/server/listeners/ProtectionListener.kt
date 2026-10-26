@@ -1,10 +1,12 @@
 package com.dreamdisplays.platform.server.listeners
 
 import com.dreamdisplays.platform.server.ModLoaderOnly
+//? if >=1.21.1 {
 //? if >=26 {
 import net.neoforged.neoforge.event.level.block.BreakBlockEvent as NeoForgeBreakEvent
 //?} else
 /*import net.neoforged.neoforge.event.level.BlockEvent.BreakEvent as NeoForgeBreakEvent*/
+//?}
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.managers.PlayerManager
 import com.dreamdisplays.platform.server.managers.SelectionManager
@@ -18,8 +20,10 @@ import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
+//? if >=1.21.1 {
 import net.neoforged.bus.api.SubscribeEvent
 import net.neoforged.neoforge.event.level.ExplosionEvent
+//?}
 import org.bukkit.Location
 import org.bukkit.block.Block
 import org.bukkit.event.Cancellable
@@ -137,6 +141,8 @@ object VanillaProtectionListener {
     }
 }
 
+// Forge adapter lives in :platform:client:forge
+
 /** `Fabric` event adapter for [VanillaProtectionListener]. */
 @FabricOnly
 object FabricProtectionListener {
@@ -152,6 +158,7 @@ object FabricProtectionListener {
     }
 }
 
+//? if >=1.21.1 {
 /** `NeoForge` event adapter for [VanillaProtectionListener]. */
 @NeoForgeOnly
 object NeoForgeProtectionListener {
@@ -177,3 +184,4 @@ object NeoForgeProtectionListener {
         VanillaProtectionListener.filterExplosionBlocks(worldKey, event.affectedBlocks)
     }
 }
+//?}

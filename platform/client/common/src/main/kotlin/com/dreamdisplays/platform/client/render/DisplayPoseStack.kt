@@ -1,5 +1,9 @@
 package com.dreamdisplays.platform.client.render
 
+//? if <1.19.3 {
+import com.dreamdisplays.platform.client.render.compat.translate
+import com.dreamdisplays.platform.client.render.compat.mulPose
+//?}
 import com.dreamdisplays.api.display.model.property.DisplayFacing
 import com.mojang.blaze3d.vertex.PoseStack
 import org.joml.Quaternionf

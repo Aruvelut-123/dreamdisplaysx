@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.ui.menu
 
+import com.dreamdisplays.platform.client.utils.translatableText
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplays.platform.client.ui.drawText
 import com.dreamdisplays.platform.client.ui.kit.UiRect
@@ -46,7 +47,7 @@ class SettingsSection(
         // Reserve a shared label column as wide as the widest label so every control gets the same
         // width and left edge, instead of each being squeezed by its own label length (which made
         // the sliders visibly different widths from row to row).
-        val labelColW = rows.maxOf { font.width(Component.translatable(it.labelKey)) }
+        val labelColW = rows.maxOf { font.width(translatableText(it.labelKey)) }
 
         for (row in rows) {
             rowY += row.extraGapBefore
@@ -60,7 +61,7 @@ class SettingsSection(
     private fun renderRow(g: GuiGraphicsCompat, row: Row, x: Int, y: Int, w: Int, labelColW: Int) {
         val font = Minecraft.getInstance().font
         g.fill(x, y, x + w, y + UiTheme.ROW_H, UiTheme.ROW_BG)
-        val label = Component.translatable(row.labelKey)
+        val label = translatableText(row.labelKey)
         val textY = y + UiTheme.ROW_H / 2 - font.lineHeight / 2
         g.drawText(font, label, x + 6, textY, UiTheme.TEXT_PRIMARY, false)
         row.labelHover = UiRect(x + 6, textY, font.width(label), font.lineHeight)

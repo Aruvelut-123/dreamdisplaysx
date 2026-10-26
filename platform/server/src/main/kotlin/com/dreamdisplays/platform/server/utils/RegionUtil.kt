@@ -66,7 +66,10 @@ object RegionUtil {
     /** Returns the block position [player] is looking at within [maxDistance] blocks, or `null`. */
     fun getTargetedBlockPos(player: ServerPlayer, maxDistance: Double = 32.0): BlockPos? {
         val eyePos = player.eyePosition
+        //? if >=1.20 {
         val hit = player.level().clip(
+        //?} else
+        /*val hit = player.level.clip(*/
             ClipContext(
                 eyePos,
                 eyePos.add(player.lookAngle.scale(maxDistance)),
@@ -80,8 +83,14 @@ object RegionUtil {
 
     /** Resolves a [ServerLevel] from a dimension key string like `"minecraft:overworld"`. */
     fun getLevelByKey(server: MinecraftServer, worldKey: String): ServerLevel? {
+        //? if >=1.21.1 {
         val rl = runCatching { Identifier.parse(worldKey) }.getOrNull() ?: return null
+        //?} else
+        /*val rl = runCatching { Identifier(worldKey) }.getOrNull() ?: return null*/
+        //? if >=1.19.3 {
         val key = ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, rl)
+        //?} else
+        /*val key = ResourceKey.create(net.minecraft.core.Registry.DIMENSION_REGISTRY, rl)*/
         return server.getLevel(key)
     }
 
@@ -105,7 +114,14 @@ object RegionUtil {
         //? if >=1.21.11 {
         player.level()
     //?} else
-    /*player.serverLevel()*/
+    /*
+    //? if >=1.20 {
+    player.serverLevel()
+    //?}
+    //? if <1.20 {
+    player.getLevel()
+    //?}
+    */
 
     /**
      * Describes a region in 3D space.

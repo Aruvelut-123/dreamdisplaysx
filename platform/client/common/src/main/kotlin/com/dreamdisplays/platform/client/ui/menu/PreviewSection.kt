@@ -1,5 +1,7 @@
 package com.dreamdisplays.platform.client.ui.menu
 
+import com.dreamdisplays.platform.client.utils.translatableText
+import com.dreamdisplays.platform.client.utils.identifier
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.RenderPipelines
 //?}
@@ -392,7 +394,7 @@ class PreviewSection(
     )
 
     private fun watchOrViewCount(count: Long?, isLive: Boolean): String = count?.let {
-        formatCompactCount(it) + " " + Component.translatable(
+        formatCompactCount(it) + " " + translatableText(
             if (isLive) ClientMessage.UI_WATCHING.key else ClientMessage.UI_VIEWS_SHORT.key,
         ).string
     } ?: ""
@@ -419,7 +421,7 @@ class PreviewSection(
         // The platform tag (Twitch / Vimeo / Kick / Link) takes precedence over the generic "New"
         val badge = PlatformBadge.forPlatform(info.platform)
         val tagText = when {
-            badge != null -> Component.translatable(badge.labelKey).string
+            badge != null -> translatableText(badge.labelKey).string
             info.isNew -> ClientMessage.UI_NEW.component().string
             else -> null
         }
@@ -655,7 +657,7 @@ class PreviewSection(
                 tex = DynamicTexture({ "dreamdisplays:ambient" }, img)
                 //?} else
                 /*tex = DynamicTexture(img)*/
-                textureId = Identifier.fromNamespaceAndPath(
+                textureId = identifier(
                     Initializer.MOD_ID,
                     "ambient/${ds.uuid}-${UUID.randomUUID()}",
                 )

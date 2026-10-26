@@ -1,5 +1,12 @@
 package com.dreamdisplays.platform.client.ui.widgets
 
+import com.dreamdisplays.platform.client.utils.literalText
+import com.dreamdisplays.platform.client.utils.translatableText
+import com.dreamdisplays.platform.client.utils.emptyText
+//? if <1.20.2 {
+import com.dreamdisplays.platform.client.ui.blitSprite
+//?}
+import com.dreamdisplays.platform.client.utils.vanillaIdentifier
 import com.dreamdisplays.api.media.search.MediaChapter
 import com.dreamdisplays.platform.client.render.ScrubPreview
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
@@ -9,7 +16,9 @@ import com.dreamdisplays.platform.client.ui.kit.UiWidget
 //? if >=1.21.11 {
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 //?}
+//? if >=1.19.4 {
 import net.minecraft.client.InputType
+//?}
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.narration.NarratedElementType
 import net.minecraft.client.gui.narration.NarrationElementOutput
@@ -41,7 +50,7 @@ class SeekBar(
     statusLabels: List<() -> String?> = [],
     private val chapters: () -> List<MediaChapter> = { [] },
     private val onSeek: (Long) -> Unit,
-) : UiWidget(Component.empty()) {
+) : UiWidget(emptyText()) {
 
     private var sliderFocused = false
     private var dragging = false
@@ -70,7 +79,7 @@ class SeekBar(
             val full = " • $text"
             val chars = (full.length * reveal).toInt().coerceIn(0, full.length)
             return base.append(
-                Component.literal(full.substring(0, chars)).withStyle { it.withColor(WAITING_COLOR) },
+                literalText(full.substring(0, chars)).withStyle { it.withColor(WAITING_COLOR) },
             )
         }
     }
@@ -121,7 +130,7 @@ class SeekBar(
 
         val waiting = waitingLabel?.invoke()
         val base = if (waiting != null) {
-            Component.literal(waiting).copy().withStyle { it.withColor(WAITING_COLOR) }
+            literalText(waiting).copy().withStyle { it.withColor(WAITING_COLOR) }
         } else {
             timeLabel(cur, dur)
         }
@@ -218,7 +227,7 @@ class SeekBar(
 
     private fun timeLabel(cur: Long, dur: Long): MutableComponent {
         val color = if (active) 0xFFFFFFFF.toInt() else 0xFFA0A0A0.toInt()
-        return Component.literal("${UiText.formatTime(cur)} / ${UiText.formatTime(dur)}")
+        return literalText("${UiText.formatTime(cur)} / ${UiText.formatTime(dur)}")
             .copy().withStyle { it.withColor(color) }
     }
 
@@ -229,9 +238,13 @@ class SeekBar(
         if (!isHovered && !sliderFocused) HANDLE else HANDLE_HIGHLIGHTED
 
     override fun createNarrationMessage(): MutableComponent =
-        Component.translatable("gui.narrate.slider", timeLabel(current(), duration()))
+        translatableText("gui.narrate.slider", timeLabel(current(), duration()))
 
+    // Renamed from updateNarration in 1.19.3
+    //? if >=1.19.3 {
     override fun updateWidgetNarration(builder: NarrationElementOutput) {
+    //?} else
+    /*override fun updateNarration(builder: NarrationElementOutput) {*/
         builder.add(NarratedElementType.TITLE, createNarrationMessage())
     }
 
@@ -290,8 +303,11 @@ class SeekBar(
         if (!focused) {
             sliderFocused = false
         } else {
+            //? if >=1.19.4 {
             val t = Minecraft.getInstance().lastInputType
             if (t == InputType.MOUSE || t == InputType.KEYBOARD_TAB) sliderFocused = true
+            //?} else
+            /*sliderFocused = true*/
         }
     }
 
@@ -302,9 +318,9 @@ class SeekBar(
         private const val FADE_SPEED = 0.35f
         private const val CHAPTER_LABEL_RGB = 0xAAAAAA
         private const val WAITING_COLOR = 0xFFA0A0A0.toInt()
-        private val TRACK = Identifier.withDefaultNamespace("widget/slider")
-        private val TRACK_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_highlighted")
-        private val HANDLE = Identifier.withDefaultNamespace("widget/slider_handle")
-        private val HANDLE_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_handle_highlighted")
+        private val TRACK = vanillaIdentifier("widget/slider")
+        private val TRACK_HIGHLIGHTED = vanillaIdentifier("widget/slider_highlighted")
+        private val HANDLE = vanillaIdentifier("widget/slider_handle")
+        private val HANDLE_HIGHLIGHTED = vanillaIdentifier("widget/slider_handle_highlighted")
     }
 }

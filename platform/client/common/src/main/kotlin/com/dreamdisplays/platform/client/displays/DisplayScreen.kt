@@ -1201,7 +1201,10 @@ class DisplayScreen(
 
     private fun focalLengthPx(): Double {
         val mc = Minecraft.getInstance()
+        //? if >=1.19 {
         val fov = mc.options.fov().get().toDouble().coerceIn(1.0, 179.0)
+        //?} else
+        /*val fov = mc.options.fov.coerceIn(1.0, 179.0)*/
         return mc.window.height.coerceAtLeast(1) / (2.0 * tan(Math.toRadians(fov) / 2.0))
     }
 
@@ -1330,7 +1333,10 @@ class DisplayScreen(
          */
         internal fun clientRenderDistanceBlocks(): Int {
             val minecraft = Minecraft.getInstance()
+            //? if >=1.19 {
             val render = minecraft.options.renderDistance().get()
+            //?} else
+            /*val render = minecraft.options.renderDistance*/
             val simulation = minecraft.level?.serverSimulationDistance?.takeIf { it > 0 } ?: render
             val own = ClientStateManager.config.displayDistanceChunks.takeIf { it > 0 } ?: render
             return minOf(render, simulation, own) * 16

@@ -32,7 +32,18 @@ object UnshadedDisplayPass {
             return
         }
         pendingCamera = camera
+        //? if >=1.20.5 {
         pendingView.set(RenderSystem.getModelViewStack()).mul(stack.last().pose())
+        //?} else
+        /*
+        //? if >=1.19.3 {
+        pendingView.set(RenderSystem.getModelViewStack().last().pose()).mul(stack.last().pose())
+        //?}
+        //? if <1.19.3 {
+        pending = false
+        return
+        //?}
+        */
         pending = true
     }
 
@@ -44,15 +55,25 @@ object UnshadedDisplayPass {
         if (Minecraft.getInstance().level == null) return
 
         val modelView = RenderSystem.getModelViewStack()
+        //? if >=1.20.5 {
         modelView.pushMatrix()
         modelView.set(pendingView)
+        //?} else
+        /*modelView.pushPose()
+        //? if >=1.19.3 {
+        modelView.last().pose().set(pendingView)
+        //?}
+        */
         //? if >=1.21.11 {
         //?} else
         /*RenderSystem.applyModelViewMatrix()*/
         try {
             ScreenRenderer.render(PoseStack(), camera, replay = true)
         } finally {
+            //? if >=1.20.5 {
             modelView.popMatrix()
+            //?} else
+            /*modelView.popPose()*/
             //? if >=1.21.11 {
             //?} else
             /*RenderSystem.applyModelViewMatrix()*/

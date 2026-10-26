@@ -43,7 +43,16 @@ object VanillaSelectionVisualizer {
         //? if >=1.21.11 {
         DustParticleOptions(rgb, DUST_SCALE)
     //?} else
-    /*DustParticleOptions(Vector3f((rgb shr 16 and 0xFF) / 255f, (rgb shr 8 and 0xFF) / 255f, (rgb and 0xFF) / 255f), DUST_SCALE)*/
+    /*
+    //? if >=1.19.3 {
+    DustParticleOptions(Vector3f((rgb shr 16 and 0xFF) / 255f, (rgb shr 8 and 0xFF) / 255f, (rgb and 0xFF) / 255f), DUST_SCALE)
+    //?}
+    //? if <1.19.3 {
+    DustParticleOptions(
+        com.mojang.math.Vector3f((rgb shr 16 and 0xFF) / 255f, (rgb shr 8 and 0xFF) / 255f, (rgb and 0xFF) / 255f), DUST_SCALE,
+    )
+    //?}
+    */
 
     private fun send(level: ServerLevel, player: ServerPlayer, options: ParticleOptions, x: Double, y: Double, z: Double) {
         //? if >=1.21.11 {

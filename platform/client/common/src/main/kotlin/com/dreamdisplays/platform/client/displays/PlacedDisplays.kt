@@ -29,7 +29,14 @@ internal object PlacedDisplays {
         //? if >=1.21.11 {
         return mc.deltaTracker.getGameTimeDeltaPartialTick(false)
         //?} else
-        /*return mc.timer.getGameTimeDeltaPartialTick(false)*/
+        /*
+        //? if >=1.21.1 {
+        return mc.timer.getGameTimeDeltaPartialTick(false)
+        //?}
+        //? if <1.21.1 {
+        return mc.frameTime
+        //?}
+        */
     }
 
     private fun localOrigin(transform: PlacementTransform) = BlockPos(transform.anchorX, transform.anchorY, transform.anchorZ)

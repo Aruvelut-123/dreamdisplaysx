@@ -4,7 +4,14 @@ import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 //? if >=26 {
 import net.minecraft.client.gui.GuiGraphicsExtractor
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplays.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 import net.minecraft.client.gui.screens.Screen
 //? if >=1.21.11 {
 import net.minecraft.client.input.MouseButtonEvent
@@ -150,11 +157,18 @@ abstract class UiScreenBase(title: Component) : Screen(title) {
     protected open fun onMouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean =
         false
 
+    //? if >=1.20.2 {
     final override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
         val mx = mouseX / uiScale
         val my = mouseY / uiScale
         return onMouseScrolled(mx, my, scrollX, scrollY) || super.mouseScrolled(mx, my, scrollX, scrollY)
     }
+    //?} else
+    /*final override fun mouseScrolled(mouseX: Double, mouseY: Double, delta: Double): Boolean {
+        val mx = mouseX / uiScale
+        val my = mouseY / uiScale
+        return onMouseScrolled(mx, my, 0.0, delta) || super.mouseScrolled(mx, my, delta)
+    }*/
 
     final override fun mouseMoved(mouseX: Double, mouseY: Double) =
         super.mouseMoved(mouseX / uiScale, mouseY / uiScale)
@@ -170,17 +184,38 @@ abstract class UiScreenBase(title: Component) : Screen(title) {
     protected fun drawChildren(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, delta: Float) =
         super.extractRenderState(g, mouseX, mouseY, delta)
     //?} else
-    /*final override fun render(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) =
+    /*
+    //? if >=1.20 {
+    final override fun render(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) =
         renderScaled(g, mouseX, mouseY, delta)
+    //?}
+    //? if <1.20 {
+    final override fun render(pose: com.mojang.blaze3d.vertex.PoseStack, mouseX: Int, mouseY: Int, delta: Float) =
+        renderScaled(GuiGraphics(pose), mouseX, mouseY, delta)
+    //?}
 
     // Draws the standard translucent screen background.
+    //? if >=1.20.2 {
     protected fun drawScreenBackground(g: GuiGraphicsCompat) = renderTransparentBackground(g)
+    //?}
+    //? if >=1.20 <1.20.2 {
+    protected fun drawScreenBackground(g: GuiGraphicsCompat) = renderBackground(g)
+    //?}
+    //? if <1.20 {
+    protected fun drawScreenBackground(g: GuiGraphicsCompat) = renderBackground(g.pose())
+    //?}
 
     // Renders all registered child widgets (the vanilla `super` pass).
+    //? if >=1.20 {
     protected fun drawChildren(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, delta: Float) =
         super.render(g, mouseX, mouseY, delta)
+    //?}
+    //? if <1.20 {
+    protected fun drawChildren(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, delta: Float) =
+        super.render(g.pose(), mouseX, mouseY, delta)
+    //?}
 
-    //? if <1.21.11 {
+    //? if >=1.20.2 <1.21.11 {
     // 1.21.1 strange background remover
     override fun renderBackground(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) {}
     //?}

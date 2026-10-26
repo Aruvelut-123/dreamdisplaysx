@@ -30,9 +30,10 @@ object Scheduler {
         plugin.server.onlinePlayers.forEach(::trackPlayer)
     }
 
-    /** Runs [task] off the main / global thread using `Paper`'s async scheduler. */
+    /** Runs [task] off the main / global thread. `Paper` only gained its own async scheduler in 1.20, alongside `Folia`. */
     fun runAsync(task: Runnable) {
-        plugin.server.asyncScheduler.runNow(plugin) { task.run() }
+        if (isFolia) plugin.server.asyncScheduler.runNow(plugin) { task.run() }
+        else plugin.server.scheduler.runTaskAsynchronously(plugin, task)
     }
 
     /** Runs [task] on the main / global region thread. Do not touch region-owned entities from this helper on `Folia`. */

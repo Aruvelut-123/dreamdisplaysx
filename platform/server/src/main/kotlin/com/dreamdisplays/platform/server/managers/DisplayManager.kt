@@ -36,7 +36,10 @@ import com.dreamdisplays.platform.server.utils.net.VanillaPacketUtil
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import kotlinx.coroutines.launch
 import net.minecraft.core.BlockPos
+//? if >=1.19.3 {
 import net.minecraft.core.registries.BuiltInRegistries
+//?} else
+/*import net.minecraft.core.Registry as BuiltInRegistries*/
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import org.bukkit.Bukkit

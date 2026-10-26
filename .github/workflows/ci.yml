@@ -1,7 +1,7 @@
 name: CI
 
 # Runs on every push to main and every PR. Always builds and uploads artifacts,
-# with no conditional/skipped jobs, so the check set is complete and consistent.
+# with no conditional / skipped jobs, so the check set is complete and consistent.
 on:
   push:
     branches: [ main ]

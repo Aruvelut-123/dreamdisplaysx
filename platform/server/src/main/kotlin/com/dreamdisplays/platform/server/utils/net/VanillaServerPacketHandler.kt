@@ -5,8 +5,10 @@ import com.dreamdisplays.platform.client.net.LegacyProbe
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
-import net.minecraft.server.level.ServerPlayer
+//? if >=1.21.1 {
 import net.neoforged.neoforge.network.registration.PayloadRegistrar
+//?}
+import net.minecraft.server.level.ServerPlayer
 
 /**
  * Protocol v1 is no longer supported; only its handshake is still registered, to tell outdated
@@ -14,13 +16,22 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar
  * player that never said hello means a v1-only client.
  */
 object VanillaServerPacketHandler {
+    // Forge registers its channels in :platform:client:forge
+
     /** Registers the v1 `version` probe receiver for `Fabric` servers. */
     @FabricOnly
     fun registerReceivers() {
+        //? if >=1.20.5 {
         ServerPlayNetworking.registerGlobalReceiver(LegacyProbe.Version.PACKET_ID) { _, context ->
             onLegacyVersion(context.player())
         }
+        //?} else
+        /*ServerPlayNetworking.registerGlobalReceiver(LegacyProbe.Version.PACKET_ID.id()) { server, player, _, _, _ ->
+            server.execute { onLegacyVersion(player) }
+        }*/
     }
+
+    //? if >=1.21.1 {
 
     /**
      * Registers the v1 probe payloads against [registrar]: the serverbound `version` and the
@@ -37,8 +48,10 @@ object VanillaServerPacketHandler {
             Initializer.onLegacyServerDetected()
         }
     }
+    //?}
 
-    private fun onLegacyVersion(player: ServerPlayer) {
+    /** Handles a v1 `version` packet from [player]; shared by every loader's receiver. */
+    fun onLegacyVersion(player: ServerPlayer) {
         if (V2PlayerTracker.isV2(player.uuid)) return
         VanillaDisplayActions.notifyOutdatedClient(player)
     }

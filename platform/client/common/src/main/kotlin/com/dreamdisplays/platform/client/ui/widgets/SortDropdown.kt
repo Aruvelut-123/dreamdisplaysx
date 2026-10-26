@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.ui.widgets
 
+import com.dreamdisplays.platform.client.utils.buttonClickSound
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplays.platform.client.ui.drawText
 import com.dreamdisplays.platform.client.ui.kit.*
@@ -113,7 +114,7 @@ class SortDropdown(
         visible = false
         if (!inside) return false
         val index = ((my - rect.y) / ITEM_H).coerceIn(0, items.size - 1)
-        val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+        val s = SimpleSoundInstance.forUI(buttonClickSound(), 1.0f)
         Minecraft.getInstance().soundManager.play(s)
         onSelect(items[index])
         return true

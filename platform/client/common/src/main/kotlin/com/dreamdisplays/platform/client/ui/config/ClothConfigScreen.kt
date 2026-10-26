@@ -1,5 +1,7 @@
 package com.dreamdisplays.platform.client.ui.config
 
+import com.dreamdisplays.platform.client.utils.literalText
+import com.dreamdisplays.platform.client.utils.translatableText
 import com.dreamdisplays.api.media.model.VideoQuality
 import com.dreamdisplays.platform.client.Config
 import com.dreamdisplays.platform.client.core.modules.ClientAudioModule
@@ -28,7 +30,7 @@ object ClothConfigScreen {
         general.addEntry(
             entries.startIntSlider(text("new_display_volume"), percent(config.newDisplayVolume), 0, 200)
                 .setDefaultValue(percent(Config.DEFAULT_NEW_DISPLAY_VOLUME))
-                .setTextGetter { Component.literal("$it%") }
+                .setTextGetter { literalText("$it%") }
                 .setTooltip(text("new_display_volume.tooltip"))
                 .setSaveConsumer { config.newDisplayVolume = it / 200.0 }
                 .build()
@@ -36,7 +38,7 @@ object ClothConfigScreen {
         general.addEntry(
             entries.startSelector(text("new_display_quality"), QUALITIES, qualityChoice(config.newDisplayQuality))
                 .setDefaultValue(qualityChoice(Config.DEFAULT_NEW_DISPLAY_QUALITY))
-                .setNameProvider { if (it == VideoQuality.AUTO_LABEL) text("value.auto") else Component.literal("${it}p") }
+                .setNameProvider { if (it == VideoQuality.AUTO_LABEL) text("value.auto") else literalText("${it}p") }
                 .setTooltip(text("new_display_quality.tooltip"))
                 .setSaveConsumer { config.newDisplayQuality = it }
                 .build()
@@ -52,7 +54,7 @@ object ClothConfigScreen {
         general.addEntry(
             entries.startIntSlider(text("max_active_displays"), config.maxActiveDisplays, 0, Config.MAX_ACTIVE_DISPLAYS)
                 .setDefaultValue(0)
-                .setTextGetter { if (it == 0) text("value.unlimited") else Component.literal(it.toString()) }
+                .setTextGetter { if (it == 0) text("value.unlimited") else literalText(it.toString()) }
                 .setTooltip(text("max_active_displays.tooltip"))
                 .setSaveConsumer { config.maxActiveDisplays = it }
                 .build()
@@ -87,7 +89,7 @@ object ClothConfigScreen {
     }
 
     private fun text(key: String, vararg args: Any): Component =
-        Component.translatable("dreamdisplays.config.$key", *args)
+        translatableText("dreamdisplays.config.$key", *args)
 
     private fun percent(volume: Double): Int = (volume * 200).roundToInt().coerceIn(0, 200)
 

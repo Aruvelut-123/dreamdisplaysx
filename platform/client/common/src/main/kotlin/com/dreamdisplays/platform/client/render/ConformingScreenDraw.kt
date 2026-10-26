@@ -159,6 +159,7 @@ internal object ConformingScreenDraw {
         g: Int,
         b: Int,
     ) {
+        //? if >=1.21.1 {
         builder.addVertex(
             pose,
             vertex.x + vertex.ox * clearance,
@@ -167,5 +168,15 @@ internal object ConformingScreenDraw {
         )
             .setUv(vertex.u, vertex.v)
             .setColor(r, g, b, 255)
+        //?} else
+        /*builder.vertex(
+            pose.pose(),
+            vertex.x + vertex.ox * clearance,
+            vertex.y + vertex.oy * clearance,
+            vertex.z + vertex.oz * clearance,
+        )
+            .uv(vertex.u, vertex.v)
+            .color(r, g, b, 255)
+            .endVertex()*/
     }
 }

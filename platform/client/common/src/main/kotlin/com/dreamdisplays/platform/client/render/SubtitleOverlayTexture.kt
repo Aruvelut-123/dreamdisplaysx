@@ -50,7 +50,7 @@ class SubtitleOverlayTexture {
         val image = rasterize(normalized)
         aspectRatio = image.width.toFloat() / image.height.toFloat()
         val native = toNativeImage(image)
-        val id = identifier ?: Identifier.fromNamespaceAndPath(
+        val id = identifier ?: com.dreamdisplays.platform.client.utils.identifier(
             Initializer.MOD_ID,
             "dynamic/subtitle_${INSTANCE_ID.incrementAndGet()}",
         ).also { identifier = it }
@@ -148,7 +148,13 @@ class SubtitleOverlayTexture {
                 val r = (argb ushr 16) and 0xFF
                 val gr = (argb ushr 8) and 0xFF
                 val b = argb and 0xFF
-                native.setPixelRGBA(x, y, FastColor.ABGR32.color(a, r, gr, b))*/
+                //? if >=1.19 {
+                native.setPixelRGBA(x, y, FastColor.ABGR32.color(a, r, gr, b))
+                //?}
+                //? if <1.19 {
+                native.setPixelRGBA(x, y, NativeImage.combine(a, b, gr, r))
+                //?}
+                */
             }
         }
         return native

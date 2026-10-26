@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.render
 
+import com.dreamdisplays.platform.client.utils.identifier
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier
 //?} else
@@ -217,7 +218,7 @@ object Thumbnails {
             tex = DynamicTexture({ "yt-thumb-$key" }, image)
             //?} else
             /*tex = DynamicTexture(image)*/
-            val id = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "yt_thumb/${hash(key)}")
+            val id = identifier(Initializer.MOD_ID, "yt_thumb/${hash(key)}")
             Minecraft.getInstance().textureManager.register(id, tex)
             TextureUploadUtil.applyBilinearFilter(tex)
             AVG_COLOR.put(avgColorKey, decoded.avgColor)
@@ -229,7 +230,7 @@ object Thumbnails {
                 //?} else
                 /*ambientTex = DynamicTexture(ambientImage)*/
                 val ambientId =
-                    Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "yt_thumb_ambient/${hash(avgColorKey)}")
+                    identifier(Initializer.MOD_ID, "yt_thumb_ambient/${hash(avgColorKey)}")
                 Minecraft.getInstance().textureManager.register(ambientId, ambientTex)
                 TextureUploadUtil.applyBilinearFilter(ambientTex)
                 AMBIENT_TEX.put(avgColorKey, ambientId)

@@ -9,6 +9,9 @@ import com.dreamdisplays.shared.protocol.PacketDirection
 import com.dreamdisplays.core.protocol.common.PacketRegistry
 import com.dreamdisplays.core.protocol.common.packets.*
 import com.dreamdisplays.platform.client.net.V2Payload
+//? if <1.20.5 {
+import com.dreamdisplays.platform.client.net.compat.CompatPayloads
+//?}
 import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.managers.DisplayManager
 import com.dreamdisplays.platform.server.managers.PlayerManager
@@ -36,12 +39,16 @@ object FabricV2Networking {
             .onFailure { logger.warn("Failed to encode v2 packet", it) }
             .getOrNull() ?: return
         players.forEach { player ->
+            //? if >=1.20.5 {
             runCatching { ServerPlayNetworking.send(player, V2Payload(bytes)) }
+            //?} else
+            /*runCatching { ServerPlayNetworking.send(player, V2Payload.TYPE.id(), CompatPayloads.encode(V2Payload(bytes))) }*/
         }
     }
 
     /** Registers the single v2 envelope receiver. */
     fun registerReceivers() {
+        //? if >=1.20.5 {
         ServerPlayNetworking.registerGlobalReceiver(V2Payload.TYPE) { payload, context ->
             runCatching {
                 dispatch(
@@ -53,6 +60,17 @@ object FabricV2Networking {
                 logger.warn("Failed to handle v2 packet", e)
             }
         }
+        //?} else
+        /*ServerPlayNetworking.registerGlobalReceiver(V2Payload.TYPE.id()) { server, player, _, buf, _ ->
+            val bytes = ByteArray(buf.readableBytes()).also(buf::readBytes)
+            server.execute {
+                runCatching {
+                    dispatch(player, server, PacketRegistry.decode(bytes, PacketDirection.CLIENT_TO_SERVER) ?: return@runCatching)
+                }.onFailure { e ->
+                    logger.warn("Failed to handle v2 packet.", e)
+                }
+            }
+        }*/
     }
 
     private fun dispatch(player: ServerPlayer, server: MinecraftServer, packet: DreamPacket) {

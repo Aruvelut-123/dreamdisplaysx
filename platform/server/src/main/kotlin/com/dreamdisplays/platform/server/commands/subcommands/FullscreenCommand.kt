@@ -1,5 +1,9 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
+//? if <1.19 {
+import com.dreamdisplays.platform.server.utils.sendSystemMessage
+//?}
+import com.dreamdisplays.platform.client.utils.literalText
 import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.api.media.model.VideoQuality
 import com.dreamdisplays.shared.playback.FullscreenMode
@@ -416,7 +420,12 @@ object VanillaFullscreenCommand {
             token.equals("@s", ignoreCase = true) -> setOfNotNull(sender?.uuid)
             token.equals("@p", ignoreCase = true) ->
                 online
-                    .filter { it.level() == level }
+                    .filter {
+                        //? if >=1.20 {
+                        it.level() == level
+                        //?} else
+                        /*it.level == level*/
+                    }
                     .minByOrNull { it.distanceToSqr(origin) }
                     ?.let { setOf(it.uuid) } ?: emptySet()
 
@@ -462,7 +471,7 @@ object VanillaFullscreenCommand {
         if (player != null) MessageUtil.sendColoredMessage(
             player,
             line
-        ) else ctx.source.sendSystemMessage(Component.literal(line))
+        ) else ctx.source.sendSystemMessage(literalText(line))
         return count
     }
 
@@ -477,7 +486,7 @@ object VanillaFullscreenCommand {
             if (player != null) MessageUtil.sendColoredMessage(
                 player,
                 line
-            ) else ctx.source.sendSystemMessage(Component.literal(line))
+            ) else ctx.source.sendSystemMessage(literalText(line))
             return 0
         }
         local.forEach { s ->
@@ -488,7 +497,7 @@ object VanillaFullscreenCommand {
             if (player != null) MessageUtil.sendColoredMessage(
                 player,
                 line
-            ) else ctx.source.sendSystemMessage(Component.literal(line))
+            ) else ctx.source.sendSystemMessage(literalText(line))
         }
         network.forEach { n ->
             val line = MessageUtil.formatIndexed(
@@ -498,7 +507,7 @@ object VanillaFullscreenCommand {
             if (player != null) MessageUtil.sendColoredMessage(
                 player,
                 line
-            ) else ctx.source.sendSystemMessage(Component.literal(line))
+            ) else ctx.source.sendSystemMessage(literalText(line))
         }
         return local.size + network.size
     }
@@ -531,7 +540,7 @@ object VanillaFullscreenCommand {
         if (player != null) {
             MessageUtil.sendColoredMessage(player, text)
         } else {
-            ctx.source.sendSystemMessage(Component.literal(text.replace(Regex("&[0-9a-fk-or]"), "")))
+            ctx.source.sendSystemMessage(literalText(text.replace(Regex("&[0-9a-fk-or]"), "")))
         }
     }
 }

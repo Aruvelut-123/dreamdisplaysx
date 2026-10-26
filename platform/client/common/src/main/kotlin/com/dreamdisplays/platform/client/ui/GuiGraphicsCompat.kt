@@ -7,7 +7,14 @@ import net.minecraft.network.chat.Component
 import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplays.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 
 /**
  * Version-neutral alias for the per-frame GUI draw target. Minecraft 26+ draws into a [GuiGraphicsExtractor];
@@ -45,8 +52,13 @@ fun GuiGraphicsCompat.drawText(font: Font, text: Component, x: Int, y: Int, colo
 //? if <1.21.11 {
 fun GuiGraphicsCompat.enableScissorPoseAware(x1: Int, y1: Int, x2: Int, y2: Int) {
     val m = pose().last().pose()
+    //? if >=1.19.3 {
     val p1 = m.transformPosition(org.joml.Vector3f(x1.toFloat(), y1.toFloat(), 0f))
     val p2 = m.transformPosition(org.joml.Vector3f(x2.toFloat(), y2.toFloat(), 0f))
     enableScissor(p1.x.toInt(), p1.y.toInt(), p2.x.toInt(), p2.y.toInt())
+    //?} else
+    /*val p1 = com.mojang.math.Vector4f(x1.toFloat(), y1.toFloat(), 0f, 1f).also { it.transform(m) }
+    val p2 = com.mojang.math.Vector4f(x2.toFloat(), y2.toFloat(), 0f, 1f).also { it.transform(m) }
+    enableScissor(p1.x().toInt(), p1.y().toInt(), p2.x().toInt(), p2.y().toInt())*/
 }
 //?}

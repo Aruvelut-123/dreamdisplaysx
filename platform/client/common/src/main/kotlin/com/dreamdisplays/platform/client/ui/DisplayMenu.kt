@@ -1,5 +1,7 @@
 package com.dreamdisplays.platform.client.ui
 
+import com.dreamdisplays.platform.client.utils.literalText
+import com.dreamdisplays.platform.client.utils.translatableText
 //? if >=1.21.11 {
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
@@ -111,7 +113,7 @@ class DisplayMenu private constructor(
         volume = addUi(
             ValueSlider(
                 initial = ds.volume.toDouble(),
-                label = { Component.literal("${(it * 200).roundToInt()}%") },
+                label = { literalText("${(it * 200).roundToInt()}%") },
                 // Volume's fraction maps to 0-200%, so a 5%-of-displayed-value stop is 0.025 of the fraction.
                 step = 0.025,
             ) { playback.setVolume(displayId, it.toFloat()) })
@@ -124,9 +126,9 @@ class DisplayMenu private constructor(
                 label = {
                     when {
                         // Broadcast pins everyone to the highest quality within the cap; show that, not the saved setting
-                        ds.qualityCap > 0 -> Component.literal("${broadcastQuality()}p")
-                        ds.qualityList.isNotEmpty() -> Component.literal("${qualityFromFraction(it)}p")
-                        else -> Component.literal("${ds.quality.serialize()}p")
+                        ds.qualityCap > 0 -> literalText("${broadcastQuality()}p")
+                        ds.qualityList.isNotEmpty() -> literalText("${qualityFromFraction(it)}p")
+                        else -> literalText("${ds.quality.serialize()}p")
                     }
                 },
                 // One stop per available quality, so the handle can only ever rest exactly on a real option
@@ -146,7 +148,7 @@ class DisplayMenu private constructor(
         brightness = addUi(
             ValueSlider(
                 initial = ds.brightness.toDouble().coerceIn(0.0, 1.0),
-                label = { Component.literal("${(it * 100).roundToInt()}%") },
+                label = { literalText("${(it * 100).roundToInt()}%") },
                 step = 0.05,
             ) { playback.setBrightness(displayId, it.toFloat()) })
         brightness.enabledWhen = { !ds.isSync || ds.canEdit }
@@ -158,7 +160,7 @@ class DisplayMenu private constructor(
                 initial = ClientStateManager.config.audioAcoustics,
                 current = { ClientStateManager.config.audioAcoustics },
                 enabledFor = { true },
-                label = { Component.translatable(audio3dModeLabel(it)) },
+                label = { translatableText(audio3dModeLabel(it)) },
             ) { quality ->
                 ClientStateManager.config.audioAcoustics = quality
                 ClientStateManager.config.save()
@@ -178,7 +180,7 @@ class DisplayMenu private constructor(
                         it != PlaybackMode.WATCH_PARTY && ds.canSetModeHere
                     }
                 },
-                label = { Component.translatable(syncModeLabel(it)) },
+                label = { translatableText(syncModeLabel(it)) },
             ) { mode ->
                 when {
                     mode == ds.effectiveMode -> Unit
@@ -197,7 +199,7 @@ class DisplayMenu private constructor(
                 initial = ds.access ?: DisplayAccess.DEFAULT,
                 current = { ds.access ?: DisplayAccess.DEFAULT },
                 enabledFor = { ds.canToggleLockHere },
-                label = { Component.translatable(accessLevelLabel(it)) },
+                label = { translatableText(accessLevelLabel(it)) },
             ) { level ->
                 if (level != ds.access) displays.setAccess(displayId, level)
             })
@@ -357,7 +359,7 @@ class DisplayMenu private constructor(
                 val tip = mutableListOf(
                     tooltipTitle(ClientMessage.BUTTON_QUALITY_TOOLTIP_1.key),
                     tooltipBody(ClientMessage.BUTTON_QUALITY_TOOLTIP_2.key),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue(ClientMessage.BUTTON_QUALITY_TOOLTIP_4.key, qualityFromFraction(quality.value)),
                 )
                 if ((ds.quality.targetHeight ?: 0) > 1080) {
@@ -372,7 +374,7 @@ class DisplayMenu private constructor(
                 [
                     tooltipTitle(ClientMessage.BUTTON_BRIGHTNESS_TOOLTIP_1.key),
                     tooltipBody(ClientMessage.BUTTON_BRIGHTNESS_TOOLTIP_2.key),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue(ClientMessage.BUTTON_BRIGHTNESS_TOOLTIP_3.key, floor(brightness.value * 100).toInt()),
                 ]
             },
@@ -380,14 +382,14 @@ class DisplayMenu private constructor(
                 [
                     tooltipTitle(ClientMessage.BUTTON_AUDIO3D_TOOLTIP_1.key),
                     tooltipBody(ClientMessage.BUTTON_AUDIO3D_TOOLTIP_2.key),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipModeBullet(ClientMessage.MODE_AUDIO_OFF.key, ClientMessage.BUTTON_AUDIO3D_TOOLTIP_3.key),
                     tooltipModeBullet(ClientMessage.MODE_AUDIO_ENHANCED.key, ClientMessage.BUTTON_AUDIO3D_TOOLTIP_4.key),
                     tooltipModeBullet(ClientMessage.MODE_AUDIO_ADVANCED.key, ClientMessage.BUTTON_AUDIO3D_TOOLTIP_5.key),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue(
                         ClientMessage.BUTTON_AUDIO3D_TOOLTIP_6.key,
-                        Component.translatable(audio3dModeLabel(audio3d.mode)),
+                        translatableText(audio3dModeLabel(audio3d.mode)),
                     ),
                 ]
             },
@@ -395,14 +397,14 @@ class DisplayMenu private constructor(
                 [
                     tooltipTitle(ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_1.key),
                     tooltipBody(ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_2.key),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipModeBullet(ClientMessage.MODE_LOCAL.key, ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_3.key),
                     tooltipModeBullet(ClientMessage.MODE_SYNCED.key, ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_4.key),
                     tooltipModeBullet(ClientMessage.MODE_BROADCAST.key, ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_6.key),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue(
                         ClientMessage.BUTTON_SYNCHRONIZATION_TOOLTIP_5.key,
-                        Component.translatable(syncModeLabel(sync.mode)),
+                        translatableText(syncModeLabel(sync.mode)),
                     ),
                 ]
             },
@@ -410,24 +412,24 @@ class DisplayMenu private constructor(
                 buildList {
                     add(tooltipTitle(ClientMessage.BUTTON_ACCESS_TOOLTIP_1.key))
                     add(tooltipBody(ClientMessage.BUTTON_ACCESS_TOOLTIP_2.key))
-                    add(Component.literal(""))
+                    add(literalText(""))
                     add(tooltipModeBullet(ClientMessage.ACCESS_EVERYONE.key, ClientMessage.BUTTON_ACCESS_TOOLTIP_3.key))
                     if (ds.supportsRegionAccess) {
                         add(tooltipModeBullet(ClientMessage.ACCESS_REGION.key, ClientMessage.BUTTON_ACCESS_TOOLTIP_4.key))
                     }
                     add(tooltipModeBullet(ClientMessage.ACCESS_LOCKED.key, ClientMessage.BUTTON_ACCESS_TOOLTIP_5.key))
                     if (ds.supportsRegionAccess && !ds.inRegion) {
-                        add(Component.literal(""))
+                        add(literalText(""))
                         add(
                             ClientMessage.BUTTON_ACCESS_TOOLTIP_NO_REGION.component()
                                 .withStyle { it.withColor(ChatFormatting.YELLOW) },
                         )
                     }
-                    add(Component.literal(""))
+                    add(literalText(""))
                     add(
                         tooltipValue(
                             ClientMessage.BUTTON_ACCESS_TOOLTIP_6.key,
-                            Component.translatable(accessLevelLabel(access.mode)),
+                            translatableText(accessLevelLabel(access.mode)),
                         ),
                     )
                 }
@@ -444,23 +446,23 @@ class DisplayMenu private constructor(
         } else {
             ClientMessage.UI_SCHEDULE_PLAY.key
         }
-        return Component.translatable(key, UiText.formatTime(remainingMs * 1_000_000L)).string
+        return translatableText(key, UiText.formatTime(remainingMs * 1_000_000L)).string
     }
 
     private fun tooltipTitle(key: String): Component =
-        Component.translatable(key).withStyle { it.withColor(ChatFormatting.WHITE).withBold(true) }
+        translatableText(key).withStyle { it.withColor(ChatFormatting.WHITE).withBold(true) }
 
     private fun tooltipBody(key: String): Component =
-        Component.translatable(key).withStyle { it.withColor(ChatFormatting.GRAY) }
+        translatableText(key).withStyle { it.withColor(ChatFormatting.GRAY) }
 
     private fun tooltipValue(key: String, arg: Any): Component =
-        Component.translatable(key, arg).withStyle { it.withColor(ChatFormatting.GOLD) }
+        translatableText(key, arg).withStyle { it.withColor(ChatFormatting.GOLD) }
 
     private fun tooltipModeBullet(modeKey: String, descKey: String): Component =
-        Component.literal("• ").withStyle { it.withColor(ChatFormatting.GRAY) }
-            .append(Component.translatable(modeKey).withStyle { it.withColor(ChatFormatting.GRAY) })
-            .append(Component.literal(": ").withStyle { it.withColor(ChatFormatting.GRAY) })
-            .append(Component.translatable(descKey).withStyle { it.withColor(ChatFormatting.GRAY) })
+        literalText("• ").withStyle { it.withColor(ChatFormatting.GRAY) }
+            .append(translatableText(modeKey).withStyle { it.withColor(ChatFormatting.GRAY) })
+            .append(literalText(": ").withStyle { it.withColor(ChatFormatting.GRAY) })
+            .append(translatableText(descKey).withStyle { it.withColor(ChatFormatting.GRAY) })
 
     private fun buttonTooltip(prefix: String): List<Component> = [
         tooltipTitle("$prefix.tooltip.1"),

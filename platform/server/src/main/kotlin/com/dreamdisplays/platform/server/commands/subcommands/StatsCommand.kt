@@ -1,5 +1,9 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
+//? if <1.19 {
+import com.dreamdisplays.platform.server.utils.sendSystemMessage
+//?}
+import com.dreamdisplays.platform.client.utils.literalText
 import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.managers.PlayerManager
@@ -71,10 +75,10 @@ object VanillaStatsCommand {
             val total = counts.values.sum()
             MessageUtil.sendColoredMessage(player, MessageUtil.formatPrintf(player, ServerMessage.DISPLAY_STATS_TOTAL, total))
         } else {
-            ctx.source.sendSystemMessage(Component.literal(MessageUtil.messageFor(player, ServerMessage.DISPLAY_STATS_HEADER)))
+            ctx.source.sendSystemMessage(literalText(MessageUtil.messageFor(player, ServerMessage.DISPLAY_STATS_HEADER)))
             for ((version, count) in counts) {
                 ctx.source.sendSystemMessage(
-                    Component.literal(
+                    literalText(
                         MessageUtil.formatPrintf(
                             player,
                             ServerMessage.DISPLAY_STATS_ENTRY,
@@ -86,7 +90,7 @@ object VanillaStatsCommand {
             }
             val total = counts.values.sum()
             ctx.source.sendSystemMessage(
-                Component.literal(
+                literalText(
                     MessageUtil.formatPrintf(
                         player,
                         ServerMessage.DISPLAY_STATS_TOTAL,

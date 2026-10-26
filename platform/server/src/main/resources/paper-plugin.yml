@@ -1,6 +1,7 @@
 name: DreamDisplays
 version: '${version}'
 main: com.dreamdisplays.platform.server.PaperServer
+bootstrapper: com.dreamdisplays.platform.server.PaperBootstrap
 api-version: '${paperMinecraftApi}'
 description: 'Plugin for the Dream Displays mod.'
 website: 'https://github.com/arnodoelinger/dreamdisplays'
@@ -10,16 +11,21 @@ authors:
   - Kolyakot33
   - Toffikk
 folia-supported: true
+# Don't change this format!
+# Pre-1.19.4 dependency format on purpose: Paper 1.19.3 only reads this one, and every newer Paper migrates it
+# (a declared dependency joins the classpath; load-after loads it before this plugin).
 dependencies:
-  server:
-    LuckPerms:
-      load: BEFORE
-      required: false
-      join-classpath: true
-    WorldGuard:
-      load: BEFORE
-      required: false
-      join-classpath: true
+  - name: LuckPerms
+    required: false
+    bootstrap: false
+  - name: WorldGuard
+    required: false
+    bootstrap: false
+load-after:
+  - name: LuckPerms
+    bootstrap: false
+  - name: WorldGuard
+    bootstrap: false
 permissions:
   dreamdisplays.create:
     default: true

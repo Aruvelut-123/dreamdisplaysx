@@ -4,12 +4,21 @@ import com.dreamdisplays.core.runtime.getOrNull
 import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.managers.ClientStateManager
 import com.dreamdisplays.platform.client.overlay.CrosshairPolicy
+//? if >=1.21.1 {
 import net.minecraft.client.DeltaTracker
+//?}
 //? if >=26 {
 import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplays.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.Pseudo
 import org.spongepowered.asm.mixin.injection.At
@@ -35,8 +44,15 @@ open class Crosshair {
         //?} else
         /*@Inject(method = ["renderCrosshair"], at = [At("HEAD")], cancellable = true, require = 0)
         open fun extractCrosshair(
+            //? if >=1.20 {
             guiGraphics: GuiGraphics,
+            //?}
+            //? if <1.20 {
+            poseStack: com.mojang.blaze3d.vertex.PoseStack,
+            //?}
+            //? if >=1.21.1 {
             deltaTracker: DeltaTracker,
+            //?}
             ci: CallbackInfo
         ) {*/
         val suppress = DreamServices.registry.getOrNull<CrosshairPolicy>()

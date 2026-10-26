@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
+import com.dreamdisplays.platform.client.utils.literalText
 import com.dreamdisplays.shared.geometry.SurfaceCensus
 import com.dreamdisplays.shared.geometry.SurfaceRole
 import com.dreamdisplays.api.playback.model.DisplayAccess
@@ -21,7 +22,10 @@ import io.github.arnodoelinger.platformweaver.PaperOnly
 import kotlinx.coroutines.launch
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.core.BlockPos
+//? if >=1.19.3 {
 import net.minecraft.core.registries.BuiltInRegistries
+//?} else
+/*import net.minecraft.core.Registry as BuiltInRegistries*/
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
@@ -161,7 +165,7 @@ object VanillaCreateCommand {
     /** Command execution logic. */
     fun execute(ctx: CommandContext<CommandSourceStack>): Int {
         val player = ctx.source.entity as? ServerPlayer
-            ?: return ctx.source.sendFailure(Component.literal("This command can only be used by a player.")).let { 0 }
+            ?: return ctx.source.sendFailure(literalText("This command can only be used by a player.")).let { 0 }
 
         val sel = SelectionManager.selectionPoints[player.uuid] as? VanillaSelectionData
             ?: return MessageUtil.sendMessageWithMaterials(

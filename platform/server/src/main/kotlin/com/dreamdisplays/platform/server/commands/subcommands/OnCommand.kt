@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
+import com.dreamdisplays.platform.client.utils.literalText
 import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.VanillaServerState
 import com.dreamdisplays.platform.server.managers.PlayerManager
@@ -103,14 +104,14 @@ object VanillaOnCommand {
 
         val target: ServerPlayer = if (targetName == null) {
             self ?: run {
-                ctx.source.sendFailure(Component.literal("This command must be used in-game or with a player argument."))
+                ctx.source.sendFailure(literalText("This command must be used in-game or with a player argument."))
                 return 0
             }
         } else {
             ctx.source.server.playerList.getPlayerByName(targetName) ?: run {
                 val msg = config.getMessageForPlayer(self, "displayTargetNotFound") as? String ?: "Player not found: %s"
                 if (self != null) MessageUtil.sendColoredMessage(self, String.format(msg, targetName))
-                else ctx.source.sendFailure(Component.literal(String.format(msg, targetName)))
+                else ctx.source.sendFailure(literalText(String.format(msg, targetName)))
                 return 0
             }
         }
@@ -125,7 +126,7 @@ object VanillaOnCommand {
             ))
         ) {
             if (self != null) ServerMessage.DISPLAY_COMMAND_MISSING_PERMISSION.sendTo(self)
-            else ctx.source.sendFailure(Component.literal("Missing permission."))
+            else ctx.source.sendFailure(literalText("Missing permission."))
             return 0
         }
 

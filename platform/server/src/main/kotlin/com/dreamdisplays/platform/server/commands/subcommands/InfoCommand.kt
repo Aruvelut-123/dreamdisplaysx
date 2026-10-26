@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
+import com.dreamdisplays.platform.client.utils.literalText
 import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.api.playback.model.PlaybackAction
 import com.dreamdisplays.platform.server.PaperServer
@@ -107,7 +108,7 @@ object VanillaInfoCommand {
     /** Prints owner, UUID, region, size, and media metadata of the targeted display. */
     fun execute(ctx: CommandContext<CommandSourceStack>, token: String): Int {
         val player = ctx.source.entity as? ServerPlayer
-            ?: return ctx.source.sendFailure(Component.literal("Players only.")).let { 0 }
+            ?: return ctx.source.sendFailure(literalText("Players only.")).let { 0 }
 
         val data = resolveVanillaDisplayTarget(player, token) as? VanillaDisplayData ?: return 0
 

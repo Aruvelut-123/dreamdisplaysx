@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
+import com.dreamdisplays.platform.client.utils.literalText
 import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.VanillaServerState
@@ -52,7 +53,7 @@ object VanillaDeleteCommand {
     /** Deletes the display named by `this` (looked-at, within 32 blocks) or a remote id/prefix. */
     fun execute(ctx: CommandContext<CommandSourceStack>, token: String): Int {
         val player = ctx.source.entity as? ServerPlayer
-            ?: return ctx.source.sendFailure(Component.literal("Players only.")).let { 0 }
+            ?: return ctx.source.sendFailure(literalText("Players only.")).let { 0 }
 
         val data = resolveVanillaDisplayTarget(player, token) as? VanillaDisplayData ?: return 0
 

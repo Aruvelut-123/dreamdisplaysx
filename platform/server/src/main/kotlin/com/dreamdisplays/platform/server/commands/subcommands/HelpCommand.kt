@@ -1,5 +1,9 @@
 package com.dreamdisplays.platform.server.commands.subcommands
 
+//? if <1.19 {
+import com.dreamdisplays.platform.server.utils.sendSystemMessage
+//?}
+import com.dreamdisplays.platform.client.utils.literalText
 import com.dreamdisplays.platform.server.ModLoaderOnly
 import com.dreamdisplays.platform.server.PaperServer
 import com.dreamdisplays.platform.server.VanillaServerState
@@ -69,7 +73,7 @@ object VanillaHelpCommand {
 
         val header = config.getMessageForPlayer(player, "displayHelpHeader")
         MessageUtil.sendColoredMessage(player ?: run {
-            ctx.source.sendSystemMessage(Component.literal("D | Help"))
+            ctx.source.sendSystemMessage(literalText("D | Help"))
             return
         }, header)
 

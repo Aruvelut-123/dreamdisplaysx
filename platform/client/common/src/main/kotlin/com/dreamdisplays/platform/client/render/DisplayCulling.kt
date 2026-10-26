@@ -48,7 +48,10 @@ internal object DisplayCulling {
         val len = sqrt(fx * fx + fy * fy + fz * fz)
         if (len < 1e-6) return
 
+        //? if >=1.19 {
         val fovDegrees = (mc.options.fov().get() * FOV_HEADROOM).coerceAtMost(MAX_FOV_DEGREES)
+        //?} else
+        /*val fovDegrees = (mc.options.fov * FOV_HEADROOM).coerceAtMost(MAX_FOV_DEGREES)*/
         val tanV = tan(Math.toRadians(fovDegrees) / 2.0)
         val tanH = tanV * windowW / windowH
         val half = atan(sqrt(tanV * tanV + tanH * tanH))

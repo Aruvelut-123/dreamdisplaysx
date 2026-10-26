@@ -1,5 +1,9 @@
 package com.dreamdisplays.platform.client.ui.kit
 
+//? if <1.20.2 {
+import com.dreamdisplays.platform.client.ui.blitSprite
+//?}
+import com.dreamdisplays.platform.client.utils.identifier
 import com.dreamdisplays.platform.client.Initializer
 import com.dreamdisplays.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplays.platform.client.ui.drawText
@@ -7,7 +11,14 @@ import net.minecraft.client.gui.Font
 //? if >=26 {
 import net.minecraft.client.gui.GuiGraphicsExtractor
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplays.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 import net.minecraft.client.gui.components.AbstractWidget
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.RenderPipelines
@@ -127,10 +138,10 @@ fun GuiGraphicsCompat.drawVerifiedBadge(x: Int, y: Int, size: Int, badgeColor: I
 }
 
 /** Nine-slice panel background sprite; see textures/gui/sprites/widgets/panel.png. */
-val PANEL_SPRITE: Identifier = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/panel")
+val PANEL_SPRITE: Identifier = identifier(Initializer.MOD_ID, "widgets/panel")
 
 /** Nine-slice dropdown background sprite; see textures/gui/sprites/widgets/dropdown.png. */
-val DROPDOWN_SPRITE: Identifier = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/dropdown")
+val DROPDOWN_SPRITE: Identifier = identifier(Initializer.MOD_ID, "widgets/dropdown")
 
 /**
  * Draws a nine-slice textured panel background filling [r], additionally faded by [alpha] (1 = the
@@ -157,5 +168,13 @@ fun GuiGraphicsCompat.drawPanel(font: Font, r: UiRect, title: String) {
 fun AbstractWidget.renderChild(g: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) =
     extractRenderState(g, mouseX, mouseY, partialTick)
 //?} else
-/*fun AbstractWidget.renderChild(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) =
-    render(g, mouseX, mouseY, partialTick)*/
+/*
+//? if >=1.20 {
+fun AbstractWidget.renderChild(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) =
+    render(g, mouseX, mouseY, partialTick)
+//?}
+//? if <1.20 {
+fun AbstractWidget.renderChild(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) =
+    render(g.pose(), mouseX, mouseY, partialTick)
+//?}
+*/

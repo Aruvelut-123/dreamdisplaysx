@@ -39,13 +39,26 @@ import com.dreamdisplays.platform.client.input.DisplayMenuInputHandler
 import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.minecraft.world.InteractionResult
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
+//? if <1.19.4 {
+import com.dreamdisplays.core.runtime.getOrNull
+import com.dreamdisplays.platform.client.input.MouseButtons
+import com.dreamdisplays.platform.client.overlay.OverlayManager
+import com.dreamdisplays.platform.client.ui.FullscreenOverlayManager
+import com.dreamdisplays.platform.client.ui.MinecraftOverlayRenderContext
+import com.dreamdisplays.platform.client.ui.compat.GuiGraphics
+import com.dreamdisplays.platform.client.utils.MinecraftScreenUtil
+//?}
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
+//? if >=1.20.5 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
+//?} else
+/*import com.dreamdisplays.platform.client.net.compat.CompatPayloads
+import com.dreamdisplays.platform.client.net.compat.CustomPacketPayload*/
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
 
@@ -61,6 +74,7 @@ class Client : ClientModInitializer, Mod {
         // Note: PayloadTypeRegistry registrations are done in platform/server/ (it's a main entrypoint)
         // which runs on both integrated and dedicated servers, before the client entrypoint.
 
+        //? if >=1.20.5 {
         // Protocol v2: every packet arrives as one opaque envelope payload
         ClientPlayNetworking.registerGlobalReceiver(V2Payload.TYPE) { payload, _ ->
             Initializer.onV2Packet(payload.bytes)
@@ -70,6 +84,15 @@ class Client : ClientModInitializer, Mod {
         ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID) { _, _ ->
             Initializer.onLegacyServerDetected()
         }
+        //?} else
+        /*
+        ClientPlayNetworking.registerGlobalReceiver(V2Payload.TYPE.id()) { client, _, buf, _ ->
+            val bytes = ByteArray(buf.readableBytes()).also(buf::readBytes)
+            client.execute { Initializer.onV2Packet(bytes) }
+        }
+        ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID.id()) { client, _, _, _ ->
+            client.execute { Initializer.onLegacyServerDetected() }
+        }*/
 
         //? if >=26 {
         LevelRenderEvents.BEFORE_GIZMOS.register { context ->
@@ -131,8 +154,19 @@ class Client : ClientModInitializer, Mod {
         //?} else
         /*HudRenderCallback.EVENT.register { graphics, deltaTracker ->
             Initializer.onRenderHud(
-                Minecraft.getInstance(), graphics,
+                Minecraft.getInstance(),
+                //? if >=1.20 {
+                graphics,
+                //?}
+                //? if <1.20 {
+                com.dreamdisplays.platform.client.ui.compat.GuiGraphics(graphics),
+                //?}
+                //? if >=1.21.1 {
                 deltaTracker.getGameTimeDeltaPartialTick(false)
+                //?}
+                //? if <1.21.1 {
+                deltaTracker
+                //?}
             )
         }*/
 
@@ -157,11 +191,45 @@ class Client : ClientModInitializer, Mod {
         }
 
         ClientLifecycleEvents.CLIENT_STOPPING.register { Initializer.onStop() }
+
+        //? if <1.19.4 {
+        registerLegacyScreenOverlays()
+        //?}
     }
 
     override fun sendPacket(packet: CustomPacketPayload) {
+        //? if >=1.20.5 {
         ClientPlayNetworking.send(packet)
+        //?} else
+        /*ClientPlayNetworking.send(packet.type().id(), CompatPayloads.encode(packet))*/
     }
+
+    //? if <1.19.4 {
+    private fun registerLegacyScreenOverlays() {
+        net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.BEFORE_INIT.register { mc, screen, _, _ ->
+            net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.beforeRender(screen).register { _, pose, _, _, tickDelta ->
+                if (FullscreenOverlayManager.isEmpty) return@register
+                FullscreenOverlayManager.onClientTick(mc)
+                if (FullscreenOverlayManager.isEmpty) return@register
+                if (MinecraftScreenUtil.isTransientLoadingScreen(MinecraftScreenUtil.currentScreen(mc))) return@register
+                FullscreenOverlayManager.renderAll(mc, GuiGraphics(pose), tickDelta)
+            }
+            net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.afterRender(screen).register { _, pose, mouseX, mouseY, tickDelta ->
+                val graphics = GuiGraphics(pose)
+                if (!FullscreenOverlayManager.isEmpty &&
+                    MinecraftScreenUtil.isTransientLoadingScreen(MinecraftScreenUtil.currentScreen(mc))
+                ) {
+                    FullscreenOverlayManager.renderAll(mc, graphics, tickDelta)
+                }
+                val overlays = DreamServices.registry.getOrNull<OverlayManager>() ?: return@register
+                if (overlays.isEmpty) return@register
+                overlays.renderAll(
+                    MinecraftOverlayRenderContext(mc, graphics, mouseX, mouseY, MouseButtons.hardwareLeftDown(), tickDelta)
+                )
+            }
+        }
+    }
+    //?}
 
     private fun isDisplayBlock(pos: BlockPos): Boolean =
         DisplayRegistry.getScreens().any { it.isInScreen(pos) }

@@ -102,7 +102,7 @@ object ProxyBridge : PluginMessageListener {
             send(
                 player,
                 BackendHello(
-                    pluginVersion = plugin.pluginMeta.version,
+                    pluginVersion = @Suppress("DEPRECATION") plugin.description.version,
                     mcVersion = Bukkit.getMinecraftVersion(),
                     platform = "paper",
                 ),

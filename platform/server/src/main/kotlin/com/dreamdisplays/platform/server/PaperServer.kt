@@ -14,7 +14,10 @@ import com.dreamdisplays.platform.server.registrar.CommandRegistrar
 import com.dreamdisplays.platform.server.registrar.ListenerRegistrar
 import com.dreamdisplays.platform.server.storage.StorageBackend
 import io.github.arnodoelinger.platformweaver.PaperOnly
+//? if >=1.20.5 {
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
+//?} else
+/*import com.dreamdisplays.platform.server.registrar.LegacyPaperCommands*/
 import org.bstats.bukkit.Metrics
 import org.bukkit.plugin.java.JavaPlugin
 import org.jspecify.annotations.NullMarked
@@ -33,12 +36,17 @@ class PaperServer : JavaPlugin() {
     override fun onLoad() {
         instance = this
         Companion.config = Config(this)
+        //? if >=1.20.5 {
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(CommandRegistrar.buildDisplayCommand(), "Main Dream Displays command")
         }
+        //?}
     }
 
     override fun onEnable() {
+        //? if <1.20.5 {
+        LegacyPaperCommands.register(this, CommandRegistrar.buildDisplayCommand(), "Main Dream Displays command")
+        //?}
         doEnable()
     }
 

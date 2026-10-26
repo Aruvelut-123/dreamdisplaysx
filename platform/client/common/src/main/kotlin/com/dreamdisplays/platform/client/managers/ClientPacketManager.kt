@@ -10,7 +10,10 @@ import com.dreamdisplays.platform.client.Mod
 import com.dreamdisplays.platform.client.capabilities.CapabilityNegotiationService
 import com.dreamdisplays.platform.client.core.DreamServices
 import com.dreamdisplays.platform.client.displays.DisplayRegistry
+//? if >=1.20.5 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
+//?} else
+/*import com.dreamdisplays.platform.client.net.compat.CustomPacketPayload*/
 import org.slf4j.LoggerFactory
 
 /**

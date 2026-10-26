@@ -17,7 +17,9 @@ import com.dreamdisplays.platform.server.utils.net.VanillaServerPacketHandler
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+//? if >=1.20.5 {
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
+//?}
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.server.MinecraftServer
 import net.minecraft.world.level.storage.LevelResource
@@ -39,7 +41,9 @@ class Server : ModInitializer {
         VanillaServerState.platformName = "fabric"
         VanillaNetworking.adapter = FabricNetworkingAdapter
 
+        //? if >=1.20.5 {
         registerPayloadTypes()
+        //?}
 
         VanillaServerPacketHandler.registerReceivers()
         FabricV2Networking.registerReceivers()
@@ -68,6 +72,7 @@ class Server : ModInitializer {
         logger.info("Server-side initialization complete.")
     }
 
+    //? if >=1.20.5 {
     private fun registerPayloadTypes() {
         runCatching {
             payloadRegistry("clientboundPlay", "playS2C").let { clientbound ->
@@ -101,6 +106,7 @@ class Server : ModInitializer {
         }
         register.invoke(registry, packetId, packetCodec)
     }
+    //?}
 
     companion object {
         /** Logger. */

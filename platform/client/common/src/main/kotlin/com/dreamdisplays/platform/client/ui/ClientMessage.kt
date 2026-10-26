@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.ui
 
+import com.dreamdisplays.platform.client.utils.translatableText
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.MutableComponent
 
@@ -91,7 +92,7 @@ enum class ClientMessage(val key: String) {
     ;
 
     /** This message as a translatable component, with [args] filling its placeholders. */
-    fun component(vararg args: Any): MutableComponent = Component.translatable(key, *args)
+    fun component(vararg args: Any): MutableComponent = translatableText(key, *args)
 
     /** This message translated to the current language, with [args] filling its placeholders. */
     fun text(vararg args: Any): String = component(*args).string

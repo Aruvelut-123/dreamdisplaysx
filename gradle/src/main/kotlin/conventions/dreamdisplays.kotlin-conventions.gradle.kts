@@ -14,6 +14,8 @@ plugins {
 private val scVersions = gradle.extensions.getByType<StonecutterVersions>()
 private val activeVersion = scVersions.active
 private val javaVersion = scVersion("java.version").toInt()
+
+private val toolchainVersion = scVersions.getOrNull("java.toolchain")?.toInt() ?: javaVersion
 private fun scVersion(name: String): String = scVersions.get(name)
 
 private val allVersionsJson = VersionsJson.load(rootProject.file("versions.json"))
@@ -27,7 +29,8 @@ private val platformIndependentModules =
         ":platform:proxy", ":platform:proxy:common", ":platform:proxy:velocity", ":platform:proxy:bungeecord",
     )
 
-private val bytecodeTarget: Int = if (project.path in platformIndependentModules) javaFloor else javaVersion
+private val bytecodeTarget: Int =
+    if (project.path in platformIndependentModules || project.path == ":platform:server") javaFloor else javaVersion
 
 if (project.path !in platformIndependentModules) {
     layout.buildDirectory.set(layout.projectDirectory.dir("build/$activeVersion"))
@@ -45,7 +48,7 @@ scVersions.getOrNull("commons.compress.version")?.let { commonsCompressVersion -
 }
 
 java {
-    toolchain { languageVersion.set(JavaLanguageVersion.of(javaVersion)) }
+    toolchain { languageVersion.set(JavaLanguageVersion.of(toolchainVersion)) }
 }
 
 dependencies {
@@ -59,7 +62,7 @@ tasks.test {
 }
 
 extensions.configure<KotlinJvmProjectExtension> {
-    jvmToolchain(javaVersion)
+    jvmToolchain(toolchainVersion)
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -71,6 +74,9 @@ tasks.withType<KotlinCompile>().configureEach {
     compilerOptions.jvmTarget.set(JvmTarget.fromTarget(bytecodeTarget.toString()))
     compilerOptions.optIn.add("com.dreamdisplays.api.Unstable")
     compilerOptions.freeCompilerArgs.add("-Xcollection-literals")
+    if (bytecodeTarget < toolchainVersion && project.path != ":media:player") {
+        compilerOptions.freeCompilerArgs.add("-Xjdk-release=$bytecodeTarget")
+    }
 }
 
 pluginManager.withPlugin("io.github.arnodoelinger.platformweaver") {

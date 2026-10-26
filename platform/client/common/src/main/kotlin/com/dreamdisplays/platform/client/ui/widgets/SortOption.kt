@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.ui.widgets
 
+import com.dreamdisplays.platform.client.utils.translatableText
 import com.dreamdisplays.platform.client.ui.ClientMessage
 import com.dreamdisplays.api.media.search.SortOrder
 import net.minecraft.network.chat.Component
@@ -23,5 +24,5 @@ enum class SortOption(val labelKey: String, val networkSort: SortOrder) {
      */
     val isOwnList: Boolean get() = this == MY_LINKS
 
-    fun label(): String = Component.translatable(labelKey).string
+    fun label(): String = translatableText(labelKey).string
 }

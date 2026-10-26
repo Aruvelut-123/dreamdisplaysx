@@ -1,5 +1,6 @@
 package com.dreamdisplays.platform.client.render
 
+import com.dreamdisplays.platform.client.utils.identifier
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier
 //?} else
@@ -206,7 +207,7 @@ object ScrubPreview {
                 val tex = DynamicTexture({ "scrub-$texKey" }, image)
                 //?} else
                 /*val tex = DynamicTexture(image)*/
-                val id = Identifier.fromNamespaceAndPath("dreamdisplays", "scrub/${hash(texKey)}")
+                val id = identifier("dreamdisplays", "scrub/${hash(texKey)}")
                 Minecraft.getInstance().textureManager.register(id, tex)
                 TextureUploadUtil.applyBilinearFilter(tex)
                 result = id
