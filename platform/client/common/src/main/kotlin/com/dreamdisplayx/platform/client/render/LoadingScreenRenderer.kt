@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.api.display.geometry.ConformQuad
 import com.dreamdisplayx.api.display.geometry.ConformVertex
 import com.dreamdisplayx.api.display.geometry.clipToUvRect
@@ -35,7 +37,7 @@ internal object LoadingScreenRenderer {
     private val brushType by lazy { texture("textures/gui/loading_dot.png", "loading-ring") }
 
     private fun texture(path: String, name: String): RenderType = DisplayUnlitRenderTypes.create(
-        "dream-displays-$name", Identifier.fromNamespaceAndPath(Initializer.MOD_ID, path), translucent = true,
+        "dream-displays-$name", DreamIdentifiers.of(Initializer.MOD_ID, path), translucent = true,
     )
 
     /** Called before the flat/curved split; the real first frame always wins over the intro. */

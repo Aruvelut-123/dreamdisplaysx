@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.debug
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 //? if >=26 {
 import com.dreamdisplayx.util.GeneralUtil
 import net.minecraft.client.resources.language.I18n
@@ -25,7 +27,7 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
     private val commitId: String by lazy { I18n.get("dreamdisplayx.debug.commit") }
 
     /** Shared group for right-side display alongside system specs. */
-    private val groupId = Identifier.fromNamespaceAndPath("minecraft", "system_specs")
+    private val groupId = DreamIdentifiers.of("minecraft", "system_specs")
 
     override fun display(
         displayer: DebugScreenDisplayer,
@@ -71,7 +73,7 @@ object DreamDisplaysDebugEntry : DebugScreenEntry {
  * Safe to call from mod init (Minecraft classes are resolvable).
  */
 object DebugScreenEntryRegistrar {
-    private val DEBUG_ENTRY_ID = Identifier.fromNamespaceAndPath("dreamdisplayx", "debug")
+    private val DEBUG_ENTRY_ID = DreamIdentifiers.of("dreamdisplayx", "debug")
 
     fun register() {
         val field = DebugScreenEntries::class.java.getDeclaredField("ENTRIES_BY_ID")

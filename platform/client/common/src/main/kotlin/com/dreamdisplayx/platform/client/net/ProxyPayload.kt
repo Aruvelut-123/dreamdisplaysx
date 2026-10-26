@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.net
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.core.protocol.proxy.ProxyPacketRegistry
 import com.dreamdisplayx.platform.client.Initializer
 import net.minecraft.network.RegistryFriendlyByteBuf
@@ -31,7 +33,7 @@ data class ProxyPayload(val bytes: ByteArray) : CustomPacketPayload {
 
         /** Registered payload type for the proxy channel. */
         val TYPE: CustomPacketPayload.Type<ProxyPayload> =
-            CustomPacketPayload.Type(Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "proxy"))
+            CustomPacketPayload.Type(DreamIdentifiers.of(Initializer.MOD_ID, "proxy"))
 
         /** Stream codec that reads / writes the raw envelope bytes verbatim. */
         val CODEC: StreamCodec<RegistryFriendlyByteBuf, ProxyPayload> = StreamCodec.of(

@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.client.Initializer
 //? if >=1.21.11 {
 //? if <26.3 {
@@ -31,13 +33,13 @@ object DisplayUnlitRenderTypes {
     /** Lazily-built unlit textured pipeline for display quads. */
     private val texturedPipeline: RenderPipeline by lazy {
         val pipeline = RenderPipelineCompat.createDisplayPipeline(
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "pipeline/display_unlit_textured"),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_fog" +
+            DreamIdentifiers.of(Initializer.MOD_ID, "pipeline/display_unlit_textured"),
+            DreamIdentifiers.of(Initializer.MOD_ID, "core/display_fog" +
                 //? if >=26.3 {
                 "_rp"
                 //?} else
                 /*""*/),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_fog" +
+            DreamIdentifiers.of(Initializer.MOD_ID, "core/display_fog" +
                 //? if >=26.3 {
                 "_rp"
                 //?} else

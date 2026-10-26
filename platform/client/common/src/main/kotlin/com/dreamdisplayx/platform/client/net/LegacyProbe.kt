@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.net
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.client.Initializer
 import net.minecraft.network.RegistryFriendlyByteBuf
 import net.minecraft.network.codec.StreamCodec
@@ -15,7 +17,7 @@ import net.minecraft.resources.Identifier
  */
 object LegacyProbe {
     private fun <T : CustomPacketPayload> createType(path: String): CustomPacketPayload.Type<T> =
-        CustomPacketPayload.Type(Identifier.fromNamespaceAndPath(Initializer.MOD_ID, path))
+        CustomPacketPayload.Type(DreamIdentifiers.of(Initializer.MOD_ID, path))
 
     /** Serverbound v1 handshake; sent by every client so v1-only servers reveal themselves. */
     data class Version(val version: String) : CustomPacketPayload {

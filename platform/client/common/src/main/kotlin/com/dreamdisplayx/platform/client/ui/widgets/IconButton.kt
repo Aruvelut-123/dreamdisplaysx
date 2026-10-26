@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
@@ -78,19 +80,19 @@ class IconButton(
 
     companion object {
         val DEFAULT_SPRITES = WidgetSprites(
-            Identifier.withDefaultNamespace("widget/button"),
-            Identifier.withDefaultNamespace("widget/button_disabled"),
-            Identifier.withDefaultNamespace("widget/button_highlighted"),
+            DreamIdentifiers.vanilla("widget/button"),
+            DreamIdentifiers.vanilla("widget/button_disabled"),
+            DreamIdentifiers.vanilla("widget/button_highlighted"),
         )
 
         /** Red variant used for destructive actions (delete, report). */
         val RED_SPRITES = WidgetSprites(
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/red_button"),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/red_button_disabled"),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/red_button_highlighted"),
+            DreamIdentifiers.of(Initializer.MOD_ID, "widgets/red_button"),
+            DreamIdentifiers.of(Initializer.MOD_ID, "widgets/red_button_disabled"),
+            DreamIdentifiers.of(Initializer.MOD_ID, "widgets/red_button_highlighted"),
         )
 
         /** Resolves a mod-namespaced icon sprite by [name]. */
-        fun modIcon(name: String): Identifier = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, name)
+        fun modIcon(name: String): Identifier = DreamIdentifiers.of(Initializer.MOD_ID, name)
     }
 }

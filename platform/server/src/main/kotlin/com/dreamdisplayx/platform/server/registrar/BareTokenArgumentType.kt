@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.server.registrar
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.mojang.brigadier.LiteralMessage
 import com.mojang.brigadier.StringReader
 import com.mojang.brigadier.arguments.ArgumentType
@@ -23,7 +25,7 @@ import net.minecraft.resources.Identifier
  */
 object BareTokenArgumentType : ArgumentType<String> {
     private val MISSING = SimpleCommandExceptionType(LiteralMessage("Expected a value."))
-    val ID: Identifier = Identifier.fromNamespaceAndPath("dreamdisplayx", "bare_token")
+    val ID: Identifier = DreamIdentifiers.of("dreamdisplayx", "bare_token")
 
     @Suppress("UNCHECKED_CAST")
     val NETWORK_FALLBACK: ArgumentType<Any> = StringArgumentType.greedyString() as ArgumentType<Any>

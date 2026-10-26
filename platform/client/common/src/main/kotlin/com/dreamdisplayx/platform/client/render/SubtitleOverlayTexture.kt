@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.client.Initializer
 import com.mojang.blaze3d.platform.NativeImage
 //? if >=1.21.11 {
@@ -60,7 +62,7 @@ class SubtitleOverlayTexture {
             cachedRenderType = null
             return
         }
-        val id = identifier ?: Identifier.fromNamespaceAndPath(
+        val id = identifier ?: DreamIdentifiers.of(
             Initializer.MOD_ID,
             "dynamic/subtitle_${INSTANCE_ID.incrementAndGet()}",
         ).also { identifier = it }

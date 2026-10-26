@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 //? if >=1.21.11 {
 //?} else
 /*import com.mojang.blaze3d.systems.RenderSystem*/
@@ -131,7 +133,7 @@ class FullscreenOverlay(
             tex = DynamicTexture({ "dreamdisplayx:fullscreen" }, img)
             //?} else
             /*tex = DynamicTexture(img)*/
-            textureId = Identifier.fromNamespaceAndPath(
+            textureId = DreamIdentifiers.of(
                 Initializer.MOD_ID, "fullscreen/${displayScreen.uuid}-${UUID.randomUUID()}"
             )
             mc.textureManager.register(textureId!!, tex)

@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.client.Initializer
 //? if >=1.21.11 <26.3 {
 import com.mojang.blaze3d.pipeline.RenderPipeline
@@ -93,13 +95,13 @@ object DisplayYuvRenderTypes {
     private fun buildPipeline(): RenderPipeline =
         if (!isSupported) Yuv262Reflect.createPipeline()
         else RenderPipelineCompat.createDisplayPipeline(
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "pipeline/display_yuv"),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_fog" +
+            DreamIdentifiers.of(Initializer.MOD_ID, "pipeline/display_yuv"),
+            DreamIdentifiers.of(Initializer.MOD_ID, "core/display_fog" +
                 //? if >=26.3 {
                 "_rp"
                 //?} else
                 /*""*/),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_yuv" +
+            DreamIdentifiers.of(Initializer.MOD_ID, "core/display_yuv" +
                 //? if >=26.3 {
                 "_rp"
                 //?} else
@@ -141,7 +143,7 @@ object DisplayYuvRenderTypes {
             img.setPixel(0, 0, -1)
             val tex = DynamicTexture({ "dreamdisplayx:white" }, img)
             tex.upload()
-            val newId = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "screen-white")
+            val newId = DreamIdentifiers.of(Initializer.MOD_ID, "screen-white")
             Minecraft.getInstance().textureManager.register(newId, tex)
             whiteTextureId = newId
             newId
@@ -171,7 +173,7 @@ object DisplayYuvRenderTypes {
             img.setPixelRGBA(0, 0, -1)
             val tex = DynamicTexture(img)
             tex.upload()
-            val newId = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "screen-white")
+            val newId = DreamIdentifiers.of(Initializer.MOD_ID, "screen-white")
             Minecraft.getInstance().textureManager.register(newId, tex)
             whiteTextureId = newId
             newId

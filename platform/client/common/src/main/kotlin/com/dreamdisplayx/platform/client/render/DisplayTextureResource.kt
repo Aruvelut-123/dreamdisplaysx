@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.rendertype.RenderType
 //?} else
@@ -220,7 +222,7 @@ class DisplayTextureResource(private val uuid: UUID) {
         )
         //?} else
         /*val newTexture = DynamicTexture(NativeImage(NativeImage.Format.RGBA, w, h, false))*/
-        val newId = Identifier.fromNamespaceAndPath(
+        val newId = DreamIdentifiers.of(
             Initializer.MOD_ID,
             "screen-main-texture-$uuid-${UUID.randomUUID()}",
         )
@@ -245,7 +247,7 @@ class DisplayTextureResource(private val uuid: UUID) {
         var u: AbstractTexture? = null
         var v: AbstractTexture? = null
         val ids = listOf("y" to (w to h), "u" to (cw to ch), "v" to (cw to ch)).map { (plane, dims) ->
-            val id = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "screen-$plane-plane-$suffix.")
+            val id = DreamIdentifiers.of(Initializer.MOD_ID, "screen-$plane-plane-$suffix.")
             val tex =
                 DisplayYuvRenderTypes.createPlaneTexture("dreamdisplayx $plane plane $uuid.", dims.first, dims.second)
             manager.register(id, tex)

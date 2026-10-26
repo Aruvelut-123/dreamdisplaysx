@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.net
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.client.Initializer
 import net.minecraft.network.RegistryFriendlyByteBuf
 import net.minecraft.network.codec.StreamCodec
@@ -18,7 +20,7 @@ data class V3Payload(val bytes: ByteArray) : CustomPacketPayload {
     companion object {
         const val CHANNEL: String = "${Initializer.MOD_ID}:v3"
         val TYPE: CustomPacketPayload.Type<V3Payload> =
-            CustomPacketPayload.Type(Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "v3"))
+            CustomPacketPayload.Type(DreamIdentifiers.of(Initializer.MOD_ID, "v3"))
         val CODEC: StreamCodec<RegistryFriendlyByteBuf, V3Payload> = StreamCodec.of(
             { buf, payload -> buf.writeBytes(payload.bytes) },
             { buf -> V3Payload(ByteArray(buf.readableBytes()).also(buf::readBytes)) },

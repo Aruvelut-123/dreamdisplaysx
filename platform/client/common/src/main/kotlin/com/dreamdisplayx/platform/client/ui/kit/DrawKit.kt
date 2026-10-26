@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui.kit
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
@@ -129,10 +131,10 @@ fun GuiGraphicsCompat.drawVerifiedBadge(x: Int, y: Int, size: Int, badgeColor: I
 }
 
 /** Nine-slice panel background sprite; see textures/gui/sprites/widgets/panel.png. */
-val PANEL_SPRITE: Identifier = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/panel")
+val PANEL_SPRITE: Identifier = DreamIdentifiers.of(Initializer.MOD_ID, "widgets/panel")
 
 /** Nine-slice dropdown background sprite; see textures/gui/sprites/widgets/dropdown.png. */
-val DROPDOWN_SPRITE: Identifier = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/dropdown")
+val DROPDOWN_SPRITE: Identifier = DreamIdentifiers.of(Initializer.MOD_ID, "widgets/dropdown")
 
 /**
  * Draws a nine-slice textured panel background filling [r], additionally faded by [alpha] (1 = the

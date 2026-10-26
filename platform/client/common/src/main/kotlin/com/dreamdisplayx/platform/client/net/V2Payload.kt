@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.net
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.platform.client.Initializer
 import net.minecraft.network.RegistryFriendlyByteBuf
@@ -32,7 +34,7 @@ data class V2Payload(val bytes: ByteArray) : CustomPacketPayload {
 
         /** Registered payload type for the v2 channel. */
         val TYPE: CustomPacketPayload.Type<V2Payload> =
-            CustomPacketPayload.Type(Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "v2"))
+            CustomPacketPayload.Type(DreamIdentifiers.of(Initializer.MOD_ID, "v2"))
 
         /** Stream codec that reads / writes the raw envelope bytes verbatim. */
         val CODEC: StreamCodec<RegistryFriendlyByteBuf, V2Payload> = StreamCodec.of(

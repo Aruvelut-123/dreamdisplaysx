@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.RenderPipelines
 //?}
@@ -726,7 +728,7 @@ class PreviewSection(
                 tex = DynamicTexture({ "dreamdisplayx:ambient" }, img)
                 //?} else
                 /*tex = DynamicTexture(img)*/
-                textureId = Identifier.fromNamespaceAndPath(
+                textureId = DreamIdentifiers.of(
                     Initializer.MOD_ID,
                     "ambient/${ds.uuid}-${UUID.randomUUID()}",
                 )

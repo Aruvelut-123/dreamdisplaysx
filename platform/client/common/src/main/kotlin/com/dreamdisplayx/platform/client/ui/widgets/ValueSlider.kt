@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
 //? if >=1.21.11 {
@@ -147,9 +149,9 @@ class ValueSlider(
     }
 
     companion object {
-        private val TRACK = Identifier.withDefaultNamespace("widget/slider")
-        private val TRACK_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_highlighted")
-        private val HANDLE = Identifier.withDefaultNamespace("widget/slider_handle")
-        private val HANDLE_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_handle_highlighted")
+        private val TRACK = DreamIdentifiers.vanilla("widget/slider")
+        private val TRACK_HIGHLIGHTED = DreamIdentifiers.vanilla("widget/slider_highlighted")
+        private val HANDLE = DreamIdentifiers.vanilla("widget/slider_handle")
+        private val HANDLE_HIGHLIGHTED = DreamIdentifiers.vanilla("widget/slider_handle_highlighted")
     }
 }

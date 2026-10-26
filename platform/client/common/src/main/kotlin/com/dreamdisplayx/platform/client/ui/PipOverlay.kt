@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 //? if >=1.21.11 {
 //?} else
 /*import com.mojang.blaze3d.systems.RenderSystem*/
@@ -210,7 +212,7 @@ class PipOverlay(
             tex = DynamicTexture({ "dreamdisplayx:pip" }, img)
             //?} else
             /*tex = DynamicTexture(img)*/
-            textureId = Identifier.fromNamespaceAndPath(
+            textureId = DreamIdentifiers.of(
                 Initializer.MOD_ID, "pip/${displayScreen.uuid}-${UUID.randomUUID()}"
             )
             mc.textureManager.register(textureId!!, tex)

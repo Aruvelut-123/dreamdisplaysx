@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.server.utils
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.util.toJsonString
@@ -321,7 +323,7 @@ object MessageUtil {
                         val item = BuiltInRegistries.ITEM.getValue(itemId)
                         val isBlock = item is net.minecraft.world.item.BlockItem
                         val atlasId = if (isBlock) AtlasIds.BLOCKS else AtlasIds.ITEMS
-                        val spriteId = Identifier.fromNamespaceAndPath(
+                        val spriteId = DreamIdentifiers.of(
                             itemId.namespace,
                             (if (isBlock) "block/" else "item/") + itemId.path
                         )

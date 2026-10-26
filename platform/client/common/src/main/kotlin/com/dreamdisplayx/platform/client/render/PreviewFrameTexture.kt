@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.platform.client.DreamIdentifiers
+
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier
 //?} else
@@ -92,7 +94,7 @@ class PreviewFrameTexture(private val uuid: UUID) {
             tex = DynamicTexture({ "dreamdisplayx:preview" }, img)
             //?} else
             /*tex = DynamicTexture(img)*/
-            textureId = Identifier.fromNamespaceAndPath(
+            textureId = DreamIdentifiers.of(
                 Initializer.MOD_ID,
                 "preview/${uuid}-${UUID.randomUUID()}",
             )
