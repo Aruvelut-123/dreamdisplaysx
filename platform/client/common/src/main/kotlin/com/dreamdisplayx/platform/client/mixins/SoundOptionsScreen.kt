@@ -3,7 +3,7 @@ package com.dreamdisplayx.platform.client.mixins
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import net.minecraft.client.OptionInstance
-//? if >=1.21.11 {
+//? if >=1.21 {
 import net.minecraft.client.gui.screens.options.SoundOptionsScreen
 //?} else
 /*import net.minecraft.client.gui.screens.SoundOptionsScreen*/

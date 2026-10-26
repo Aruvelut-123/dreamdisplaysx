@@ -191,12 +191,17 @@ abstract class UiScreenBase(title: Component) : Screen(title) {
     protected fun drawChildren(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, delta: Float) =
         super.render(g, mouseX, mouseY, delta)*/
     //? if <1.21.11 {
-    /** 1.21.1 has no `renderTransparentBackground`; a translucent fill over the whole screen matches it. */
+    /**
+     * Hides the vanilla screen background.
+     *
+     * `renderTransparentBackground` only exists on `Screen` from 1.20.2 on, and its signature
+     * changes with the 1.20.2 `mouseX`/`delta` parameters, so the pre-1.20.2 line needs its own
+     * fill and the post-1.20.2 line overrides the real method.
+     */
+    //? if <1.20.2 {
     private fun renderTransparentBackground(g: GuiGraphics) =
         g.fillGradient(0, 0, width, height, -1072689136, -804253680)
 
-    /** Hides the vanilla screen background; the signature differs before 1.20.2. */
-    //? if <1.20.2 {
     override fun renderBackground(g: GuiGraphics) {}
     //?} else
     /*override fun renderBackground(g: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) {}*/

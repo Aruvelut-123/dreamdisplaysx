@@ -37,7 +37,7 @@ object DreamIdentifiers {
 /** Constructs an identifier from a namespace and a path (spelling differs by Minecraft era). */
 @Suppress("UNUSED_PARAMETER")
 private fun construct(namespace: String, path: String): Identifier =
-//? if >=1.21.11 {
+//? if >=1.21 {
     Identifier.fromNamespaceAndPath(namespace, path)
 //?} else
 /*Identifier(namespace, path)*/
