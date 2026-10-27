@@ -43,6 +43,10 @@ sourceSets.main {
     resources.exclude("dreamdisplays.mixins.json", "dreamdisplays.server.mixins.json")
 }
 
+extensions.configure<kotlinx.atomicfu.plugin.gradle.AtomicFUPluginExtension>("atomicfu") {
+    transformJvm = false
+}
+
 platformweaver {
     target = "forge"
     chameleonsDir = null
