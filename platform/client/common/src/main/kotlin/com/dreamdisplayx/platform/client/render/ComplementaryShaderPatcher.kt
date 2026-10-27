@@ -1,6 +1,5 @@
 package com.dreamdisplayx.platform.client.render
 
-import net.minecraft.client.Minecraft
 import org.slf4j.LoggerFactory
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -39,13 +38,15 @@ object ComplementaryShaderPatcher {
     }.onFailure { logger.warn("Complementary shader patch scan skipped: {}", it.message) }.getOrDefault(emptyList())
 
     private fun shaderpacksDirectory(): Path? = runCatching {
-        val mc = Minecraft.getInstance()
-        val field = mc.javaClass.methods.firstOrNull { it.name == "gameDirectory" && it.parameterCount == 0 }
-        val value = field?.invoke(mc) ?: runCatching {
-            mc.javaClass.getField("gameDirectory").get(mc)
-        }.getOrNull()
-        (value as? java.io.File)?.toPath()?.resolve("shaderpacks")
-            ?: Path.of("shaderpacks").toAbsolutePath()
+        // The working directory Fabric Loader launches the game from is the instance directory, so it
+        // contains `shaderpacks/`. Reading it from a system property keeps this off the Minecraft class
+        // entirely: `Minecraft.gameDirectory` is a public *field* on every target we build (never a
+        // getter), and reflecting it would force the JVM to resolve that class's whole field set,
+        // dragging unrelated types such as `Gui` through the mixin transformer while client entrypoints
+        // are still running - where a half-applied mixin aborts startup.
+        val gameDirProperty = System.getProperty("user.dir")
+        val gameDir = if (gameDirProperty != null) Path.of(gameDirProperty) else Path.of(".").toAbsolutePath()
+        gameDir.resolve("shaderpacks")
     }.getOrNull()
 
     private fun isComplementary(file: Path): Boolean = runCatching {
