@@ -98,6 +98,8 @@
   remapped for the 1.20.1 build) before diagnosing a log, not just the reported timestamp. Later
   1.20.1 builds: `e18b2301…` adds `DisplayLatePass`, `603ad287…` adds `HudSuppress`, `bd541c13…` adds
   the `user.dir` shader-scan fix, `d1478126…` moves `DisplayUnlitRenderTypes` onto the access widener.
+  `d2dce976…` is the first artifact that reaches the world with a display, and `569d9d05…` adds the
+  `POSITION_TEX_COLOR` element-order fix in `VertexCompat`.
 - **On 1.20.1 every vertex attribute must be written in the format's own element order.** The legacy
   `BufferVertexConsumer` setters (`vertex`, `color`, `uv`, `overlayCoords`, `uv2`, `normal`) read
   `currentElement()` and *silently `return this`* when the usage does not match — `color()` on a UV0
