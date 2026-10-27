@@ -71,8 +71,28 @@
   `ScreenRenderer`, no client mixins), i.e. an instant `NoClassDefFoundError` on load.
   Fix: in the `isClassicLoomTarget` branch, point `Jar` at `layout.buildDirectory.dir("libs")` and
   clear `archiveClassifier`, so the artifact Gradle hands the consumer matches the file on disk.
-  **Verify fat jars by class inventory, never by size or by "BUILD SUCCESSFUL"** — extract the
-  `shadow(project(...))` jars and assert every class name appears in the final artifact.
+   **Verify fat jars by class inventory, never by size or by "BUILD SUCCESSFUL"** — extract the
+   `shadow(project(...))` jars and assert every class name appears in the final artifact.
+- **Without `remapJar` the shipped classTweaker keeps its `named` header and Fabric Loader rejects
+  the mod.** Every other target writes `accessWidener v1 named` into the jar and lets `remapJar`
+  rewrite the header to `intermediary`; 1.20.1 ships the jar unremapped, so Loader dies with
+  `ClassTweakerFormatException: Namespace (named) does not match current runtime namespace
+  (intermediary)` before any class loads. Writing `intermediary` directly into the generated file
+  is **not** an option — Loom reads `accessWidenerPath` at configuration time and fails with
+  `Failed to setup Minecraft: Namespace mismatch, expected named got intermediary`. The working
+  shape is two files: the generated `named` copy stays for Loom, and a
+  `tasks.named<ProcessResources>("processResources") { doLast { … } }` block overwrites the
+  packaged `dreamdisplayx.classtweaker` with `accessWidener v1 intermediary` after the copy ran.
+  `sourceSets.main.resources.srcDir(files(dir).builtBy(task))` does **not** make
+  `processResources` depend on that task — the extra directory stays empty and the jar keeps
+  `named`. Verify by reading the header out of the final jar, not out of `resources/main`.
+- **1.20.1 could use `remapJar` if `:platform:client:common` stopped applying classic Loom.** The
+  `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension` failure is not caused
+  by `remapJar`: two modules apply classic Loom for the same target (`common` via
+  `apply(plugin = "fabric-loom")` under `isClassicLoomTarget`, `:platform:client:fabric` via
+  `isClassicLoomOnly`), so two `VisitableURLClassLoader`s each load their own `LoomGradleExtension`
+  and any cross-module call casts between them. Even `tasks --all` and `genSourcesWithCfr` blow up
+  on it. The un-remapped pack is a deliberate workaround, not a hard limit.
 - **A locally built 1.20.1 jar is not testable on Android.** `natives-manifest.json` carries a CI-owned
   `release_base` (`natives-<sha>-<stamp>`); a local build stamps the placeholder that CI never uploaded,
   so `libvlc-android-aarch64.tar.gz` 404s and playback cannot initialise. Always test the CI artifact
