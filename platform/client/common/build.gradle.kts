@@ -109,4 +109,23 @@ if (isClassicLoomTarget) {
     tasks.matching { it.name == "remapJar" || it.name == "remapSourcesJar" }.configureEach {
         enabled = false
     }
+
+    /**
+     * Disabling `remapJar` leaves the module's `runtimeElements` variant pointing at
+     * `build/<ver>/libs/common-<version>.jar`, but classic Loom moves the plain `jar` output to
+     * `build/<ver>/devlibs/` and suffixes it with `-dev`. Nothing ever writes the advertised path,
+     * so `:platform:client:fabric`'s `shadow(project(":platform:client:common"))` resolves to a
+     * file that does not exist and silently drops the whole module from the fat jar — the shipped
+     * 1.20.1 jar then has no `Initializer`, no `ScreenRenderer` and none of the client mixins, and
+     * the game dies with `NoClassDefFoundError` the moment the mod loads.
+     *
+     * Point `jar` at the advertised path instead. Loom only redirects it there because it owns the
+     * subsequent remap step, and that step is disabled for this target, so overriding the location
+     * makes the artifact Gradle hands to the consumer match the file that exists. The classes are
+     * already in named mappings (the same set the game runs with), so no remapping is needed.
+     */
+    tasks.named<Jar>("jar") {
+        destinationDirectory.set(layout.buildDirectory.dir("libs"))
+        archiveClassifier.set("")
+    }
 }
