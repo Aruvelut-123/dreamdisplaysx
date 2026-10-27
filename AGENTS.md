@@ -60,6 +60,21 @@
   `Cannot remap access widener from namespace 'intermediary'. Expected: 'named'`. The generated dev copy
   stays `named` (`accessWidener v1 named`, header-only for 1.20.1 since none of the widened members
   exist there), and `loom.accessWidenerPath` keeps pointing at it.
+- **`GameRenderer.renderLevel` and `Gui`'s HUD hooks change shape between legacy versions.** 1.20.1
+  declares `renderLevel(float, long, PoseStack)` while 1.21.1/1.21.11 declare
+  `renderLevel(DeltaTracker)`, and `Gui#displayScoreboardSidebar` takes
+  `(GuiGraphics, Objective)` on *both* legacy lines. A handler whose parameters do not match the
+  target exactly makes Mixin refuse the whole class with
+  `InvalidInjectionException: Invalid descriptor … Expected (…)V but found (…)V`, which aborts
+  startup. Whenever a legacy mixin is added or changed, `javap -p` the target method out of that
+  version's `minecraft-merged` jar and mirror the signature; `require = 0` does not protect against a
+  descriptor mismatch.
+- **Never reflect `Minecraft`'s fields from client init.** `Minecraft.gameDirectory` is a public
+  *field* on every target (there is no `gameDirectory()` accessor), and `Class.getField` resolves the
+  whole declared field set, dragging types like `Gui` through the mixin transformer before their
+  config is applied — the half-applied mixin then kills startup from inside
+  `Client.onInitializeClient`. Read the instance directory from the `user.dir` system property
+  instead.
 - **A "still crashing" report is only valid if the jar in `mods/` was actually updated.** A fresh
   artifact dropped at `/sdcard/` root is not what the launcher reads: Zalith/FCL run from
   `Android/data/<launcher>/files/.minecraft/versions/<name>/mods/`, and a stale copy there reproduces
