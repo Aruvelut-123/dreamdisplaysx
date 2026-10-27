@@ -44,8 +44,15 @@ platformweaver {
     chameleonsDir = null
 }
 
+val javaNewerCompileApis: Configuration = configurations.create("javaNewerCompileApis") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    attributes { attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21) }
+}
+
 dependencies {
-    compileOnly(libs.platformweaverAnnotations)
+    javaNewerCompileApis(libs.platformweaverAnnotations)
+    compileOnly(files(javaNewerCompileApis))
     compileOnly(libs.velocityApi)
     compileOnly(libs.bungeecordApi)
     compileOnly(libs.slf4jApi)
