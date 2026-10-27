@@ -122,6 +122,12 @@
   both missed the file and cropped the borders. Vanilla `minecraft:widget/*` has no counterpart at all,
   so `drawLegacyWidget` paints a procedural track/handle instead of blitting anything. Adding a new
   sprite means adding its `SpriteSource` entry, or it will be drawn as a 24×24 icon.
+- **Build sprite ids with `DreamIdentifiers`, never `ResourceLocation(namespace, path)`.** That
+  constructor is public on 1.20.1 but **private from 1.21.1 on** (which wants
+  `Identifier.fromNamespaceAndPath`), so a bare call compiles for the legacy target and then kills the
+  1.21.1/1.21.11/26.x CI jobs with `Cannot access 'constructor(p0: String!, p1: String!)':
+  it is private in 'net.minecraft.resources.ResourceLocation'`. `DreamIdentifiers.of`/`vanilla`/`parse`
+  already branch on the version, so route every new identifier through them.
 - **`remapJar`'s artifact lands in the ROOT `build/libs/`, not the module's.** Stonecutter's
   multi-version layout puts the final jar at `<root>/build/libs/dreamdisplayx-fabric-<ver>-<version>.jar`
   while `platform/client/fabric/build/<ver>/devlibs/` only ever holds the dev shadow jar, and

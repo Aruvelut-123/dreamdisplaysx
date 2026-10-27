@@ -9,6 +9,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
 /*import net.minecraft.client.gui.GuiGraphics*/
 
 //? if <1.21.11 {
+import com.dreamdisplayx.platform.client.DreamIdentifiers
 import net.minecraft.resources.ResourceLocation
 //?}
 
@@ -107,7 +108,7 @@ fun GuiGraphicsCompat.blitSpriteCompat(
 internal fun spriteTexture(sprite: ResourceLocation): ResourceLocation {
     val path = sprite.path
     if (path.startsWith("textures/")) return sprite
-    return ResourceLocation(sprite.namespace, "textures/gui/sprites/$path.png")
+    return DreamIdentifiers.of(sprite.namespace, "textures/gui/sprites/$path.png")
 }
 
 /**
