@@ -61,6 +61,22 @@
   `enabled = false` on the task does **not** skip the property serialization, and `tasks.remove()` is
   rejected by Gradle. `_build.yml` therefore appends `--no-configuration-cache` for Fabric-only targets
   and local 1.20.1 builds must pass it too.
+- **Disabling `remapJar` also breaks the module's published artifact.** `:platform:client:common`
+  disables `remapJar` for this target, but classic Loom only redirects the plain `jar` output to
+  `build/<ver>/devlibs/<name>-dev.jar` *because* `remapJar` is expected to consume it. Its
+  `runtimeElements` variant keeps advertising `build/<ver>/libs/<name>.jar`, so with `remapJar` gone
+  nothing writes that path, and `:platform:client:fabric`'s `shadow(project(...))` resolves to a
+  missing file — **ShadowJar then silently drops the entire module** instead of failing. The shipped
+  1.20.1 jar was 1 MB light and had zero of the 365 common classes (no `Initializer`, no
+  `ScreenRenderer`, no client mixins), i.e. an instant `NoClassDefFoundError` on load.
+  Fix: in the `isClassicLoomTarget` branch, point `Jar` at `layout.buildDirectory.dir("libs")` and
+  clear `archiveClassifier`, so the artifact Gradle hands the consumer matches the file on disk.
+  **Verify fat jars by class inventory, never by size or by "BUILD SUCCESSFUL"** — extract the
+  `shadow(project(...))` jars and assert every class name appears in the final artifact.
+- **A locally built 1.20.1 jar is not testable on Android.** `natives-manifest.json` carries a CI-owned
+  `release_base` (`natives-<sha>-<stamp>`); a local build stamps the placeholder that CI never uploaded,
+  so `libvlc-android-aarch64.tar.gz` 404s and playback cannot initialise. Always test the CI artifact
+  (`gh run download <run> -n build-jars-1.20.1`), not `build/libs`.
 
 ### Module Structure
 - `api/` — Common API (serializable models, settings, services)
