@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client.mixins
 
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
 import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.world.scores.Objective
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.Pseudo
 import org.spongepowered.asm.mixin.injection.At
@@ -26,8 +27,11 @@ open class HudSuppress {
     @Inject(method = ["renderPlayerHealth"], at = [At("HEAD")], cancellable = true, require = 0)
     open fun renderPlayerHealth(g: GuiGraphics, ci: CallbackInfo) = suppress(ci)
 
+    // 1.20.1 also passes the sidebar's `Objective` through: `Gui#displayScoreboardSidebar(GuiGraphics,
+    // Objective)`. Without it Mixin rejects the injection with `Invalid descriptor ... Expected
+    // (Lclass_332;Lclass_266;CallbackInfo)V but found (Lclass_332;CallbackInfo)V`.
     @Inject(method = ["displayScoreboardSidebar"], at = [At("HEAD")], cancellable = true, require = 0)
-    open fun displayScoreboardSidebar(g: GuiGraphics, ci: CallbackInfo) = suppress(ci)
+    open fun displayScoreboardSidebar(g: GuiGraphics, objective: Objective, ci: CallbackInfo) = suppress(ci)
 
     @Inject(method = ["renderEffects"], at = [At("HEAD")], cancellable = true, require = 0)
     open fun renderEffects(g: GuiGraphics, ci: CallbackInfo) = suppress(ci)
