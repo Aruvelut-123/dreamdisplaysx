@@ -117,6 +117,7 @@ object ScreenRenderer {
                 h,
                 displayScreen.errored,
                 lift,
+                displayScreen.rotation,
             )
         }
 
@@ -172,7 +173,7 @@ object ScreenRenderer {
 
     private fun renderPlaceholder(
         stack: PoseStack, drawQuad: QuadRenderer, type: RenderType,
-        facing: DisplayFacing, w: Int, h: Int, error: Boolean, lift: Float,
+        facing: DisplayFacing, w: Int, h: Int, error: Boolean, lift: Float, rotation: DisplayRotation,
     ) {
         // Backdrop on the screen plane
         drawLayer(stack, facing, w, h, lift) {
@@ -194,7 +195,7 @@ object ScreenRenderer {
         // Bar track, lifted off the backdrop.
         drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT) {
             val (r, g, b) = if (error) Triple(120, 30, 30) else Triple(22, 24, 34)
-            drawQuad(type) { pose, vb -> appendRect(pose, vb, x0, y0, x1, y1, r, g, b) }
+            drawQuad(type) { pose, vb -> appendRect(pose, vb, x0, y0, x1, y1, r, g, b, rotation) }
         }
         if (error) return
 
@@ -208,7 +209,7 @@ object ScreenRenderer {
         val sx0 = segStart.coerceIn(x0, x1)
         val sx1 = (segStart + segW).coerceIn(x0, x1)
         if (sx1 > sx0) drawLayer(stack, facing, w, h, lift + OVERLAY_LIFT * 2f) {
-            drawQuad(type) { pose, vb -> appendRect(pose, vb, sx0, y0, sx1, y1, 40, 110, 255) }
+            drawQuad(type) { pose, vb -> appendRect(pose, vb, sx0, y0, sx1, y1, 40, 110, 255, rotation) }
         }
     }
 
@@ -225,11 +226,23 @@ object ScreenRenderer {
     private fun appendRect(
         pose: PoseStack.Pose, builder: VertexConsumer,
         x0: Float, y0: Float, x1: Float, y1: Float, r: Int, g: Int, b: Int,
+        rotation: DisplayRotation = DisplayRotation.NONE,
     ) {
-        addVertex(pose, builder, x0, y0, 0f, r, g, b, 0f, 0f)
-        addVertex(pose, builder, x1, y0, 0f, r, g, b, 0f, 0f)
-        addVertex(pose, builder, x1, y1, 0f, r, g, b, 0f, 0f)
-        addVertex(pose, builder, x0, y1, 0f, r, g, b, 0f, 0f)
+        val turns = rotation.quarterTurns % 4
+        fun v(cx: Float, cy: Float) {
+            var x = cx
+            var y = cy
+            repeat(turns) {
+                val nx = y
+                y = 1f - x
+                x = nx
+            }
+            addVertex(pose, builder, x, y, 0f, r, g, b, 0f, 0f)
+        }
+        v(x0, y0)
+        v(x1, y0)
+        v(x1, y1)
+        v(x0, y1)
     }
 
     private val baseU = floatArrayOf(0f, 1f, 1f, 0f)
