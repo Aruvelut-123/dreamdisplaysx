@@ -89,15 +89,15 @@ tasks.matching { it.name == "sourcesJar" }.configureEach {
 }
 
 val sourceClassTweaker = project(":platform:client:common").file("src/main/resources/dreamdisplayx.classtweaker")
+val isClassicLoom = scVersion("minecraft.version").startsWith("1.20")
 val classTweakerNamespace = if (isLegacyObfuscated) "named" else "official"
 val generatedClassTweaker = layout.buildDirectory.file("generated/classtweaker/dreamdisplayx.classtweaker").get().asFile
-// Minecraft 1.20.1 targets the pre-split Loom line (1.10.x), which predates the `classTweaker v1`
-// format and its parser still insists on a plain `accessWidener v1 <namespace>` header. None of the
-// widened members the newer targets need exist in 1.20.1 (the render pipeline API is not there at
-// all), so the classic variant ships a header-only file; the runtime loader accepts that.
-val isClassicLoom = scVersion("minecraft.version").startsWith("1.20")
 run {
     val rewritten = if (isClassicLoom) {
+        // Minecraft 1.20.1 targets the pre-split Loom line (1.10.x), whose parser insists on a plain
+        // `accessWidener v1 <namespace>` header rather than `classTweaker v1`. None of the widened
+        // members the newer targets need exist in 1.20.1 — the render pipeline API is not there at
+        // all — so the classic variant is header-only.
         "accessWidener v1 $classTweakerNamespace\n"
     } else {
         sourceClassTweaker.readText().lineSequence().joinToString("\n") { line ->
@@ -112,6 +112,34 @@ run {
 
 val loomExt = the<net.fabricmc.loom.api.LoomGradleExtensionAPI>()
 loomExt.accessWidenerPath.set(generatedClassTweaker)
+
+/**
+ * Fabric Loader only accepts a class tweaker whose namespace matches the runtime one
+ * (`intermediary`), but Loom's own `accessWidenerPath` must stay in the dev namespace (`named`)
+ * because it resolves the file while setting up Minecraft (`Namespace mismatch, expected named got
+ * intermediary` at configuration time otherwise). Every other target bridges the two by remapping
+ * the shadow jar; Minecraft 1.20.1 cannot, since this target disables `remapJar` (classic Loom
+ * resolves TinyRemapper across two plugin classloaders and cast-fails) and ships the shadow jar
+ * verbatim — so whatever header the jar carries reaches the loader unchanged and `named` makes the
+ * game die with `Namespace (named) does not match current runtime namespace (intermediary)`.
+ *
+ * Rewrite the packaged copy to `intermediary` after `processResources` has copied the real file.
+ * The classic variant is header-only, so the two differ by that one word and no symbol needs
+ * translating.
+ */
+if (isClassicLoom) {
+    val shippedClassTweakerName = "dreamdisplayx.classtweaker"
+    tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
+        val outDir = destinationDir
+        doLast {
+            val packaged = outDir.resolve(shippedClassTweakerName)
+            check(packaged.isFile) {
+                "Expected $packaged to exist; fabric.mod.json advertises it as accessWidener."
+            }
+            packaged.writeText("accessWidener v1 intermediary\n")
+        }
+    }
+}
 
 // Dev runs get native-library debug logging by default
 loomExt.runs.configureEach {
