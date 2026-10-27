@@ -56,11 +56,157 @@ fun GuiGraphicsCompat.enableScissorPoseAware(x1: Int, y1: Int, x2: Int, y2: Int)
 /**
  * Draws a GUI sprite scaled into a `w` x `h` rectangle.
  *
- * Pre-1.21 `GuiGraphics` has no `blitSprite`; the equivalent is `blit` over the whole 16x16 GUI
- * atlas cell these widget sprites are authored at, which is what the vanilla widget code passed
- * implicitly. Keeping the call sites on this name lets one branch serve both eras.
+ * Pre-1.20.2 Minecraft has no GUI sprite system at all: `GuiSpriteManager` and `blitSprite` only
+ * arrive in 1.20.2, and the 1.20.1 client jar contains zero `textures/gui/sprites/` entries. A
+ * `widgets/panel`-style id therefore has to be resolved back to the plain texture that holds the
+ * sprite — `assets/<namespace>/textures/gui/sprites/widgets/panel.png` — and drawn with the legacy
+ * `blit`. The previous implementation passed the sprite id straight to `blit`, which resolves it as
+ * `textures/<path>.png`; that asked for `textures/dreamdisplayx/widgets/panel.png`, missed, and
+ * painted the purple/black missing-texture checkerboard over every panel, icon and slider.
+ *
+ * [textureW] / [textureH] are the source PNG dimensions for sprites this mod does not own; its own
+ * sprites are resolved from [SPRITE_SOURCES], because the real sizes matter — the 64x64 panel and the
+ * 200x20 red buttons were previously sampled as if they were 16x16, which stretched the art and cut
+ * off its authored nine-slice corners, while the 24x24 icons sampled only their top-left corner.
  */
-fun GuiGraphicsCompat.blitSpriteCompat(sprite: ResourceLocation, x: Int, y: Int, w: Int, h: Int) {
-    blit(sprite, x, y, 0f, 0f, w, h, 16, 16)
+fun GuiGraphicsCompat.blitSpriteCompat(
+    sprite: ResourceLocation,
+    x: Int,
+    y: Int,
+    w: Int,
+    h: Int,
+    textureW: Int = 16,
+    textureH: Int = 16,
+) {
+    // Vanilla widget sprites are 1.20.2+ ids with no pre-1.20.2 counterpart at all; draw those
+    // procedurally instead of asking the texture manager for a file that cannot exist.
+    if (sprite.namespace == "minecraft" && sprite.path.startsWith("widget/")) {
+        drawLegacyWidget(sprite.path, x, y, w, h)
+        return
+    }
+    if (sprite.path.startsWith("textures/")) {
+        blit(sprite, x, y, 0f, 0f, w, h, textureW, textureH)
+        return
+    }
+    val source = SPRITE_SOURCES[sprite.path]
+    if (source == null) {
+        // Unknown sprite: flat icon art drawn at its authored 24x24 size.
+        blit(spriteTexture(sprite), x, y, 0f, 0f, w, h, ICON_SOURCE_SIZE, ICON_SOURCE_SIZE)
+        return
+    }
+    blitNineSlice(spriteTexture(sprite), x, y, w, h, source)
+}
+
+/**
+ * Resolves a GUI sprite id to the texture that actually holds it on pre-1.20.2 clients.
+ *
+ * Sprites live under `textures/gui/sprites/`, so `dreamdisplayx:widgets/panel` becomes
+ * `dreamdisplayx:textures/gui/sprites/widgets/panel.png`. Ids that already spell out a texture path
+ * are returned unchanged, which keeps vanilla fallbacks (`minecraft:widgets` style) working.
+ */
+internal fun spriteTexture(sprite: ResourceLocation): ResourceLocation {
+    val path = sprite.path
+    if (path.startsWith("textures/")) return sprite
+    return ResourceLocation(sprite.namespace, "textures/gui/sprites/$path.png")
+}
+
+/**
+ * Source geometry of one GUI sprite on pre-1.20.2 clients: the PNG it lives in, its pixel size and
+ * the nine-slice border declared by its `.mcmeta`. Mirrors the atlas data 1.20.2+ would build.
+ */
+private class SpriteSource(val width: Int, val height: Int, val border: Int)
+
+/**
+ * Layout of this mod's own GUI sprites, which 1.20.1 has to read as plain textures.
+ *
+ * Must stay in sync with the PNGs under `assets/dreamdisplayx/textures/gui/sprites/` and their
+ * `.mcmeta` nine-slice borders; the sizes are the authors' originals, not an atlas guess.
+ */
+private val SPRITE_SOURCES: Map<String, SpriteSource> = mapOf(
+    "widgets/panel" to SpriteSource(64, 64, 3),
+    "widgets/dropdown" to SpriteSource(16, 16, 3),
+    "widgets/red_button" to SpriteSource(200, 20, 3),
+    "widgets/red_button_disabled" to SpriteSource(200, 20, 1),
+    "widgets/red_button_highlighted" to SpriteSource(200, 20, 3),
+)
+
+/** Icon sprites are flat 24x24 art with no nine-slice border. */
+private const val ICON_SOURCE_SIZE = 24
+
+/**
+ * Stitches a nine-slice texture into a `w` x `h` rectangle: corners keep their pixel size, edges and
+ * the centre stretch. Falls back to a single stretched blit when the target is smaller than the
+ * borders, where a nine-slice would overlap itself.
+ */
+private fun GuiGraphicsCompat.blitNineSlice(
+    texture: ResourceLocation,
+    x: Int,
+    y: Int,
+    w: Int,
+    h: Int,
+    source: SpriteSource,
+) {
+    val b = source.border
+    val tw = source.width
+    val th = source.height
+    if (b <= 0 || w < b * 2 || h < b * 2) {
+        blit(texture, x, y, 0f, 0f, w, h, tw, th)
+        return
+    }
+    val midW = w - b * 2
+    val midH = h - b * 2
+    // Corners.
+    blit(texture, x, y, 0f, 0f, b, b, tw, th)
+    blit(texture, x + w - b, y, (tw - b).toFloat(), 0f, b, b, tw, th)
+    blit(texture, x, y + h - b, 0f, (th - b).toFloat(), b, b, tw, th)
+    blit(texture, x + w - b, y + h - b, (tw - b).toFloat(), (th - b).toFloat(), b, b, tw, th)
+    // Edges.
+    blit(texture, x + b, y, b.toFloat(), 0f, midW, b, tw, th)
+    blit(texture, x + b, y + h - b, b.toFloat(), (th - b).toFloat(), midW, b, tw, th)
+    blit(texture, x, y + b, 0f, b.toFloat(), b, midH, tw, th)
+    blit(texture, x + w - b, y + b, (tw - b).toFloat(), b.toFloat(), b, midH, tw, th)
+    // Centre.
+    if (midW > 0 && midH > 0) blit(texture, x + b, y + b, b.toFloat(), b.toFloat(), midW, midH, tw, th)
+}
+
+/**
+ * Draws a flat-colour stand-in for a 1.20.2+ vanilla widget sprite on 1.20.1.
+ *
+ * `minecraft:widget/slider`, `widget/button` and friends live in a sprite atlas that 1.20.1 simply
+ * does not have (the client jar contains zero `textures/gui/sprites/` entries), so asking the
+ * texture manager for them yields the missing-texture checkerboard. Vanilla 1.20.1 assets keep those
+ * controls inside `textures/gui/widgets.png` / `slider.png`, but those sheets have their own
+ * hand-tuned UVs; rather than guessing at them this draws a neutral dark track with a light handle,
+ * which matches this mod's own theme and never shows a missing texture.
+ */
+private fun GuiGraphicsCompat.drawLegacyWidget(path: String, x: Int, y: Int, w: Int, h: Int) {
+    if (w <= 0 || h <= 0) return
+    val track = 0x40FFFFFF
+    val handle = 0xFFD8DCE6.toInt()
+    if (path.contains("slider") || path.contains("button")) {
+        val fillColor = if (path.contains("highlight") || path.contains("hover") || path.contains("focused")) {
+            0x60FFFFFF
+        } else {
+            0x30FFFFFF
+        }
+        fill(x, y, x + w, y + h, fillColor)
+        outline(x, y, w, h, track)
+        if (path.contains("handle")) {
+            // Handles are drawn 8px wide by the call sites; keep them crisp and high-contrast.
+            fill(x, y, x + w, y + h, handle)
+            outline(x, y, w, h, 0xFF2A2E38.toInt())
+        }
+        return
+    }
+    fill(x, y, x + w, y + h, 0x30FFFFFF)
+    outline(x, y, w, h, track)
+}
+
+/** Draws a 1px border just inside the `w` x `h` rect at ([x], [y]). */
+private fun GuiGraphicsCompat.outline(x: Int, y: Int, w: Int, h: Int, color: Int) {
+    fill(x, y, x + w, y + 1, color)
+    fill(x, y + h - 1, x + w, y + h, color)
+    fill(x, y, x + 1, y + h, color)
+    fill(x + w - 1, y, x + w, y + h, color)
 }
 //?}

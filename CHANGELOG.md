@@ -13,6 +13,9 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - The 1.20.1 Fabric jar is now remapped to intermediary, so its entrypoint and mixins load instead of failing with `NoClassDefFoundError`.
 - The 1.20.1 client no longer crashes on startup while building its display render types.
 - The 1.20.1 client no longer crashes with `Not filled all elements of the vertex` on the first frame of a newly created display.
+- The 1.20.1 display menu renders its panels, buttons, and icons instead of magenta checkerboards, using nine-slice blits over the original sprite sizes.
+- The 1.20.1 loading spinner now sits in the lower quarter of the screen instead of below the title.
+- Android playback no longer stalls on `libvlc first frame timeout` when libvlc skips the vmem format callback; the frame buffer falls back to the requested display size.
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
 - Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.

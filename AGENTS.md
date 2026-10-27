@@ -110,6 +110,30 @@
   branch of `VertexCompat.vertexCompat` must emit `vertex(...).uv(u, v).color(r, g, b, a).endVertex()`;
   writing `.color(...)` before `.uv(...)` drops both attributes. Every legacy vertex emission funnels
   through that one helper — keep it that way rather than hand-rolling a second call site.
+- **1.20.1 has no GUI sprite system, so `GuiGraphicsCompat` must synthesise every sprite itself.**
+  `GuiSpriteManager` does not exist in the 1.20.1 jar and `textures/gui/sprites` appears **0 times** in
+  its client asset index; `GuiGraphics` only offers `blit`/`blitNineSliced`/`blitRepeating`/`innerBlit`.
+  A sprite `ResourceLocation` handed straight to `blit` is resolved as a *texture*, i.e.
+  `textures/<path>.png`, which is why `dreamdisplayx:widgets/panel` and `minecraft:widget/slider` died
+  with `FileNotFoundException` and drew as a magenta checkerboard. The legacy branch therefore:
+  maps a sprite id to `textures/gui/sprites/<path>.png`, looks the real PNG size up in `SPRITE_SOURCES`
+  (panel 64×64/border 3, dropdown 16×16/border 3, `red_button` 200×20/border 3, `red_button_disabled`
+  200×20/border 1, every icon 24×24), and stitches its own nine-slice — never a hardcoded 16×16, which
+  both missed the file and cropped the borders. Vanilla `minecraft:widget/*` has no counterpart at all,
+  so `drawLegacyWidget` paints a procedural track/handle instead of blitting anything. Adding a new
+  sprite means adding its `SpriteSource` entry, or it will be drawn as a 24×24 icon.
+- **`remapJar`'s artifact lands in the ROOT `build/libs/`, not the module's.** Stonecutter's
+  multi-version layout puts the final jar at `<root>/build/libs/dreamdisplayx-fabric-<ver>-<version>.jar`
+  while `platform/client/fabric/build/<ver>/devlibs/` only ever holds the dev shadow jar, and
+  `platform/client/fabric/build/libs/` stays empty. Always `md5sum` the root jar and confirm its mtime is
+  newer than the last `compileKotlin` before trusting a build.
+- **`libvlc` may never call the vmem format callback.** When it does not, `TextureRenderCallback.setup()`
+  never runs, `formatReady` stays false, and every `lock()` used to divert into the drop buffer, so the
+  display showed audio with no picture and the log carried only `libvlc first frame timeout` (the
+  `libvlc video setup: WxH pitch=…` line is absent — that absence is the diagnostic).
+  `lock()` must therefore prime a fallback format from `expectedW/H` (`align32(w * 4)` pitch,
+  `align32(h)` lines) and set `formatReady`, instead of requiring `setup()` to come first. The callback
+  registration return codes are logged so a real registration failure is visible next time.
 - **Kotlin `@Metadata` keeps `named` names; that is expected and harmless.** Remapping rewrites the
   constant pool and method descriptors (`drawScreen(net.minecraft.class_332, …)`) but not the Kotlin
   metadata annotation, whose `d2` array still spells `Lnet/minecraft/client/gui/GuiGraphics;`. The JVM

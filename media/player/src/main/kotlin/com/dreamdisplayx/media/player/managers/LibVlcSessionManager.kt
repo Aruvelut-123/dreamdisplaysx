@@ -853,10 +853,17 @@ internal class LibVlcSessionManager(
             // from retired Android players.
             if (!LibVlcDiagnostics.noVideoCallback) {
                 val callbacks = VideoCallbackSet()
-                videoCallbackSets += callbacks
+videoCallbackSets += callbacks
                 videoCallbacksByPlayer[Pointer.nativeValue(mp)] = callbacks
-                lib.libvlc_video_set_format_callbacks(mp, callbacks.format, callbacks.cleanup)
-                lib.libvlc_video_set_callbacks(mp, callbacks.lock, callbacks.unlock, callbacks.display, null)
+                val formatRc = lib.libvlc_video_set_format_callbacks(mp, callbacks.format, callbacks.cleanup)
+                val callbacksRc = lib.libvlc_video_set_callbacks(mp, callbacks.lock, callbacks.unlock, callbacks.display, null)
+                // Registration failures are silent in libvlc: a player without callbacks decodes
+                // audio but renders video to libvlc's own (headless) vout, which on Android looks
+                // exactly like "sound plays, display stays on the loading ring". Log both return
+                // codes so the next log pinpoints it instead of needing a native verbose rebuild.
+                logger.info("$debugLabel registered libvlc video callbacks (format={}, callbacks={}).", formatRc, callbacksRc)
+            } else {
+                logger.warn("$debugLabel libvlc video callbacks DISABLED by -Ddreamdisplayx.noVideoCallback; frames cannot reach the display.")
             }
             // Events are bound to this concrete player. The video player drives session state;
             // retired Android players may still emit delayed events that must be ignored.
@@ -1877,6 +1884,28 @@ internal class LibVlcSessionManager(
             active = false
         }
 
+        /**
+         * Initializes the frame pool from the session's expected dimensions when libvlc never
+         * delivered a format callback.
+         *
+         * `setup()` is the only other place that calls [resize], so without this fallback a missing
+         * format callback left `formatReady == false` forever and [lock] handed every frame to the
+         * drop buffer — audio played while the display stayed stuck on its loading ring.
+         */
+        private fun primeFallbackFormat() {
+            val w = expectedW.coerceAtLeast(1)
+            val h = expectedH.coerceAtLeast(1)
+            if (w <= 0 || h <= 0) return
+            val pitch = align32(w * 4)
+            val lineCount = align32(h)
+            logger.warn(
+                "$debugLabel libvlc never sent a video format; priming {}x{} pitch={} lines={} from the session target.",
+                w, h, pitch, lineCount,
+            )
+            resize(w, h, pitch, lineCount)
+            formatReady = true
+        }
+
         @Synchronized
         fun cleanup(opaque: Pointer?) {
             clear()
@@ -1884,11 +1913,18 @@ internal class LibVlcSessionManager(
 
         @Synchronized
         fun lock(opaque: Pointer?, planes: Pointer?): Pointer? {
-            if (planes == null || !active || !formatReady) {
+            if (planes == null || !active) {
                 ensureDropBuffer()
                 if (planes != null) planes.setPointer(0, dropPointer!!)
                 return DROP_TOKEN
             }
+            // libvlc normally calls setup() before the first lock, but the format callback is only
+            // delivered when its vout decides on a chroma. If it never fires, formatReady stays
+            // false and every frame used to be written into the drop buffer: audio played, the
+            // display stayed on its loading ring, and "libvlc video setup" never appeared in the
+            // log. Fall back to the dimensions the session asked for so frames still reach the
+            // surface.
+            if (!formatReady) primeFallbackFormat()
             if (buffers[0] == null || bufferSize <= 0) {
                 ensureDropBuffer()
                 planes.setPointer(0, dropPointer!!)
