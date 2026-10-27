@@ -113,13 +113,93 @@ val sourceClassTweaker = project(":platform:client:common").file("src/main/resou
 val compilesCommonSources = scVersion("minecraft.version").startsWith("1.20")
 val classTweakerNamespace = if (isLegacyObfuscated) "named" else "official"
 val generatedClassTweaker = layout.buildDirectory.file("generated/classtweaker/dreamdisplayx.classtweaker").get().asFile
+
+/**
+ * Access-widener entries for 1.20.1's render-type builder API.
+ *
+ * None of the newer targets' entries apply here (1.20.1 has no `RenderPipeline` / `RenderSetup`), but
+ * this target needs a different set. `RenderType.CompositeState`, its builder and the
+ * `RenderStateShard` nested types are `protected`, the state constants are `protected` fields, and
+ * `RenderType.create(String, VertexFormat, Mode, int, CompositeState)` is package-private, so a
+ * render type cannot be assembled from outside the vanilla package without either an access widener
+ * or reflection.
+ *
+ * The widener is the only workable choice, and the reason is specific to obfuscated targets: Loom's
+ * remapper rewrites *bytecode references* to `intermediary` but leaves string literals untouched, so
+ * a reflective `getMethod("builder")` / `getDeclaredField("NO_CULL")` still asks for the `named`
+ * names while the shipped jar only has `method_23598` / `field_21412`. Even the nested-class
+ * `simpleName` is remapped (`CompositeState` becomes `class_4688`), so `getDeclaredClasses` matching
+ * fails too. Widened members let this file be ordinary Kotlin, whose references *are* remapped.
+ *
+ * The header stays in the dev namespace Loom validates against; `remapJar` rewrites the header and
+ * the entries to `intermediary` for the shipped jar exactly like the other obfuscated targets.
+ */
+fun legacy1_20ClassTweaker(namespace: String): String = buildString {
+    append("accessWidener v1 $namespace\n")
+    // `RenderStateShard` nested types - protected, and every one of them appears in a signature below.
+    listOf(
+        "EmptyTextureStateShard",
+        "ShaderStateShard",
+        "TextureStateShard",
+        "TransparencyStateShard",
+        "CullStateShard",
+        "DepthTestStateShard",
+        "LayeringStateShard",
+    ).forEach { append("accessible class net/minecraft/client/renderer/RenderStateShard\$$it\n") }
+    // `RenderType` nested types - protected outer, and `create` returns the package-private concrete type.
+    listOf("CompositeState", "CompositeState\$CompositeStateBuilder", "CompositeRenderType").forEach {
+        append("accessible class net/minecraft/client/renderer/RenderType\$$it\n")
+    }
+    // The 5-argument factory plus the builder entry point and its terminal call.
+    append(
+        "accessible method net/minecraft/client/renderer/RenderType create " +
+            "(Ljava/lang/String;Lcom/mojang/blaze3d/vertex/VertexFormat;" +
+            "Lcom/mojang/blaze3d/vertex/VertexFormat\$Mode;I" +
+            "Lnet/minecraft/client/renderer/RenderType\$CompositeState;)" +
+            "Lnet/minecraft/client/renderer/RenderType\$CompositeRenderType;\n",
+    )
+    append(
+        "accessible method net/minecraft/client/renderer/RenderType\$CompositeState builder ()" +
+            "Lnet/minecraft/client/renderer/RenderType\$CompositeState\$CompositeStateBuilder;\n",
+    )
+    append(
+        "accessible method net/minecraft/client/renderer/RenderType\$CompositeState\$CompositeStateBuilder " +
+            "createCompositeState (Z)Lnet/minecraft/client/renderer/RenderType\$CompositeState;\n",
+    )
+    // Single-argument builder setters. All are already `public` on the builder, but the builder itself
+    // sits inside a protected outer type, so the method entries keep the widening explicit.
+    mapOf(
+        "setShaderState" to "ShaderStateShard",
+        "setTextureState" to "EmptyTextureStateShard",
+        "setTransparencyState" to "TransparencyStateShard",
+        "setCullState" to "CullStateShard",
+        "setDepthTestState" to "DepthTestStateShard",
+        "setLayeringState" to "LayeringStateShard",
+    ).forEach { (setter, shard) ->
+        append(
+            "accessible method net/minecraft/client/renderer/RenderType\$CompositeState\$CompositeStateBuilder " +
+                "$setter (Lnet/minecraft/client/renderer/RenderStateShard\$$shard;)" +
+                "Lnet/minecraft/client/renderer/RenderType\$CompositeState\$CompositeStateBuilder;\n",
+        )
+    }
+    // The protected state constants the unlit type composes.
+    mapOf(
+        "NO_TRANSPARENCY" to "TransparencyStateShard",
+        "TRANSLUCENT_TRANSPARENCY" to "TransparencyStateShard",
+        "NO_CULL" to "CullStateShard",
+        "LEQUAL_DEPTH_TEST" to "DepthTestStateShard",
+        "POLYGON_OFFSET_LAYERING" to "LayeringStateShard",
+    ).forEach { (field, shard) ->
+        append(
+            "accessible field net/minecraft/client/renderer/RenderStateShard $field " +
+                "Lnet/minecraft/client/renderer/RenderStateShard\$$shard;\n",
+        )
+    }
+}
+
 run {
     val rewritten = if (compilesCommonSources) {
-        // None of the widened members the newer targets need exist in 1.20.1 - the render pipeline
-        // API this tweaker opens up is not there at all - so the 1.20.1 variant is header-only. The
-        // header stays in the dev namespace Loom validates against; `remapJar` rewrites it to
-        // `intermediary` for the shipped jar exactly like the other obfuscated targets.
-        "accessWidener v1 $classTweakerNamespace\n"
+        legacy1_20ClassTweaker(classTweakerNamespace)
     } else {
         sourceClassTweaker.readText().lineSequence().joinToString("\n") { line ->
             if (line.startsWith("classTweaker v1 ")) "classTweaker v1 $classTweakerNamespace" else line
