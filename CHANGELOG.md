@@ -1,3 +1,21 @@
+# 1.10.5 Release
+
+## Highlights
+
+- Added support for 1.18.2, 1.19.4, and 1.20.1 versions for both `Fabric` and `Forge` loaders and servers
+
+## Client
+
+### Features
+
+- Added support for 1.18.2, 1.19.4, and 1.20.1 versions for `Fabric` and `Forge`
+
+## Server
+
+### Features
+
+- Added support for 1.18.2, 1.19.4, and 1.20.1 versions for `Fabric`, `Forge`, and `Paper` servers
+
 # 1.10.4 Release
 
 ## Highlights
