@@ -12,6 +12,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 ### Fixes
 - The 1.20.1 Fabric jar is now remapped to intermediary, so its entrypoint and mixins load instead of failing with `NoClassDefFoundError`.
 - The 1.20.1 client no longer crashes on startup while building its display render types.
+- The 1.20.1 client no longer crashes with `Not filled all elements of the vertex` on the first frame of a newly created display.
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
 - Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.

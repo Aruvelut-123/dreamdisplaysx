@@ -39,5 +39,9 @@ fun VertexConsumer.vertexCompat(
     b: Int,
     a: Int,
 ) {
-    vertex(pose.pose(), x, y, z).color(r, g, b, a).uv(u, v).endVertex()
+    // 1.20.1 declares DefaultVertexFormat.POSITION_TEX_COLOR as Position -> UV0 -> Color, and
+    // BufferBuilder.endVertex() rejects a vertex whose elements were not filled in exactly that
+    // order ("Not filled all elements of the vertex"). 1.20.2+ needs no ordering because the
+    // fluent setUv/setColor setters address their own element slots.
+    vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, a).endVertex()
 }*/

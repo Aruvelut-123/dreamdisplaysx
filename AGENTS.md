@@ -98,6 +98,16 @@
   remapped for the 1.20.1 build) before diagnosing a log, not just the reported timestamp. Later
   1.20.1 builds: `e18b2301…` adds `DisplayLatePass`, `603ad287…` adds `HudSuppress`, `bd541c13…` adds
   the `user.dir` shader-scan fix, `d1478126…` moves `DisplayUnlitRenderTypes` onto the access widener.
+- **On 1.20.1 every vertex attribute must be written in the format's own element order.** The legacy
+  `BufferVertexConsumer` setters (`vertex`, `color`, `uv`, `overlayCoords`, `uv2`, `normal`) read
+  `currentElement()` and *silently `return this`* when the usage does not match — `color()` on a UV0
+  slot writes nothing, so `elementIndex` stays where it was. `BufferBuilder.endVertex()` only checks
+  `elementIndex != 0` and then throws `IllegalStateException("Not filled all elements of the vertex")`,
+  which surfaces as a crash on the first frame that draws. `DefaultVertexFormat.POSITION_TEX_COLOR`
+  is `Position -> UV0 -> Color` (confirmed from the `<clinit>` `ImmutableMap` puts), so the 1.20.1
+  branch of `VertexCompat.vertexCompat` must emit `vertex(...).uv(u, v).color(r, g, b, a).endVertex()`;
+  writing `.color(...)` before `.uv(...)` drops both attributes. Every legacy vertex emission funnels
+  through that one helper — keep it that way rather than hand-rolling a second call site.
 - **Kotlin `@Metadata` keeps `named` names; that is expected and harmless.** Remapping rewrites the
   constant pool and method descriptors (`drawScreen(net.minecraft.class_332, …)`) but not the Kotlin
   metadata annotation, whose `d2` array still spells `Lnet/minecraft/client/gui/GuiGraphics;`. The JVM
