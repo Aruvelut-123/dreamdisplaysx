@@ -60,6 +60,11 @@
   `Cannot remap access widener from namespace 'intermediary'. Expected: 'named'`. The generated dev copy
   stays `named` (`accessWidener v1 named`, header-only for 1.20.1 since none of the widened members
   exist there), and `loom.accessWidenerPath` keeps pointing at it.
+- **A "still crashing" report is only valid if the jar in `mods/` was actually updated.** A fresh
+  artifact dropped at `/sdcard/` root is not what the launcher reads: Zalith/FCL run from
+  `Android/data/<launcher>/files/.minecraft/versions/<name>/mods/`, and a stale copy there reproduces
+  the previous crash byte for byte. Compare md5 stamps (`0dac6fc0…` = un-remapped, `af5fa031…` =
+  remapped for the 1.20.1 build) before diagnosing a log, not just the reported timestamp.
 - **Kotlin `@Metadata` keeps `named` names; that is expected and harmless.** Remapping rewrites the
   constant pool and method descriptors (`drawScreen(net.minecraft.class_332, …)`) but not the Kotlin
   metadata annotation, whose `d2` array still spells `Lnet/minecraft/client/gui/GuiGraphics;`. The JVM
