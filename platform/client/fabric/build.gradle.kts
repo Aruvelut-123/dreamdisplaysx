@@ -5,11 +5,10 @@ import support.shadow.relocateDreamDisplaysXSharedPackages
 import support.stonecutter.StonecutterVersions
 
 plugins {
-    // Single-segment `fabric-loom` id is the only one present in every Loom line we build against:
-    // classic 1.10.5 (1.20.1) exports just LoomGradlePlugin, while 1.17.x additionally exports
-    // `net.fabricmc.fabric-loom` / `net.fabricmc.fabric-loom-remap` from the same jar. Declaring
-    // this one `apply false` only puts the jar on the build classpath; the actual plugin is
-    // selected at runtime below.
+    // Single-segment `fabric-loom` id is the one present in every Loom line we build against: 1.17.x
+    // exports it next to `net.fabricmc.fabric-loom` / `net.fabricmc.fabric-loom-remap` from the same
+    // jar. Declaring this one `apply false` only puts the jar on the build classpath; the actual
+    // plugin is selected at runtime below.
     id("fabric-loom") apply false
     id("maven-publish")
     id("dreamdisplayx.kotlin-conventions")
@@ -19,17 +18,17 @@ plugins {
 }
 
 // Loom plugin id depends on whether the target Minecraft is obfuscated.
-// Legacy releases (1.21.1 / 1.21.11) ship obfuscated -> fabric-loom-remap.
+// Legacy releases (1.20.1 / 1.21.1 / 1.21.11) ship obfuscated -> a remapping Loom.
 // Year-versioned releases (26.x) ship deobfuscated -> net.fabricmc.fabric-loom.
-// Minecraft 1.20.1 predates the id split entirely: classic Loom 1.10.5 publishes only the
-// single-segment `fabric-loom` id (LoomGradlePlugin) and has no remap variant.
+// 1.20.1 keeps the pre-split single-segment `fabric-loom` id: it is the one id present in every
+// Loom line this build has been used with, and 1.17.13 still exports it next to the split variants.
 // The plugin version is supplied per Stonecutter version via settings.gradle.kts resolutionStrategy.
 run {
     val mcVersion = gradle.extensions.getByType<StonecutterVersions>().get("minecraft.version")
     val isLegacyObfuscated = mcVersion.startsWith("1.")
-    val isClassicLoomOnly = mcVersion.startsWith("1.20")
+    val usesLegacyLoomId = mcVersion.startsWith("1.20")
     when {
-        isClassicLoomOnly -> apply(plugin = "fabric-loom")
+        usesLegacyLoomId -> apply(plugin = "fabric-loom")
         isLegacyObfuscated -> apply(plugin = "net.fabricmc.fabric-loom-remap")
         else -> apply(plugin = "net.fabricmc.fabric-loom")
     }
@@ -69,6 +68,27 @@ sourceSets.main {
     // Consume :platform:server's chiseled output (version directives already resolved) rather than its raw
     // source, so the active Minecraft version's branch is compiled here too.
     kotlin.srcDir(project(":platform:server").layout.buildDirectory.dir("generated/chisel/main/kotlin"))
+    // 1.20.1 compiles `:platform:client:common`'s sources here as well. Loom may be applied to exactly
+    // one module per target: two copies put two `LoomGradleExtension` classes on two plugin
+    // classloaders and `remapJar` then dies evaluating `tinyRemapperServiceOptions` with
+    // `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`. That holds for every
+    // Loom line (1.10.5 and 1.17.13 alike), so `common` applies no provider for this target and its
+    // compile tasks are disabled - its (already version-resolved) sources are compiled here, against
+    // this module's classpath, and `remapJar` below maps the result to `intermediary` as usual.
+    if (scVersion("minecraft.version").startsWith("1.20")) {
+        val commonProject = project(":platform:client:common")
+        val commonChisel = commonProject.layout.buildDirectory.dir("generated/chisel/main/kotlin")
+        // The convention plugin rewrites `compileKotlin`'s source inside its own `afterEvaluate` to
+        // `[own chisel] + otherDirs`, so anything added to the source set before that point can be
+        // dropped. Registering here — in a later `afterEvaluate` on this project — appends the
+        // directory to the already-rewritten source list instead of racing with it.
+        afterEvaluate {
+            tasks.named<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>("compileKotlin") {
+                dependsOn(commonProject.tasks.named("chiselSource"))
+                source(commonChisel)
+            }
+        }
+    }
     // Translations live once in :platform:resources and are pulled in here instead of being duplicated per platform.
     // The lang/client/ split is source-tree organization only; vanilla's language system requires the actual
     // jar to have client lang files directly under assets/dreamdisplayx/lang/, so processResources flattens it back.
@@ -89,15 +109,16 @@ tasks.matching { it.name == "sourcesJar" }.configureEach {
 }
 
 val sourceClassTweaker = project(":platform:client:common").file("src/main/resources/dreamdisplayx.classtweaker")
-val isClassicLoom = scVersion("minecraft.version").startsWith("1.20")
+// `common` applies no Minecraft provider for 1.20.1, so this module owns its compiled sources too.
+val compilesCommonSources = scVersion("minecraft.version").startsWith("1.20")
 val classTweakerNamespace = if (isLegacyObfuscated) "named" else "official"
 val generatedClassTweaker = layout.buildDirectory.file("generated/classtweaker/dreamdisplayx.classtweaker").get().asFile
 run {
-    val rewritten = if (isClassicLoom) {
-        // Minecraft 1.20.1 targets the pre-split Loom line (1.10.x), whose parser insists on a plain
-        // `accessWidener v1 <namespace>` header rather than `classTweaker v1`. None of the widened
-        // members the newer targets need exist in 1.20.1 — the render pipeline API is not there at
-        // all — so the classic variant is header-only.
+    val rewritten = if (compilesCommonSources) {
+        // None of the widened members the newer targets need exist in 1.20.1 - the render pipeline
+        // API this tweaker opens up is not there at all - so the 1.20.1 variant is header-only. The
+        // header stays in the dev namespace Loom validates against; `remapJar` rewrites it to
+        // `intermediary` for the shipped jar exactly like the other obfuscated targets.
         "accessWidener v1 $classTweakerNamespace\n"
     } else {
         sourceClassTweaker.readText().lineSequence().joinToString("\n") { line ->
@@ -112,34 +133,6 @@ run {
 
 val loomExt = the<net.fabricmc.loom.api.LoomGradleExtensionAPI>()
 loomExt.accessWidenerPath.set(generatedClassTweaker)
-
-/**
- * Fabric Loader only accepts a class tweaker whose namespace matches the runtime one
- * (`intermediary`), but Loom's own `accessWidenerPath` must stay in the dev namespace (`named`)
- * because it resolves the file while setting up Minecraft (`Namespace mismatch, expected named got
- * intermediary` at configuration time otherwise). Every other target bridges the two by remapping
- * the shadow jar; Minecraft 1.20.1 cannot, since this target disables `remapJar` (classic Loom
- * resolves TinyRemapper across two plugin classloaders and cast-fails) and ships the shadow jar
- * verbatim — so whatever header the jar carries reaches the loader unchanged and `named` makes the
- * game die with `Namespace (named) does not match current runtime namespace (intermediary)`.
- *
- * Rewrite the packaged copy to `intermediary` after `processResources` has copied the real file.
- * The classic variant is header-only, so the two differ by that one word and no symbol needs
- * translating.
- */
-if (isClassicLoom) {
-    val shippedClassTweakerName = "dreamdisplayx.classtweaker"
-    tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
-        val outDir = destinationDir
-        doLast {
-            val packaged = outDir.resolve(shippedClassTweakerName)
-            check(packaged.isFile) {
-                "Expected $packaged to exist; fabric.mod.json advertises it as accessWidener."
-            }
-            packaged.writeText("accessWidener v1 intermediary\n")
-        }
-    }
-}
 
 // Dev runs get native-library debug logging by default
 loomExt.runs.configureEach {
@@ -163,8 +156,10 @@ configurations.register("mappedFabricApiElements") {
 // resolvable: PlatformWeaver's annotations drive the Kotlin IR plugin, and the rest are the server
 // platforms' own API stubs whose sources this module compiles. Declaring a Java 25 consumer on the
 // compile classpath makes every module resolvable while `options.release` / `jvmTarget` still emit
-// Java 17 bytecode.
-if (isClassicLoom) {
+// Java 17 bytecode. This is also why 1.20.1 builds against Loom 1.17.13 rather than the 1.10.5 line
+// that line-up used: 1.17.13's TinyRemapper reads Java 25 class files, while 1.10.5 aborts remapping
+// with `Unsupported class file major version 69`.
+if (compilesCommonSources) {
     listOf("compileClasspath", "testCompileClasspath").forEach { name ->
         configurations.findByName(name)?.attributes {
             attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 25)
@@ -187,9 +182,9 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:${scVersion("paper.api.version")}")
     compileOnly("net.neoforged:bus:8.0.5")
     compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
-    if (isClassicLoom) {
-        // Classic targets see the server sources through the chiseled output below, whose command tree
-        // needs brigadier. Non-classic targets receive it transitively through NeoForge/Paper.
+    if (compilesCommonSources) {
+        // 1.20.1 sees the server sources through the chiseled output below, whose command tree needs
+        // brigadier; every other target receives it transitively through NeoForge/Paper.
         compileOnly("com.mojang:brigadier:${scVersion("brigadier.version")}")
     } else {
         compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
@@ -226,7 +221,23 @@ dependencies {
         implementation("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")
         implementation("net.fabricmc.fabric-api:fabric-api:${scVersion("fabric.api.version")}")
     }
-    implementation(project(":platform:client:common"))
+    // 1.20.1 compiles `common`'s sources directly (see the `sourceSets.main` block above), so the
+    // project dependency must be dropped: `common` produces no classes for this target and depending
+    // on it would make `shadowJar` look for an artifact that never appears. Its own third-party
+    // dependencies still have to be on this module's compile classpath, though, because those
+    // sources import them.
+    if (!compilesCommonSources) {
+        implementation(project(":platform:client:common"))
+    } else {
+        compileOnly(libs.jspecify)
+        compileOnly(libs.commonsCompress)
+        compileOnly(libs.caffeine)
+        compileOnly(libs.tukaaniXz)
+        compileOnly(libs.zxingCore)
+        compileOnly(libs.okhttp)
+        compileOnly(libs.okio)
+        compileOnly(libs.kotlinxCoroutinesCore)
+    }
     shadow(project(":core"))
     shadow(project(":api"))
     shadow(project(":util"))
@@ -234,7 +245,11 @@ dependencies {
     shadow(project(":media:source"))
     shadow(project(":media:player"))
     shadow(project(":media:audio"))
-    shadow(project(":platform:client:common"))
+    // `common`'s classes are compiled into this module for 1.20.1 (see `sourceSets.main`), so they are
+    // already part of the project output and must not be shadowed a second time.
+    if (!compilesCommonSources) {
+        shadow(project(":platform:client:common"))
+    }
     shadow(libs.kotlinxSerializationProtobuf)
     shadow(libs.kotlinxSerializationJson)
     shadow(libs.kotlinStdlib)
@@ -302,30 +317,22 @@ tasks.shadowJar {
     archiveBaseName.set("dreamdisplayx-fabric")
     archiveVersion.set("$activeStonecutterVersion-${rootProject.version}")
     if (isLegacyObfuscated) {
-        // 1.20.1 (classic Loom) has no usable remapJar — see the note below — so its shadow jar IS the
-        // shippable artifact: build it straight into build/libs, under the final name.
-        if (isClassicLoom) {
-            archiveClassifier.set("")
-            destinationDirectory.set(rootProject.layout.buildDirectory.dir("libs"))
-        } else {
-            archiveClassifier.set("dev-shadow")
-            destinationDirectory.set(layout.buildDirectory.dir("devlibs"))
-        }
+        // The shadow jar is always `remapJar`'s input, never the shipped artifact: keep it in
+        // devlibs under the dev classifier so `remapJar` writes the only file in build/libs.
+        archiveClassifier.set("dev-shadow")
+        destinationDirectory.set(layout.buildDirectory.dir("devlibs"))
     }
     includeDreamDisplaysXSharedContents()
     relocateDreamDisplaysXSharedPackages()
     excludeDreamDisplaysXSqliteNativeExtras()
 }
 
-// If it's a legacy version (like 1.21.11 where the shadow jar is obfuscated), we need to remap the shadow jar with
-// loom's remapJar task to get proper mappings in the final artifact.
-// Minecraft 1.20.1 is excluded: classic Loom 1.10.5 is applied to this module *and* to
-// :platform:client:common, and its TinyRemapperService resolves the LoomGradleExtension through the
-// plugin classloader of whichever module reaches it first — the second module's extension then fails
-// the cast (`LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`). The 1.20.1
-// shadow jar is already produced in named mappings by the same Loom mapping set the game runs with,
-// so it is the shippable artifact and remapping it again would be a no-op anyway.
-if (isLegacyObfuscated && !isClassicLoom) {
+// Every obfuscated target ships a remapped jar: the shadow jar holds `named` bytecode while the game
+// resolves `intermediary` - 1.20.1's `net/minecraft/commands/synchronization/SingletonArgumentInfo`
+// is really `class_2319` at runtime - so skipping this step yields a mod that dies on
+// `NoClassDefFoundError` before its entrypoint runs. 1.20.1's `common` sources are compiled into this
+// module, which puts them under this same remap pass.
+if (isLegacyObfuscated) {
     tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
         dependsOn(tasks.shadowJar)
         inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
@@ -340,7 +347,6 @@ tasks.register("publishJar") {
     description = "Publish the final jar to the local Maven repository."
     dependsOn(
         when {
-            isClassicLoom -> "shadowJar"
             isLegacyObfuscated -> "remapJar"
             else -> "shadowJar"
         }

@@ -14,8 +14,8 @@
 
 ### Minecraft 1.20.1 (Fabric only)
 - 1.20.1 predates NeoForge (whose first release targets 1.20.2) and predates the Loom plugin-id split,
-  so it is a **Fabric-only** target driven by **classic Loom 1.10.5** instead of `moddev`. `_build.yml`
-  detects `version_key < (1,21,1)` and skips the NeoForge job for it.
+  so it is a **Fabric-only** target that runs **Loom `1.17.13`** (via the pre-split `fabric-loom` id)
+  instead of `moddev`. `_build.yml` detects `version_key < (1,21,1)` and skips the NeoForge job for it.
 - **Legacy override source sets**: `platform/<module>/src/legacy/1.20/kotlin/`. A file with the same
   relative path replaces the `src/main/kotlin` one wholesale; legacy-only files are compiled too. The
   directory name is matched with `minecraftVersion.startsWith(it.name)`.
@@ -25,74 +25,47 @@
   `net.neoforged.*` / `io.papermc.paper.command.brigadier.*` / `com.sk89q.*` reference that 1.20.1's
   classpath cannot supply needs either a `//? if >=1.21.1` gate on the import **and** the declaration,
   or a legacy stand-in file. Never re-add a bare import for those packages in shared files.
-- **Never enable the classic-Loom `remapJar`.** Classic Loom is applied to both
-  `:platform:client:common` and `:platform:client:fabric`; `TinyRemapperService` resolves
-  `LoomGradleExtension` through the plugin classloader of whichever module reaches it first, so the
-  second fails with `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`. 1.20.1
-  disables `common`'s remap tasks and treats `fabric:shadowJar` as the shippable artifact (built
-  straight into `build/libs` under the final name). Every other target keeps `devlibs` → `remapJar`.
-- **1.20.1 API differences worth remembering**: no `CustomPacketPayload` / `PayloadTypeRegistry`
-  (`PacketType.create` self-registers and `PlayPacketHandler.receive` takes 3 args:
-  payload, player, sender); no `DataComponents` (`ItemStack.tag` instead); no `ResourceLocation.parse`
-  (`tryParse`); `TextColor.parseColor` returns a nullable `TextColor`; `ServerPlayer.clientInformation()`
-  only exists from 1.20.2; Paper has no `LifecycleEvents.COMMANDS`, no `Particle.DUST` (`REDSTONE`), no
-  `ItemMeta.setEnchantmentGlintOverride`; `paper-api:1.20.1` has no
-  `io.papermc.paper.command.brigadier` package at all.
-- `fabric.mod.json`'s `fabricloader` floor is templated from `fabric.loader.version` — 1.20.1 builds
-  against loader 0.16.x, so a hardcoded `>=0.19` makes the mod unloadable there.
-- The classic-Loom Minecraft artifact does not re-export brigadier, hence
-  `brigadier.version: "1.1.8"` in `versions.json` plus a `compileOnly("com.mojang:brigadier:…")`.
-- **Gates must key off the release that actually changed the API, not the next LTS.** Two bugs in this
-  port came from pinning `>=1.21.11` when the break happened earlier, silently making 1.21.1 compile the
-  newer spelling:
-  - `TextColor.parseColor(String)` returns `DataResult<TextColor>` from **1.21**, not 1.21.11; 1.20.1
-    still returns a nullable `TextColor`.
-  - Fabric's `HudRenderCallback.onHudRender` second parameter is `float` in 1.20.1 and already a
-    `DeltaTracker` in **1.21/1.21.1** (0.92.6 vs 0.116.12 `fabric-rendering-v1`); `HudElementRegistry`
-    only arrives at 1.21.11. So the HUD hook needs three flat scopes:
-    `>=1.21.11` → `HudElementRegistry`, `>=1.21 && <1.21.11` → `HudRenderCallback` +
-    `getGameTimeDeltaPartialTick(false)`, `<1.21` → `HudRenderCallback` + raw float.
-  Verify with `javap` against the cached merged jars under
-  `~/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-merged/<ver>-*/` before gating.
-- **`org.gradle.configuration-cache=true` breaks the classic-Loom targets in CI.** `remapJar`
-  serializes `__tinyRemapperServiceOptions__`, which resolves `LoomGradleExtension` through the plugin
-  classloader of whichever module reached it first — the second one fails with
-  `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`. Setting
-  `enabled = false` on the task does **not** skip the property serialization, and `tasks.remove()` is
-  rejected by Gradle. `_build.yml` therefore appends `--no-configuration-cache` for Fabric-only targets
-  and local 1.20.1 builds must pass it too.
-- **Disabling `remapJar` also breaks the module's published artifact.** `:platform:client:common`
-  disables `remapJar` for this target, but classic Loom only redirects the plain `jar` output to
-  `build/<ver>/devlibs/<name>-dev.jar` *because* `remapJar` is expected to consume it. Its
-  `runtimeElements` variant keeps advertising `build/<ver>/libs/<name>.jar`, so with `remapJar` gone
-  nothing writes that path, and `:platform:client:fabric`'s `shadow(project(...))` resolves to a
-  missing file — **ShadowJar then silently drops the entire module** instead of failing. The shipped
-  1.20.1 jar was 1 MB light and had zero of the 365 common classes (no `Initializer`, no
-  `ScreenRenderer`, no client mixins), i.e. an instant `NoClassDefFoundError` on load.
-  Fix: in the `isClassicLoomTarget` branch, point `Jar` at `layout.buildDirectory.dir("libs")` and
-  clear `archiveClassifier`, so the artifact Gradle hands the consumer matches the file on disk.
-   **Verify fat jars by class inventory, never by size or by "BUILD SUCCESSFUL"** — extract the
-   `shadow(project(...))` jars and assert every class name appears in the final artifact.
-- **Without `remapJar` the shipped classTweaker keeps its `named` header and Fabric Loader rejects
-  the mod.** Every other target writes `accessWidener v1 named` into the jar and lets `remapJar`
-  rewrite the header to `intermediary`; 1.20.1 ships the jar unremapped, so Loader dies with
-  `ClassTweakerFormatException: Namespace (named) does not match current runtime namespace
-  (intermediary)` before any class loads. Writing `intermediary` directly into the generated file
-  is **not** an option — Loom reads `accessWidenerPath` at configuration time and fails with
-  `Failed to setup Minecraft: Namespace mismatch, expected named got intermediary`. The working
-  shape is two files: the generated `named` copy stays for Loom, and a
-  `tasks.named<ProcessResources>("processResources") { doLast { … } }` block overwrites the
-  packaged `dreamdisplayx.classtweaker` with `accessWidener v1 intermediary` after the copy ran.
-  `sourceSets.main.resources.srcDir(files(dir).builtBy(task))` does **not** make
-  `processResources` depend on that task — the extra directory stays empty and the jar keeps
-  `named`. Verify by reading the header out of the final jar, not out of `resources/main`.
-- **1.20.1 could use `remapJar` if `:platform:client:common` stopped applying classic Loom.** The
-  `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension` failure is not caused
-  by `remapJar`: two modules apply classic Loom for the same target (`common` via
-  `apply(plugin = "fabric-loom")` under `isClassicLoomTarget`, `:platform:client:fabric` via
-  `isClassicLoomOnly`), so two `VisitableURLClassLoader`s each load their own `LoomGradleExtension`
-  and any cross-module call casts between them. Even `tasks --all` and `genSourcesWithCfr` blow up
-  on it. The un-remapped pack is a deliberate workaround, not a hard limit.
+- **1.20.1 applies exactly one Loom and ships a remapped jar.** Loom may be applied to only *one*
+  module per target: applying it to both `:platform:client:common` and `:platform:client:fabric` puts two
+  `LoomGradleExtension` classes on two plugin classloaders, and any cross-module call then dies with
+  `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension` (hit by `remapJar`'s
+  `tinyRemapperServiceOptions`, and by `tasks --all` / `genSourcesWithCfr`). This holds for **every** Loom
+  line — verified with 1.10.5 and 1.17.13 alike — so it cannot be dodged by moving Loom. `common`
+  therefore applies no Minecraft provider for this target (no Loom, no `moddev`) and its compile tasks are
+  disabled; `:platform:client:fabric` compiles `common`'s chiseled sources itself, via a `source(...)`
+  added inside a **later** `afterEvaluate` on `compileKotlin` (the kotlin convention rewrites that task's
+  source list in its own `afterEvaluate`, so anything added earlier is dropped).
+- **Do not try to hand `common` another project's Minecraft classpath.** Gradle 9 rejects every variant:
+  a foreign `Configuration` as a dependency (both directly and as a provider), cross-project
+  `extendsFrom`, `incoming.artifactView {}.files` (circular `common:classes -> common:compileJava`),
+  and a task that exports a classpath manifest (task cycle). Resolving bare
+  `net.minecraft:minecraft:1.20.1` in a `detachedConfiguration` fails offline — Minecraft coordinates
+  only resolve through Loom.
+- **1.20.1 uses modern Loom `1.17.13`, not the `1.10.5` line.** `versions.json` pins `1.17.13` for every
+  target; 1.20.1 is no exception. Two reasons: `remapJar` runs again (see above), and Loom 1.17.13's
+  TinyRemapper reads **Java 25** class files while 1.10.5 aborts with `Unsupported class file major
+  version 69`. Java 25 enters the picture because `:platform:client:fabric` declares a Java 25 consumer
+  on `compileClasspath` (needed to resolve the Java 21+ `compileOnly` API stubs for Paper/NeoForge/
+  PlatformWeaver while `options.release` still emits 17). 1.20.1 still applies the pre-split
+  single-segment `fabric-loom` id, which 1.17.13 exports alongside the split variants.
+- **Never ship the shadow jar un-remapped.** The game runs `intermediary`; the shadow jar holds `named`
+  bytecode, so e.g. `net/minecraft/commands/synchronization/SingletonArgumentInfo` is really
+  `class_2319` at runtime and an unremapped jar dies on `NoClassDefFoundError` inside the entrypoint
+  (`FabricBareTokenArgumentType.register`), plus every mixin logs `@Mixin target … was not found`.
+  Shipping `shadowJar` straight into `build/libs` was the bug behind three rounds of crash reports.
+  Route every obfuscated target through `devlibs` → `remapJar`; only 26.x (deobfuscated) ships `shadowJar`.
+- **The classTweaker hack is gone.** `remapJar` rewrites the packaged `dreamdisplayx.classtweaker`
+  header from `named` to `intermediary` itself, so the `processResources { doLast { … } }` overwrite that
+  1.20.1 needed while it was un-remapped must not come back — it now makes `remapJar` fail with
+  `Cannot remap access widener from namespace 'intermediary'. Expected: 'named'`. The generated dev copy
+  stays `named` (`accessWidener v1 named`, header-only for 1.20.1 since none of the widened members
+  exist there), and `loom.accessWidenerPath` keeps pointing at it.
+- **Kotlin `@Metadata` keeps `named` names; that is expected and harmless.** Remapping rewrites the
+  constant pool and method descriptors (`drawScreen(net.minecraft.class_332, …)`) but not the Kotlin
+  metadata annotation, whose `d2` array still spells `Lnet/minecraft/client/gui/GuiGraphics;`. The JVM
+  never loads annotation strings eagerly and nothing here uses `kotlin-reflect` for Minecraft types, so
+  this does not affect loading. **Verify remapping via `javap -p` signatures and constant-pool class
+  refs — not via a whole-jar `grep` for named names**, which always reports hits from `@Metadata`.
 - **A locally built 1.20.1 jar is not testable on Android.** `natives-manifest.json` carries a CI-owned
   `release_base` (`natives-<sha>-<stamp>`); a local build stamps the placeholder that CI never uploaded,
   so `libvlc-android-aarch64.tar.gz` 404s and playback cannot initialise. Always test the CI artifact

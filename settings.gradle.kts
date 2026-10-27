@@ -31,11 +31,12 @@ pluginManagement {
         eachPlugin {
             val loomVersion = scVersion("loom.version")
             val mcVer = scVersion("minecraft.version")
-            // Minecraft 1.20.1 predates the split fabric-loom/fabric-loom-remap plugin ids and
-            // only ships classic Loom, which is always published as a module (no plain plugin marker).
+            // Minecraft 1.20.1 predates the split fabric-loom/fabric-loom-remap plugin ids, so it
+            // applies the pre-split `fabric-loom` id. Every Loom line still publishes that id as the
+            // `net.fabricmc:fabric-loom` module (no plain plugin marker), hence `useModule` below.
             val legacyLoomModule = mcVer.startsWith("1.20")
             when (requested.id.id) {
-                // The build declares the classic `fabric-loom` id (`apply false`) in every version so
+                // The build declares the pre-split `fabric-loom` id (`apply false`) in every version so
                 // that one jar lands on the build classpath; the runtime `apply(...)` call then picks
                 // the remapping variant the target version needs.
                 "fabric-loom" -> useModule("net.fabricmc:fabric-loom:$loomVersion")

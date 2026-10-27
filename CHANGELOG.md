@@ -10,7 +10,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Added an opt-in loading animation with a centered logo, flowing-rainbow waving title, and Windows 11-style spinner.
 
 ### Fixes
-
+- The 1.20.1 Fabric jar is now remapped to intermediary, so its entrypoint and mixins load instead of failing with `NoClassDefFoundError`.
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
 - Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.

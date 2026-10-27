@@ -15,13 +15,24 @@ fun scVersion(name: String): String = scVersions.get(name)
 /**
  * Minecraft 1.20.1 predates NeoForge (its first release targets 1.20.2 and its loader was still
  * published as `net.neoforged:forge`), so the `moddev` plugin cannot supply Minecraft classes for
- * that target. Classic Fabric Loom can, so 1.20.1 swaps the Minecraft provider while every other
- * version keeps using `moddev`. The plugin is applied here, before any accessor is touched, because
- * `apply false` only puts the jar on the classpath and the extension does not exist until the plugin
- * is actually applied.
+ * that target - and applying Loom here instead is not an option either (see below). 1.20.1 therefore
+ * gets no Minecraft provider at all while every other version keeps using `moddev`. The plugin is
+ * applied here, before any accessor is touched, because `apply false` only puts the jar on the
+ * classpath and the extension does not exist until the plugin is actually applied.
  */
-val isClassicLoomTarget = scVersion("minecraft.version").startsWith("1.20")
-apply(plugin = if (isClassicLoomTarget) "fabric-loom" else "net.neoforged.moddev")
+val compilesCommonElsewhere = scVersion("minecraft.version").startsWith("1.20")
+// 1.20.1 applies *no* Minecraft provider here. Applying a Loom in this module as well as in
+// `:platform:client:fabric` puts a second `LoomGradleExtension` on a second plugin classloader, and
+// `fabric`'s `remapJar` then dies evaluating `tinyRemapperServiceOptions` with
+// `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`. That holds for every
+// Loom line (verified with 1.10.5 and with 1.17.13), so it cannot be dodged by moving Loom.
+//
+// The fix is the same shape `:platform:server` already uses: this module keeps the sources,
+// `:platform:client:fabric` compiles them against the target's classpath and its `remapJar` maps the
+// result to `intermediary`. See the `sourceSets.main` note in that module for the wiring.
+if (!compilesCommonElsewhere) {
+    apply(plugin = "net.neoforged.moddev")
+}
 
 repositories {
     mavenCentral()
@@ -58,23 +69,11 @@ dependencies {
         compileOnly("org.lwjgl:lwjgl-sdl:3.4.3")
         compileOnly("org.lwjgl:lwjgl-opengl:3.4.3")
     }
-    if (isClassicLoomTarget) {
-        "minecraft"("com.mojang:minecraft:${scVersion("fabric.minecraft.version")}")
-        "mappings"(
-            project.extensions.getByType(LoomGradleExtensionAPI::class.java).layered {
-                officialMojangMappings()
-                parchment(
-                    scVersions.getOrNull("parchment.dependency")
-                        ?: "org.parchmentmc.data:parchment:${scVersion("minecraft.version")}+build.3"
-                )
-            }
-        )
-        "modImplementation"("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")
-        "modImplementation"("net.fabricmc.fabric-api:fabric-api:${scVersion("fabric.api.version")}")
-    }
+    // 1.20.1 declares no Minecraft/Fabric coordinates: `:platform:client:fabric` compiles this
+    // module's sources against its own classpath. See the plugin note above.
 }
 
-if (!isClassicLoomTarget) {
+if (!compilesCommonElsewhere) {
     configure<net.neoforged.moddevgradle.dsl.NeoForgeExtension> {
         enable {
             val neoForm = scVersions.getOrNull("neoform.version")
@@ -97,35 +96,16 @@ kotlin {
 }
 
 /**
- * Classic Loom (1.20.1) applies to this module *and* to `:platform:client:fabric`, which is the
- * only consumer that produces an artifact. Loom's `remapJar` resolves its `TinyRemapper` service
- * through the plugin's isolated classloader; when the task is reached through another module's
- * `shadow(project(...))` dependency, the service lookup happens across two plugin classloaders and
- * dies with `LoomGradleExtensionImpl_Decorated cannot be cast to LoomGradleExtension`. Both Loom
- * copies then remap the same classes a second time down in `:platform:client:fabric:remapJar`
- * anyway, so the intermediate remap is redundant: skip it for the 1.20.1 target only.
+ * 1.20.1 compiles this module's sources inside `:platform:client:fabric`, which owns the only Loom
+ * instance for that target. Nothing is compiled here, so the compile tasks are disabled outright
+ * rather than left to fail on the missing Minecraft classpath. The chisel output that `fabric`
+ * consumes is still produced by this module's `chiselSource` task.
  */
-if (isClassicLoomTarget) {
-    tasks.matching { it.name == "remapJar" || it.name == "remapSourcesJar" }.configureEach {
+if (compilesCommonElsewhere) {
+    tasks.matching {
+        it.name == "compileKotlin" || it.name == "compileJava" ||
+            it.name == "compileTestKotlin" || it.name == "compileTestJava"
+    }.configureEach {
         enabled = false
-    }
-
-    /**
-     * Disabling `remapJar` leaves the module's `runtimeElements` variant pointing at
-     * `build/<ver>/libs/common-<version>.jar`, but classic Loom moves the plain `jar` output to
-     * `build/<ver>/devlibs/` and suffixes it with `-dev`. Nothing ever writes the advertised path,
-     * so `:platform:client:fabric`'s `shadow(project(":platform:client:common"))` resolves to a
-     * file that does not exist and silently drops the whole module from the fat jar — the shipped
-     * 1.20.1 jar then has no `Initializer`, no `ScreenRenderer` and none of the client mixins, and
-     * the game dies with `NoClassDefFoundError` the moment the mod loads.
-     *
-     * Point `jar` at the advertised path instead. Loom only redirects it there because it owns the
-     * subsequent remap step, and that step is disabled for this target, so overriding the location
-     * makes the artifact Gradle hands to the consumer match the file that exists. The classes are
-     * already in named mappings (the same set the game runs with), so no remapping is needed.
-     */
-    tasks.named<Jar>("jar") {
-        destinationDirectory.set(layout.buildDirectory.dir("libs"))
-        archiveClassifier.set("")
     }
 }
