@@ -1,3 +1,20 @@
+# 1.10.6 Release
+
+## Highlights
+
+- Hotfix: crash on button click
+
+## Client
+
+### Fixes
+
+- Fixed crash on button click ([#266](https://github.com/arnodoelinger/dreamdisplays/issues/266))
+- Orient loading bar to display content rotation
+
+## Server
+
+No changes.
+
 # 1.10.5 Release
 
 ## Highlights
