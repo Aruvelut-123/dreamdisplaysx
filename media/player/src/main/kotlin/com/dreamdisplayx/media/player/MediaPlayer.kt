@@ -1123,6 +1123,30 @@ class MediaPlayer(
         }
 
         if (normalEos && !liveStream) {
+            // A session that never delivered a single decoded frame cannot have "finished" honour
+            // its media: libvlc reported end-of-input while the vout never opened (or the audio-only
+            // slave ended first). Looping that state replays the opening audio forever, which is
+            // exactly the "sound keeps snapping back to the start" symptom. Retry the resolve
+            // instead, so a broken first session does not masquerade as a completed VOD.
+            if (!sessionManager.hasDeliveredFrame) {
+                logger.warn(
+                    "$debugLabel EOS at {}ms without a single decoded frame; retrying instead of looping.",
+                    position / 1_000_000L,
+                )
+                if (retryPolicy.exhausted) {
+                    logger.error("$debugLabel No frame was ever decoded and retries are exhausted; stopping.")
+                    state.set(PlaybackState.ERROR)
+                    host.mediaError = DreamMediaException.Decode(
+                        "Stream ended without delivering a video frame",
+                        isFatal = true,
+                    )
+                    clock.reset(clock.currentTime())
+                    return
+                }
+                primedStartPositionNanos.set(position.coerceAtLeast(0L))
+                scheduleRetry(invalidateCache = true)
+                return
+            }
             // A CDN/DASH leg can report END_REACHED after only a few seconds. Treating that as a
             // completed VOD makes loop-enabled displays replay the same opening forever, which looks
             // like a player storm. Re-resolve the stream instead when EOS is clearly far from the end.

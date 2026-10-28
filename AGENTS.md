@@ -122,6 +122,13 @@
   both missed the file and cropped the borders. Vanilla `minecraft:widget/*` has no counterpart at all,
   so `drawLegacyWidget` paints a procedural track/handle instead of blitting anything. Adding a new
   sprite means adding its `SpriteSource` entry, or it will be drawn as a 24×24 icon.
+- **Never scale with the 9-argument legacy `blit`.** `GuiGraphics.blit(rl, x, y, u, v, w, h, texW, texH)`
+  forwards the *destination* size as the sampled `uWidth`/`vHeight`, so drawing a 64×64 panel into a
+  400×200 rect samples UV `0..6.25`; vanilla samplers are `GL_REPEAT`, so the sprite tiles and its
+  nine-slice borders repeat into a full-screen grid of the checkerboard-looking seams. Only the
+  11-argument overload `blit(rl, x, y, w, h, u, v, uWidth, vHeight, texW, texH)` separates the
+  sampled size from the destination size. Every legacy sprite draw goes through
+  `GuiGraphicsCompat.blitScaled`, which is the one call site that uses it.
 - **Build sprite ids with `DreamIdentifiers`, never `ResourceLocation(namespace, path)`.** That
   constructor is public on 1.20.1 but **private from 1.21.1 on** (which wants
   `Identifier.fromNamespaceAndPath`), so a bare call compiles for the legacy target and then kills the
@@ -140,6 +147,15 @@
   `lock()` must therefore prime a fallback format from `expectedW/H` (`align32(w * 4)` pitch,
   `align32(h)` lines) and set `formatReady`, instead of requiring `setup()` to come first. The callback
   registration return codes are logged so a real registration failure is visible next time.
+- **An EOS from a session that never decoded a frame is not a finished video.** `libvlc_video_set_callbacks`
+  does force `vout=vmem` (the setter writes `vmem-lock`/`vmem-unlock`/`vmem-display`/`vmem-data` and sets
+  `vout=vmem`, `window=none`, `avcodec-hw=none` through `var_SetChecked`), and the AAR does export both
+  `libvlc_video_set_callbacks` and `libvlc_video_set_format_callbacks` plus the built-in `vmem` module —
+  yet a session can still end without ever calling `setup()`/`lock()`. Treating that end as a completed
+  VOD makes a looping display replay the opening audio forever ("sound keeps snapping back to the
+  start"). `LibVlcSessionManager.hasDeliveredFrame` is reset per `start()`, set by the frame publisher,
+  and `MediaPlayer.handleStreamEnd` retries instead of looping when it is false. `firstFrameFired` alone
+  is not enough — it is a latch guard, not an observable-from-outside session fact.
 - **Kotlin `@Metadata` keeps `named` names; that is expected and harmless.** Remapping rewrites the
   constant pool and method descriptors (`drawScreen(net.minecraft.class_332, …)`) but not the Kotlin
   metadata annotation, whose `d2` array still spells `Lnet/minecraft/client/gui/GuiGraphics;`. The JVM

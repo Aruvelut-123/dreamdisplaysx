@@ -49,7 +49,7 @@ class LoadingScreenAnimationTest {
     }
 
     @Test
-    fun `spinner appears only after intro and stays below the title not the entire lockup`() {
+    fun `spinner appears only after intro and is centred on the screen below the middle`() {
         for (ms in listOf(0L, 250L, 975L, 1300L, 1450L)) {
             assertEquals(0f, frame(ms).spinnerAlpha)
             assertTrue(frame(ms).ringBrushes.isEmpty())
@@ -58,8 +58,11 @@ class LoadingScreenAnimationTest {
         assertEquals(0.5f, appearing.spinnerAlpha, 0.00001f)
         val shown = frame(1670)
         assertEquals(1f, shown.spinnerAlpha)
-        assertEquals(shown.title.centerX, shown.spinner.centerX, 0.00001f)
-        assertTrue(shown.spinner.centerX > 0.5f)
+        // Dead centre horizontally: the lockup is shifted right by the icon, so the ring must not
+        // follow `title.centerX`.
+        assertEquals(0.5f, shown.spinner.centerX, 0.00001f)
+        // A quarter of the display height above the bottom, well below the wordmark.
+        assertEquals(0.75f, shown.spinner.centerY, 0.00001f)
         assertTrue(shown.spinner.y > shown.glyphs.maxOf { it.rect.bottom })
         assertFalse(shown.ringBrushes.isEmpty())
     }

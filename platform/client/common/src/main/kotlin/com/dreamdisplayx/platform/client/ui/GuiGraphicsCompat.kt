@@ -86,13 +86,13 @@ fun GuiGraphicsCompat.blitSpriteCompat(
         return
     }
     if (sprite.path.startsWith("textures/")) {
-        blit(sprite, x, y, 0f, 0f, w, h, textureW, textureH)
+        blitScaled(sprite, x, y, w, h, textureW, textureH)
         return
     }
     val source = SPRITE_SOURCES[sprite.path]
     if (source == null) {
         // Unknown sprite: flat icon art drawn at its authored 24x24 size.
-        blit(spriteTexture(sprite), x, y, 0f, 0f, w, h, ICON_SOURCE_SIZE, ICON_SOURCE_SIZE)
+        blitScaled(spriteTexture(sprite), x, y, w, h, ICON_SOURCE_SIZE, ICON_SOURCE_SIZE)
         return
     }
     blitNineSlice(spriteTexture(sprite), x, y, w, h, source)
@@ -151,23 +151,55 @@ private fun GuiGraphicsCompat.blitNineSlice(
     val tw = source.width
     val th = source.height
     if (b <= 0 || w < b * 2 || h < b * 2) {
-        blit(texture, x, y, 0f, 0f, w, h, tw, th)
+        blitScaled(texture, x, y, w, h, tw, th)
         return
     }
     val midW = w - b * 2
     val midH = h - b * 2
+    val srcMidW = tw - b * 2
+    val srcMidH = th - b * 2
     // Corners.
-    blit(texture, x, y, 0f, 0f, b, b, tw, th)
-    blit(texture, x + w - b, y, (tw - b).toFloat(), 0f, b, b, tw, th)
-    blit(texture, x, y + h - b, 0f, (th - b).toFloat(), b, b, tw, th)
-    blit(texture, x + w - b, y + h - b, (tw - b).toFloat(), (th - b).toFloat(), b, b, tw, th)
+    blitScaled(texture, x, y, b, b, tw, th, 0f, 0f, b, b)
+    blitScaled(texture, x + w - b, y, b, b, tw, th, (tw - b).toFloat(), 0f, b, b)
+    blitScaled(texture, x, y + h - b, b, b, tw, th, 0f, (th - b).toFloat(), b, b)
+    blitScaled(texture, x + w - b, y + h - b, b, b, tw, th, (tw - b).toFloat(), (th - b).toFloat(), b, b)
     // Edges.
-    blit(texture, x + b, y, b.toFloat(), 0f, midW, b, tw, th)
-    blit(texture, x + b, y + h - b, b.toFloat(), (th - b).toFloat(), midW, b, tw, th)
-    blit(texture, x, y + b, 0f, b.toFloat(), b, midH, tw, th)
-    blit(texture, x + w - b, y + b, (tw - b).toFloat(), b.toFloat(), b, midH, tw, th)
+    blitScaled(texture, x + b, y, midW, b, tw, th, b.toFloat(), 0f, srcMidW, b)
+    blitScaled(texture, x + b, y + h - b, midW, b, tw, th, b.toFloat(), (th - b).toFloat(), srcMidW, b)
+    blitScaled(texture, x, y + b, b, midH, tw, th, 0f, b.toFloat(), b, srcMidH)
+    blitScaled(texture, x + w - b, y + b, b, midH, tw, th, (tw - b).toFloat(), b.toFloat(), b, srcMidH)
     // Centre.
-    if (midW > 0 && midH > 0) blit(texture, x + b, y + b, b.toFloat(), b.toFloat(), midW, midH, tw, th)
+    if (midW > 0 && midH > 0) {
+        blitScaled(texture, x + b, y + b, midW, midH, tw, th, b.toFloat(), b.toFloat(), srcMidW, srcMidH)
+    }
+}
+
+/**
+ * Draws (part of) [texture] into a `dw` x `dh` destination rect on pre-1.20.2 clients.
+ *
+ * The plain 9-argument `blit(texture, x, y, u, v, w, h, texW, texH)` overload cannot scale: it
+ * forwards the *destination* size as the sampled `uWidth`/`vHeight`, so drawing a 64x64 panel into
+ * a 400x200 rect asks for UV `0..6.25`. Vanilla samplers use `GL_REPEAT`, so the sprite tiles across
+ * the whole panel and its nine-slice borders repeat into a grid. Only the 11-argument overload takes
+ * the sampled size separately from the destination size, and that is what every blit here uses.
+ *
+ * [sw] / [sh] default to the full source image; the nine-slice passes its slice sizes instead.
+ */
+private fun GuiGraphicsCompat.blitScaled(
+    texture: ResourceLocation,
+    dx: Int,
+    dy: Int,
+    dw: Int,
+    dh: Int,
+    texW: Int,
+    texH: Int,
+    u: Float = 0f,
+    v: Float = 0f,
+    sw: Int = texW,
+    sh: Int = texH,
+) {
+    if (dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0 || texW <= 0 || texH <= 0) return
+    blit(texture, dx, dy, dw, dh, u, v, sw, sh, texW, texH)
 }
 
 /**

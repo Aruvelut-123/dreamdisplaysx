@@ -299,6 +299,18 @@ internal class LibVlcSessionManager(
     /** Guards [onStreamEnd] so it fires exactly once per session. */
     private val eosFired = AtomicBoolean(false)
 
+    /**
+     * True once this session published a decoded video frame.
+     *
+     * Session end must distinguish "the video really finished" from "the input ended while the vout
+     * never opened". Without that distinction an audio-only session that dies early is treated as a
+     * completed VOD and looped, which replays the opening audio forever — the reported "sound keeps
+     * snapping back to the start" symptom. Reset per start(), set by the frame publisher.
+     */
+    @Volatile
+    var hasDeliveredFrame = false
+        private set
+
     // ── Park state ──────────────────────────────────────────────────────────
 
     private val parkFlag = AtomicBoolean(false)
@@ -650,6 +662,7 @@ internal class LibVlcSessionManager(
         expectedW = w
         expectedH = h
         firstFrameFired = false
+        hasDeliveredFrame = false
         firstFrameLatch = CountDownLatch(1)
         // Reset the playback clock to the requested offset so the progress bar starts at the
         // right second instead of inheriting a stale origin from the previous session.
@@ -822,7 +835,14 @@ internal class LibVlcSessionManager(
         // The control-executor submit is asynchronous, so unconditionally await the latch.
         try {
             if (!firstFrameLatch.await(10, TimeUnit.SECONDS)) {
-                logger.error("$debugLabel libvlc first frame timeout")
+                // A silent timeout is nearly impossible to diagnose from outside: libvlc reports vout
+                // trouble on its own log sink, which [recentLogLines] captures. Dump it so the missing
+                // `libvlc video setup` line is followed by the reason the vout never opened.
+                logger.error(
+                    "$debugLabel libvlc first frame timeout (firstFrameFired={}, log={})",
+                    firstFrameFired,
+                    LibVlc.recentLogLines(12),
+                )
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -2057,6 +2077,7 @@ videoCallbackSets += callbacks
 
                 if (!firstFrameFired) {
                     firstFrameFired = true
+                    hasDeliveredFrame = true
                     firstFrameLatch.countDown()
                     clock.markFirstFrame() // start the playback position clock on the first decoded frame
                     logger.info("$debugLabel first frame delivered {}x{} (libvlc, yuv={}).", ew, eh, gpuYuvActive)
