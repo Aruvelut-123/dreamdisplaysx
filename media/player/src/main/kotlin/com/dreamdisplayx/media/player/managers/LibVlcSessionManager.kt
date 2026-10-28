@@ -681,6 +681,17 @@ internal class LibVlcSessionManager(
         // frame back to system memory before handing it to the vmem lock callback, so vmem and hw
         // coexist and 4K H.264/HEVC decodes on the GPU instead of starving the CPU.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
+        // The resolved URLs are the first thing to check when a display plays sound but shows no
+        // picture: a DASH video rendition that is really the audio track (or a path libvlc demuxes as
+        // audio-only) opens no vout at all. Host + path only — the query carries the signed token.
+        logger.info(
+            "$debugLabel libvlc video source={} audio source={} separateAudio={} target={}x{}",
+            describeMediaUrl(safeUrl),
+            if (separateAudio) describeMediaUrl(safeAudioUrl) else "<muxed with video>",
+            separateAudio,
+            w,
+            h,
+        )
         // Media-level hw decode is an avcodec-module concept (desktop backends only); Android
         // selects its decoder at instance level and defaults to explicit software avcodec when
         // the launcher cannot provide a real MediaCodec bridge.
@@ -897,6 +908,15 @@ internal class LibVlcSessionManager(
                 "firstFrameFired=$firstFrameFired state=${lib.libvlc_media_player_get_state(mp)}"
         }.getOrElse { "player=introspection failed: ${it.message}" }
     }
+
+    /**
+     * Host + path of [url] with the query stripped, for logging a resolved media source without
+     * leaking its signed token. Never throws: a malformed URL falls back to a fixed marker.
+     */
+    private fun describeMediaUrl(url: String): String = runCatching {
+        val uri = java.net.URI(url)
+        "${uri.host}${uri.path}"
+    }.getOrElse { "<unparseable url>" }
 
     /**
      * Returns the current libvlc VIDEO player, creating it on first use. Desktop keeps and reuses
