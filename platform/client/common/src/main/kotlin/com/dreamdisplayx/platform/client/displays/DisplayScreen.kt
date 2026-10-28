@@ -517,6 +517,14 @@ class DisplayScreen(
     /** True once the video is effectively playing: not awaiting the initial timeline and a frame has filled. */
     val isVideoStarted: Boolean get() = !stillWaitingForInitialTimeline() && (hasEverRendered || mediaPlayer?.textureFilled() == true)
 
+    /**
+     * Read-only views for [ScreenRenderer]'s placeholder diagnostic: they break [isVideoStarted]'s
+     * expression apart so a log can name the condition that stayed false.
+     */
+    internal val waitingForTimelineForDiagnostics: Boolean get() = stillWaitingForInitialTimeline()
+    internal val hasEverRenderedForDiagnostics: Boolean get() = hasEverRendered
+    internal val mediaPlayerForDiagnostics: MediaPlayer? get() = mediaPlayer
+
     /** Marks that a frame has rendered, stamping the first-frame time so to appear fade-in can run. */
     private fun markRendered() {
         if (!hasEverRendered) firstFrameNanos = System.nanoTime()

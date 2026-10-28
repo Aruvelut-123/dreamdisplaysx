@@ -175,23 +175,59 @@ object ScreenRenderer : ClientRenderService {
             // The replay lift is added on top so the UnshadedDisplayPass repaint sits just in front of
             // the level-pass draw it repeats (water/glass fix).
             renderVideo(stack, displayScreen, drawQuad, lift)
-        } else if (loadingFrame != null) {
-            LoadingScreenRenderer.renderFlat(displayScreen, stack, loadingFrame, lift, replay, drawQuad)
         } else {
-            renderPlaceholder(
-                stack,
-                drawQuad,
-                DisplayYuvRenderTypes.solidColorType(),
-                facing,
-                w,
-                h,
-                displayScreen.errored,
-                lift,
-            )
+            // A display that stays on the placeholder while audio plays is the "no picture" report.
+            // Log WHICH of the three conditions failed, once every few seconds, so the next log names
+            // the broken link instead of only showing the placeholder on screen.
+            logStuckDisplay(displayScreen)
+            if (loadingFrame != null) {
+                LoadingScreenRenderer.renderFlat(displayScreen, stack, loadingFrame, lift, replay, drawQuad)
+            } else {
+                renderPlaceholder(
+                    stack,
+                    drawQuad,
+                    DisplayYuvRenderTypes.solidColorType(),
+                    facing,
+                    w,
+                    h,
+                    displayScreen.errored,
+                    lift,
+                )
+            }
         }
 
         renderDanmakuOverlay(displayScreen, stack, facing, w, h, lift, drawQuad)
         renderSubtitleOverlay(displayScreen, stack, facing, w, h, lift, drawQuad)
+    }
+
+    /** Last time [logStuckDisplay] reported a display, keyed by screen uuid. Render thread only. */
+    private val stuckReportedAt = HashMap<java.util.UUID, Long>()
+
+    /**
+     * Explains why [screen] is still drawn as a placeholder instead of its video.
+     *
+     * The draw gate is `isVideoStarted && hasTexture && renderType != null`. `hasTexture` is already
+     * implied true here (see the caller's early `continue`), so the remaining candidates are reported
+     * individually. Throttled to one line per display per 3s so a placeholder that stays up while
+     * audio plays leaves a readable trail instead of a log flood.
+     */
+    private fun logStuckDisplay(screen: DisplayScreen) {
+        val now = System.nanoTime()
+        val last = stuckReportedAt[screen.uuid]
+        if (last != null && now - last < 3_000_000_000L) return
+        stuckReportedAt[screen.uuid] = now
+        val player = screen.mediaPlayerForDiagnostics
+        org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/ScreenRenderer").warn(
+            "display {} drawn as placeholder: isVideoStarted={} (waitingTimeline={} hasEverRendered={} textureFilled={}) " +
+                "renderType={} player={}",
+            screen.uuid,
+            screen.isVideoStarted,
+            screen.waitingForTimelineForDiagnostics,
+            screen.hasEverRenderedForDiagnostics,
+            player?.textureFilled(),
+            screen.renderType != null,
+            player != null,
+        )
     }
 
     /** Renders the selected subtitle cue as a viewer-local textured overlay. */
