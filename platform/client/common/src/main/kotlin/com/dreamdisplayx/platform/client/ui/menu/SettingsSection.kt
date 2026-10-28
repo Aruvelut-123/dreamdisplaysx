@@ -243,15 +243,26 @@ class SettingsSection(
     }
 
     /**
-     * Renders the tooltip of whichever row label or action button is hovered. Hit-testing uses the
-     * virtual ([mouseX], [mouseY]) coordinates; the tooltip is anchored at the real ([anchorX],
-     * [anchorY]) coordinates because deferred tooltips render unscaled, outside the menu's transform.
+     * Renders the tooltip of whichever row label or action button is hovered.
+     *
+     * Hit-testing always uses the virtual ([mouseX], [mouseY]) coordinates. The anchor differs by
+     * version because of *when* the tooltip is painted:
+     * - 1.21.11+ queues the tooltip (`setComponentTooltipForNextFrame`) and paints it after the
+     *   screen's transform has been popped, so it needs REAL screen coordinates ([anchorX]/[anchorY]).
+     * - Older versions paint it immediately (`renderComponentTooltip`), i.e. still inside the
+     *   menu's downscale transform, so the anchor must stay VIRTUAL or the matrix scales it twice and
+     *   the box drifts up-left away from the cursor (the 1.20.1 offset bug).
      */
     fun renderTooltips(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, anchorX: Int, anchorY: Int) {
-        val font = Minecraft.getInstance().font
+        //? if >=1.21.11 {
+        val x = anchorX
+        val y = anchorY
+        //?} else
+        /*val x = mouseX
+        val y = mouseY*/
         for (row in rows) {
             if (row.labelHover?.contains(mouseX, mouseY) == true) {
-                renderTooltip(g, row.tooltip(), anchorX, anchorY)
+                renderTooltip(g, row.tooltip(), x, y)
             }
         }
         for ((button, tooltip) in buttonTooltips) {
@@ -259,7 +270,7 @@ class SettingsSection(
             if (mouseX >= button.x && mouseX < button.x + button.width &&
                 mouseY >= button.y && mouseY < button.y + button.height
             ) {
-                tooltip()?.let { renderTooltip(g, it, anchorX, anchorY) }
+                tooltip()?.let { renderTooltip(g, it, x, y) }
             }
         }
     }

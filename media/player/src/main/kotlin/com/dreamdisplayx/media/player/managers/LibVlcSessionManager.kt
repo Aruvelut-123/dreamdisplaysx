@@ -16,6 +16,7 @@ import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+import com.sun.jna.ptr.IntByReference
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -794,7 +795,10 @@ internal class LibVlcSessionManager(
                 }
                 synchronized(lifecycleLock) {
                     if (lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get()) return@submit
-                    LibVlc.lib.libvlc_media_player_play(activeMp)
+                    val playRc = LibVlc.lib.libvlc_media_player_play(activeMp)
+                    if (MediaPlayer.DEBUG || playRc != 0) {
+                        logger.warn("$debugLabel libvlc_media_player_play(video) rc=$playRc ({}).", voutState())
+                    }
                 }
                 // libvlc volume is per-player. Re-assert it after every fresh play so both the muxed
                 // video path and a separate Android audio player honor the user's pre-start volume.
@@ -834,13 +838,27 @@ internal class LibVlcSessionManager(
         // Wait for the first frame so the caller can rely on frames being delivered (with timeout).
         // The control-executor submit is asynchronous, so unconditionally await the latch.
         try {
-            if (!firstFrameLatch.await(10, TimeUnit.SECONDS)) {
-                // A silent timeout is nearly impossible to diagnose from outside: libvlc reports vout
-                // trouble on its own log sink, which [recentLogLines] captures. Dump it so the missing
-                // `libvlc video setup` line is followed by the reason the vout never opened.
+            // Poll instead of a single 10s await: "no picture" is a *timeline*, and the one-off timeout
+            // line could not tell whether the vout ever opened. Sampling every 2s shows whether
+            // hasVout flips (vout opened late), never opens (module/decoder refusal), or opens with a
+            // zero size (vmem setup() was never called).
+            var waitedSeconds = 0
+            while (waitedSeconds < FIRST_FRAME_TIMEOUT_SECONDS && !firstFrameFired) {
+                if (firstFrameLatch.await(2, TimeUnit.SECONDS)) break
+                waitedSeconds += 2
+                if (!firstFrameFired) {
+                    logger.info(
+                        "$debugLabel waiting for the first video frame ({}s): {}",
+                        waitedSeconds,
+                        voutState(),
+                    )
+                }
+            }
+            if (!firstFrameFired) {
                 logger.error(
-                    "$debugLabel libvlc first frame timeout (firstFrameFired={}, log={})",
+                    "$debugLabel libvlc first frame timeout (firstFrameFired={}, {} log={})",
                     firstFrameFired,
+                    voutState(),
                     LibVlc.recentLogLines(12),
                 )
             }
@@ -848,6 +866,36 @@ internal class LibVlcSessionManager(
             Thread.currentThread().interrupt()
         }
         return started.get()
+    }
+
+    /**
+     * Video-output introspection for the timeout diagnostic.
+     *
+     * "No picture" has three very different causes and libvlc's log alone cannot separate them, because
+     * [LibVlc.recentLogLines] is a single global sink shared with the separate audio player — its
+     * `down-sampling` / `playing silence` lines evict every video line, which is exactly what the
+     * 2026-10-28 log showed. These three exported calls answer it directly:
+     * - `videoTracks == 0` → the resolved media has no video stream (source/rendition problem).
+     * - `videoTracks > 0` but `hasVout == false` → vout never opened (module/decoder refusal).
+     * - `hasVout == true` and `size == 0x0` → vout opened but never negotiated a format, so the vmem
+     *   `setup()` callback was never called and every `lock()` is skipped.
+     */
+    private fun voutState(): String {
+        val mp = mediaPlayer ?: return "player=null"
+        return runCatching {
+            val lib = LibVlc.lib
+            val hasVout = lib.libvlc_media_player_has_vout(mp)
+            val tracks = lib.libvlc_video_get_track_count(mp)
+            val width = IntByReference(0)
+            val height = IntByReference(0)
+            val sizeResult = lib.libvlc_video_get_size(mp, 0, width, height)
+            val ready = videoCallbacksByPlayer[Pointer.nativeValue(mp)]?.frames?.isFormatReady
+            val calls = videoCallbacksByPlayer[Pointer.nativeValue(mp)]?.frames
+            "player=ok hasVout=$hasVout videoTracks=$tracks " +
+                "sizeResult=$sizeResult decoded=${width.value}x${height.value} " +
+                "formatReady=$ready setupCalls=${calls?.setupCalls} lockCalls=${calls?.lockCalls} " +
+                "firstFrameFired=$firstFrameFired state=${lib.libvlc_media_player_get_state(mp)}"
+        }.getOrElse { "player=introspection failed: ${it.message}" }
     }
 
     /**
@@ -1873,6 +1921,20 @@ videoCallbackSets += callbacks
         @Volatile
         private var active = true
         private var formatReady = false
+
+        /** Read-only view for the first-frame timeout diagnostic; see [LibVlcSessionManager.voutState]. */
+        val isFormatReady: Boolean get() = formatReady
+
+        /** How many times libvlc called [lock]; 0 means the vout never produced a frame to write. */
+        @Volatile
+        var lockCalls: Int = 0
+            private set
+
+        /** How many times libvlc called [setup]; 0 means the format callback never fired. */
+        @Volatile
+        var setupCalls: Int = 0
+            private set
+
         private var formatGeneration = 0L
         private var nextWrite = 0
         private var writing = -1
@@ -1880,6 +1942,7 @@ videoCallbackSets += callbacks
         @Synchronized
         fun setup(opaque: com.sun.jna.ptr.PointerByReference?, chroma: Pointer?, width: Pointer?, height: Pointer?,
                   pitches: Pointer?, lines: Pointer?): Int {
+            setupCalls++
             if (!active || width == null || height == null || chroma == null || pitches == null || lines == null) return 0
             val w = width.getInt(0)
             val h = height.getInt(0)
@@ -1933,6 +1996,7 @@ videoCallbackSets += callbacks
 
         @Synchronized
         fun lock(opaque: Pointer?, planes: Pointer?): Pointer? {
+            lockCalls++
             if (planes == null || !active) {
                 ensureDropBuffer()
                 if (planes != null) planes.setPointer(0, dropPointer!!)
@@ -2299,6 +2363,9 @@ videoCallbackSets += callbacks
 
         private const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
         private const val REPLAY_FPS = 30.0
+
+        /** How long [start] waits for the first decoded frame before reporting a timeout. */
+        private const val FIRST_FRAME_TIMEOUT_SECONDS = 10
 
         /**
          * Nominal frame duration handed to [FrameSurface.enableDisplaySync]; the surface halves it (and caps the

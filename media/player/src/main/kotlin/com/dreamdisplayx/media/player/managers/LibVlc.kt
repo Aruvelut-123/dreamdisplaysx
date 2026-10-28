@@ -737,8 +737,17 @@ object LibVlc {
 
         // Video
         fun libvlc_video_set_callbacks(player: Pointer, lock: VideoLockCallback, unlock: VideoUnlockCallback,
-                                        display: VideoDisplayCallback, opaque: Pointer?)
-        fun libvlc_video_set_format_callbacks(player: Pointer, setup: VideoFormatCallback, cleanup: VideoCleanupCallback)
+                                        display: VideoDisplayCallback, opaque: Pointer?): Int
+        fun libvlc_video_set_format_callbacks(player: Pointer, setup: VideoFormatCallback, cleanup: VideoCleanupCallback): Int
+
+        /**
+         * Video-output introspection. Exported by the VLC-Android AAR even though the desktop-only
+         * decoder-info APIs are not, and the only way to tell "vout never opened" apart from
+         * "vout opened but never called lock()" when the frame callback stays silent.
+         */
+        fun libvlc_media_player_has_vout(player: Pointer): Int
+        fun libvlc_video_get_track_count(player: Pointer): Int
+        fun libvlc_video_get_size(player: Pointer, num: Int, width: IntByReference, height: IntByReference): Int
 
         // Events
         fun libvlc_media_player_event_manager(player: Pointer): Pointer?
