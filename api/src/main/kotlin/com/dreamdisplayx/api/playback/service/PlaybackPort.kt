@@ -5,7 +5,6 @@ import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.model.property.DisplayState
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.media.model.VideoQuality
-import kotlin.time.Duration
 
 /**
  * Playback port.
@@ -24,10 +23,10 @@ interface PlaybackPort {
     fun stop(displayId: DisplayId)
 
     /** Seeks to a specific position in the display with the given [displayId]. */
-    fun seek(displayId: DisplayId, position: Duration)
+    fun seek(displayId: DisplayId, positionMs: Long)
 
-    /** Seeks [delta] relative to the current position for [displayId] (negative = backward). */
-    fun seekRelative(displayId: DisplayId, delta: Duration)
+    /** Seeks [deltaMs] relative to the current position for [displayId] (negative = backward). */
+    fun seekRelative(displayId: DisplayId, deltaMs: Long)
 
     /** Sets the volume for [displayId]. */
     fun setVolume(displayId: DisplayId, volume: Float)
@@ -38,13 +37,8 @@ interface PlaybackPort {
     /** Sets the active audio track for [displayId], identified by its resolved stream URL. */
     fun setAudioTrack(displayId: DisplayId, trackUrl: String)
 
-    /** Sets the stable subtitle identity for [displayId], or null to turn subtitles off. */
+    /** Sets the subtitle track language for [displayId], or null to turn subtitles off. Client-local, per-viewer. */
     fun setSubtitleTrack(displayId: DisplayId, lang: String?)
-
-    /** Sets primary and optional secondary subtitle identities for bilingual rendering. */
-    fun setSubtitleTracks(displayId: DisplayId, primaryLang: String?, secondaryLang: String?) {
-        setSubtitleTrack(displayId, primaryLang)
-    }
 
     /** Sets the brightness multiplier for a display. */
     fun setBrightness(displayId: DisplayId, brightness: Float)

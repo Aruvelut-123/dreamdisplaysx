@@ -9,9 +9,8 @@ import java.util.*
  *
  * @since 1.8.x
  */
-@JvmInline
 @DreamDisplaysXUnstableApi
-value class MediaHttpUrl(val value: String) {
+data class MediaHttpUrl(val value: String) {
     init {
         require(parseUri(value) != null) { "Invalid HTTP media URL: $value" }
     }
