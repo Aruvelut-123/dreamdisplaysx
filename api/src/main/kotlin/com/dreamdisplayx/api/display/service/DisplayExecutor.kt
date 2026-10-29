@@ -57,6 +57,10 @@ interface DisplayExecutor {
     /** Sets the subtitle track language, or null to turn subtitles off. */
     fun setSubtitleTrack(displayId: DisplayId, lang: String?): Display? = null
 
+    /** Sets a primary and optional secondary subtitle language for bilingual rendering. */
+    fun setSubtitleTracks(displayId: DisplayId, primaryLang: String?, secondaryLang: String?): Display? =
+        setSubtitleTrack(displayId, primaryLang)
+
     /** Set the brightness multiplier. */
     fun setBrightness(displayId: DisplayId, brightness: Float): Display? = null
 

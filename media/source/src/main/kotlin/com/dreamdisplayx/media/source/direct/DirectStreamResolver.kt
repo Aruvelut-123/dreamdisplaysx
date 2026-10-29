@@ -17,7 +17,6 @@ import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
-import kotlin.time.Duration.Companion.nanoseconds
 
 /**
  * Plays a URL that already is the media: a video file, an HLS playlist, or a DASH manifest.
@@ -359,6 +358,6 @@ object DirectStreamResolver : MediaResolverService {
             title = fileName?.let(CustomMediaUrls::cleanFileName)?.takeIf { it.isNotBlank() }
                 ?: CustomMediaUrls.displayName(url),
             uploader = CustomMediaUrls.hostOf(url),
-            duration = durationNanos?.takeIf { it > 0L }?.nanoseconds,
+            durationMs = durationNanos?.takeIf { it > 0L }?.div(1_000_000L),
         )
 }

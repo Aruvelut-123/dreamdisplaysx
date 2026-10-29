@@ -48,7 +48,6 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * The display configuration screen: video preview with playback controls, the settings rows, and
@@ -418,7 +417,7 @@ class DisplayMenu private constructor(
                 ),
             ) { nanos ->
                 if (ds.canSeek() && !ds.isLive && ds.canSeekHere) {
-                    playback.seek(displayId, (nanos / 1_000_000L).milliseconds)
+                    playback.seek(displayId, nanos / 1_000_000L)
                 }
             })
         progress.enabledWhen = { videoReady() && ds.canSeek() && !ds.isLive && ds.canSeekHere }
@@ -951,7 +950,7 @@ class DisplayMenu private constructor(
         val canSeek = videoReady && ds.canSeek() && !ds.isLive && ds.canSeekHere
         fun seekTo(nanos: Long) {
             val target = nanos.coerceIn(0L, ds.mediaPlayerDurationNanos.coerceAtLeast(0L))
-            playback.seek(displayId, (target / 1_000_000L).milliseconds)
+            playback.seek(displayId, target / 1_000_000L)
         }
         fun nudgeVolume(delta: Double) {
             val next = (((volume.value + delta) / VOLUME_STEP).roundToInt() * VOLUME_STEP).coerceIn(0.0, 1.0)

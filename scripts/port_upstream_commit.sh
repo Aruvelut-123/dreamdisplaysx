@@ -61,21 +61,35 @@ while IFS=$'\t' read -r status upstream_path; do
       fi
       ;;
     A|M|T|R*)
-      # Source path for renames is field 2; git gives "R100<TAB>old<TAB>new".
       if ! git show "$commit:$upstream_path" >/dev/null 2>&1; then
         echo "SKIP    $upstream_path (not readable at commit)"
         skipped=$((skipped + 1))
         continue
       fi
-      mkdir -p "$(dirname "$fork_path")"
-      if [ -f "$fork_path" ]; then
-        modified=$((modified + 1))
-        printf 'MODIFY  %s\n' "$fork_path"
-      else
-        added=$((added + 1))
-        printf 'ADD     %s\n' "$fork_path"
+
+      # The fork deliberately deleted some upstream features (e.g. 13c82b92 removed
+      # yt-dlp and YouTube support). Re-adding those files would resurrect dead code,
+      # so refuse to create a file the fork does not already track.
+      if [ ! -f "$fork_path" ]; then
+        echo "REFUSE  $fork_path (absent in fork; port by hand if it is really needed)"
+        skipped=$((skipped + 1))
+        continue
       fi
-      git show "$commit:$upstream_path" | bash "$rename" > "$fork_path"
+
+      # A wholesale replace silently drops fork-only members (playlist state, extra
+      # subtitle tracks, custom widgets). Warn loudly when the diff looks large so the
+      # caller reviews the file instead of trusting the result.
+      before_lines=$(wc -l < "$fork_path")
+      git show "$commit:$upstream_path" | bash "$rename" > /tmp/port_candidate.$$
+      after_lines=$(wc -l < /tmp/port_candidate.$$)
+      lost=$((before_lines - after_lines))
+
+      modified=$((modified + 1))
+      printf 'MODIFY  %s (%d -> %d lines)\n' "$fork_path" "$before_lines" "$after_lines"
+      if [ "$lost" -gt 10 ]; then
+        printf '  WARNING: this replace removes %d fork lines; review it by hand.\n' "$lost"
+      fi
+      mv /tmp/port_candidate.$$ "$fork_path"
       ;;
     *)
       echo "SKIP    $upstream_path (status $status)"

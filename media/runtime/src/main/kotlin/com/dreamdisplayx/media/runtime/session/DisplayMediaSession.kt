@@ -65,7 +65,7 @@ internal class DisplayMediaSession(
     /** Playback control calls are delegated to the [PlaybackService] with the display ID. */
     override fun play() = playback.play(displayId)
     override fun pause() = playback.pause(displayId)
-    override fun seek(position: Duration) = playback.seek(displayId, position)
+    override fun seek(positionMs: Long) = playback.seek(displayId, positionMs)
     override fun setVolume(volume: Float) = playback.setVolume(displayId, volume)
 
     /**
