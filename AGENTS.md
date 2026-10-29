@@ -166,6 +166,25 @@
   `release_base` (`natives-<sha>-<stamp>`); a local build stamps the placeholder that CI never uploaded,
   so `libvlc-android-aarch64.tar.gz` 404s and playback cannot initialise. Always test the CI artifact
   (`gh run download <run> -n build-jars-1.20.1`), not `build/libs`.
+- **`libvlc_log_set` is instance-wide, so audio chatter evicts every video line.** On Android the separate
+  audio player shares the video player's log sink; its demux noise (`read box:`, `Buffering N%`,
+  `inserting …`, `in DATA (`, `tk N`) filled the whole ring, which is why a stuck display produced a
+  `first frame timeout` whose `log=[…]` mentioned nothing but audio. `LibVlc.logRing` is now 200 entries
+  and `LibVlc.isAudioNoise()` drops those prefixes before they reach it. When diagnosing "no picture",
+  check that vout/decoder lines survive in the ring rather than assuming the vout was silent.
+- **`hasVout`/`videoTracks`/`get_size` are the only reliable "is a vout alive" probe.** `player.isPlaying`
+  and a decoding stream are both true while nothing is being rendered, so
+  `LibVlcSessionManager.voutState()` reports `hasVout`, `videoTracks`, `get_size` + the decoded size,
+  `formatReady`, `setupCalls`, `lockCalls`, `firstFrameFired` and `state` every 2 s during the first-frame
+  wait. `hasVout=0` with `setupCalls=0`/`lockCalls=0` means libvlc never created a video output at all —
+  look at the instance options, not at the callback plumbing.
+- **The display menu must not do per-frame Component/resource work.** `ModTitleLabel.draw`,
+  `DisplayMenu.drawPanelTabs` and `SettingsSection.render` all run on the render thread every frame.
+  `GeneralUtil.getPrettyModVersion()` used to open `/assets/dreamdisplayx/version.txt` from the classpath
+  on every one of those frames, which alone dropped the game to a few FPS while the menu was open (the
+  world alone was fine). Version strings and translated labels are `by lazy` now; any new per-frame label
+  must be cached the same way. Note the JVM getter clash: a `modVersion` property collides with
+  `getModVersion()`, hence the `cached*` names.
 
 ### Module Structure
 - `api/` — Common API (serializable models, settings, services)
@@ -342,10 +361,15 @@
   nullable and NOT instantiated there (`systemAudio` flag). Muxed media keeps audio on the video
   player; separate renditions create a dedicated OpenSL ES audio player, while volume goes through
   `libvlc_audio_set_volume`. Desktop keeps the Java Sound callback path.
-- Video/instance: Android passes `--aout=opensles` + `--codec=avcodec` (explicit software
-  decoding by default; a non-empty `dreamdisplayx.hwDecode` can opt into a launcher MediaCodec
-  bridge); MobileGlues also receives a bounded `--avcodec-threads` value. No `--avcodec-hw`
-  (desktop-only concept). **Never pass `--plugin-path` on Android**: the
+- Video/instance: Android passes `--aout=opensles` and **no `--codec` at all by default** — libvlc
+  picks the decoder that can actually feed the vmem output. `--codec` is a HARD module filter, not a
+  preference chain: a vmem output has no Android Surface, so `mediacodec_ndk` cannot attach and libvlc
+  does not fall back to `avcodec`, leaving **no vout whatsoever**. The measured signature is
+  `hasVout=0 videoTracks=2 decoded=852x480 state=3 formatReady=false setupCalls=0 lockCalls=0`
+  (stream decodes, player plays, display stays on its placeholder forever). `-Ddreamdisplayx.hwDecode`
+  still forces an explicit chain (empty value = software-only), and `--avcodec-threads` is only passed
+  when `-Ddreamdisplayx.androidAvcodecThreads` is set. No `--avcodec-hw` (desktop-only concept).
+  **Never pass `--plugin-path` on Android**: the
   monolithic libvlc-all AAR builds VLC with loadplugins
   disabled, so the option is compiled out entirely and `libvlc_new` returns null on an unknown
   option (observed: "vlc: unknown option or missing mandatory argument `--plugin-path=...'"

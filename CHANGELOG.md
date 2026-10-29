@@ -17,7 +17,8 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - The 1.20.1 loading spinner is now centred on the screen instead of under the wordmark.
 - Android playback no longer stalls on `libvlc first frame timeout` when libvlc skips the vmem format callback; the frame buffer falls back to the requested display size.
 - Android no longer loops the opening seconds of a video forever when its session ends before any frame was decoded.
-- Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
+- Android no longer forces a decoder module, so libvlc can create the vmem video output that used to be missing (`hasVout=0`, placeholder forever).
+- The display menu no longer re-reads the mod version file and re-translates every label each frame, which dropped the game to a few FPS while it was open.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
 - Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.
 - Isolated optional AWT overlays with mixed-script font fallback and fail-closed probing.
