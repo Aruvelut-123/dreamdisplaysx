@@ -394,11 +394,11 @@ class DisplayScreen(
         val current = if (sizeLodHeight <= 0) base else min(sizeLodHeight, base)
         val neededPx = height * focalLengthPx() / max(distance, 1.0) * SIZE_LOD_OVERSAMPLE
         val strict = min(base, lodRungFor(neededPx))
-        val relaxed = min(base, lodRungFor(neededPx * SIZE_LOD_UP_HYSTERESIS))
+        val relaxed = min(base, lodRungFor(neededPx * SIZE_LOD_HYSTERESIS))
 
         val wanted = when {
-            relaxed > current -> relaxed
-            strict < current && !live -> strict
+            strict > current -> strict
+            relaxed < current && !live -> relaxed
             else -> {
                 sizeLodSinceNanos = 0L
                 return sizeLodHeight
@@ -1310,7 +1310,7 @@ class DisplayScreen(
 
         private const val SIZE_LOD_OVERSAMPLE = 1.5
         private const val SIZE_LOD_MIN_HEIGHT = 360
-        private const val SIZE_LOD_UP_HYSTERESIS = 1.3
+        private const val SIZE_LOD_HYSTERESIS = 1.3
         private const val SIZE_LOD_DWELL_NANOS = 3_000_000_000L
         private const val LOD_SWITCH_SPACING_NANOS = 250_000_000L
         private var nextLodSwitchNanos = 0L
