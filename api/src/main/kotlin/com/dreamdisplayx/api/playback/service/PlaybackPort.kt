@@ -40,6 +40,11 @@ interface PlaybackPort {
     /** Sets the subtitle track language for [displayId], or null to turn subtitles off. Client-local, per-viewer. */
     fun setSubtitleTrack(displayId: DisplayId, lang: String?)
 
+    /** Sets a primary and optional secondary subtitle language for bilingual rendering. */
+    fun setSubtitleTracks(displayId: DisplayId, primaryLang: String?, secondaryLang: String?) {
+        setSubtitleTrack(displayId, primaryLang)
+    }
+
     /** Sets the brightness multiplier for a display. */
     fun setBrightness(displayId: DisplayId, brightness: Float)
 
