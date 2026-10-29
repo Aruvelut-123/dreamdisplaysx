@@ -40,6 +40,12 @@ class SettingsSection(
         internal var labelHover: UiRect? = null
         /** The row's current on-screen rect (accounting for scroll), used for hit-testing. */
         internal var rowRect: UiRect? = null
+        /**
+         * The translated label, resolved once. [SettingsSection.render] runs every frame and both
+         * measures and draws this text, so rebuilding the translation lookup per row per frame was
+         * pure render-thread work for a string that cannot change.
+         */
+        internal val label: Component by lazy { Component.translatable(labelKey) }
     }
 
     // ── Scroll state ──────────────────────────────────────────────────────────────────────────────
@@ -75,7 +81,7 @@ class SettingsSection(
 
         // Reserve a shared label column as wide as the widest label so every control gets the same
         // width and left edge, instead of each being squeezed by its own label length.
-        val labelColW = rows.maxOf { font.width(Component.translatable(it.labelKey)) }
+        val labelColW = rows.maxOf { font.width(it.label) }
 
         // Row area spans from below the title up to the owner-action row at the bottom.
         areaTop = titleH
@@ -131,7 +137,7 @@ class SettingsSection(
         g.fill(x, y, x + w, y + UiTheme.ROW_H, UiTheme.ROW_BG)
         row.rowRect = UiRect(x, y, w, UiTheme.ROW_H)
 
-        val label = Component.translatable(row.labelKey)
+        val label = row.label
         val textY = y + UiTheme.ROW_H / 2 - font.lineHeight / 2
         g.drawText(font, label, x + 6, textY, UiTheme.TEXT_PRIMARY, false)
         row.labelHover = UiRect(x + 6, textY, font.width(label), font.lineHeight)

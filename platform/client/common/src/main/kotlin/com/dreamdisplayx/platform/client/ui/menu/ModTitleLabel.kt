@@ -21,13 +21,21 @@ class ModTitleLabel {
     private val openedAtMs: Long = System.currentTimeMillis()
     private var hoverArea: UiRect? = null
 
-    /** Draws the label (and the update arrow when applicable) at ([x], [y]). */
-    fun draw(g: GuiGraphicsCompat, x: Int, y: Int) {
-        val font = Minecraft.getInstance().font
+    /**
+     * The static "Dream DisplaysX <version>" label. Built once: [draw] runs every frame and the text
+     * (and its style) never changes for the lifetime of the process, so rebuilding the Component
+     * tree per frame only feeds the render thread's allocation churn.
+     */
+    private val label: Component by lazy {
         val name = Component.literal("Dream DisplaysX")
         val ver = Component.literal(" ${GeneralUtil.getPrettyModVersion()}")
             .withStyle(Style.EMPTY.withColor(UiTheme.ACCENT_VERSION))
-        val label = name.copy().append(ver)
+        name.copy().append(ver)
+    }
+
+    /** Draws the label (and the update arrow when applicable) at ([x], [y]). */
+    fun draw(g: GuiGraphicsCompat, x: Int, y: Int) {
+        val font = Minecraft.getInstance().font
         g.drawText(font, label, x, y, UiTheme.TEXT_PRIMARY, true)
 
         val textW = font.width(label)
