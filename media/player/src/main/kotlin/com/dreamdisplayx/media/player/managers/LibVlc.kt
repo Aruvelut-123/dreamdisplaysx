@@ -326,10 +326,20 @@ object LibVlc {
             if (com.dreamdisplayx.util.OsInfo.isAndroid) {
                 opts.add("--aout=opensles")
                 opts.add("--codec=${androidDecoderModule()}")
-                val decoderThreads = com.dreamdisplayx.media.player.util.AndroidRendererCompat.avcodecThreads()
-                opts.add("--avcodec-threads=$decoderThreads")
+                // Do NOT cap the software decoder's threads on Android. Pinning `--avcodec-threads=2`
+                // made a 480p30 software decode fall behind badly enough that the whole game dropped
+                // to 2 FPS ("no picture + FPS collapsed" report on MobileGlues), and it could not be
+                // compensated for: the vmem output has no late-frame allowance. libvlc picks a sane
+                // thread count from the CPU topology on its own; a launcher that really needs a cap
+                // can still set `-Ddreamdisplayx.androidAvcodecThreads=<n>`.
+                System.getProperty("dreamdisplayx.androidAvcodecThreads")?.trim()?.toIntOrNull()
+                    ?.coerceIn(1, 8)
+                    ?.let { opts.add("--avcodec-threads=$it") }
                 if (com.dreamdisplayx.media.player.util.AndroidRendererCompat.isMobileGlues()) {
-                    logger.info("MobileGlues detected; using software avcodec with {} decoder thread(s).", decoderThreads)
+                    logger.info(
+                        "MobileGlues detected; decoder chain={} (avcodec threads left to libvlc unless overridden).",
+                        androidDecoderModule(),
+                    )
                 }
                 // No proxy option is passed: this libvlc-all AAR compiled `--http-proxy` out
                 // entirely (it warns "option --http-proxy no longer exists"), and VLC-Android's
@@ -516,9 +526,14 @@ object LibVlc {
     // ── Media decoder info (F3 diagnostics) ─────────────────────────────────
 
     /**
-     * The Android decoder module for `--codec`. Pojav/FCL's desktop JVM cannot load Android's
-     * MediaCodec classes, so the default is explicit software avcodec. A non-empty
-     * `dreamdisplayx.hwDecode` override can opt into a launcher-provided MediaCodec bridge.
+     * Decoder module chain for Android, in the order libvlc should try them.
+     *
+     * `mediacodec_ndk` (API 21+) is the only decoder that can hand a decoded frame straight to a vmem
+     * output; `mediacodec_jni` is the legacy fallback and `any` lets libvlc reach software avcodec.
+     * The chain must stay a CHAIN: pinning bare `avcodec` (the 1.10.0.5 regression) forced a 2-thread
+     * software decode that produced no vout frame at all on MobileGlues while starving the game down
+     * to 2 FPS. A non-blank `-Ddreamdisplayx.hwDecode` still overrides the whole chain; an empty one
+     * means software-only.
      */
     private fun androidDecoderModule(): String =
         com.dreamdisplayx.media.player.util.AndroidDecoderPolicy.module(
