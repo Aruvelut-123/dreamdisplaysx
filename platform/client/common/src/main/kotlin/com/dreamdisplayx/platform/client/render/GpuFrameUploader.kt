@@ -23,6 +23,11 @@ class GpuFrameUploader : FrameUploader {
     /** Scratch buffer reused for RGB -> RGBA expansion. */
     private var rgbaUploadBuffer: ByteBuffer? = null
 
+    // Upstream 1d9120aa: hoist the per-frame lambdas into fields so upload paths stop allocating them.
+    private val interleavedUploader: () -> AsyncTextureUploader = { glUploader() }
+    private val planarUploader: () -> AsyncTextureUploader = { planeUploader(0) }
+    private val rgbaScratchSetter: (ByteBuffer) -> Unit = { rgbaUploadBuffer = it }
+
     /** False while the window is minimized (no GL context to upload into). */
     override fun canUpload(): Boolean =
         //? if >=1.21.11 {
@@ -43,9 +48,9 @@ class GpuFrameUploader : FrameUploader {
             w = texture.getWidth(0),
             h = texture.getHeight(0),
             format = format.toUploadFormat(),
-            glUploader = { uploader ?: AsyncTextureUploader(stateCache = true).also { uploader = it } },
+            glUploader = interleavedUploader,
             rgbaScratch = rgbaUploadBuffer,
-            setRgbaScratch = { rgbaUploadBuffer = it },
+            setRgbaScratch = rgbaScratchSetter,
         )
         //?} else
         /*val texture = target as GpuTextureHandle
@@ -61,7 +66,7 @@ class GpuFrameUploader : FrameUploader {
             u = (u as GpuTextureHandle).texture,
             v = (v as GpuTextureHandle).texture,
             src = src,
-            glUploader = { planeUploader(0) },
+            glUploader = planarUploader,
         )
         return true
         //?} else
@@ -69,7 +74,6 @@ class GpuFrameUploader : FrameUploader {
     }
 
     /** Lazily creates the interleaved GL uploader. */
-    @Suppress("UNUSED")
     private fun glUploader(): AsyncTextureUploader =
         uploader ?: AsyncTextureUploader(stateCache = true).also { uploader = it }
 

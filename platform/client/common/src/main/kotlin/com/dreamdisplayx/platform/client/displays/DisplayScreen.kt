@@ -517,6 +517,24 @@ class DisplayScreen(
     /** True once the video is effectively playing: not awaiting the initial timeline and a frame has filled. */
     val isVideoStarted: Boolean get() = !stillWaitingForInitialTimeline() && (hasEverRendered || mediaPlayer?.textureFilled() == true)
 
+    /**
+     * Last value of [isVideoStarted] that was published to the registry.
+     *
+     * `isVideoStarted` is a derived getter, so it flips between ticks (as soon as the first frame fills
+     * or the initial timeline resolves) without anything telling the server. Folding the flip into
+     * [tick] means the published display state follows the first frame instead of waiting for some
+     * unrelated state change to piggyback on — upstream ab46074, fixes #268.
+     */
+    private var publishedVideoStarted = false
+
+    /** Re-publishes this screen when [isVideoStarted] changes, so the server learns the video started. */
+    private fun publishStartedFlip() {
+        val started = isVideoStarted
+        if (started == publishedVideoStarted) return
+        publishedVideoStarted = started
+        DisplayRegistry.recordScreen(this)
+    }
+
     /** Marks that a frame has rendered, stamping the first-frame time so to appear fade-in can run. */
     private fun markRendered() {
         if (!hasEverRendered) firstFrameNanos = System.nanoTime()
@@ -1466,6 +1484,7 @@ class DisplayScreen(
         val maxRadius = if (isPopoutActive) Double.MAX_VALUE else ClientStateManager.config.defaultDistance.toDouble()
         val distance = getDistanceToScreen(pos)
         mediaPlayer?.tick(distance, maxRadius)
+        publishStartedFlip()
         if (!isVideoStarted || paused) DynamicDisplayLights.remove(uuid)
         reportPositionToServer()
         if (isPopoutActive) {
