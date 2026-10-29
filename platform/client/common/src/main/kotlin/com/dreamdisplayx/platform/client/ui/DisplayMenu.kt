@@ -798,8 +798,8 @@ class DisplayMenu private constructor(
                 rect.y + (rect.h - f.lineHeight) / 2,
                 if (selected) UiTheme.TEXT_PRIMARY else UiTheme.TEXT_DIM, false)
         }
-        drawTab(playlistTab, Component.translatable("dreamdisplayx.ui.playlist"), showPlaylistTab)
-        drawTab(settingsTab, Component.translatable("dreamdisplayx.ui.settings"), !showPlaylistTab)
+        drawTab(playlistTab, playlistTabLabel, showPlaylistTab)
+        drawTab(settingsTab, settingsTabLabel, !showPlaylistTab)
 
         // Vanilla children are re-synced to their own visibleWhen every frame (UiScreenBase.syncState)
         // before drawScreen runs, so re-assert the tab-driven visibility here, right before
@@ -810,6 +810,10 @@ class DisplayMenu private constructor(
 
     private var tabPlaylistRect: UiRect? = null
     private var tabSettingsRect: UiRect? = null
+
+    /** Tab header labels, resolved once: [drawPanelTabs] runs every frame. */
+    private val playlistTabLabel: Component by lazy { Component.translatable("dreamdisplayx.ui.playlist") }
+    private val settingsTabLabel: Component by lazy { Component.translatable("dreamdisplayx.ui.settings") }
 
     /** Handles a click on the two-tab header; returns true when consumed. */
     private fun handleTabClick(mx: Int, my: Int): Boolean {
