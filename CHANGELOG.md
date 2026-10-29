@@ -19,7 +19,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Android no longer loops the opening seconds of a video forever when its session ends before any frame was decoded.
 - Android no longer forces a decoder module, so libvlc can create the vmem video output that used to be missing (`hasVout=0`, placeholder forever).
 - The display menu no longer re-reads the mod version file and re-translates every label each frame, which dropped the game to a few FPS while it was open.
-- MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
+- MobileGlues playback no longer pins a software-decoder thread count, and player replacement waits for the previous session.
 - Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.
 - Isolated optional AWT overlays with mixed-script font fallback and fail-closed probing.
 - Aligned libvlc vmem strides and retained per-generation callback buffers during Android playback.
