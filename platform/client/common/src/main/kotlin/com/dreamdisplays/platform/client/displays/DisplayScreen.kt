@@ -515,6 +515,15 @@ class DisplayScreen(
     /** True once the video is effectively playing: not awaiting the initial timeline and a frame has filled. */
     val isVideoStarted: Boolean get() = !stillWaitingForInitialTimeline() && (hasEverRendered || mediaPlayer?.textureFilled() == true)
 
+    private var publishedVideoStarted = false
+
+    private fun publishStartedFlip() {
+        val started = isVideoStarted
+        if (started == publishedVideoStarted) return
+        publishedVideoStarted = started
+        DisplayRegistry.recordScreen(this)
+    }
+
     private fun markRendered() {
         if (!hasEverRendered) firstFrameNanos = System.nanoTime()
         hasEverRendered = true
@@ -1220,6 +1229,7 @@ class DisplayScreen(
         mediaPlayer?.tick(distance, maxRadius)
         restoreAudioTrackIfPending()
         restoreSubtitleTrackIfPending()
+        publishStartedFlip()
         if (isPopoutActive) {
             if (distanceQualitySteps != 0 || sizeLodHeight != 0) {
                 distanceQualitySteps = 0
