@@ -18,6 +18,9 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Disabled MobileGlues direct PBO/BGRA uploads in favor of the command-encoder texture path.
 - Kept Android scrub callback sessions rooted after pause-only teardown.
 - Hardened Android libvlc EOF teardown by loading JNI before JNA and retaining callback-thread attachment.
+- Published display state as soon as the first frame lands (upstream `ab46074`).
+- Kept the last decoded frame when a timeline seek arrives while paused (upstream `5c794ade`).
+- Removed per-frame allocations and repeated reflection lookups from the render path (upstream `1d9120aa`).
 
 ## Server
 

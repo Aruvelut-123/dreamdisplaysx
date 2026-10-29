@@ -106,6 +106,14 @@
 - Player teardown wakes the first-frame wait immediately and exposes an asynchronous stop path for display swaps, so a stream that never delivers its first frame cannot hold later video changes behind the ten-second start timeout.
 - `DisplayMediaController` coalesces duplicate pending URL/language loads, discards stale player errors before installing a newer generation, and waits for asynchronous teardown before creating the replacement.
 
+### 2026-10-29 — Upstream ab46074 sync (lineage + hand-ported patches)
+- Branch `merge/upstream-ab46074`, PR #7. Upstream was **92 commits** ahead of `42af16c3`.
+- **A plain `git merge ab46074` was attempted and rejected**: after normalising every path/content back to `dreamdisplays`, the merge produced **289 conflicting files / 419 conflicting hunks** across all modules, and sampling showed genuine divergence, not rename noise — `util/UpdateCheck.kt` conflicts on the repo URL, `api/DisplayId.kt` is `value class` here vs `data class` upstream. Upstream's overhaul (data-class ids, the new `shared` module, addons, Forge/Quilt platforms) is a deliberate fork divergence; merging would overwrite both sides.
+- Procedure used instead: `git merge -s ours ab46074` to record lineage, then port individual commits by hand. **Do not** try the normalise-then-merge route again for this fork.
+- Ported: `ab46074` (`DisplayScreen.publishStartedFlip()` publishes state on the first frame), `5c794ade` (`TimelineFollower` keeps the paused frame when a seek lands during pause), `1d9120aa` (render path: `ScreenRenderer` raw translation + allocation-free quad UVs, `TextureUploadUtil` `writeToTexture` overload cache, `GpuFrameUploader` hoisted lambdas, fabric `Client` `bufferSource` reflection cache).
+- Skipped as absent in this fork: `bc27d4f2` (no `SIZE_LOD_*`/`lodRungFor`), `b0fca428` (no `platform/client/common/.../utils/Sounds.kt`). Always `grep` for the target symbols before porting a patch.
+- Local `--offline` builds cannot verify: the cached paper dev-bundle and the fabric-loom 1.17.13 plugin are missing on this machine. CI is the verification gate for these render-path changes (no pure-JVM seam for a unit test). `gh pr edit` fails with a Projects-classic GraphQL error — patch PRs via `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> --input file.json` instead.
+
 ### 2026-02-DD — Upstream 42af16c3 sync (1.10.0.3): curved displays, keyboard shortcuts, protocol v1 drop
 - Synced upstream `42af16c3` (= tag `v1.10.0-preview.3`) on top of `6102d461`, then ported the changes worth having into the fork's own paths.
 - **Sync procedure** (the fork's package rename makes a plain merge unusable):
