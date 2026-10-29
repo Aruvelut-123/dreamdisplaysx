@@ -317,28 +317,36 @@ object LibVlc {
             // path is needed or accepted here. The OpenSL ES audio output must be forced
             // (`--aout=opensles` — note the module's real name; `opensl` does not exist and the
             // aout bank would fall back to PulseAudio/ALSA probes that abort on Android).
-            // Android vmem playback uses explicit software avcodec by default. The Pojav/FCL JVM
-            // does not expose android.media.MediaCodecList, so probing MediaCodec only emits a JNI
-            // failure before falling back to avcodec and can leave extra native decoder state behind.
-            // A non-empty -Ddreamdisplayx.hwDecode override remains available for a launcher that
-            // supplies a working MediaCodec bridge. MobileGlues also gets a smaller avcodec thread
-            // pool because its GL translation buffers share the same native memory budget.
+            // Android vmem playback intentionally passes NO decoder/codec options by default: libvlc
+            // is allowed to pick whatever module can actually feed the vmem output. See the comment
+            // inside the branch below for why a forced --codec chain breaks the vout entirely.
             if (com.dreamdisplayx.util.OsInfo.isAndroid) {
                 opts.add("--aout=opensles")
-                opts.add("--codec=${androidDecoderModule()}")
-                // Do NOT cap the software decoder's threads on Android. Pinning `--avcodec-threads=2`
-                // made a 480p30 software decode fall behind badly enough that the whole game dropped
-                // to 2 FPS ("no picture + FPS collapsed" report on MobileGlues), and it could not be
-                // compensated for: the vmem output has no late-frame allowance. libvlc picks a sane
-                // thread count from the CPU topology on its own; a launcher that really needs a cap
-                // can still set `-Ddreamdisplayx.androidAvcodecThreads=<n>`.
-                System.getProperty("dreamdisplayx.androidAvcodecThreads")?.trim()?.toIntOrNull()
-                    ?.coerceIn(1, 8)
+                // Do NOT pass `--codec` unless the user asked for a specific module.
+                //
+                // `--codec` is a HARD filter ("only use these decoder modules"), not a preference
+                // list. A vmem video output has no Android Surface to hand out, so `mediacodec_ndk`
+                // cannot attach to it and there is no fallback to `avcodec`: libvlc ends up with no
+                // usable video output at all. That is exactly the observed failure - the log shows
+                // `hasVout=0`, `videoTracks=2`, `decoded=852x480`, `state=3` (playing) and
+                // `setupCalls=0`/`lockCalls=0`, i.e. the stream decodes fine but a vout is never
+                // created. Letting libvlc pick means it selects a decoder compatible with the actual
+                // output module instead of trusting a chain we guessed.
+                //
+                // `-Ddreamdisplayx.hwDecode=<module[,module...]>` still forces an explicit chain, and
+                // `-Ddreamdisplayx.hwDecode=` (empty) still means software-only.
+                com.dreamdisplayx.media.player.util.AndroidDecoderPolicy
+                    .explicitModule(System.getProperty("dreamdisplayx.hwDecode"))
+                    ?.let { opts.add("--codec=$it") }
+                // Do NOT cap the software decoder's threads on Android: a pinned `--avcodec-threads=2`
+                // cannot keep up and starves the game. Opt in via the system property if needed.
+                com.dreamdisplayx.media.player.util.AndroidRendererCompat
+                    .avcodecThreadOverride()
                     ?.let { opts.add("--avcodec-threads=$it") }
                 if (com.dreamdisplayx.media.player.util.AndroidRendererCompat.isMobileGlues()) {
                     logger.info(
-                        "MobileGlues detected; decoder chain={} (avcodec threads left to libvlc unless overridden).",
-                        androidDecoderModule(),
+                        "MobileGlues detected; decoder module={} (libvlc auto-selects unless overridden).",
+                        System.getProperty("dreamdisplayx.hwDecode") ?: "<auto>",
                     )
                 }
                 // No proxy option is passed: this libvlc-all AAR compiled `--http-proxy` out
@@ -399,9 +407,30 @@ object LibVlc {
      * Most recent libvlc log lines, most-recent last. Wired via [libvlc_log_set] so a bare
      * `libvlc error:` (errmsg is thread-local and usually empty on the event thread) can be
      * enriched with the real reason libvlc logged. Bounded to avoid unbounded growth.
+     *
+     * The sink is instance-wide, so the separate Android audio player shares it with the video
+     * player. Its demux/decoder chatter (`read box`, `Buffering`, `inserting N zeroes`, `playback too
+     * early`) used to evict every video line from a 40-entry ring, which is why a display could stay
+     * on its placeholder with no explanation anywhere in the log. The capacity is larger now and
+     * [isAudioNoise] drops the loudest offenders, keeping video output / decoder lines reachable.
      */
     private val logRing = java.util.Collections.synchronizedList(mutableListOf<String>())
-    private const val LOG_RING_CAP = 40
+    private const val LOG_RING_CAP = 200
+
+    /**
+     * True for log lines only the audio/demux path produces. Dropping them keeps `vout`, `vmem`,
+     * decoder and module-selection lines in the ring long enough to be read.
+     */
+    private fun isAudioNoise(text: String): Boolean =
+        text.startsWith("read box:") ||
+            text.startsWith("Buffering ") ||
+            text.startsWith("Stream buffering done") ||
+            text.startsWith("inserting ") ||
+            text.startsWith("playback too early") ||
+            text.startsWith("playback way too early") ||
+            text.startsWith("in DATA (") ||
+            text.startsWith("tk ") ||
+            text.startsWith("Decoder wait done")
 
     /** Installs the libvlc log sink once the instance exists; safe to call repeatedly. */
     private fun installLogSink() {
@@ -420,6 +449,8 @@ object LibVlc {
     private val logCallback: LogCallback = LogCallback { _, level, _, fmt, args ->
         try {
             val text = formatLogLine(fmt, args) ?: return@LogCallback
+            // Keep the ring readable: audio/demux chatter used to flush every video line out of it.
+            if (isAudioNoise(text)) return@LogCallback
             val line = if (level >= 3) "E: $text" else "W: $text"
             synchronized(logRing) {
                 logRing.add(line)
@@ -526,21 +557,17 @@ object LibVlc {
     // ── Media decoder info (F3 diagnostics) ─────────────────────────────────
 
     /**
-     * Decoder module chain for Android, in the order libvlc should try them.
+     * Decoder label shown by the F3 overlay on Android.
      *
-     * `mediacodec_ndk` (API 21+) is the only decoder that can hand a decoded frame straight to a vmem
-     * output; `mediacodec_jni` is the legacy fallback and `any` lets libvlc reach software avcodec.
-     * The chain must stay a CHAIN: pinning bare `avcodec` (the 1.10.0.5 regression) forced a 2-thread
-     * software decode that produced no vout frame at all on MobileGlues while starving the game down
-     * to 2 FPS. A non-blank `-Ddreamdisplayx.hwDecode` still overrides the whole chain; an empty one
-     * means software-only.
+     * Since Android no longer passes `--codec` by default (see the `LibVlc.load()` Android branch),
+     * the honest answer is `"auto"` unless the user forced a module through
+     * `-Ddreamdisplayx.hwDecode`. Reporting a fixed `mediacodec_ndk,...` chain here would describe
+     * what we used to request, not what libvlc actually picked.
      */
     private fun androidDecoderModule(): String =
-        com.dreamdisplayx.media.player.util.AndroidDecoderPolicy.module(
-            useHwAccel = useHwAccel,
-            noHardwareAccel = LibVlcDiagnostics.noHardwareAccel,
-            override = System.getProperty("dreamdisplayx.hwDecode"),
-        )
+        com.dreamdisplayx.media.player.util.AndroidDecoderPolicy
+            .explicitModule(System.getProperty("dreamdisplayx.hwDecode"))
+            ?: "auto"
 
     /**
      * The hw-decode backend for the NEXT session start. Null only when hw decode is globally

@@ -14,27 +14,16 @@ internal object AndroidDecoderPolicy {
     const val SOFTWARE_MODULE = "avcodec"
 
     /**
-     * Returns the libvlc `--codec` module (or comma-separated chain) for the Android vmem path.
+     * Explicit `-Ddreamdisplayx.hwDecode` module chain, or null when libvlc should choose itself.
      *
-     * The chain must stay a CHAIN. An earlier version pinned bare `avcodec` on every Android session,
-     * which forced a two-thread software decode that never produced a vout frame at all while
-     * starving the game down to a couple of FPS ("no picture + FPS collapsed" on MobileGlues).
-     * MediaCodec has to stay first so a decoder can deliver frames straight into vmem.
-     *
-     * A non-blank `-Ddreamdisplayx.hwDecode` override replaces the whole chain; an empty override
-     * explicitly requests software-only decoding.
+     * Android must not receive `--codec` by default. `--codec` is a hard filter, and a vmem output
+     * cannot satisfy `mediacodec_ndk`'s Surface requirement, so a forced chain leaves libvlc with no
+     * usable video output (observed: `hasVout=0` while the stream decodes and the player is playing).
+     * Only an explicit override is forwarded; an empty override means software-only.
      */
-    fun module(
-        useHwAccel: Boolean,
-        noHardwareAccel: Boolean,
-        override: String?,
-    ): String {
-        if (override != null) {
-            val trimmed = override.trim()
-            if (trimmed.isEmpty()) return SOFTWARE_MODULE
-            return trimmed
-        }
-        if (!useHwAccel || noHardwareAccel) return SOFTWARE_MODULE
-        return HARDWARE_CHAIN
+    fun explicitModule(override: String?): String? {
+        if (override == null) return null
+        val trimmed = override.trim()
+        return if (trimmed.isEmpty()) SOFTWARE_MODULE else trimmed
     }
 }

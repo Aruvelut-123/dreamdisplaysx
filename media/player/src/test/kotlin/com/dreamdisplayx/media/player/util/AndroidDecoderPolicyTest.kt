@@ -2,60 +2,35 @@ package com.dreamdisplayx.media.player.util
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class AndroidDecoderPolicyTest {
     /**
-     * MediaCodec has to stay first: it is the only Android decoder module that can hand a decoded
-     * frame straight to the vmem output the display reads. Pinning bare `avcodec` here regressed every
-     * Android display to "audio plays, placeholder forever, game at 2 FPS".
+     * Android must not send `--codec` by default.
+     *
+     * `--codec` is a hard module filter, not a preference list: a vmem video output has no Android
+     * Surface, so `mediacodec_ndk` cannot attach to it and libvlc never falls back to `avcodec`.
+     * The observed symptom was `hasVout=0`, `videoTracks=2`, `decoded=852x480`, `state=3` and
+     * `setupCalls=0`/`lockCalls=0` — the stream decoded, the player played, no vout ever existed.
      */
     @Test
-    fun defaultsToTheHardwareChainSoFramesReachVmem() {
-        assertEquals(
-            AndroidDecoderPolicy.HARDWARE_CHAIN,
-            AndroidDecoderPolicy.module(useHwAccel = true, noHardwareAccel = false, override = null),
-        )
+    fun noCodecOptionUnlessExplicitlyOverridden() {
+        assertNull(AndroidDecoderPolicy.explicitModule(null))
+        assertNull(AndroidDecoderPolicy.explicitModule("   "))
+    }
+
+    @Test
+    fun emptyOverrideStillMeansSoftwareOnly() {
+        assertEquals(AndroidDecoderPolicy.SOFTWARE_MODULE, AndroidDecoderPolicy.explicitModule(""))
+        assertEquals("avcodec", AndroidDecoderPolicy.SOFTWARE_MODULE)
+    }
+
+    @Test
+    fun nonEmptyOverrideIsForwardedTrimmed() {
+        assertEquals("mediacodec_ndk", AndroidDecoderPolicy.explicitModule("mediacodec_ndk"))
         assertEquals(
             "mediacodec_ndk,mediacodec_jni,any",
-            AndroidDecoderPolicy.HARDWARE_CHAIN,
-        )
-    }
-
-    @Test
-    fun disablingHardwareDecodeStillPinsSoftware() {
-        assertEquals(
-            AndroidDecoderPolicy.SOFTWARE_MODULE,
-            AndroidDecoderPolicy.module(useHwAccel = false, noHardwareAccel = false, override = null),
-        )
-        assertEquals(
-            AndroidDecoderPolicy.SOFTWARE_MODULE,
-            AndroidDecoderPolicy.module(useHwAccel = true, noHardwareAccel = true, override = null),
-        )
-    }
-
-    @Test
-    fun emptyOverrideMeansSoftwareDecode() {
-        assertEquals(
-            AndroidDecoderPolicy.SOFTWARE_MODULE,
-            AndroidDecoderPolicy.module(useHwAccel = true, noHardwareAccel = false, override = ""),
-        )
-        assertEquals(
-            AndroidDecoderPolicy.SOFTWARE_MODULE,
-            AndroidDecoderPolicy.module(useHwAccel = true, noHardwareAccel = false, override = "   "),
-        )
-    }
-
-    @Test
-    fun nonEmptyOverrideReplacesTheWholeChain() {
-        assertEquals(
-            "mediacodec_ndk",
-            AndroidDecoderPolicy.module(useHwAccel = true, noHardwareAccel = false, override = "mediacodec_ndk"),
-        )
-        // Even with hardware decode globally disabled, an explicit override wins: it is the escape
-        // hatch used to bisect a launcher's MediaCodec bridge.
-        assertEquals(
-            "mediacodec_ndk",
-            AndroidDecoderPolicy.module(useHwAccel = false, noHardwareAccel = true, override = "mediacodec_ndk"),
+            AndroidDecoderPolicy.explicitModule(" mediacodec_ndk,mediacodec_jni,any "),
         )
     }
 }

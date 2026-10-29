@@ -37,6 +37,18 @@ internal object AndroidRendererCompat {
         return override?.coerceIn(1, 8) ?: if (isMobileGlues(environment, properties)) 2 else 4
     }
 
+    /**
+     * Explicit `-Ddreamdisplayx.androidAvcodecThreads=<n>` cap, or null to leave the pool to libvlc.
+     *
+     * Android must NOT receive a forced `--avcodec-threads` value by default: a two-thread software
+     * decoder cannot keep up with a 480p stream and starves the game's own render thread down to a
+     * couple of FPS. The old [avcodecThreads] default stays available for callers that still want the
+     * MobileGlues heuristic, but the instance options only use this explicit override.
+     */
+    fun avcodecThreadOverride(
+        properties: Map<String, String> = systemProperties(),
+    ): Int? = properties["dreamdisplayx.androidAvcodecThreads"]?.trim()?.toIntOrNull()?.coerceIn(1, 8)
+
     private fun systemProperties(): Map<String, String> =
         System.getProperties().stringPropertyNames().associateWith { System.getProperty(it).orEmpty() }
 }
