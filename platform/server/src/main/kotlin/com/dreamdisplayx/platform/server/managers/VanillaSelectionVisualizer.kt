@@ -149,11 +149,16 @@ object VanillaSelectionVisualizer {
         //? if >=1.21.11 {
         DustParticleOptions(CYAN_RGB, PARTICLE_SCALE)
         //?} else
-        /*DustParticleOptions(
-            //? if >=1.19 {
-            Vector3f(0f, 1f, 1f)
-            //?} else
-            com.mojang.math.Vector3f(0f, 1f, 1f),
-            PARTICLE_SCALE,
-        )*/
+        /*DustParticleOptions(cyanVector(), PARTICLE_SCALE)*/
+
+    /**
+     * `DustParticleOptions` takes a joml `Vector3f` from 1.19 but still wants Mojang's own vector
+     * class on 1.18.2. Kept as its own single-level gate: nesting `//? if` inside a commented else
+     * block makes the chisel parser treat the inner directive as top-level.
+     */
+    private fun cyanVector() =
+        //? if >=1.19 {
+        Vector3f(0f, 1f, 1f)
+        //?} else
+        /*com.mojang.math.Vector3f(0f, 1f, 1f)*/
 }
