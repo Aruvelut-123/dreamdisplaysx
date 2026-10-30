@@ -6,6 +6,7 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 
 ### Features
 
+- Added 1.18.2, 1.19.4 and 1.20.1 builds for Fabric and Forge.
 - Added an opt-in loading animation with a centered logo, flowing-rainbow waving title, and Windows 11-style spinner.
 
 ### Fixes

@@ -72,6 +72,11 @@
 
 ## Changes & Commits
 
+### Chisel gate syntax (hard rule)
+- A `//?} else` branch MUST start its commented body on the next line with `/*` on that first line and close with `*/`. `Chisel.kt`'s `takeCommentedElse()` scans forward for `*/`; if the body never opens with `/*` it runs to EOF and every `chiselSource` task dies with `Unclosed /* else-branch */ starting at line N`.
+- Never nest a `//? if` directive inside a commented else body. Chisel parses the inner directive as top level and the enclosing block stops matching. Extract the inner choice into a sibling function with its own gate instead (`VanillaSelectionVisualizer.cyanVector()`).
+- Gate the helper itself at the same bounds as its imports: a helper only referenced from an `else` body still gets compiled for every version that satisfies its own gate, so an unguarded helper that names a since-removed type breaks the modern versions it was never meant for (`Vector3f` above 1.21.11).
+
 ### Legacy (<1.20.5) server command trees
 - `paper-api`'s `io.papermc.paper.command.brigadier.Commands` only exists from 1.20.5. `CommandRegistrar` and `GroupCommand` keep calling `Commands.literal` / `Commands.argument` verbatim; only their Paper imports sit inside `//? if >=1.20.5 { ... //?}`.
 - Below that gate both names resolve from `registrar/LegacyPaperCommands.kt`, which lives in the same package (so no import is needed) and is itself wrapped in `//? if <1.20.5 {`.
