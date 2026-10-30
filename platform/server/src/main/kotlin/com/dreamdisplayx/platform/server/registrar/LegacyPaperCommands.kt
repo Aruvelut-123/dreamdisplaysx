@@ -2,6 +2,9 @@
 package com.dreamdisplayx.platform.server.registrar
 
 import com.mojang.brigadier.CommandDispatcher
+import com.mojang.brigadier.arguments.ArgumentType
+import com.mojang.brigadier.builder.LiteralArgumentBuilder
+import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import com.mojang.brigadier.tree.LiteralCommandNode
 import io.github.arnodoelinger.platformweaver.PaperOnly
@@ -20,6 +23,22 @@ class CommandSourceStack(val sender: CommandSender) {
         get() = (sender as? Entity)?.location
             ?: (sender as? BlockCommandSender)?.block?.location
             ?: Bukkit.getWorlds().first().spawnLocation
+}
+
+/**
+ * Pre-1.20.5 stand-in for `paper-api`'s `io.papermc.paper.command.brigadier.Commands`.
+ *
+ * Both are nothing but generic factories over brigadier's own builders, so forwarding here keeps
+ * every `/display` tree source-identical across versions: the command files import `Commands` from
+ * the Paper package on 1.20.5+ and resolve this object (same package, no import needed) below it.
+ */
+@PaperOnly
+object Commands {
+    fun literal(name: String): LiteralArgumentBuilder<CommandSourceStack> =
+        LiteralArgumentBuilder.literal(name)
+
+    fun <T : Any> argument(name: String, type: ArgumentType<T>): RequiredArgumentBuilder<CommandSourceStack, T> =
+        RequiredArgumentBuilder.argument(name, type)
 }
 
 /** Registers a brigadier tree as a `Bukkit` command on pre-1.20.6 `Paper`. */

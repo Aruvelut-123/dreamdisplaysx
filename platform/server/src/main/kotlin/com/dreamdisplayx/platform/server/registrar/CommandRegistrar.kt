@@ -21,7 +21,6 @@ import com.mojang.brigadier.arguments.DoubleArgumentType
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.builder.ArgumentBuilder
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
-import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import com.mojang.brigadier.context.CommandContext
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType
 import com.mojang.brigadier.suggestion.Suggestions
@@ -31,6 +30,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode
 import io.github.arnodoelinger.platformweaver.PaperOnly
 //? if >=1.20.5 {
 import io.papermc.paper.command.brigadier.CommandSourceStack
+import io.papermc.paper.command.brigadier.Commands
 //?}
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
@@ -58,21 +58,21 @@ object CommandRegistrar {
         listOf("server", "target", "radius", "mode", "forced", "transient", "volume", "looped", "quality")
 
     /** Builds the full `Brigadier` tree for the `/display` command with all subcommands. */
-    fun buildDisplayCommand(): LiteralCommandNode<CommandSourceStack> = LiteralArgumentBuilder.literal("display")
+    fun buildDisplayCommand(): LiteralCommandNode<CommandSourceStack> = Commands.literal("display")
         .executes { ctx ->
             HelpCommand().execute(ctx.source.sender, emptyArray())
             Command.SINGLE_SUCCESS
         }
         .then(simple("help", HelpCommand()))
         .then(
-            LiteralArgumentBuilder.literal("create")
+            Commands.literal("create")
                 .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.create) }
                 .executes { ctx ->
                     CreateCommand().execute(ctx.source.sender, emptyArray())
                     Command.SINGLE_SUCCESS
                 }
                 .then(
-                    RequiredArgumentBuilder.argument("name", StringArgumentType.greedyString())
+                    Commands.argument("name", StringArgumentType.greedyString())
                         .executes { ctx ->
                             CreateCommand().execute(
                                 ctx.source.sender,
@@ -83,17 +83,17 @@ object CommandRegistrar {
                 )
         )
         .then(
-            LiteralArgumentBuilder.literal("rename")
+            Commands.literal("rename")
                 .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.name) }
                 .then(
-                    RequiredArgumentBuilder.argument("id", BareTokenCommandArgumentType)
+                    Commands.argument("id", BareTokenCommandArgumentType)
                         .suggests { _, b ->
                             b.suggest("this")
                             FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
                             b.buildFuture()
                         }
                         .then(
-                            RequiredArgumentBuilder.argument("new_name", StringArgumentType.greedyString())
+                            Commands.argument("new_name", StringArgumentType.greedyString())
                                 .executes { ctx ->
                                     PaperRenameCommand().execute(
                                         ctx.source.sender,
@@ -131,12 +131,12 @@ object CommandRegistrar {
         .build()
 
     /** `/display login <platform> <token>` — saves an encrypted global credential (OP-only) and broadcasts to all players. */
-    private fun loginSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = LiteralArgumentBuilder.literal("login")
+    private fun loginSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")
         .requires { it.sender.isOp || it.sender.hasPermission(PaperServer.config.permissions.login) }
         .then(
-            RequiredArgumentBuilder.argument("platform", StringArgumentType.word())
+            Commands.argument("platform", StringArgumentType.word())
                 .then(
-                    RequiredArgumentBuilder.argument("token", StringArgumentType.greedyString())
+                    Commands.argument("token", StringArgumentType.greedyString())
                         .executes { ctx ->
                             val sender = ctx.source.sender
                             val player = sender as? Player ?: return@executes 0
@@ -163,10 +163,10 @@ object CommandRegistrar {
         )
 
     /** `/display logout <platform>` — removes the global credential (OP-only) and broadcasts to all players. */
-    private fun logoutSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = LiteralArgumentBuilder.literal("logout")
+    private fun logoutSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("logout")
         .requires { it.sender.isOp || it.sender.hasPermission("dreamdisplayx.logout") }
         .then(
-            RequiredArgumentBuilder.argument("platform", StringArgumentType.word())
+            Commands.argument("platform", StringArgumentType.word())
                 .executes { ctx ->
                     val sender = ctx.source.sender
                     val player = sender as? Player ?: return@executes 0
@@ -191,7 +191,7 @@ object CommandRegistrar {
         cmd: SubCommand,
         check: ((CommandSourceStack) -> Boolean)? = null,
     ): LiteralArgumentBuilder<CommandSourceStack> {
-        var builder = LiteralArgumentBuilder.literal(name)
+        var builder = Commands.literal(name)
         if (check != null) builder = builder.requires(check)
         return builder.executes { ctx ->
             cmd.execute(ctx.source.sender, emptyArray())
@@ -205,17 +205,17 @@ object CommandRegistrar {
         cmd: SubCommand,
         check: ((CommandSourceStack) -> Boolean)? = null,
     ): LiteralArgumentBuilder<CommandSourceStack> {
-        var builder = LiteralArgumentBuilder.literal(name)
+        var builder = Commands.literal(name)
         if (check != null) builder = builder.requires(check)
         return builder
             .then(
-                LiteralArgumentBuilder.literal("this").executes { ctx ->
+                Commands.literal("this").executes { ctx ->
                     cmd.execute(ctx.source.sender, arrayOf("this"))
                     Command.SINGLE_SUCCESS
                 }
             )
             .then(
-                RequiredArgumentBuilder.argument("id", BareTokenCommandArgumentType)
+                Commands.argument("id", BareTokenCommandArgumentType)
                     .suggests { _, b ->
                         FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
                         b.buildFuture()
@@ -231,11 +231,11 @@ object CommandRegistrar {
      * Builds the `/display video this|<id> <url> [lang]` subcommand — see [simpleWithThis] for why
      * both `this` and an explicit id are offered.
      */
-    private fun videoSubCommand() = LiteralArgumentBuilder.literal("video")
+    private fun videoSubCommand() = Commands.literal("video")
         .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.video) }
-        .then(LiteralArgumentBuilder.literal("this").then(videoUrlArgument { "this" }))
+        .then(Commands.literal("this").then(videoUrlArgument { "this" }))
         .then(
-            RequiredArgumentBuilder.argument("id", BareTokenCommandArgumentType)
+            Commands.argument("id", BareTokenCommandArgumentType)
                 .suggests { _, b ->
                     FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
                     b.buildFuture()
@@ -246,7 +246,7 @@ object CommandRegistrar {
     /** The `<url> [lang]` greedy argument under `/display video this|<id> <url> [lang]`. */
     private fun videoUrlArgument(token: (CommandContext<CommandSourceStack>) -> String) =
         // greedyString captures the rest of the input (URL + optional lang separated by space)
-        RequiredArgumentBuilder.argument("url_and_lang", StringArgumentType.greedyString())
+        Commands.argument("url_and_lang", StringArgumentType.greedyString())
             .suggests { _, builder ->
                 // Only suggest lang codes when the input looks like "url lang_prefix"
                 if (builder.remaining.contains(' ')) {
@@ -269,16 +269,16 @@ object CommandRegistrar {
     /**
      * Builds the `/display schedule this|<id> [play|pause|cancel] [<HH:mm[:ss]>]` subcommand.
      */
-    private fun scheduleSubCommand() = LiteralArgumentBuilder.literal("schedule")
+    private fun scheduleSubCommand() = Commands.literal("schedule")
         .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.schedule) }
         .then(
-            LiteralArgumentBuilder.literal("this")
+            Commands.literal("this")
                 .executes { ctx ->
                     ScheduleCommand().execute(ctx.source.sender, arrayOf("this", null, null))
                     Command.SINGLE_SUCCESS
                 }
                 .then(
-                    LiteralArgumentBuilder.literal("cancel").executes { ctx ->
+                    Commands.literal("cancel").executes { ctx ->
                         ScheduleCommand().execute(ctx.source.sender, arrayOf("this", "cancel", null))
                         Command.SINGLE_SUCCESS
                     }
@@ -287,7 +287,7 @@ object CommandRegistrar {
                 .then(scheduleActionNode("pause") { "this" })
         )
         .then(
-            RequiredArgumentBuilder.argument("id", BareTokenCommandArgumentType)
+            Commands.argument("id", BareTokenCommandArgumentType)
                 .suggests { _, b ->
                     FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
                     b.buildFuture()
@@ -300,7 +300,7 @@ object CommandRegistrar {
                     Command.SINGLE_SUCCESS
                 }
                 .then(
-                    LiteralArgumentBuilder.literal("cancel").executes { ctx ->
+                    Commands.literal("cancel").executes { ctx ->
                         ScheduleCommand().execute(
                             ctx.source.sender,
                             arrayOf(StringArgumentType.getString(ctx, "id"), "cancel", null),
@@ -318,7 +318,7 @@ object CommandRegistrar {
      * `<HH:mm[:ss]>` argument to actually set it.
      */
     private fun scheduleActionNode(action: String, token: (CommandContext<CommandSourceStack>) -> String) =
-        LiteralArgumentBuilder.literal(action)
+        Commands.literal(action)
             .executes { ctx ->
                 ScheduleCommand().execute(ctx.source.sender, arrayOf(token(ctx), action, null))
                 Command.SINGLE_SUCCESS
@@ -330,7 +330,7 @@ object CommandRegistrar {
      * suggesting every minute of the player's local day.
      */
     private fun scheduleTimeArgument(action: String, token: (CommandContext<CommandSourceStack>) -> String) =
-        RequiredArgumentBuilder.argument("time", BareTokenCommandArgumentType)
+        Commands.argument("time", BareTokenCommandArgumentType)
             .suggests { ctx, builder -> scheduleTimeSuggestions(ctx.source.sender as? Player, builder) }
             .executes { ctx ->
                 ScheduleCommand().execute(
@@ -370,13 +370,13 @@ object CommandRegistrar {
     }
 
     /** Builds an on / off toggle subcommand that optionally targets another player. */
-    private fun toggleSubCommand(name: String, cmd: SubCommand) = LiteralArgumentBuilder.literal(name)
+    private fun toggleSubCommand(name: String, cmd: SubCommand) = Commands.literal(name)
         .executes { ctx ->
             cmd.execute(ctx.source.sender, arrayOf(name))
             Command.SINGLE_SUCCESS
         }
         .then(
-            RequiredArgumentBuilder.argument("player", StringArgumentType.word())
+            Commands.argument("player", StringArgumentType.word())
                 .requires { it.sender.hasPermission(PaperServer.config.permissions.toggleOthers) }
                 .suggests { _, builder ->
                     Bukkit.getOnlinePlayers().forEach { builder.suggest(it.name) }
@@ -393,7 +393,7 @@ object CommandRegistrar {
      * Builds the `/display fullscreen start|stop|list` subcommand: server-forced fullscreen
      * broadcasts to players by name selector, radius, or both (combinable).
      */
-    private fun fullscreenSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = LiteralArgumentBuilder.literal("fullscreen")
+    private fun fullscreenSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("fullscreen")
         .executes { ctx ->
             (ctx.source.sender as? Player)?.let { player ->
                 MessageUtil.sendColoredMessage(
@@ -405,10 +405,10 @@ object CommandRegistrar {
         }
         .then(fullscreenStartSubCommand())
         .then(
-            LiteralArgumentBuilder.literal("stop")
+            Commands.literal("stop")
                 .requires { it.sender.hasPermission(PaperServer.config.permissions.fullscreenStop) }
                 .then(
-                    RequiredArgumentBuilder.argument("id", StringArgumentType.word())
+                    Commands.argument("id", StringArgumentType.word())
                         .suggests { _, builder ->
                             PaperFullscreenCommand.stopSuggestions().forEach { builder.suggest(it) }
                             builder.buildFuture()
@@ -420,7 +420,7 @@ object CommandRegistrar {
                 )
         )
         .then(
-            LiteralArgumentBuilder.literal("list")
+            Commands.literal("list")
                 .requires { it.sender.hasPermission(PaperServer.config.permissions.fullscreenList) }
                 .executes { ctx ->
                     PaperFullscreenCommand.list(ctx.source.sender)
@@ -431,7 +431,7 @@ object CommandRegistrar {
     /** Builds the fullscreen start subcommand with optional flags in any order. */
     private fun fullscreenStartSubCommand(): LiteralArgumentBuilder<CommandSourceStack> {
         val flags = fullscreenFlagsNode()
-        return LiteralArgumentBuilder.literal("start")
+        return Commands.literal("start")
             .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.fullscreenStart) }
             .then(fullscreenIdOrUrlNode("id", flags))
             .then(fullscreenIdOrUrlNode("url", flags))
@@ -441,8 +441,8 @@ object CommandRegistrar {
     private fun fullscreenIdOrUrlNode(
         literalName: String,
         flags: List<CommandNode<CommandSourceStack>>,
-    ) = LiteralArgumentBuilder.literal(literalName).then(
-        RequiredArgumentBuilder.argument("id", BareTokenCommandArgumentType)
+    ) = Commands.literal(literalName).then(
+        Commands.argument("id", BareTokenCommandArgumentType)
             .suggests { _, builder ->
                 if (literalName == "id") {
                     builder.suggest("this")
@@ -454,11 +454,7 @@ object CommandRegistrar {
             .also { idArg -> flags.forEach { idArg.then(it) } }
     )
 
-    /**
-     * Bare space-delimited token with custom character validation. Kept local instead of
-     * reusing [BareTokenArgumentType] because that one also registers Fabric/NeoForge sync
-     * info, which the Paper tree never needs.
-     */
+    /** Bare space-delimited token argument type with custom character validation. */
     private object BareTokenCommandArgumentType : ArgumentType<String> {
         private val MISSING = SimpleCommandExceptionType(LiteralMessage("Expected a value."))
 
@@ -468,7 +464,6 @@ object CommandRegistrar {
             if (reader.cursor == start) throw MISSING.create()
             return reader.string.substring(start, reader.cursor)
         }
-
     }
 
     /**
@@ -499,11 +494,11 @@ object CommandRegistrar {
         children: List<CommandNode<CommandSourceStack>>
     ): CommandNode<CommandSourceStack> =
         when (name) {
-            "server" -> LiteralArgumentBuilder.literal("server")
+            "server" -> Commands.literal("server")
                 .requires { it.sender.hasPermission(PaperServer.config.permissions.fullscreenNetwork) }
                 .then(
                     terminate(
-                        RequiredArgumentBuilder.argument("name", StringArgumentType.word())
+                        Commands.argument("name", StringArgumentType.word())
                             .suggests { _, builder ->
                                 (ProxyNetwork.serverNames() + "global")
                                     .filter { it.startsWith(builder.remaining, ignoreCase = true) }
@@ -514,42 +509,42 @@ object CommandRegistrar {
                     )
                 ).build()
 
-            "target" -> LiteralArgumentBuilder.literal("target").then(
+            "target" -> Commands.literal("target").then(
                 terminate(
-                    RequiredArgumentBuilder.argument("players", BareTokenCommandArgumentType)
+                    Commands.argument("players", BareTokenCommandArgumentType)
                         .suggests { _, builder -> suggestPlayerNames(builder) },
                     children,
                 )
             ).build()
 
-            "radius" -> LiteralArgumentBuilder.literal("radius").then(
-                terminate(RequiredArgumentBuilder.argument("blocks", DoubleArgumentType.doubleArg(0.0)), children).also { blocks ->
+            "radius" -> Commands.literal("radius").then(
+                terminate(Commands.argument("blocks", DoubleArgumentType.doubleArg(0.0)), children).also { blocks ->
                     blocks.addChild(
-                        RequiredArgumentBuilder.argument("x", DoubleArgumentType.doubleArg())
+                        Commands.argument("x", DoubleArgumentType.doubleArg())
                             .then(
-                                RequiredArgumentBuilder.argument("y", DoubleArgumentType.doubleArg())
-                                    .then(terminate(RequiredArgumentBuilder.argument("z", DoubleArgumentType.doubleArg()), children))
+                                Commands.argument("y", DoubleArgumentType.doubleArg())
+                                    .then(terminate(Commands.argument("z", DoubleArgumentType.doubleArg()), children))
                             )
                             .build()
                     )
                 }
             ).build()
 
-            "mode" -> LiteralArgumentBuilder.literal("mode")
-                .then(terminate(LiteralArgumentBuilder.literal("standard"), children))
-                .then(terminate(LiteralArgumentBuilder.literal("immersive"), children))
+            "mode" -> Commands.literal("mode")
+                .then(terminate(Commands.literal("standard"), children))
+                .then(terminate(Commands.literal("immersive"), children))
                 .build()
 
-            "forced" -> terminate(LiteralArgumentBuilder.literal("forced"), children)
-            "transient" -> terminate(LiteralArgumentBuilder.literal("transient"), children)
-            "volume" -> LiteralArgumentBuilder.literal("volume").then(
-                terminate(RequiredArgumentBuilder.argument("volume", DoubleArgumentType.doubleArg(0.0, 200.0)), children)
+            "forced" -> terminate(Commands.literal("forced"), children)
+            "transient" -> terminate(Commands.literal("transient"), children)
+            "volume" -> Commands.literal("volume").then(
+                terminate(Commands.argument("volume", DoubleArgumentType.doubleArg(0.0, 200.0)), children)
             ).build()
 
-            "looped" -> terminate(LiteralArgumentBuilder.literal("looped"), children)
-            "quality" -> LiteralArgumentBuilder.literal("quality").then(
+            "looped" -> terminate(Commands.literal("looped"), children)
+            "quality" -> Commands.literal("quality").then(
                 terminate(
-                    RequiredArgumentBuilder.argument("quality", StringArgumentType.word())
+                    Commands.argument("quality", StringArgumentType.word())
                         .suggests { _, builder ->
                             QUALITY_SUGGESTIONS.forEach { builder.suggest(it) }
                             builder.buildFuture()
@@ -605,14 +600,14 @@ object CommandRegistrar {
     /** Builds the `/display list [filter] [value] [page]` subcommand with progressive suggestions. */
     private fun listSubCommand(): LiteralArgumentBuilder<CommandSourceStack> {
         val cmd = ListCommand()
-        return LiteralArgumentBuilder.literal("list")
+        return Commands.literal("list")
             .requires { it.sender.hasPermission(PaperServer.config.permissions.list) }
             .executes { ctx ->
                 cmd.execute(ctx.source.sender, arrayOf("list"))
                 Command.SINGLE_SUCCESS
             }
             .then(
-                RequiredArgumentBuilder.argument("filter", StringArgumentType.word())
+                Commands.argument("filter", StringArgumentType.word())
                     .suggests { ctx, builder ->
                         cmd.complete(ctx.source.sender, arrayOf("list", builder.remaining))
                             .filter { it.startsWith(builder.remaining, ignoreCase = true) }
@@ -625,7 +620,7 @@ object CommandRegistrar {
                         Command.SINGLE_SUCCESS
                     }
                     .then(
-                        RequiredArgumentBuilder.argument("value", StringArgumentType.word())
+                        Commands.argument("value", StringArgumentType.word())
                             .suggests { ctx, builder ->
                                 val filter = StringArgumentType.getString(ctx, "filter")
                                 cmd.complete(ctx.source.sender, arrayOf("list", filter, builder.remaining))
@@ -640,7 +635,7 @@ object CommandRegistrar {
                                 Command.SINGLE_SUCCESS
                             }
                             .then(
-                                RequiredArgumentBuilder.argument("page", StringArgumentType.word())
+                                Commands.argument("page", StringArgumentType.word())
                                     .suggests { ctx, builder ->
                                         val filter = StringArgumentType.getString(ctx, "filter")
                                         val value = StringArgumentType.getString(ctx, "value")
