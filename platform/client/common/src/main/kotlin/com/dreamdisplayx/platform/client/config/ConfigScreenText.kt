@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client.config
 
 import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.client.utils.translatableText
+import com.dreamdisplayx.platform.client.utils.translatableWithFallbackCompat
 import com.dreamdisplayx.platform.client.ConfigEntry
 import net.minecraft.network.chat.Component
 
@@ -54,11 +55,17 @@ object ConfigScreenText {
 
     /** Uses a declarative entry's English label until a translation or resource-pack override exists. */
     fun entryLabel(entry: ConfigEntry<*>): Component =
+        //? if >=1.19.2 {
         Component.translatableWithFallback("dreamdisplayx.config.${entry.key.replace('-', '_')}", entry.label)
+        //?} else
+        /*translatableWithFallbackCompat("dreamdisplayx.config.${entry.key.replace('-', '_')}", entry.label)*/
 
     /** Keeps new entry tooltips readable without requiring every language file to define the key. */
     fun entryTooltip(entry: ConfigEntry<*>): Component =
+        //? if >=1.19.2 {
         Component.translatableWithFallback("dreamdisplayx.config.${entry.key.replace('-', '_')}.tooltip", entry.comment)
+        //?} else
+        /*translatableWithFallbackCompat("dreamdisplayx.config.${entry.key.replace('-', '_')}.tooltip", entry.comment)*/
 
     /** Localized component for the decoder dropdown label. Falls back to the raw [value] when the key is unknown. */
     fun decoderLabel(value: String): Component =

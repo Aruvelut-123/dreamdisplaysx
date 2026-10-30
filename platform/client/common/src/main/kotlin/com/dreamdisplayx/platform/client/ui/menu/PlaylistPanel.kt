@@ -423,7 +423,7 @@ class PlaylistPanel(
 
     /** Focuses the URL box when the tab opens. */
     fun focusInput() {
-        urlBox.setFocused(true)
+        urlBox.requestFocus()
         urlBox.setValue("")
     }
 

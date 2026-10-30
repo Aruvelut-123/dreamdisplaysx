@@ -10,8 +10,7 @@ import net.minecraft.client.renderer.texture.DynamicTexture
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.rendertype.RenderType
 //?} else
-/*import net.minecraft.client.renderer.RenderType
-import net.minecraft.util.FastColor*/
+/*import net.minecraft.client.renderer.RenderType*/
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier
 //?} else
@@ -134,7 +133,8 @@ object DanmakuTextLayoutCache {
                 val r = (argb ushr 16) and 0xFF
                 val gr = (argb ushr 8) and 0xFF
                 val b = argb and 0xFF
-                native.setPixelRGBA(x, y, FastColor.ABGR32.color(a, r, gr, b))*/
+                // Packed ABGR, same layout FastColor.ABGR32.color produces (that helper is 1.19+).
+                native.setPixelRGBA(x, y, (a shl 24) or (b shl 16) or (gr shl 8) or r)*/
             }
         }
         return native

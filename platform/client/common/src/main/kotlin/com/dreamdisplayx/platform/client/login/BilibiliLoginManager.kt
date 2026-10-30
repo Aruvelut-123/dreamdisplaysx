@@ -119,6 +119,9 @@ object BilibiliLoginManager {
         // command from the client, including on a singleplayer integrated server. Guard on the
         // connection being non-null.
         val connection = Minecraft.getInstance().connection ?: return
+        //? if >=1.19 {
         connection.sendCommand(command)
+        //?} else
+        /*connection.sendUnsignedCommand(command)*/
     }
 }

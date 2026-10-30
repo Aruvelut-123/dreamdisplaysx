@@ -43,6 +43,17 @@ abstract class UiWidget(message: Component) : AbstractWidget(0, 0, 0, 0, message
         visible = visibleWhen()
     }
 
+    /**
+     * Keyboard-focus helpers. `AbstractWidget.setFocused` / `isFocused` are protected on the legacy
+     * versions, so widget code has to go through these instead of touching them directly.
+     */
+    fun requestFocus() {
+        setFocused(true)
+    }
+
+    /** True while this widget owns keyboard focus. */
+    fun hasFocus(): Boolean = isFocused
+
     /** Version-neutral render body; implement all drawing here. */
     protected abstract fun draw(g: GuiGraphicsCompat, mouseX: Int, mouseY: Int, partialTick: Float)
 

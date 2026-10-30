@@ -123,7 +123,13 @@ class BilibiliFilterDropdown(
         visible = false
         if (!inside) return false
         val index = ((my - rect.y) / ITEM_H).coerceIn(0, items.size - 1)
-        val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+        val s = SimpleSoundInstance.forUI(
+            //? if >=1.19.3 {
+            SoundEvents.UI_BUTTON_CLICK.value(),
+            //?} else
+            /*SoundEvents.UI_BUTTON_CLICK,*/
+            1.0f,
+        )
         Minecraft.getInstance().soundManager.play(s)
         onSelect(items[index])
         return true

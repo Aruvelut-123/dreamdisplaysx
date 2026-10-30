@@ -40,3 +40,14 @@ fun Style.withChatColor(color: ChatFormatting): Style =
     withColor(color)
     //?} else
     /*withColor(TextColor.fromLegacyFormat(color))*/
+
+/**
+ * Translatable component that falls back to [fallback] (raw English) when the key is missing.
+ * `Component.translatableWithFallback` only exists from 1.19.2, so older versions just use the key
+ * and let vanilla render the untranslated fallback text.
+ */
+fun translatableWithFallbackCompat(key: String, fallback: String): MutableComponent =
+    //? if >=1.19.2 {
+    Component.translatableWithFallback(key, fallback)
+    //?} else
+    /*TranslatableComponent(key)*/
