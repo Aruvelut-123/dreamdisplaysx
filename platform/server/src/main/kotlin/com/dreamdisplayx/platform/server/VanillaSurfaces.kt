@@ -2,7 +2,10 @@ package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.api.display.geometry.DisplaySurface
 import com.dreamdisplayx.api.display.geometry.normalizeBlockId
+//? if >=1.19.3 {
 import net.minecraft.core.registries.BuiltInRegistries
+//?} else
+/*import net.minecraft.core.Registry as BuiltInRegistries*/
 import net.minecraft.data.BlockFamilies
 import net.minecraft.data.BlockFamily
 import net.minecraft.world.level.block.Block

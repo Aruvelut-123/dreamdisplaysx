@@ -308,7 +308,14 @@ object VanillaDisplayActions {
             //? if >=1.21.11 {
             player.level().server
         //?} else
-        /*player.serverLevel().server*/
+        /*
+        //? if >=1.20 {
+        player.serverLevel().server
+        //?}
+        //? if <1.20 {
+        player.getLevel().server
+        //?}
+        */
         return server.playerList.isOp(
             //? if >=1.21.11 {
             NameAndId(player.gameProfile)

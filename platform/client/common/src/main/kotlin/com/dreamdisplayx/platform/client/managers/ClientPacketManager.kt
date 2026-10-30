@@ -12,7 +12,10 @@ import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
+//? if >=1.20.5 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
+//?} else
+/*import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload*/
 import org.slf4j.LoggerFactory
 
 /**

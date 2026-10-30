@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.utils.buttonClickSound
 import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
@@ -202,7 +203,7 @@ class AudioTrackDropdown(
         val rowTop = rect.y + PAD_V
         val row = ((my - rowTop) / ITEM_H).coerceIn(0, visibleCount - 1)
         val index = (scrollIndex + row).coerceIn(0, items.size - 1)
-        val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+        val s = SimpleSoundInstance.forUI(buttonClickSound(), 1.0f)
         Minecraft.getInstance().soundManager.play(s)
         onSelect(items[index])
         return true

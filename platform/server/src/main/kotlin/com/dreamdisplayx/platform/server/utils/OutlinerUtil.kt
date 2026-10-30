@@ -11,6 +11,12 @@ import org.jspecify.annotations.NullMarked
 import java.util.*
 
 /**
+    // Bukkit renamed "REDSTONE" to "DUST" in 1.20.5 XD
+    //? if >=1.20.5 {
+    private val DUST = Particle.DUST
+    //?} else
+    /*private val DUST = Particle.REDSTONE*/
+
  * Utility object for outlining areas with particles.
  */
 @PaperOnly

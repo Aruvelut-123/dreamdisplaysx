@@ -9,6 +9,9 @@ import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.core.protocol.common.packets.*
 import com.dreamdisplayx.platform.client.net.V2Payload
+//? if <1.20.5 {
+import com.dreamdisplayx.platform.client.net.compat.CompatPayloads
+//?}
 import com.dreamdisplayx.platform.client.net.V3Payload
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.VanillaServerState
@@ -53,6 +56,17 @@ object FabricV2Networking {
                 runCatching { ServerPlayNetworking.send(player, V2Payload(bytes)) }
             }
         }
+        //?} else
+        /*ServerPlayNetworking.registerGlobalReceiver(V2Payload.TYPE.id()) { server, player, _, buf, _ ->
+            val bytes = ByteArray(buf.readableBytes()).also(buf::readBytes)
+            server.execute {
+                runCatching {
+                    dispatch(player, server, PacketRegistry.decode(bytes, PacketDirection.CLIENT_TO_SERVER) ?: return@runCatching)
+                }.onFailure { e ->
+                    logger.warn("Failed to handle v2 packet.", e)
+                }
+            }
+        }*/
     }
 
     /**

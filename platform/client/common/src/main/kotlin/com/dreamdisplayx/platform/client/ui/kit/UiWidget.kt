@@ -4,7 +4,14 @@ import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 //? if >=26 {
 import net.minecraft.client.gui.GuiGraphicsExtractor
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 import net.minecraft.client.gui.components.AbstractWidget
 import net.minecraft.client.gui.narration.NarrationElementOutput
 import net.minecraft.network.chat.Component
@@ -58,8 +65,19 @@ abstract class UiWidget(message: Component) : AbstractWidget(0, 0, 0, 0, message
             text, padding,
         )
     //?} else
-    /*final override fun renderWidget(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) =
+    /*
+    //? if >=1.20 {
+    final override fun renderWidget(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) =
         draw(g, mouseX, mouseY, partialTick)
+    //?}
+    //? if >=1.19.4 <1.20 {
+    final override fun renderWidget(pose: com.mojang.blaze3d.vertex.PoseStack, mouseX: Int, mouseY: Int, partialTick: Float) =
+        draw(GuiGraphics(pose), mouseX, mouseY, partialTick)
+    //?}
+    //? if <1.19.4 {
+    final override fun renderButton(pose: com.mojang.blaze3d.vertex.PoseStack, mouseX: Int, mouseY: Int, partialTick: Float) =
+        draw(GuiGraphics(pose), mouseX, mouseY, partialTick)
+    //?}
 
     //? if >=1.21.11 {
     // Draws [text] centered over the widget with vanilla scrolling-on-overflow behavior.
@@ -71,11 +89,24 @@ abstract class UiWidget(message: Component) : AbstractWidget(0, 0, 0, 0, message
         )
     //?}
 
-    //? if <1.21.11 {
+    //? if <1.19.4 {
+    protected fun drawScrollingLabel(g: GuiGraphicsCompat, text: Component, padding: Int) =
+        net.minecraft.client.gui.GuiComponent.drawCenteredString(
+            g.pose(), net.minecraft.client.Minecraft.getInstance().font, text,
+            x + width / 2, y + (height - 8) / 2, ((alpha * 255).toInt().coerceIn(0, 255) shl 24) or 0xFFFFFF,
+        )
+    //?}
+
+    //? if >=1.19.4 <1.21.11 {
     // Draws [text] centered over the widget with vanilla scrolling-on-overflow behavior.
     protected fun drawScrollingLabel(g: GuiGraphicsCompat, text: Component, padding: Int) =
         renderScrollingString(
+            //? if >=1.20 {
             g,
+            //?}
+            //? if <1.20 {
+            g.pose(),
+            //?}
             net.minecraft.client.Minecraft.getInstance().font,
             text,
             x + padding,
@@ -86,5 +117,8 @@ abstract class UiWidget(message: Component) : AbstractWidget(0, 0, 0, 0, message
         )
     //?}*/
 
+    //? if >=1.19.3 {
     override fun updateWidgetNarration(builder: NarrationElementOutput) {}
+    //?} else
+    /*override fun updateNarration(builder: NarrationElementOutput) {}*/
 }

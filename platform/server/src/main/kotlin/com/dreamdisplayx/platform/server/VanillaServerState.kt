@@ -28,6 +28,14 @@ object VanillaServerState {
      */
     var platformName: String = ""
 
+    //? if <1.20.2 {
+    /**
+     * The client-reported language of a player. Vanilla 1.20.1 keeps it private, so the loader
+     * supplies the accessor (`Forge` exposes it as `getLanguage`).
+     */
+    var playerLanguage: (net.minecraft.server.level.ServerPlayer) -> String? = { null }
+    //?}
+
     /** Set once the underlying server starts. */
     var server: MinecraftServer? = null
 

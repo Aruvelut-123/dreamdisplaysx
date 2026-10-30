@@ -43,7 +43,7 @@ object MessageUtil {
 
     /** Legacy and JSON serializers for `Adventure Components`. */
     @PaperOnly
-    private val jsonSerializer = JSONComponentSerializer.json()
+    private val jsonSerializer = GsonComponentSerializer.gson()
 
     /** Sends a localized message identified by [messageKey] to [sender]. */
     @PaperOnly
@@ -219,11 +219,11 @@ object MessageUtil {
 
     /** NMS component builder from a JSON component map. */
     private fun nmsComponentFromJsonValue(value: Any?): NmsComponent? = when (value) {
-        is String -> NmsComponent.literal(value)
+        is String -> literalText(value)
         is Map<*, *> -> {
             val root = when {
-                value.string("translate") != null -> NmsComponent.translatable(value.string("translate")!!)
-                else -> NmsComponent.literal(value.string("text") ?: "")
+                value.string("translate") != null -> translatableText(value.string("translate")!!)
+                else -> literalText(value.string("text") ?: "")
             }
             value.list("extra")?.forEach { child ->
                 nmsComponentFromJsonValue(child)?.let(root::append)
@@ -232,7 +232,7 @@ object MessageUtil {
         }
 
         is List<*> -> {
-            val root = NmsComponent.empty()
+            val root = emptyText()
             value.forEach { child -> nmsComponentFromJsonValue(child)?.let(root::append) }
             root
         }
@@ -244,7 +244,10 @@ object MessageUtil {
     private fun MutableComponent.withJsonStyle(value: Map<*, *>): MutableComponent = withStyle { base ->
         var style = base
         value.string("color")?.let { color ->
+            //? if >=1.20.5 {
             val parsedColor = net.minecraft.network.chat.TextColor.parseColor(color).result().orElse(null)
+            //?} else
+            /*val parsedColor = net.minecraft.network.chat.TextColor.parseColor(color)*/
             if (parsedColor != null) style = style.withColor(parsedColor)
         }
         value.bool("bold")?.let { style = style.withBold(it) }
@@ -270,7 +273,7 @@ object MessageUtil {
         val hoverEvent = value.map("hoverEvent")
         if (hoverEvent?.string("action") == "show_text") {
             val hoverComponent = nmsComponentFromJsonValue(hoverEvent["value"])
-                ?: hoverEvent.string("value")?.let(NmsComponent::literal)
+                ?: hoverEvent.string("value")?.let(::literalText)
             hoverComponent?.let {
                 //? if >=1.21.11 {
                 style = style.withHoverEvent(net.minecraft.network.chat.HoverEvent.ShowText(it))
@@ -307,14 +310,17 @@ object MessageUtil {
             return
         }
         val pattern = Regex("""\{(\d+)}""")
-        val root = NmsComponent.literal("")
+        val root = literalText("")
         var lastIndex = 0
         for (match in pattern.findAll(rawMessage)) {
             val textBefore = rawMessage.substring(lastIndex, match.range.first)
             if (textBefore.isNotEmpty()) root.append(parseAmpersandLegacy(textBefore))
             val index = match.groupValues[1].toIntOrNull()
             if (index != null && index < materialKeys.size) {
+                //? if >=1.21.1 {
                 val itemId = Identifier.parse(materialKeys[index])
+                //?} else
+                /*val itemId = Identifier(materialKeys[index])*/
                 val spriteComponent =
                     //? if >=1.21.11 {
                     run {
@@ -335,7 +341,7 @@ object MessageUtil {
                         spriteComponent.withStyle { it.withHoverEvent(hoverEvent) }
                     }
                 //?} else
-                /*NmsComponent.literal(itemId.toString())*/
+                /*literalText(itemId.toString())*/
                 root.append(spriteComponent)
             }
             lastIndex = match.range.last + 1

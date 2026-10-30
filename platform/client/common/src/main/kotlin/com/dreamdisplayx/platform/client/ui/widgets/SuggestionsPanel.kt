@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.utils.buttonClickSound
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.api.media.search.model.MediaSearchResult
 import com.dreamdisplayx.platform.client.input.MouseButtons
 import com.dreamdisplayx.platform.client.render.FirstFrameThumbnails
@@ -233,7 +235,7 @@ class SuggestionsPanel(
         lastStripH = stripH
 
         controller.statusKey?.let { key ->
-            val base = Component.translatable(key).string
+            val base = translatableText(key).string
             val msg = if (controller.isLoading) {
                 val elapsed = maxOf(0L, (System.currentTimeMillis() - controller.loadStartedAtMs) / 1000L)
                 base.replace(Regex("\\.+$"), "") + " • " + elapsed + "s"
@@ -463,7 +465,7 @@ class SuggestionsPanel(
             badge != null -> drawCardTag(
                 g,
                 f,
-                Component.translatable(badge.labelKey).string,
+                translatableText(badge.labelKey).string,
                 badge.bgColor,
                 badge.textColor,
                 thumbX,
@@ -577,7 +579,13 @@ class SuggestionsPanel(
         /*g.blit(id, x, y, 0f, 0f, w, h, w, h)*/
     }
 
+    //? if >=1.20.2 {
     override fun mouseScrolled(mouseX: Double, mouseY: Double, dx: Double, dy: Double): Boolean {
+        //?} else
+        /*override fun mouseScrolled(mouseX: Double, mouseY: Double, delta: Double): Boolean =
+            mouseScrolled(mouseX, mouseY, 0.0, delta)
+
+        fun mouseScrolled(mouseX: Double, mouseY: Double, dx: Double, dy: Double): Boolean {*/
         if (!available()) return false
         if (!isMouseOver(mouseX, mouseY)) return false
         val stripTop = stripTop()
@@ -616,10 +624,20 @@ class SuggestionsPanel(
         if (searchButton.isMouseOver(mouseX, mouseY)) return searchButton.mouseClicked(event, dbl)
         if (searchBox.isMouseOver(mouseX, mouseY)) {
             val handled = searchBox.mouseClicked(event, dbl)
+            //? if >=1.19.4 {
             searchBox.isFocused = true
+            //?}
+            //? if <1.19.4 {
+            searchBox.setFocus(true)
+            //?}
             return handled
         }
+        //? if >=1.19.4 {
         searchBox.isFocused = false
+        //?}
+        //? if <1.19.4 {
+        searchBox.setFocus(false)
+        //?}
         if (MouseButtons.isLeft(event.button()) && overScrollbar(mouseX, mouseY)) {
             draggingScrollbar = true
             scrollFromPos(if (sbVertical) mouseY else mouseX)
@@ -629,7 +647,7 @@ class SuggestionsPanel(
         if (MouseButtons.isRight(event.button()) && forgetCardAt(mx, my)) return true
         val card = if (MouseButtons.isLeft(event.button())) cardAt(mouseX, mouseY) else -1
         if (card in controller.visibleCards.indices) {
-            val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+            val s = SimpleSoundInstance.forUI(buttonClickSound(), 1.0f)
             Minecraft.getInstance().soundManager.play(s)
             onPick(controller.visibleCards[card])
             return true
@@ -664,10 +682,20 @@ class SuggestionsPanel(
         if (searchButton.isMouseOver(mouseX, mouseY)) return searchButton.mouseClicked(mouseX, mouseY, button)
         if (searchBox.isMouseOver(mouseX, mouseY)) {
             val handled = searchBox.mouseClicked(mouseX, mouseY, button)
+            //? if >=1.19.4 {
             searchBox.isFocused = true
+            //?}
+            //? if <1.19.4 {
+            searchBox.setFocus(true)
+            //?}
             return handled
         }
+        //? if >=1.19.4 {
         searchBox.isFocused = false
+        //?}
+        //? if <1.19.4 {
+        searchBox.setFocus(false)
+        //?}
         if (MouseButtons.isLeft(button) && overScrollbar(mouseX, mouseY)) {
             draggingScrollbar = true
             scrollFromPos(if (sbVertical) mouseY else mouseX)
@@ -677,7 +705,7 @@ class SuggestionsPanel(
         if (MouseButtons.isRight(button) && forgetCardAt(mx, my)) return true
         val card = if (MouseButtons.isLeft(button)) cardAt(mouseX, mouseY) else -1
         if (card in controller.visibleCards.indices) {
-            val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+            val s = SimpleSoundInstance.forUI(buttonClickSound(), 1.0f)
             Minecraft.getInstance().soundManager.play(s)
             onPick(controller.visibleCards[card])
             return true
@@ -710,7 +738,7 @@ class SuggestionsPanel(
         val card = cardAt(mx.toDouble(), my.toDouble())
         val result = controller.visibleCards.getOrNull(card) ?: return false
         if (!controller.forgetCustom(result)) return false
-        val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 0.7f)
+        val s = SimpleSoundInstance.forUI(buttonClickSound(), 0.7f)
         Minecraft.getInstance().soundManager.play(s)
         return true
     }

@@ -512,7 +512,10 @@ object ScreenRenderer : ClientRenderService {
         u: Float,
         v: Float,
     ) {
+        //? if >=1.21.1 {
         builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, 255)
+        //?} else
+        /*builder.vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, 255).endVertex()*/
     }
 
     /** Adds a textured vertex with an explicit alpha for transparent danmaku glyphs. */
@@ -548,9 +551,22 @@ object ScreenRenderer : ClientRenderService {
                 RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
                 //?}
                 try {
+                    //? if >=1.21.1 {
                     val builder = Tesselator.getInstance().begin(type.mode(), type.format())
                     appendVertices(stack.last(), builder)
                     type.draw(builder.buildOrThrow())
+                    //?}
+                    //? if <1.21.1 {
+                    val builder = Tesselator.getInstance().builder
+                    builder.begin(type.mode(), type.format())
+                    appendVertices(stack.last(), builder)
+                    //? if >=1.20 {
+                    type.end(builder, RenderSystem.getVertexSorting())
+                    //?}
+                    //? if <1.20 {
+                    type.end(builder, 0, 0, 0)
+                    //?}
+                    //?}
                 } finally {
                     //? if <1.21.11 {
                     RenderSystem.setShaderColor(1f, 1f, 1f, 1f)

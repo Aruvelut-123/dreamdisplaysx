@@ -1,0 +1,42 @@
+modLoader = "javafml"
+loaderVersion = "${forgeLoaderRange}"
+license = "LGPL-3.0"
+issueTrackerURL = "https://github.com/arnodoelinger/dreamdisplayx/issues"
+
+[[mods]]
+
+modId = "dreamdisplayx"
+version = "${version}"
+displayName = "Dream Displays"
+displayURL = "https://github.com/arnodoelinger/dreamdisplayx"
+logoFile = "assets/dreamdisplayx/icon.png"
+authors = "arnodoelinger, INotSleep, Kolyakot33, Toffikk"
+description = "Create in-game screens to stream your favorite videos in Minecraft."
+
+[[dependencies.dreamdisplayx]]
+modId = "forge"
+mandatory = true
+versionRange = "${forgeLoaderRange}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.dreamdisplayx]]
+modId = "minecraft"
+mandatory = true
+versionRange = "${minecraftRange}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.dreamdisplayx]]
+modId = "luckperms"
+mandatory = false
+versionRange = "[5,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.dreamdisplayx]]
+modId = "cloth_config"
+mandatory = false
+versionRange = "*"
+ordering = "NONE"
+side = "CLIENT"

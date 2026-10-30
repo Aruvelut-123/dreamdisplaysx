@@ -19,7 +19,6 @@ fun scVersion(name: String): String = scVersions.get(name)
 // of moddev; every modern target keeps the plain NeoForge plugin.
 val usesLegacyForge = scVersions.getOrNull("forge.version") != null
 if (usesLegacyForge) apply(plugin = "net.neoforged.moddev.legacyforge") else apply(plugin = "net.neoforged.moddev")
-
 dependencies {
     api(project(":core"))
     api(project(":api"))

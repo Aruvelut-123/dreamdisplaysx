@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.platform.client.utils.identifier
 import com.dreamdisplayx.platform.client.Initializer
 //? if >=1.21.11 {
 //? if <26.3 {
@@ -31,13 +32,13 @@ object DisplayUnlitRenderTypes {
     /** Lazily-built unlit textured pipeline for display quads. */
     private val texturedPipeline: RenderPipeline by lazy {
         val pipeline = RenderPipelineCompat.createDisplayPipeline(
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "pipeline/display_unlit_textured"),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_fog" +
+            identifier(Initializer.MOD_ID, "pipeline/display_unlit_textured"),
+            identifier(Initializer.MOD_ID, "core/display_fog" +
                 //? if >=26.3 {
                 "_rp"
                 //?} else
                 /*""*/),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_fog" +
+            identifier(Initializer.MOD_ID, "core/display_fog" +
                 //? if >=26.3 {
                 "_rp"
                 //?} else
@@ -101,5 +102,33 @@ object DisplayUnlitRenderTypes {
             false,
             state,
         ) as RenderType
-    }*/
+    }
+    //?}
+    //? if <1.21.1 {
+    fun create(name: String, id: Identifier): RenderType {
+        val state = LegacyShards.texturedState(id)
+        val method = RenderType::class.java.declaredMethods.first { m ->
+            m.parameterCount == 7 && m.parameterTypes[0] == String::class.java &&
+                m.parameterTypes[1] == VertexFormat::class.java && m.parameterTypes[6].isAssignableFrom(state.javaClass)
+        }
+        return method.apply { isAccessible = true }.invoke(
+            null, name, DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS, 1536, false, false, state,
+        ) as RenderType
+    }
+
+    private object LegacyShards : RenderType(
+        "dreamdisplayx_legacy_shards", DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS,
+        256, false, false, {}, {},
+    ) {
+        fun texturedState(id: Identifier): Any = CompositeState.builder()
+            .setShaderState(ShaderStateShard { GameRenderer.getPositionTexColorShader() })
+            .setTextureState(TextureStateShard(id, false, false))
+            .setTransparencyState(NO_TRANSPARENCY)
+            .setCullState(NO_CULL)
+            .setDepthTestState(LEQUAL_DEPTH_TEST)
+            .setLayeringState(POLYGON_OFFSET_LAYERING)
+            .createCompositeState(false)
+    }
+    //?}
+    */
 }

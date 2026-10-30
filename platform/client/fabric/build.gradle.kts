@@ -50,6 +50,7 @@ val hasNeoForge = scVersions.getOrNull("neoforge.version") != null
 // Legacy (obfuscated) Minecraft targets need layered Mojang+Parchment mappings and modImplementation;
 // year-versioned (deobfuscated) targets resolve the source set directly with plain implementation.
 val isLegacyObfuscated = scVersion("minecraft.version").startsWith("1.")
+val clothConfigFabric = scVersions.getOrNull("cloth.config.fabric") ?: "${scVersion("cloth.config.version")}+fabric"
 
 fun fancyModLoaderVersion(neoForgeVersion: String): String = when (neoForgeVersion) {
     "21.1.233" -> "4.0.42"
@@ -75,6 +76,7 @@ platformweaver {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     dependsOn(":platform:server:chiselSource")
+    if (!hasNeoForge) exclude("**/*NeoForge*.kt")
 }
 tasks.matching { it.name == "sourcesJar" }.configureEach {
     dependsOn(":platform:server:chiselSource")
@@ -188,6 +190,7 @@ dependencies {
     shadow(libs.zxingCore)
 }
 
+    scVersions.getOrNull("joml.version")?.let { shadow("org.joml:joml:$it") }
 tasks.processResources {
     from(generatedClassTweaker)
     from(project(":platform:resources").file("src/main/resources/assets/dreamdisplayx/lang/client")) {
@@ -241,6 +244,11 @@ if (isLegacyObfuscated) {
     tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
         dependsOn(tasks.shadowJar)
         inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
+    // Bundled only where Minecraft has no JOML of its own; elsewhere the references are Minecraft's and must stay put
+    if (scVersions.getOrNull("joml.version") != null) {
+        dependencies { include(dependency("org.joml:joml")) }
+        relocate("org.joml", "com.dreamdisplayx.libs.org.joml")
+    }
         addNestedDependencies.set(false)
         archiveBaseName.set("dreamdisplayx-fabric")
         archiveVersion.set("$activeStonecutterVersion-${rootProject.version}")

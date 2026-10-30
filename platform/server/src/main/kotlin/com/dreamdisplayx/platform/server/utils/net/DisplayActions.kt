@@ -301,7 +301,8 @@ object DisplayActions {
 
         if (PlayerManager.hasBeenNotifiedAboutPluginUpdate(player)) return
 
-        val currentVersionString = PaperServer.getInstance().pluginMeta.version
+        @Suppress("DEPRECATION")
+        val currentVersionString = PaperServer.getInstance().description.version
         if (currentVersionString.contains("-SNAPSHOT", ignoreCase = true) ||
             currentVersionString.contains("-DEV", ignoreCase = true)
         ) {

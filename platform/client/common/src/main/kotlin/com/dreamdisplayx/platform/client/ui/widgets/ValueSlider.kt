@@ -1,11 +1,19 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.utils.translatableText
+import com.dreamdisplayx.platform.client.utils.emptyText
+//? if <1.20.2 {
+import com.dreamdisplayx.platform.client.ui.blitSprite
+//?}
+import com.dreamdisplayx.platform.client.utils.vanillaIdentifier
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
 //? if >=1.21.11 {
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 //?}
+//? if >=1.19.4 {
 import net.minecraft.client.InputType
+//?}
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.narration.NarratedElementType
 import net.minecraft.client.gui.narration.NarrationElementOutput
@@ -28,7 +36,7 @@ class ValueSlider(
     private val live: Boolean = true,
     step: Double? = null,
     private val onApply: (Double) -> Unit,
-) : UiWidget(Component.empty()) {
+) : UiWidget(emptyText()) {
 
     var step: Double? = step
 
@@ -54,14 +62,17 @@ class ValueSlider(
         if (!isHovered && !sliderFocused) HANDLE else HANDLE_HIGHLIGHTED
 
     override fun createNarrationMessage(): MutableComponent =
-        Component.translatable("gui.narrate.slider", label(value))
+        translatableText("gui.narrate.slider", label(value))
 
+    //? if >=1.19.3 {
     override fun updateWidgetNarration(builder: NarrationElementOutput) {
+    //?} else
+    /*override fun updateNarration(builder: NarrationElementOutput) {*/
         builder.add(NarratedElementType.TITLE, createNarrationMessage())
         if (active) {
             builder.add(
                 NarratedElementType.USAGE,
-                Component.translatable(if (isFocused) "narration.slider.usage.focused" else "narration.slider.usage.hovered"),
+                translatableText(if (isFocused) "narration.slider.usage.focused" else "narration.slider.usage.hovered"),
             )
         }
     }
@@ -116,8 +127,11 @@ class ValueSlider(
         if (!focused) {
             sliderFocused = false
         } else {
+            //? if >=1.19.4 {
             val t = Minecraft.getInstance().lastInputType
             if (t == InputType.MOUSE || t == InputType.KEYBOARD_TAB) sliderFocused = true
+            //?} else
+            /*sliderFocused = true*/
         }
     }
 
@@ -147,9 +161,9 @@ class ValueSlider(
     }
 
     companion object {
-        private val TRACK = Identifier.withDefaultNamespace("widget/slider")
-        private val TRACK_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_highlighted")
-        private val HANDLE = Identifier.withDefaultNamespace("widget/slider_handle")
-        private val HANDLE_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_handle_highlighted")
+        private val TRACK = vanillaIdentifier("widget/slider")
+        private val TRACK_HIGHLIGHTED = vanillaIdentifier("widget/slider_highlighted")
+        private val HANDLE = vanillaIdentifier("widget/slider_handle")
+        private val HANDLE_HIGHLIGHTED = vanillaIdentifier("widget/slider_handle_highlighted")
     }
 }

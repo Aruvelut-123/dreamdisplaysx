@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
 import com.dreamdisplayx.platform.client.ui.kit.UiRect
@@ -75,7 +76,7 @@ class SettingsSection(
 
         // Reserve a shared label column as wide as the widest label so every control gets the same
         // width and left edge, instead of each being squeezed by its own label length.
-        val labelColW = rows.maxOf { font.width(Component.translatable(it.labelKey)) }
+        val labelColW = rows.maxOf { font.width(translatableText(it.labelKey)) }
 
         // Row area spans from below the title up to the owner-action row at the bottom.
         areaTop = titleH
@@ -131,7 +132,7 @@ class SettingsSection(
         g.fill(x, y, x + w, y + UiTheme.ROW_H, UiTheme.ROW_BG)
         row.rowRect = UiRect(x, y, w, UiTheme.ROW_H)
 
-        val label = Component.translatable(row.labelKey)
+        val label = translatableText(row.labelKey)
         val textY = y + UiTheme.ROW_H / 2 - font.lineHeight / 2
         g.drawText(font, label, x + 6, textY, UiTheme.TEXT_PRIMARY, false)
         row.labelHover = UiRect(x + 6, textY, font.width(label), font.lineHeight)

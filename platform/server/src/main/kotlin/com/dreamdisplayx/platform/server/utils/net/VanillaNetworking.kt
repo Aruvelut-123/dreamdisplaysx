@@ -23,6 +23,8 @@ interface VanillaNetworkingAdapter {
 object VanillaNetworking {
     lateinit var adapter: VanillaNetworkingAdapter
 }
+// Forge adapter lives in :platform:client:forge
+
 
 /** Fabric v2 networking adapter. */
 @FabricOnly
@@ -39,3 +41,4 @@ object NeoForgeNetworkingAdapter : VanillaNetworkingAdapter {
     override fun sendV3Batch(players: List<ServerPlayer>, packets: List<DreamPacket>) = NeoForgeV2Networking.sendBatch(players, packets)
     override fun sendProxy(player: ServerPlayer, packet: CustomPacketPayload) = net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, packet)
 }
+//?}

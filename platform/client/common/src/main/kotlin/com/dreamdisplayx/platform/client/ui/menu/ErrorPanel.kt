@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.model.MediaFailureKind
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
@@ -33,7 +34,7 @@ class ErrorPanel(
         val textW = panelW - 2 * UiTheme.PANEL_PADDING_X
 
         val ex = error()
-        val headline = Component.translatable(headlineKey(ex?.kind)).withStyle { it.withColor(ChatFormatting.RED) }
+        val headline = translatableText(headlineKey(ex?.kind)).withStyle { it.withColor(ChatFormatting.RED) }
         val detailLines = detailLines(font, ex?.message, textW)
         val hint = Component.translatable("dreamdisplayx.error.loadingerror.hint")
             .withStyle { it.withColor(ChatFormatting.GRAY) }

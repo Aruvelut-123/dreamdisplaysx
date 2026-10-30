@@ -1640,7 +1640,13 @@ class DisplayScreen(
         private const val MAX_SERVER_DEFAULT_VOLUME = 1.0f
 
         /** The client's own chunk render distance option, converted to blocks. */
-        internal fun clientRenderDistanceBlocks(): Int =
-            Minecraft.getInstance().options.renderDistance().get() * 16
+        internal fun clientRenderDistanceBlocks(): Int {
+            val minecraft = Minecraft.getInstance()
+            //? if >=1.19 {
+            val render = minecraft.options.renderDistance().get()
+            //?} else
+            /*val render = minecraft.options.renderDistance*/
+            return render * 16
+        }
     }
 }

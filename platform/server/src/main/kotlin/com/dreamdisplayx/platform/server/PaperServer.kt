@@ -17,7 +17,10 @@ import com.dreamdisplayx.platform.server.registrar.ListenerRegistrar
 import com.dreamdisplayx.platform.server.storage.StorageBackend
 import com.dreamdisplayx.platform.server.utils.net.PaperV2Networking
 import io.github.arnodoelinger.platformweaver.PaperOnly
+//? if >=1.20.5 {
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
+//?} else
+/*import com.dreamdisplayx.platform.server.registrar.LegacyPaperCommands*/
 import org.bstats.bukkit.Metrics
 import org.bukkit.plugin.java.JavaPlugin
 import org.jspecify.annotations.NullMarked

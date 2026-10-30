@@ -12,7 +12,14 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 import net.minecraft.client.gui.screens.Screen
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
@@ -46,7 +53,14 @@ open class ScreenOverlay {
             at = [At("HEAD")],
             require = 0
         )
-        open fun onRenderHead(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float, ci: CallbackInfo) {*/
+        //? if >=1.20 {
+        open fun onRenderHead(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float, ci: CallbackInfo) {
+        //?}
+        //? if <1.20 {
+        open fun onRenderHead(pose: com.mojang.blaze3d.vertex.PoseStack, mouseX: Int, mouseY: Int, partialTick: Float, ci: CallbackInfo) {
+            val graphics = GuiGraphics(pose)
+        //?}
+        */
         if (!com.dreamdisplayx.platform.client.render.FlashbackCompat.shouldRenderHud) return
         if (FullscreenOverlayManager.isEmpty) return
         val mc = Minecraft.getInstance()
@@ -83,7 +97,14 @@ open class ScreenOverlay {
             at = [At("RETURN")],
             require = 0
         )
-        open fun onRenderReturn(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float, ci: CallbackInfo) {*/
+        //? if >=1.20 {
+        open fun onRenderReturn(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float, ci: CallbackInfo) {
+        //?}
+        //? if <1.20 {
+        open fun onRenderReturn(pose: com.mojang.blaze3d.vertex.PoseStack, mouseX: Int, mouseY: Int, partialTick: Float, ci: CallbackInfo) {
+            val graphics = GuiGraphics(pose)
+        //?}
+        */
         val mc = Minecraft.getInstance()
         if (!com.dreamdisplayx.platform.client.render.FlashbackCompat.shouldRenderHud) return
         if (!FullscreenOverlayManager.isEmpty &&

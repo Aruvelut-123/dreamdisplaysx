@@ -1,6 +1,7 @@
 import support.shadow.excludeDreamDisplaysXSqliteNativeExtras
 import support.stonecutter.StonecutterVersions
 import support.stonecutter.VersionsJson
+import org.gradle.kotlin.dsl.support.serviceOf
 
 plugins {
     id("dreamdisplayx.kotlin-conventions")
@@ -17,6 +18,17 @@ fun scVersion(name: String): String = scVersions.get(name)
 val hasNeoForge = scVersions.getOrNull("neoforge.version") != null
 
 val isLegacyObfuscatedMinecraft = scVersion("minecraft.version").startsWith("1.")
+val hasFabric = scVersions.getOrNull("fabric.api.version") != null
+
+// Paper before 1.20.5 neither runs on Mojang names nor remaps plugins. Such versions (1.20.1) get their own build,
+// compiled for that version, relocated under legacyPackage and reobfuscated to Spigot names; the pinned build then
+// bundles it into the one Paper jar, where PaperBootstrap picks which of the two to run.
+val isStandalonePaper = scVersions.getOrNull("paper.standalone") == "true"
+val legacyPaperVersions = VersionsJson.load(rootProject.file("versions.json")).let { json ->
+    json.allVersions.filter { json.propertiesFor(it)["paper.standalone"] == "true" }
+}
+val legacyPackage = "com.dreamdisplayx.platform.v1_20_1.server"
+fun legacyPaperJar(version: String) = layout.projectDirectory.file("build/$version/legacyPaper/dreamdisplayx-paper-legacy.jar")
 
 fun fancyModLoaderVersion(neoForgeVersion: String): String = when (neoForgeVersion) {
     "21.1.233" -> "4.0.42"
@@ -24,7 +36,7 @@ fun fancyModLoaderVersion(neoForgeVersion: String): String = when (neoForgeVersi
     else -> "11.0.13"
 }
 
-if (isLegacyObfuscatedMinecraft) {
+if (isLegacyObfuscatedMinecraft && hasFabric) {
     evaluationDependsOn(":platform:client:fabric")
 }
 
@@ -48,8 +60,9 @@ tasks.named("compileKotlin") {
     // the configuration cache can't serialize.
     val active = activeStonecutterVersion
     val pin = paperPinVersion
+    val standalone = isStandalonePaper
     doFirst {
-        require(active == pin) {
+        require(active == pin || standalone) {
             "The Paper jar must be compiled with the active Stonecutter version pinned to $pin " +
                     "(active is $active). Run the root ':platform:server:buildPaper' task instead " +
                     "of building this module's tasks directly, or switch with " +
@@ -61,6 +74,54 @@ tasks.named("compileKotlin") {
 if (activeStonecutterVersion == paperPinVersion) {
     tasks.build {
         dependsOn(tasks.shadowJar)
+    }
+
+    val buildLegacyPaper = legacyPaperVersions.map { legacyVersion ->
+        tasks.register("buildLegacyPaper_${legacyVersion.replace('.', '_')}") {
+            group = "build"
+            description = "Builds the $legacyVersion Paper classes bundled into the Paper jar."
+            val versionsJsonFile = rootProject.file("versions.json")
+            val gradlewPath = rootProject.file("gradlew").absolutePath
+            val rootDir = rootProject.projectDir
+            val pinVersion = paperPinVersion
+            outputs.file(legacyPaperJar(legacyVersion))
+            outputs.upToDateWhen { false }
+            doLast {
+                val originalText = versionsJsonFile.readText()
+                val legacyText = originalText.replaceFirst("\"active\": \"$pinVersion\"", "\"active\": \"$legacyVersion\"")
+                check(legacyText != originalText) {
+                    "Could not find \"active\": \"$pinVersion\" in versions.json to switch it to $legacyVersion."
+                }
+                versionsJsonFile.writeText(legacyText)
+                try {
+                    val exitCode = ProcessBuilder(gradlewPath, ":platform:server:reobfJar")
+                        .directory(rootDir)
+                        .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                        .redirectError(ProcessBuilder.Redirect.INHERIT)
+                        .start()
+                        .waitFor()
+                    check(exitCode == 0) { "Nested Gradle build for the $legacyVersion Paper classes failed with exit code $exitCode." }
+                } finally {
+                    versionsJsonFile.writeText(originalText)
+                }
+            }
+        }
+    }
+    tasks.configureEach {
+        if (this !in buildLegacyPaper.map { it.get() }) mustRunAfter(buildLegacyPaper)
+    }
+    tasks.shadowJar {
+        dependsOn(buildLegacyPaper)
+        val archives = serviceOf<ArchiveOperations>()
+        val legacyJars = legacyPaperVersions.map { legacyPaperJar(it).asFile }
+        val legacyPath = legacyPackage.replace('.', '/')
+        legacyJars.forEach { jar ->
+            from({ archives.zipTree(jar) }) { include("$legacyPath/**") }
+        }
+    }
+} else if (isStandalonePaper) {
+    tasks.named("build") {
+        dependsOn("reobfJar")
     }
 } else {
     val buildPaper = tasks.register("buildPaper") {
@@ -102,6 +163,12 @@ if (activeStonecutterVersion == paperPinVersion) {
     }
 }
 
+// Wholly Fabric / NeoForge files can't resolve on versions without those loaders (1.20.1 is Forge-only).
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    if (!hasFabric) exclude("**/*Fabric*.kt")
+    if (!hasNeoForge) exclude("**/*NeoForge*.kt")
+}
+
 repositories {
     if (isLegacyObfuscatedMinecraft) {
         maven(rootProject.layout.projectDirectory.dir(".gradle/loom-cache/remapped_mods"))
@@ -113,6 +180,10 @@ repositories {
     maven("https://maven.neoforged.net/releases")
     maven("https://prmaven.neoforged.net/NeoForge/pr3403")
     maven("https://maven.enginehub.org/repo/")
+}
+
+java {
+    disableAutoTargetJvm()
 }
 
 platformweaver {
@@ -136,17 +207,19 @@ dependencies {
     }
     compileOnly(project(":core"))
     compileOnly(project(":platform:client:common"))
-    compileOnly("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")
     if (hasNeoForge) {
         compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
         compileOnly("net.neoforged:bus:8.0.5")
         compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
     }
     compileOnly("net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7")
-    if (isLegacyObfuscatedMinecraft) {
-        compileOnly(project(path = ":platform:client:fabric", configuration = "mappedFabricApiElements"))
-    } else {
-        compileOnly("net.fabricmc.fabric-api:fabric-api:${scVersion("fabric.api.version")}")
+    if (hasFabric) {
+        compileOnly("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")
+        if (isLegacyObfuscatedMinecraft) {
+            compileOnly(project(path = ":platform:client:fabric", configuration = "mappedFabricApiElements"))
+        } else {
+            compileOnly("net.fabricmc.fabric-api:fabric-api:${scVersion("fabric.api.version")}")
+        }
     }
 
     implementation(project(":core"))
@@ -187,6 +260,32 @@ tasks.processResources {
     filesMatching("paper-plugin.yml") {
         expand(props)
     }
+    val legacyMain = "$legacyPackage.PaperServer"
+    from("src/main/resources/paper-plugin.yml") {
+        rename { "plugin.yml" }
+        expand(props)
+        var skippingBlock = false
+        filter { line ->
+            when {
+                line.startsWith("#") || line.startsWith("bootstrapper:") -> null
+                line.startsWith("main:") -> "main: $legacyMain"
+                line.startsWith("api-version:") -> "api-version: '1.18'"
+                line == "dependencies:" -> {
+                    skippingBlock = true
+                    "softdepend: [LuckPerms, WorldGuard]"
+                }
+                line == "load-after:" -> {
+                    skippingBlock = true
+                    null
+                }
+                skippingBlock && line.startsWith(" ") -> null
+                else -> {
+                    skippingBlock = false
+                    line
+                }
+            }
+        }
+    }
 }
 
 tasks.jar {
@@ -196,10 +295,17 @@ tasks.jar {
 tasks.shadowJar {
     archiveBaseName.set("dreamdisplayx-paper")
     archiveVersion.set(rootProject.version.toString())
-    manifest {
-        attributes(
-            "paperweight-mappings-namespace" to "mojang",
-        )
+    if (isStandalonePaper) {
+        // Mojang-named and only an intermediate: its reobfuscated copy (reobfJar below) is what gets bundled
+        archiveClassifier.set("dev")
+        destinationDirectory.set(layout.buildDirectory.dir("devlibs"))
+        relocate("com.dreamdisplayx.platform.server", legacyPackage)
+    } else {
+        manifest {
+            attributes(
+                "paperweight-mappings-namespace" to "mojang",
+            )
+        }
     }
     dependencies {
         exclude(dependency("org.jetbrains.kotlin:kotlin-reflect"))
@@ -225,4 +331,11 @@ tasks.shadowJar {
 
 tasks.withType<AbstractArchiveTask>().configureEach {
     archiveVersion.set(rootProject.version.toString())
+}
+
+if (isStandalonePaper) {
+    tasks.named<io.papermc.paperweight.tasks.RemapJar>("reobfJar") {
+        inputJar.set(tasks.shadowJar.flatMap { it.archiveFile })
+        outputJar.set(legacyPaperJar(activeStonecutterVersion))
+    }
 }

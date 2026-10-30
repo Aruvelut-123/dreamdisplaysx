@@ -17,6 +17,9 @@ enum class PlatformId(override val wire: String) : WireEnum {
     /** `NeoForge` mod loader. */
     NEOFORGE("neoforge"),
 
+    /** `Forge` mod loader (Minecraft 1.20.1). */
+    FORGE("forge"),
+
     /** `Paper` server. */
     PAPER("paper"),
 

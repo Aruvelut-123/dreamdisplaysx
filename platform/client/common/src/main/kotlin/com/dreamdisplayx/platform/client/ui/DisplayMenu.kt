@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui
 
+import com.dreamdisplayx.platform.client.utils.literalText
+import com.dreamdisplayx.platform.client.utils.translatableText
 //? if >=1.21.11 {
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
@@ -145,7 +147,7 @@ class DisplayMenu private constructor(
         volume = addUi(
             ValueSlider(
                 initial = ds.volume.toDouble(),
-                label = { Component.literal("${(it * 200).roundToInt()}%") },
+                label = { literalText("${(it * 200).roundToInt()}%") },
                 // Volume's fraction maps to 0-200%, so a 5%-of-displayed-value stop is 0.025 of the fraction.
                 step = 0.025,
             ) { playback.setVolume(displayId, it.toFloat()) })
@@ -180,7 +182,7 @@ class DisplayMenu private constructor(
         brightness = addUi(
             ValueSlider(
                 initial = ds.brightness.toDouble().coerceIn(0.0, 1.0),
-                label = { Component.literal("${(it * 100).roundToInt()}%") },
+                label = { literalText("${(it * 100).roundToInt()}%") },
                 step = 0.05,
             ) { playback.setBrightness(displayId, it.toFloat()) })
         brightness.enabledWhen = { !ds.isSync || ds.canEdit }
@@ -192,7 +194,7 @@ class DisplayMenu private constructor(
                 initial = ClientStateManager.config.audioAcoustics,
                 current = { ClientStateManager.config.audioAcoustics },
                 enabledFor = { true },
-                label = { Component.translatable(audio3dModeLabel(it)) },
+                label = { translatableText(audio3dModeLabel(it)) },
             ) { quality ->
                 ClientStateManager.config.audioAcoustics = quality
                 ClientStateManager.config.save()
@@ -212,7 +214,7 @@ class DisplayMenu private constructor(
                         it != PlaybackMode.WATCH_PARTY && ds.canSetModeHere
                     }
                 },
-                label = { Component.translatable(syncModeLabel(it)) },
+                label = { translatableText(syncModeLabel(it)) },
             ) { mode ->
                 when {
                     mode == ds.effectiveMode -> Unit
@@ -515,7 +517,7 @@ class DisplayMenu private constructor(
                 val tip = mutableListOf(
                     tooltipTitle("dreamdisplayx.button.quality.tooltip.1"),
                     tooltipBody("dreamdisplayx.button.quality.tooltip.2"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue("dreamdisplayx.button.quality.tooltip.4", qualityFromFraction(quality.value)),
                 )
                 if ((ds.quality.targetHeight ?: 0) > 1080) {
@@ -530,7 +532,7 @@ class DisplayMenu private constructor(
                 listOf(
                     tooltipTitle("dreamdisplayx.button.brightness.tooltip.1"),
                     tooltipBody("dreamdisplayx.button.brightness.tooltip.2"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue("dreamdisplayx.button.brightness.tooltip.3", floor(brightness.value * 100).toInt()),
                 )
             },

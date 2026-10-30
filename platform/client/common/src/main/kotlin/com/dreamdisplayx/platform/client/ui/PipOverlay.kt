@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui
 
+import com.dreamdisplayx.platform.client.utils.buttonClickSound
+import com.dreamdisplayx.platform.client.utils.identifier
 //? if >=1.21.11 {
 //?} else
 /*import com.mojang.blaze3d.systems.RenderSystem*/
@@ -29,7 +31,14 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 import net.minecraft.client.renderer.texture.DynamicTexture
 import net.minecraft.client.resources.sounds.SimpleSoundInstance
 import net.minecraft.sounds.SoundEvents
@@ -210,7 +219,7 @@ class PipOverlay(
             tex = DynamicTexture({ "dreamdisplayx:pip" }, img)
             //?} else
             /*tex = DynamicTexture(img)*/
-            textureId = Identifier.fromNamespaceAndPath(
+            textureId = identifier(
                 Initializer.MOD_ID, "pip/${displayScreen.uuid}-${UUID.randomUUID()}"
             )
             mc.textureManager.register(textureId!!, tex)
@@ -429,7 +438,7 @@ class PipOverlay(
                 }
 
                 pressedInClose -> {
-                    val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+                    val s = SimpleSoundInstance.forUI(buttonClickSound(), 1.0f)
                     Minecraft.getInstance().soundManager.play(s)
                     displayScreen.deactivatePopout()
                 }

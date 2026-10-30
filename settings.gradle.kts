@@ -19,6 +19,7 @@ pluginManagement {
         maven("https://oss.sonatype.org/content/repositories/snapshots")
         maven("https://maven.neoforged.net/releases")
         maven("https://prmaven.neoforged.net/NeoForge/pr3403")
+        maven("https://maven.minecraftforge.net/")
         maven("https://maven.fabricmc.net/")
         maven("https://maven.parchmentmc.org")
         maven("https://maven.quiltmc.org/repository/release/")
@@ -89,6 +90,7 @@ val activeLoaderProps: Map<String, Any?> = run {
     (root["versions"] as Map<String, Map<String, Any?>>)[root["active"] as String].orEmpty()
 }
 if ("fabric.api.version" in activeLoaderProps) include(":platform:client:fabric")
+if ("forge.version" in activeLoaderProps) include(":platform:client:forge")
 if ("neoforge.version" in activeLoaderProps && !java.lang.Boolean.getBoolean("idea.sync.active")) {
     include(":platform:client:neoforge")
 }

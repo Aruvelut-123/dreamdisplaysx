@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
 import com.dreamdisplayx.platform.client.ui.kit.UiRect
@@ -39,7 +40,7 @@ class ModTitleLabel {
                 val p = t / 0.25f
                 arrowYOffset = (-sin(p * Math.PI) * 3.0).toInt()
             }
-            val arrow = Component.literal(" ▲")
+            val arrow = literalText(" ▲")
                 .withStyle(Style.EMPTY.withColor(UiTheme.ACCENT_UPDATE))
             g.drawText(font, arrow, x + textW, y + arrowYOffset, UiTheme.TEXT_PRIMARY, true)
             totalW += font.width(arrow)
