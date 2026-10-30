@@ -11,14 +11,14 @@ import com.dreamdisplayx.api.util.wireEnumValueOf
  */
 @DreamDisplaysXUnstableApi
 enum class RenderBackend(override val wire: String) : WireEnum {
-    /** OpenGL renderer. */
+    /** `OpenGL` renderer. */
     OPENGL("opengl"),
 
-    /** Vulkan renderer. */
+    /** `Vulkan` renderer. */
     VULKAN("vulkan"),
 
     /**
-     * Vulkan renderer replacement provided by VulkanMod.
+     * `Vulkan` renderer replacement provided by `VulkanMod`.
      *
      * @see <a href="https://modrinth.com/mod/vulkanmod">VulkanMod</a>
      */
