@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.display.geometry.SurfaceCensus
 import com.dreamdisplayx.api.display.geometry.SurfaceRole
 import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.platform.server.*
+import com.dreamdisplayx.platform.server.api.ServerVetoes
 import com.dreamdisplayx.platform.server.datatypes.selection.PaperSelectionData
 import com.dreamdisplayx.platform.server.datatypes.selection.VanillaSelectionData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -124,6 +125,11 @@ class CreateCommand : SubCommand {
                 return
             }
             displayData.name = normalized
+        }
+
+        ServerVetoes.askCreate(displayData, player.uniqueId)?.let { reason ->
+            if (reason.isNotEmpty()) MessageUtil.sendColoredMessage(player, reason)
+            return
         }
 
         DisplayManager.register(displayData)
@@ -265,6 +271,11 @@ object VanillaCreateCommand {
         }
 
         SelectionManager.selectionPoints.remove(player.uuid)
+
+        ServerVetoes.askCreate(displayData, player.uuid)?.let { reason ->
+            if (reason.isNotEmpty()) MessageUtil.sendColoredMessage(player, reason)
+            return 0
+        }
 
         DisplayManager.register(displayData)
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(displayData) }
