@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.ui.editBoxHasFocus
 import com.dreamdisplayx.platform.client.ui.editBoxSetFocused
 import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
@@ -429,5 +430,5 @@ class PlaylistPanel(
     }
 
     /** True when either text box currently holds keyboard focus. */
-    fun isTyping(): Boolean = urlBox.isFocused || titleBox.isFocused
+    fun isTyping(): Boolean = editBoxHasFocus(urlBox) || editBoxHasFocus(titleBox)
 }

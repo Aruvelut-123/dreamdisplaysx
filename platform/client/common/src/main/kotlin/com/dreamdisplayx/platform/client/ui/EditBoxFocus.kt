@@ -5,12 +5,12 @@ import net.minecraft.client.gui.components.EditBox
 /**
  * Keyboard-focus helpers for [EditBox].
  *
- * `AbstractWidget.setFocused(boolean)` only became public in 1.20, and `EditBox` has no public
- * focus accessor before 1.21.1 (`setFocus` / `isFocused()` were the protected legacy pair), so
+ * `AbstractWidget.setFocused(boolean)` only became public in 1.19.4, and `EditBox` has no public
+ * focus accessor before 1.21.1 (the legacy `EditBox.setFocus` / `isFocused()` pair), so
  * call sites cannot touch either directly on every version.
  */
 fun editBoxSetFocused(box: EditBox, focused: Boolean) {
-    //? if >=1.20 {
+    //? if >=1.19.4 {
     box.setFocused(focused)
     //?} else
     /*box.setFocus(focused)*/

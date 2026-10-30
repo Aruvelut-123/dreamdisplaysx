@@ -90,7 +90,10 @@ class SuggestionsPanel(
             f, 0, 0, 100, SEARCH_H,
             translatableText("dreamdisplayx.suggestions.search"),
         )
+        //? if >=1.19.4 {
         searchBox.setHint(translatableText("dreamdisplayx.suggestions.search"))
+        //?} else
+        /*searchBox.setSuggestion(translatableText("dreamdisplayx.suggestions.search").string)*/
         searchBox.setMaxLength(200)
         // The controller owns the text: Minecraft rebuilds this panel (and so this EditBox) whenever
         // DisplayMenu.init runs, e.g. on a window resize, and the user's typed/pasted link must survive.
@@ -626,20 +629,10 @@ class SuggestionsPanel(
         if (searchButton.isMouseOver(mouseX, mouseY)) return searchButton.mouseClicked(event, dbl)
         if (searchBox.isMouseOver(mouseX, mouseY)) {
             val handled = searchBox.mouseClicked(event, dbl)
-            //? if >=1.19.4 {
             editBoxSetFocused(searchBox, true)
-            //?}
-            //? if <1.19.4 {
-            searchBox.setFocus(true)
-            //?}
             return handled
         }
-        //? if >=1.19.4 {
         editBoxSetFocused(searchBox, false)
-        //?}
-        //? if <1.19.4 {
-        searchBox.setFocus(false)
-        //?}
         if (MouseButtons.isLeft(event.button()) && overScrollbar(mouseX, mouseY)) {
             draggingScrollbar = true
             scrollFromPos(if (sbVertical) mouseY else mouseX)
@@ -684,20 +677,10 @@ class SuggestionsPanel(
         if (searchButton.isMouseOver(mouseX, mouseY)) return searchButton.mouseClicked(mouseX, mouseY, button)
         if (searchBox.isMouseOver(mouseX, mouseY)) {
             val handled = searchBox.mouseClicked(mouseX, mouseY, button)
-            //? if >=1.19.4 {
             editBoxSetFocused(searchBox, true)
-            //?}
-            //? if <1.19.4 {
-            searchBox.setFocus(true)
-            //?}
             return handled
         }
-        //? if >=1.19.4 {
         editBoxSetFocused(searchBox, false)
-        //?}
-        //? if <1.19.4 {
-        searchBox.setFocus(false)
-        //?}
         if (MouseButtons.isLeft(button) && overScrollbar(mouseX, mouseY)) {
             draggingScrollbar = true
             scrollFromPos(if (sbVertical) mouseY else mouseX)

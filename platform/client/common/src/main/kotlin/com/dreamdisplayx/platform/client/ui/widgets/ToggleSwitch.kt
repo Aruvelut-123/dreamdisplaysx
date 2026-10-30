@@ -95,6 +95,7 @@ class ToggleSwitch(
         return true
     }*/
 
+    // Minecraft.lastInputType / InputType land in 1.21.1; older versions treat any focus as keyboard focus.
     //? if >=1.21.1 {
     override fun setFocused(focused: Boolean) {
         super.setFocused(focused)
@@ -106,8 +107,7 @@ class ToggleSwitch(
         }
     }
     //?} else
-    /*// Minecraft.lastInputType / InputType do not exist before 1.21.1: any focus counts as keyboard focus.
-    override fun setFocused(focused: Boolean) {
+    /*override fun setFocused(focused: Boolean) {
         super.setFocused(focused)
         sliderFocused = focused
     }*/
