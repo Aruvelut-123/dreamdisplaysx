@@ -83,9 +83,9 @@ class Server : ModInitializer {
         }
 
         logger.info("Server-side initialization complete.")
-    //? if >=1.20.5 {
     }
 
+    //? if >=1.20.5 {
     /** Registers all custom payload types for clientbound and serverbound play channels. */
     private fun registerPayloadTypes() {
         runCatching {
