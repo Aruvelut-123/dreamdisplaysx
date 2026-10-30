@@ -7,6 +7,8 @@ import com.dreamdisplayx.platform.client.input.MouseButtons
 import com.dreamdisplayx.platform.client.render.FirstFrameThumbnails
 import com.dreamdisplayx.platform.client.render.Thumbnails
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
+import com.dreamdisplayx.platform.client.ui.editBoxHasFocus
+import com.dreamdisplayx.platform.client.ui.editBoxSetFocused
 import com.dreamdisplayx.platform.client.ui.drawText
 //? if <1.21.11 {
 import com.dreamdisplayx.platform.client.ui.enableScissorPoseAware
@@ -96,7 +98,7 @@ class SuggestionsPanel(
         searchBox.setResponder { controller.searchText = it }
         clearButton = IconButton(icon = { IconButton.modIcon("cross") }, margin = 4) {
             searchBox.value = ""
-            focusBox(searchBox, true)
+            editBoxSetFocused(searchBox, true)
         }
         sortButton = IconButton(icon = { IconButton.modIcon("filter") }, margin = 4) {
             sortDropdown.toggle()
@@ -625,7 +627,7 @@ class SuggestionsPanel(
         if (searchBox.isMouseOver(mouseX, mouseY)) {
             val handled = searchBox.mouseClicked(event, dbl)
             //? if >=1.19.4 {
-            focusBox(searchBox, true)
+            editBoxSetFocused(searchBox, true)
             //?}
             //? if <1.19.4 {
             searchBox.setFocus(true)
@@ -633,7 +635,7 @@ class SuggestionsPanel(
             return handled
         }
         //? if >=1.19.4 {
-        focusBox(searchBox, false)
+        editBoxSetFocused(searchBox, false)
         //?}
         //? if <1.19.4 {
         searchBox.setFocus(false)
@@ -683,7 +685,7 @@ class SuggestionsPanel(
         if (searchBox.isMouseOver(mouseX, mouseY)) {
             val handled = searchBox.mouseClicked(mouseX, mouseY, button)
             //? if >=1.19.4 {
-            focusBox(searchBox, true)
+            editBoxSetFocused(searchBox, true)
             //?}
             //? if <1.19.4 {
             searchBox.setFocus(true)
@@ -691,7 +693,7 @@ class SuggestionsPanel(
             return handled
         }
         //? if >=1.19.4 {
-        focusBox(searchBox, false)
+        editBoxSetFocused(searchBox, false)
         //?}
         //? if <1.19.4 {
         searchBox.setFocus(false)
@@ -773,12 +775,12 @@ class SuggestionsPanel(
     }
 
     /** True while the search box has keyboard focus, so screen-level hotkeys must stand aside. */
-    val isTyping: Boolean get() = boxHasFocus(searchBox)
+    val isTyping: Boolean get() = editBoxHasFocus(searchBox)
 
     //? if >=1.21.11 {
     override fun keyPressed(event: KeyEvent): Boolean {
         if (!available()) return super.keyPressed(event)
-        if (boxHasFocus(searchBox)) {
+        if (editBoxHasFocus(searchBox)) {
             if (event.key() ==
                 //? if >=26.3 {
                 InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER
@@ -794,13 +796,13 @@ class SuggestionsPanel(
     }
 
     override fun charTyped(event: CharacterEvent): Boolean {
-        if (boxHasFocus(searchBox)) return searchBox.charTyped(event)
+        if (editBoxHasFocus(searchBox)) return searchBox.charTyped(event)
         return super.charTyped(event)
     }
     //?} else
     /*override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
         if (!available()) return super.keyPressed(keyCode, scanCode, modifiers)
-        if (boxHasFocus(searchBox)) {
+        if (editBoxHasFocus(searchBox)) {
             if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
                 controller.runSearch(searchBox.value)
                 return true
@@ -811,7 +813,7 @@ class SuggestionsPanel(
     }
 
     override fun charTyped(chr: Char, modifiers: Int): Boolean {
-        if (boxHasFocus(searchBox)) return searchBox.charTyped(chr, modifiers)
+        if (editBoxHasFocus(searchBox)) return searchBox.charTyped(chr, modifiers)
         return super.charTyped(chr, modifiers)
     }*/
 
@@ -846,18 +848,3 @@ class SuggestionsPanel(
         const val MIN_CARD_VIEWPORT_H = 30 + CARD_TEXT_H + CARD_INNER_PAD
     }
 }
-
-/** `EditBox.setFocused` / `isFocused` are protected before 1.21.1, so route focus through here. */
-private fun focusBox(box: net.minecraft.client.gui.components.EditBox, focused: Boolean) {
-    //? if >=1.21.1 {
-    box.setFocused(focused)
-    //?} else
-    /*box.setFocus(focused)*/
-}
-
-/** True while [box] owns keyboard focus. */
-private fun boxHasFocus(box: net.minecraft.client.gui.components.EditBox): Boolean =
-    //? if >=1.21.1 {
-    box.isFocused
-    //?} else
-    /*box.isFocused()*/

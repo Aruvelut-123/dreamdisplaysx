@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.ui.editBoxSetFocused
 import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
 import com.dreamdisplayx.api.playback.model.PlaylistEndBehavior
@@ -423,7 +424,7 @@ class PlaylistPanel(
 
     /** Focuses the URL box when the tab opens. */
     fun focusInput() {
-        urlBox.requestFocus()
+        editBoxSetFocused(urlBox, true)
         urlBox.setValue("")
     }
 
