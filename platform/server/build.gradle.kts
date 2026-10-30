@@ -14,6 +14,8 @@ val scVersions = gradle.extensions.getByType<StonecutterVersions>()
 val activeStonecutterVersion = scVersions.active
 fun scVersion(name: String): String = scVersions.get(name)
 
+val hasNeoForge = scVersions.getOrNull("neoforge.version") != null
+
 val isLegacyObfuscatedMinecraft = scVersion("minecraft.version").startsWith("1.")
 
 fun fancyModLoaderVersion(neoForgeVersion: String): String = when (neoForgeVersion) {
@@ -134,10 +136,12 @@ dependencies {
     compileOnly(project(":core"))
     compileOnly(project(":platform:client:common"))
     compileOnly("net.fabricmc:fabric-loader:${scVersion("fabric.loader.version")}")
-    compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
-    compileOnly("net.neoforged:bus:8.0.5")
+    if (hasNeoForge) {
+        compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
+        compileOnly("net.neoforged:bus:8.0.5")
+        compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
+    }
     compileOnly("net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7")
-    compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
     if (isLegacyObfuscatedMinecraft) {
         compileOnly(project(path = ":platform:client:fabric", configuration = "mappedFabricApiElements"))
     } else {

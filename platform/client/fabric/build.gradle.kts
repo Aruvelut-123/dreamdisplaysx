@@ -44,6 +44,9 @@ val scVersions = gradle.extensions.getByType<StonecutterVersions>()
 val activeStonecutterVersion = scVersions.active
 fun scVersion(name: String): String = scVersions.get(name)
 
+// 1.18.2 / 1.19.4 / 1.20.1 target Forge instead of NeoForge, so neoforge.* is absent there.
+val hasNeoForge = scVersions.getOrNull("neoforge.version") != null
+
 // Legacy (obfuscated) Minecraft targets need layered Mojang+Parchment mappings and modImplementation;
 // year-versioned (deobfuscated) targets resolve the source set directly with plain implementation.
 val isLegacyObfuscated = scVersion("minecraft.version").startsWith("1.")
@@ -122,9 +125,11 @@ dependencies {
         compileOnly("me.shedaniel.cloth:cloth-config-fabric:${scVersion("cloth.config.version")}")
     }
     compileOnly("io.papermc.paper:paper-api:${scVersion("paper.api.version")}")
-    compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
-    compileOnly("net.neoforged:bus:8.0.5")
-    compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
+    if (hasNeoForge) {
+        compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
+        compileOnly("net.neoforged:bus:8.0.5")
+        compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
+    }
     compileOnly(libs.worldguardApi) {
         exclude(group = "com.google.guava", module = "guava")
         exclude(group = "com.google.code.gson", module = "gson")
