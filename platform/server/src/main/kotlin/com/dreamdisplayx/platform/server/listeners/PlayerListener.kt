@@ -135,6 +135,8 @@ object FabricPlayerListener {
     }
 }
 
+// NeoForge only exists from 1.21.1, so both the imports above and this adapter are gated.
+//? if >=1.21.1 {
 /** `NeoForge` event-subscription adapter for [VanillaPlayerListener]. */
 @NeoForgeOnly
 object NeoForgePlayerListener {

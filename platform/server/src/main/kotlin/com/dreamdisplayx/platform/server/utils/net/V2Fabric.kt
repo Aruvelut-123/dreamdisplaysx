@@ -40,6 +40,9 @@ object FabricV2Networking {
         if (players.isEmpty()) return
         val v3Players = players.filter { V2PlayerTracker.isV3(it.uuid) }
         val v2Players = players.filterNot { V2PlayerTracker.isV3(it.uuid) }
+        // The envelope senders below are the 1.20.5+ API; older Fabric builds instead
+        // register a legacy receiver (the commented-out else branch).
+        //? if >=1.20.5 {
         if (v3Players.isNotEmpty()) {
             val bytes = runCatching { PacketRegistry.encodeV3(packet) }
                 .onFailure { logger.warn("Failed to encode v3 packet", it) }
@@ -67,6 +70,7 @@ object FabricV2Networking {
                 }
             }
         }*/
+        //?}
     }
 
     /**

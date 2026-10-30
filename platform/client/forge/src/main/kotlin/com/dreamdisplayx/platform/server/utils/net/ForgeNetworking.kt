@@ -18,9 +18,9 @@ import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.playback.PipPinManager
 import com.dreamdisplayx.platform.server.proxy.VanillaProxyBridge
 import com.dreamdisplayx.platform.server.utils.RegionUtil
-import com.dreamdisplayx.shared.capability.ServerFeature
-import com.dreamdisplayx.shared.playback.FullscreenAckAction
-import com.dreamdisplayx.shared.protocol.PacketDirection
+import com.dreamdisplayx.api.capability.ServerFeature
+import com.dreamdisplayx.api.playback.model.FullscreenAckAction
+import com.dreamdisplayx.api.protocol.model.PacketDirection
 import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.server.MinecraftServer

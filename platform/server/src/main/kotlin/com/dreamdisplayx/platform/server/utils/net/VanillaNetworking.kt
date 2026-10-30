@@ -34,6 +34,8 @@ object FabricNetworkingAdapter : VanillaNetworkingAdapter {
     override fun sendProxy(player: ServerPlayer, packet: CustomPacketPayload) = net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, packet)
 }
 
+// NeoForge only exists from 1.21.1; below it this adapter must not be compiled at all.
+//? if >=1.21.1 {
 /** NeoForge v2 networking adapter. */
 @NeoForgeOnly
 object NeoForgeNetworkingAdapter : VanillaNetworkingAdapter {

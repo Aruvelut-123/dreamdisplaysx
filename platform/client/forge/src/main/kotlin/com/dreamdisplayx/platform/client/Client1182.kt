@@ -1,8 +1,8 @@
 //? if <1.19 {
 package com.dreamdisplayx.platform.client
 
-import com.dreamdisplayx.core.runtime.getOrNull
-import com.dreamdisplayx.core.services.keys.PlatformServices
+import com.dreamdisplayx.api.runtime.registry.service.getOrNull
+import com.dreamdisplayx.api.platform.service.keys.PlatformServices
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.input.DisplayMenuInputHandler

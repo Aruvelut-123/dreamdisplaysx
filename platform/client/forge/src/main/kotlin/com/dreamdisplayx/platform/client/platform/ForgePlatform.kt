@@ -7,7 +7,7 @@ import com.dreamdisplayx.api.platform.identity.Platform
 import com.dreamdisplayx.api.platform.identity.PlatformId
 import com.dreamdisplayx.api.platform.identity.PlatformSide
 import com.dreamdisplayx.platform.client.Initializer
-import com.dreamdisplayx.shared.platform.PlatformService
+import com.dreamdisplayx.api.platform.service.PlatformIntegrationService
 import com.dreamdisplayx.util.GeneralUtil
 import net.minecraftforge.fml.ModList
 import net.minecraftforge.fml.loading.FMLEnvironment
@@ -47,6 +47,6 @@ object ForgePlatform : Platform {
 }
 
 /** Supplies the `Forge` [Platform] adapter. */
-object ForgePlatformIntegrationProvider : PlatformService {
+object ForgePlatformIntegrationProvider : PlatformIntegrationService {
     override fun create(): Platform = ForgePlatform
 }
