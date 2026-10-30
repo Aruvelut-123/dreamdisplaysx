@@ -14,8 +14,6 @@ plugins {
 }
 
 /** Shared `Stonecutter` version reader, published once by the dreamdisplayx.stonecutter-versions settings plugin. */
-
-private val toolchainVersion = scVersions.getOrNull("java.toolchain")?.toInt() ?: javaVersion
 private val scVersions = gradle.extensions.getByType<StonecutterVersions>()
 
 /** Active Minecraft version. */
@@ -98,9 +96,7 @@ configurations.create("javaNewerCompileApis") {
     isCanBeResolved = true
     attributes { attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21) }
 }
-    if (bytecodeTarget < toolchainVersion && project.path != ":media:player") {
-        compilerOptions.freeCompilerArgs.add("-Xjdk-release=$bytecodeTarget")
-    }
+
 /** Java and Kotlin conventions. */
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(toolchainVersion)) }
