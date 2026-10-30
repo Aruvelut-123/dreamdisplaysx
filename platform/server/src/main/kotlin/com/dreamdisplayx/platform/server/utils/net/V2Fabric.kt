@@ -11,6 +11,7 @@ import com.dreamdisplayx.core.protocol.common.packets.*
 import com.dreamdisplayx.platform.client.net.V2Payload
 //? if <1.20.5 {
 import com.dreamdisplayx.platform.client.net.compat.CompatPayloads
+import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket
 //?}
 import com.dreamdisplayx.platform.client.net.V3Payload
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
@@ -40,8 +41,8 @@ object FabricV2Networking {
         if (players.isEmpty()) return
         val v3Players = players.filter { V2PlayerTracker.isV3(it.uuid) }
         val v2Players = players.filterNot { V2PlayerTracker.isV3(it.uuid) }
-        // The envelope senders below are the 1.20.5+ API; older Fabric builds instead
-        // register a legacy receiver (the commented-out else branch).
+        // 1.20.5 turned payloads into typed objects with their own codec; below it Fabric only
+        // accepts the raw channel id plus an encoded buffer.
         //? if >=1.20.5 {
         if (v3Players.isNotEmpty()) {
             val bytes = runCatching { PacketRegistry.encodeV3(packet) }
@@ -60,13 +61,15 @@ object FabricV2Networking {
             }
         }
         //?} else
-        /*ServerPlayNetworking.registerGlobalReceiver(V2Payload.TYPE.id()) { server, player, _, buf, _ ->
-            val bytes = ByteArray(buf.readableBytes()).also(buf::readBytes)
-            server.execute {
+        /*if (players.isNotEmpty()) {
+            val bytes = runCatching { PacketRegistry.encode(packet) }
+                .onFailure { logger.warn("Failed to encode v2 packet", it) }
+                .getOrNull()
+            if (bytes != null) players.forEach { player ->
                 runCatching {
-                    dispatch(player, server, PacketRegistry.decode(bytes, PacketDirection.CLIENT_TO_SERVER) ?: return@runCatching)
-                }.onFailure { e ->
-                    logger.warn("Failed to handle v2 packet.", e)
+                    player.connection.send(
+                        ClientboundCustomPayloadPacket(V2Payload.TYPE.id(), CompatPayloads.encode(V2Payload(bytes))),
+                    )
                 }
             }
         }*/
@@ -82,6 +85,7 @@ object FabricV2Networking {
         if (players.isEmpty() || packets.isEmpty()) return
         val v3Players = players.filter { V2PlayerTracker.isV3(it.uuid) }
         val v2Players = players.filterNot { V2PlayerTracker.isV3(it.uuid) }
+        //? if >=1.20.5 {
         if (v3Players.isNotEmpty()) {
             val bytes = runCatching { PacketRegistry.encodeV3(packets) }
                 .onFailure { logger.warn("Failed to encode v3 batch", it) }
@@ -91,6 +95,9 @@ object FabricV2Networking {
             }
         }
         if (v2Players.isNotEmpty()) packets.forEach { packet -> send(v2Players, packet) }
+        //?} else
+        /*packets.forEach { packet -> send(players, packet) }*/
+        //?}
     }
 
     /** Registers the single v2 envelope receiver. */

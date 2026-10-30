@@ -69,7 +69,8 @@ import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 //?} else
 /*import com.dreamdisplayx.platform.client.net.compat.CompatPayloads
-import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload*/
+import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload
+import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket*/
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
 
@@ -277,7 +278,12 @@ class Client : ClientModInitializer, Mod {
 
     /** Packet sender. */
     override fun sendPacket(packet: CustomPacketPayload) {
+        //? if >=1.20.5 {
         ClientPlayNetworking.send(packet)
+        //?} else
+        /*Minecraft.getInstance().connection?.send(
+            ServerboundCustomPayloadPacket(packet.type().id(), CompatPayloads.encode(packet)),
+        )*/
     }
 
     private fun isDisplayBlock(pos: BlockPos): Boolean =
