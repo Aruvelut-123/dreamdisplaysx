@@ -115,14 +115,14 @@ object BilibiliLoginManager {
     }
 
     private fun sendServerCommand(command: String) {
-        // 1.19 introduced dedicated chat-command packets and `sendCommand(String)`. Before
-        // that a client command is just a chat message starting with `/`, which the server
-        // parses and runs as a command exactly like the vanilla chat box does. Guard on the
-        // connection being non-null either way.
+        // 1.19 introduced the dedicated chat-command packet and `ClientPacketListener.sendCommand`.
+        // Before that, a client command is just a chat line starting with `/`, which the server
+        // parses and runs exactly like the vanilla chat box does -- `LocalPlayer.chat` performs
+        // that prefix check on every supported version.
         val connection = Minecraft.getInstance().connection ?: return
         //? if >=1.19 {
         connection.sendCommand(command)
         //?} else
-        /*connection.sendChat("/" + command)*/
+        /*Minecraft.getInstance().player?.chat("/" + command)*/
     }
 }
