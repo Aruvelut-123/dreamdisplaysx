@@ -108,8 +108,8 @@ object DisplayUnlitRenderTypes {
     //?}
     //?}
     //? if <1.21.1 {
-    fun create(name: String, id: Identifier): RenderType {
-        val state = LegacyShards.texturedState(id)
+    fun create(name: String, id: Identifier, translucent: Boolean = false): RenderType {
+        val state = LegacyShards.texturedState(id, translucent)
         val method = RenderType::class.java.declaredMethods.first { m ->
             m.parameterCount == 7 && m.parameterTypes[0] == String::class.java &&
                 m.parameterTypes[1] == VertexFormat::class.java && m.parameterTypes[6].isAssignableFrom(state.javaClass)
@@ -123,10 +123,10 @@ object DisplayUnlitRenderTypes {
         "dreamdisplayx_legacy_shards", DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS,
         256, false, false, {}, {},
     ) {
-        fun texturedState(id: Identifier): Any = CompositeState.builder()
+        fun texturedState(id: Identifier, translucent: Boolean): Any = CompositeState.builder()
             .setShaderState(ShaderStateShard { GameRenderer.getPositionTexColorShader() })
             .setTextureState(TextureStateShard(id, false, false))
-            .setTransparencyState(NO_TRANSPARENCY)
+            .setTransparencyState(if (translucent) TRANSLUCENT_TRANSPARENCY else NO_TRANSPARENCY)
             .setCullState(NO_CULL)
             .setDepthTestState(LEQUAL_DEPTH_TEST)
             .setLayeringState(POLYGON_OFFSET_LAYERING)

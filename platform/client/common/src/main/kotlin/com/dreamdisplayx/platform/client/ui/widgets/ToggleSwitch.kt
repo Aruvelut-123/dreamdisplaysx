@@ -3,6 +3,9 @@ package com.dreamdisplayx.platform.client.ui.widgets
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
 import com.dreamdisplayx.platform.client.utils.vanillaIdentifier
+//? if <1.20.2 {
+import com.dreamdisplayx.platform.client.ui.blitSprite
+//?}
 //? if >=1.21.11 {
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 //?}
