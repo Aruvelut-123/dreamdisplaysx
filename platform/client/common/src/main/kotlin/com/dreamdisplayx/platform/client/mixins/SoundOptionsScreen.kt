@@ -5,10 +5,12 @@ package com.dreamdisplayx.platform.client.mixins
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import net.minecraft.client.OptionInstance
+import com.dreamdisplayx.platform.client.utils.translatableText
 //? if >=1.20.2 {
 import net.minecraft.client.gui.screens.options.SoundOptionsScreen
-//?} else if >=1.19 {
-/*import net.minecraft.client.gui.screens.SoundOptionsScreen*/
+//?}
+//? if <1.20.2 {
+import net.minecraft.client.gui.screens.SoundOptionsScreen
 //?}
 import net.minecraft.network.chat.Component
 import org.spongepowered.asm.mixin.Mixin
@@ -21,7 +23,7 @@ import java.lang.reflect.Proxy
 import java.util.function.DoubleFunction
 import java.util.function.ToDoubleFunction
 
-/** Adds the global Dream DisplaysX volume multiplier to Minecraft's vanilla sound options. */
+// Adds the global Dream DisplaysX volume multiplier to Minecraft's vanilla sound options.
 @Suppress("NonJavaMixin")
 @Pseudo
 @Mixin(SoundOptionsScreen::class)
@@ -74,7 +76,7 @@ open class SoundOptionsScreenMixin {
                 else -> {
                     val value = (args?.getOrNull(0) as? Number)?.toDouble()
                         ?: ClientStateManager.config.globalAudioMultiplier.coerceIn(0.0, 2.0)
-                    Component.translatable("options.dreamdisplayx.global_volume", "%.2fx".format(value))
+                    translatableText("options.dreamdisplayx.global_volume", "%.2fx".format(value))
                 }
             }
         }

@@ -1,6 +1,5 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
-import com.dreamdisplayx.platform.client.utils.withChatColor
 import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.client.utils.emptyText
@@ -89,7 +88,7 @@ class SeekBar(
             val full = " • $text"
             val chars = (full.length * reveal).toInt().coerceIn(0, full.length)
             return base.append(
-                literalText(full.substring(0, chars)).withStyle { it.withChatColor(WAITING_COLOR) },
+                literalText(full.substring(0, chars)).withStyle { it.withColor(WAITING_COLOR) },
             )
         }
     }
@@ -147,7 +146,7 @@ class SeekBar(
 
         val waiting = waitingLabel?.invoke()
         val base = if (waiting != null) {
-            literalText(waiting).copy().withStyle { it.withChatColor(WAITING_COLOR) }
+            literalText(waiting).copy().withStyle { it.withColor(WAITING_COLOR) }
         } else {
             timeLabel(cur, dur)
         }
@@ -251,7 +250,7 @@ class SeekBar(
     private fun timeLabel(cur: Long, dur: Long): MutableComponent {
         val color = if (active) 0xFFFFFFFF.toInt() else 0xFFA0A0A0.toInt()
         return literalText("${UiText.formatTime(cur)} / ${UiText.formatTime(dur)}")
-            .copy().withStyle { it.withChatColor(color) }
+            .copy().withStyle { it.withColor(color) }
     }
 
     /** Returns the track sprite, highlighted when the widget has keyboard focus. */

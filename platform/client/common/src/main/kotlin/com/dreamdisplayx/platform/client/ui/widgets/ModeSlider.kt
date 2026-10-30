@@ -1,6 +1,5 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
-import com.dreamdisplayx.platform.client.utils.withChatColor
 import com.dreamdisplayx.platform.client.utils.emptyText
 //? if <1.20.2 {
 import com.dreamdisplayx.platform.client.ui.blitSprite
@@ -89,7 +88,7 @@ class ModeSlider<T : Any>(
         //?} else
         /*g.blitSprite(handleSprite(), handleX, y, 8, height)*/
         val color = if (active) 0xFFFFFF else 0xA0A0A0
-        drawScrollingLabel(g, label(mode).copy().withStyle { it.withChatColor(color) }, 2)
+        drawScrollingLabel(g, label(mode).copy().withStyle { it.withColor(color) }, 2)
         //? if >=1.21.11 {
         if (isHovered) {
             g.requestCursor(if (active) CursorTypes.POINTING_HAND else CursorTypes.NOT_ALLOWED)
