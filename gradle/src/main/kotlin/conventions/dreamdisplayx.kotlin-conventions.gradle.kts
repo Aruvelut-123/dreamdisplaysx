@@ -10,7 +10,20 @@ import org.gradle.api.attributes.java.TargetJvmVersion
 plugins {
     java
     id("org.jetbrains.kotlin.jvm")
-    id("org.jetbrains.kotlinx.atomicfu")
+}
+
+/**
+ * `atomicfu` rewrites `atomic(...)` into plain JVM atomics, and to do that it resolves the common
+ * superclasses of every class it visits through a class loader. Applying it to *every* module made
+ * that resolution run over the loader source sets, which compile `:platform:server`'s chiseled
+ * output: on the legacy Forge targets the Minecraft superclass (`ServerPlayer`) then has to be read
+ * out of a signed Forge jar, whose `IForgePlayer.class` fails the SHA-384 digest check and aborts
+ * the build. Only the modules that actually call `atomic(...)` need the transformer, so apply it
+ * there and leave every other module's bytecode untouched.
+ */
+private val atomicfuModules = setOf(":media:audio", ":platform:client:common")
+if (project.path in atomicfuModules) {
+    apply(plugin = "org.jetbrains.kotlinx.atomicfu")
 }
 
 /** Shared `Stonecutter` version reader, published once by the dreamdisplayx.stonecutter-versions settings plugin. */
