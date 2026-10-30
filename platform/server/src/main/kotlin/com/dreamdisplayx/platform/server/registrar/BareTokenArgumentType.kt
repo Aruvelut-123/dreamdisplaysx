@@ -23,7 +23,11 @@ import net.minecraft.resources.Identifier
  */
 object BareTokenArgumentType : ArgumentType<String> {
     private val MISSING = SimpleCommandExceptionType(LiteralMessage("Expected a value."))
-    val ID: Identifier = Identifier.fromNamespaceAndPath("dreamdisplayx", "bare_token")
+    val ID: Identifier =
+        //? if >=1.21 {
+        Identifier.fromNamespaceAndPath("dreamdisplayx", "bare_token")
+        //?} else
+        /*Identifier("dreamdisplayx", "bare_token")*/
 
     @Suppress("UNCHECKED_CAST")
     val NETWORK_FALLBACK: ArgumentType<Any> = StringArgumentType.greedyString() as ArgumentType<Any>

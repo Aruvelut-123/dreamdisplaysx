@@ -18,6 +18,7 @@ import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
 import com.dreamdisplayx.platform.server.playback.PipPinManager
 import com.dreamdisplayx.platform.server.proxy.VanillaProxyBridge
 import com.dreamdisplayx.platform.server.utils.RegionUtil
+import com.dreamdisplayx.platform.server.utils.MessageUtil
 import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.api.playback.model.FullscreenAckAction
 import com.dreamdisplayx.api.protocol.model.PacketDirection
@@ -86,7 +87,9 @@ object ForgeChannels {
 
     private fun onLegacyVersion(bytes: ByteArray, context: NetworkEvent.Context) {
         if (context.direction != NetworkDirection.PLAY_TO_SERVER) return
-        VanillaServerPacketHandler.onLegacyVersion(context.sender ?: return)
+        val player = context.sender as? ServerPlayer ?: return
+        if (V2PlayerTracker.isV2(player.uuid)) return
+        MessageUtil.sendMessage(player, "outdatedClient")
     }
 
     private fun onLegacyPremium(bytes: ByteArray, context: NetworkEvent.Context) {
@@ -99,7 +102,12 @@ object ForgeNetworkingAdapter : VanillaNetworkingAdapter {
         ForgeV2Networking.send(players, packet)
     }
 
-    override fun sendRaw(player: ServerPlayer, packet: CustomPacketPayload) {
+    override fun sendV3Batch(players: List<ServerPlayer>, packets: List<DreamPacket>) {
+        // Legacy Forge builds have no generation-3 envelope; fall back to per-packet v2 frames.
+        packets.forEach { ForgeV2Networking.send(players, it) }
+    }
+
+    override fun sendProxy(player: ServerPlayer, packet: CustomPacketPayload) {
         runCatching { ForgeChannels.sendToPlayer(player, packet) }
     }
 }

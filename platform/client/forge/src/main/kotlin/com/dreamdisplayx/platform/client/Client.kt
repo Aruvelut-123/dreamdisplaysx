@@ -16,7 +16,6 @@ import com.dreamdisplayx.platform.client.render.ScreenRenderer
 import com.dreamdisplayx.platform.client.render.UnshadedDisplayPass
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
 import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
-import com.dreamdisplayx.platform.client.ui.config.ClothConfigScreen
 import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 import com.dreamdisplayx.platform.client.net.compat.CompatPayloads
 //? if <1.20 {
@@ -26,7 +25,6 @@ import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket
 import net.minecraft.world.InteractionResult
-import net.minecraftforge.client.ConfigScreenHandler
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent
 import net.minecraftforge.client.event.RenderGuiEvent
 import net.minecraftforge.client.event.RenderGuiOverlayEvent
@@ -54,11 +52,8 @@ object Client : Mod {
 
     /** Registers the client side. */
     fun init() {
-        if (ModList.get().isLoaded("cloth_config")) {
-            ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory::class.java) {
-                ConfigScreenHandler.ConfigScreenFactory { _, parent -> ClothConfigScreen.create(parent) }
-            }
-        }
+        // The legacy Forge source set ships no Cloth config screen (only Fabric and NeoForge do),
+        // so 1.18.2-1.20.1 has no in-game settings screen.
 
         DreamServices.registry.register(PlatformServices.PLATFORM, ForgePlatformIntegrationProvider.create())
         Initializer.onModInit(this)

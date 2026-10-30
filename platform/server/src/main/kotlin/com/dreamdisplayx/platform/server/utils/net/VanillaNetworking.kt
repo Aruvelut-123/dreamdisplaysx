@@ -3,7 +3,10 @@ package com.dreamdisplayx.platform.server.utils.net
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
+//? if >=1.20.5 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
+//?} else
+/*import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload*/
 import net.minecraft.server.level.ServerPlayer
 
 /** Loader-specific seam for the protocol-v2 envelope. */
