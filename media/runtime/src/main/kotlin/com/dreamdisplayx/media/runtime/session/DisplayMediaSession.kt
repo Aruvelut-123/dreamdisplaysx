@@ -10,8 +10,6 @@ import com.dreamdisplayx.api.media.session.property.MediaSessionState
 import com.dreamdisplayx.api.media.source.model.MediaMetadata
 import com.dreamdisplayx.api.playback.service.PlaybackService
 import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * [MediaSessionService] view onto a display, expressed purely over the core services: transport calls delegate to [PlaybackService] and
@@ -47,20 +45,20 @@ internal class DisplayMediaSession(
      * The current position is derived from the display runtime state, or zero if the display is gone or the session is
      * closed.
      */
-    override val currentPosition: Duration
+    override val currentPositionMs: Long
         get() = when (val s = runtimeState()) {
-            is DisplayState.Playing -> s.positionMs.milliseconds
-            is DisplayState.Paused -> s.positionMs.milliseconds
-            else -> Duration.ZERO
+            is DisplayState.Playing -> s.positionMs
+            is DisplayState.Paused -> s.positionMs
+            else -> 0L
         }
 
     /** The duration is derived from the display runtime state, or null if the display is gone or the session is closed. */
-    override val duration: Duration?
-        get() = (runtimeState() as? DisplayState.Playing)?.durationMs?.milliseconds
+    override val durationMs: Long?
+        get() = (runtimeState() as? DisplayState.Playing)?.durationMs
 
     /** Only the duration is known at this layer; rich metadata lives in the search / metadata caches. */
     override val metadata: MediaMetadata
-        get() = MediaMetadata.UNKNOWN.copy(duration = duration)
+        get() = MediaMetadata.UNKNOWN.copy(durationMs = durationMs)
 
     /** Playback control calls are delegated to the [PlaybackService] with the display ID. */
     override fun play() = playback.play(displayId)

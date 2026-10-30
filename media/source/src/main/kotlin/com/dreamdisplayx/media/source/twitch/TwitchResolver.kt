@@ -12,8 +12,6 @@ import com.dreamdisplayx.util.net.DreamHttpClient
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 /** In-process Twitch stream resolver: one GQL round trip for the playback access token (plus metadata), then a direct
  * usher request for the stream URLs. */
@@ -75,7 +73,7 @@ object TwitchResolver : MediaResolverService {
         TwitchMetadataCache.put(source, playback.metadata)
         return ResolvedMedia(
             streams = renditions,
-            metadata = playback.metadata.toMediaMetadata(duration = null),
+            metadata = playback.metadata.toMediaMetadata(durationMs = null),
             isLive = true,
             isSeekable = false,
         )
@@ -90,7 +88,7 @@ object TwitchResolver : MediaResolverService {
         return ResolvedMedia(
             streams = renditions,
             metadata = playback.metadata.toMediaMetadata(
-                duration = playback.durationSeconds.takeIf { it > 0 }?.seconds,
+                durationMs = playback.durationSeconds.takeIf { it > 0 }?.times(1_000L),
             ),
             isLive = false,
             isSeekable = true,
@@ -119,7 +117,7 @@ object TwitchResolver : MediaResolverService {
         return ResolvedMedia(
             streams = streams,
             metadata = playback.metadata.toMediaMetadata(
-                duration = playback.durationSeconds.takeIf { it > 0 }?.seconds,
+                durationMs = playback.durationSeconds.takeIf { it > 0 }?.times(1_000L),
             ),
             isLive = false,
             isSeekable = true,
@@ -150,10 +148,10 @@ object TwitchResolver : MediaResolverService {
         audioTrackLang = null,
     )
 
-    private fun TwitchMetadata.toMediaMetadata(duration: Duration?): MediaMetadata = MediaMetadata(
+    private fun TwitchMetadata.toMediaMetadata(durationMs: Long?): MediaMetadata = MediaMetadata(
         title = title,
         uploader = channelName,
-        duration = duration,
+        durationMs = durationMs,
         thumbnailUrl = thumbnailUrl,
         viewCount = viewCount,
         likeCount = null,
