@@ -91,7 +91,7 @@ scVersions.getOrNull("commons.compress.version")?.let { commonsCompressVersion -
  * Resolving them through a configuration that requests `TargetJvmVersion = 21` decouples the
  * artifact's class-file level from the module's own bytecode target.
  */
-configurations.create("javaNewerCompileApis") {
+configurations.findByName("javaNewerCompileApis") ?: configurations.create("javaNewerCompileApis") {
     isCanBeConsumed = false
     isCanBeResolved = true
     attributes { attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21) }

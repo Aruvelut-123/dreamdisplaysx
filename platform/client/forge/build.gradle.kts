@@ -93,11 +93,8 @@ configurations.all {
 
 // Compile-time-only APIs published for Java 21 (source-retention annotations, WorldGuard, whose runtime copy is
 // whatever the server ships). Resolved apart from compileClasspath so its Java 17 request stays strict for the rest.
-val javaNewerCompileApis: Configuration = configurations.create("javaNewerCompileApis") {
-    isCanBeConsumed = false
-    isCanBeResolved = true
-    attributes { attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21) }
-}
+// Declared once by dreamdisplayx.kotlin-conventions; reused here.
+val javaNewerCompileApis: Configuration = configurations.getByName("javaNewerCompileApis")
 
 val isolatedSqliteJdbc = configurations.register("isolatedSqliteJdbc") {
     isCanBeConsumed = false
