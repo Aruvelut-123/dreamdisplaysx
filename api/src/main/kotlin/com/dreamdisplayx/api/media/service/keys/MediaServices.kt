@@ -4,7 +4,6 @@ import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.media.search.service.MediaSearchService
 import com.dreamdisplayx.api.media.source.service.MediaResolverRegistry
 import com.dreamdisplayx.api.runtime.registry.model.ServiceKey
-import com.dreamdisplayx.api.runtime.registry.model.serviceKey
 
 /**
  * Media service keys.
@@ -14,8 +13,10 @@ import com.dreamdisplayx.api.runtime.registry.model.serviceKey
 @DreamDisplaysXUnstableApi
 object MediaServices {
     /** Ordered resolver chain for media sources. */
-    val RESOLVER_REGISTRY: ServiceKey<MediaResolverRegistry> = serviceKey("dreamdisplayx:media_resolver_registry")
+    val RESOLVER_REGISTRY: ServiceKey<MediaResolverRegistry> =
+        ServiceKey("dreamdisplayx:media_resolver_registry", MediaResolverRegistry::class.java)
 
     /** Search and related-video lookup service. */
-    val SEARCH: ServiceKey<MediaSearchService> = serviceKey("dreamdisplayx:media_search")
+    val SEARCH: ServiceKey<MediaSearchService> =
+        ServiceKey("dreamdisplayx:media_search", MediaSearchService::class.java)
 }

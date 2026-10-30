@@ -5,7 +5,6 @@ import com.dreamdisplayx.api.render.backend.service.RenderSurface
 import com.dreamdisplayx.api.render.service.DisplayRenderer
 import com.dreamdisplayx.api.render.texture.service.TextureUploaderFactory
 import com.dreamdisplayx.api.runtime.registry.model.ServiceKey
-import com.dreamdisplayx.api.runtime.registry.model.serviceKey
 
 /**
  * Render service keys.
@@ -15,9 +14,10 @@ import com.dreamdisplayx.api.runtime.registry.model.serviceKey
 @DreamDisplaysXUnstableApi
 object RenderServices {
     /** API surface renderer used to render registered [RenderSurface] instances. */
-    val DISPLAY_RENDERER: ServiceKey<DisplayRenderer> = serviceKey("dreamdisplayx:display_renderer")
+    val DISPLAY_RENDERER: ServiceKey<DisplayRenderer> =
+        ServiceKey("dreamdisplayx:display_renderer", DisplayRenderer::class.java)
 
     /** Factory for creating texture uploaders on a render context. */
     val TEXTURE_UPLOADER_FACTORY: ServiceKey<TextureUploaderFactory> =
-        serviceKey("dreamdisplayx:texture_uploader_factory")
+        ServiceKey("dreamdisplayx:texture_uploader_factory", TextureUploaderFactory::class.java)
 }
