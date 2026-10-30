@@ -2,6 +2,12 @@
 
 Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplays/commit/42af16c320f962becc184590e93ebbf6dbf6d4d7).
 
+## Server
+
+### Features
+
+- Added `DisplayVeto`, so plugins can refuse a display creation, deletion or video change before it happens.
+
 ## Client
 
 ### Features

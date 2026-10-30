@@ -410,6 +410,15 @@ Every task MUST be tracked in the session's `todo` task list at all times:
 - Never merge upstream changelog into our version's section
 - The CI release pipeline extracts the matching section from CHANGELOG.md by the `pretty_version` title
 
+## Display vetoes
+
+`api/display/event/DisplayVeto` (port of upstream `023357e3`) lets a plugin refuse a display change before it happens. The fork could not take the upstream shape: upstream hangs `DisplayVetoes` off `DreamDisplaysServer` / `ServerDisplay` / `ServerEvents`, and this fork has none of those (it exposes `api.display.service.DisplayService` + `DisplayMutationPort` instead). So the fork ships a standalone `DisplayVetoRegistry` plus `platform/server/api/ServerVetoes`, which both loaders call directly.
+
+- `DisplayVeto` carries a flattened `Target` (id, owner, size, url, name, virtual) rather than an API `Display`, because the world position/facing types (`PaperDisplayData` vs `VanillaDisplayData`) never unify across loaders. Do not try to build a full `Display` in the veto path.
+- The three call sites are `DisplayActions` / `VanillaDisplayActions` `delete` and `setVideo`, plus `CreateCommand` (both the Paper and vanilla branch). `setVideo` sanitizes the language BEFORE asking, so a listener sees the value that would actually be stored.
+- `ServerVetoes.ask*` short-circuits on an empty registry, logs a throwing listener instead of propagating, and returns `null` for allowed / a possibly-empty string for denied. The first denial wins.
+- `DisplayVetoRegistryTest` covers dispatch, first-denial-wins, empty denials, throwing listeners, unsubscribe and clear. Keep it green: it is the only pure-JVM coverage of this path.
+
 ## Experimental Remote Control
 
 The Paper remote-control stick is experimental and uses a `PersistentDataContainer` entry named `remote_display_id`. A normal stick links to the nearest display under the player's look ray on right-click; the server adds a custom name and enchantment-glint override. Shift+right-click on a linked stick sends the experimental V3 `RemoteControlOpen` packet, and the client opens the linked `DisplayMenu` when that display is loaded. Keep the packet id append-only and validate the linked display server-side.
