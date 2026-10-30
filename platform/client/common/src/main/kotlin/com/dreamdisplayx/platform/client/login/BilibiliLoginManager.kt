@@ -115,10 +115,14 @@ object BilibiliLoginManager {
     }
 
     private fun sendServerCommand(command: String) {
-        // All supported versions expose `connection.sendCommand(String)` for issuing a server
-        // command from the client, including on a singleplayer integrated server. Guard on the
-        // connection being non-null.
+        // 1.19 introduced dedicated chat-command packets and `sendCommand(String)`. Before
+        // that a client command is just a chat message starting with `/`, which the server
+        // parses and runs as a command exactly like the vanilla chat box does. Guard on the
+        // connection being non-null either way.
         val connection = Minecraft.getInstance().connection ?: return
+        //? if >=1.19 {
         connection.sendCommand(command)
+        //?} else
+        /*connection.sendChat("/" + command)*/
     }
 }
