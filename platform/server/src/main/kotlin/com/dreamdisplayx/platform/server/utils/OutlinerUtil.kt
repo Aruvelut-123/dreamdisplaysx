@@ -11,17 +11,18 @@ import org.jspecify.annotations.NullMarked
 import java.util.*
 
 /**
-    // Bukkit renamed "REDSTONE" to "DUST" in 1.20.5 XD
-    //? if >=1.20.5 {
-    private val DUST = Particle.DUST
-    //?} else
-    /*private val DUST = Particle.REDSTONE*/
-
  * Utility object for outlining areas with particles.
  */
 @PaperOnly
 @NullMarked
 object OutlinerUtil {
+    /** Bukkit renamed the coloured dust particle from `REDSTONE` to `DUST` in 1.20.5. */
+    private val DUST: Particle =
+        //? if >=1.20.5 {
+        Particle.DUST
+        //?} else
+        /*Particle.REDSTONE*/
+
     /** The currently active outlines, keyed by player UUID. */
     private val activeOutlines: MutableMap<UUID, OutlineData> = mutableMapOf()
 
