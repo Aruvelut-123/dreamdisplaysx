@@ -72,6 +72,12 @@
 
 ## Changes & Commits
 
+### Legacy (<1.20.5) server command trees
+- `paper-api`'s `io.papermc.paper.command.brigadier.Commands` only exists from 1.20.5. `CommandRegistrar` and `GroupCommand` keep calling `Commands.literal` / `Commands.argument` verbatim; only their Paper imports sit inside `//? if >=1.20.5 { ... //?}`.
+- Below that gate both names resolve from `registrar/LegacyPaperCommands.kt`, which lives in the same package (so no import is needed) and is itself wrapped in `//? if <1.20.5 {`.
+- The shim's signatures MUST mirror paper-api exactly: `literal(name)` returns a **non-generic** `LiteralArgumentBuilder<CommandSourceStack>`, and `argument(name, type)` returns `RequiredArgumentBuilder<CommandSourceStack, T>`. Paper pins `S` to `CommandSourceStack`; a generic `fun <S> literal(...)` instead loses the inferred sender type and every `.requires { it.sender ... }` fails with `Cannot infer type for type parameter 'S'` across all versions — that mistake turned the whole CI matrix red once (commit `f6600d2e`, reverted by `c9b24e68`). Do not "simplify" the shim back to brigadier's generic factories.
+- Paper-only argument types must not leak below the gate either: `CustomArgumentType` (1.20.5+) is replaced by a plain brigadier `ArgumentType<String>` implementation.
+
 ### Optional animated video-loading screen
 - `animated-loading-screen` is a client-only TOML/Cloth toggle, default false; missing or invalid values must not opt existing users in.
 - `LoadingScreenAnimation` and `LoadingScreenClock` own JVM-only timing/layout, while `LoadingScreenRenderer` batches static icon/glyph/round-brush textures on both flat and conforming world displays. Keep the real first frame and legacy error/disabled paths higher priority than the intro.
