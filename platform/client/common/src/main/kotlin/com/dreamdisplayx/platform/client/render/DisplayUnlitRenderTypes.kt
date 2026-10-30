@@ -70,7 +70,9 @@ object DisplayUnlitRenderTypes {
         }
     }
     //?} else
-    /*fun create(name: String, id: Identifier, translucent: Boolean = false): RenderType {
+    /*
+    //? if >=1.21.1 {
+    fun create(name: String, id: Identifier, translucent: Boolean = false): RenderType {
         val state = RenderType.CompositeState.builder()
             .setShaderState(RenderStateShard.ShaderStateShard(java.util.function.Supplier {
                 GameRenderer.getPositionTexColorShader()
@@ -103,6 +105,7 @@ object DisplayUnlitRenderTypes {
             state,
         ) as RenderType
     }
+    //?}
     //?}
     //? if <1.21.1 {
     fun create(name: String, id: Identifier): RenderType {

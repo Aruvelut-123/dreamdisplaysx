@@ -513,7 +513,10 @@ object ScreenRenderer : ClientRenderService {
         v: Float,
     ) {
         //? if >=1.21.1 {
+        //? if >=1.21.1 {
         builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, 255)
+        //?} else
+        /*builder.vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, 255).endVertex()*/
         //?} else
         /*builder.vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, 255).endVertex()*/
     }
@@ -532,7 +535,10 @@ object ScreenRenderer : ClientRenderService {
         v: Float,
         opacity: Float,
     ) {
+        //? if >=1.21.1 {
         builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, (opacity.coerceIn(0f, 1f) * 255f).toInt())
+        //?} else
+        /*builder.vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, (opacity.coerceIn(0f, 1f) * 255f).toInt()).endVertex()*/
     }
 
     /** Draws a quad using the given [type] and [appendVertices] function. A bit of a hack. */
