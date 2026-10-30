@@ -116,6 +116,9 @@ object RegionUtil {
      * Returns the [ServerLevel] of a [ServerPlayer]. `ServerPlayer.serverLevel()` was renamed to `level()`
      * (covariant return) in later versions — chisel-gated here.
      */
+    /** The level a [ServerPlayer] is in, across the `level()` / `serverLevel()` / `getLevel()` renames. */
+    fun levelOf(player: ServerPlayer): ServerLevel = playerServerLevel(player)
+
     private fun playerServerLevel(player: ServerPlayer): ServerLevel =
         //? if >=1.21.11 {
         player.level()

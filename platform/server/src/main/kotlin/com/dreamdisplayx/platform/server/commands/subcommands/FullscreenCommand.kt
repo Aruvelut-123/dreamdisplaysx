@@ -439,7 +439,7 @@ object VanillaFullscreenCommand {
         token.equals("@s", ignoreCase = true) -> setOf(sender.uuid)
         token.equals("@p", ignoreCase = true) ->
             online
-                .filter { it.level() == sender.level() }
+                .filter { RegionUtil.levelOf(it) == RegionUtil.levelOf(sender) }
                 .minByOrNull { it.distanceToSqr(sender) }
                 ?.let { setOf(it.uuid) } ?: emptySet()
 

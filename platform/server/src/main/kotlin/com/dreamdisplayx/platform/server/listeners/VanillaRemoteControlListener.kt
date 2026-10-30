@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.listeners
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.core.protocol.common.packets.RemoteControlOpen
@@ -37,7 +38,7 @@ object VanillaRemoteControlListener {
         }
         val display = target(player, level) ?: return false
         RemoteControlItemAdapter.writeLinked(stack, display.id, "Display Remote — ${display.name ?: display.id.toString().take(8)}")
-        player.sendSystemMessage(Component.literal("Remote linked to display ${display.name ?: display.id.toString().take(8)}."))
+        player.sendSystemMessage(literalText("Remote linked to display ${display.name ?: display.id.toString().take(8)}."))
         return true
     }
 

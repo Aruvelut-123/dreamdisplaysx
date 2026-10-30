@@ -356,5 +356,5 @@ object MessageUtil {
 
     /** Converts `&` color codes to a plain NMS text component (strips formatting on `Fabric`/`NeoForge`). */
     private fun parseAmpersandLegacy(text: String): NmsComponent =
-        NmsComponent.literal(text.replace(Regex("&[0-9a-fA-FrRlLoOnNmMkK]"), ""))
+        NmsliteralText(text.replace(Regex("&[0-9a-fA-FrRlLoOnNmMkK]"), ""))
 }

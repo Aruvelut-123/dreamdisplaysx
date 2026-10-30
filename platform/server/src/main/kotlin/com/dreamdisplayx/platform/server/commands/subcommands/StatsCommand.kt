@@ -74,10 +74,10 @@ object VanillaStatsCommand {
             val total = counts.values.sum()
             MessageUtil.sendColoredMessage(player, MessageUtil.formatPrintf(player, "displayStatsTotal", total))
         } else {
-            ctx.source.sendSystemMessage(Component.literal(MessageUtil.messageFor(player, "displayStatsHeader")))
+            ctx.source.sendSystemMessage(literalText(MessageUtil.messageFor(player, "displayStatsHeader")))
             for ((version, count) in counts) {
                 ctx.source.sendSystemMessage(
-                    Component.literal(
+                    literalText(
                         MessageUtil.formatPrintf(
                             player,
                             "displayStatsEntry",

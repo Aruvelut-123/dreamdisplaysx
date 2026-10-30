@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.listeners
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 //? if >=1.20.5 {
 import net.minecraft.core.component.DataComponents
@@ -48,10 +49,10 @@ internal object RemoteControlItemAdapter {
         val tag = CompoundTag()
         tag.putString(LINK_KEY, displayId.toString())
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag))
-        stack.set(DataComponents.CUSTOM_NAME, Component.literal(label))
+        stack.set(DataComponents.CUSTOM_NAME, literalText(label))
         stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true)
         //?} else
         /*stack.orCreateTag.putString(LINK_KEY, displayId.toString())
-        stack.hoverName = Component.literal(label)*/
+        stack.hoverName = literalText(label)*/
     }
 }

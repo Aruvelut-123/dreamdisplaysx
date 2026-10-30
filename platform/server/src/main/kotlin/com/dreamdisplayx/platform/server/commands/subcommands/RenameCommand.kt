@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.commands.subcommands
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
@@ -27,7 +28,7 @@ object RenameCommand {
     /** Renames the display addressed by [idToken] to [newName]; returns 1 on success. */
     fun execute(ctx: CommandContext<CommandSourceStack>, idToken: String, newName: String): Int {
         val player = ctx.source.entity as? ServerPlayer
-            ?: return ctx.source.sendFailure(Component.literal("Players only.")).let { 0 }
+            ?: return ctx.source.sendFailure(literalText("Players only.")).let { 0 }
 
         val data = resolveByIdPrefix(idToken) as? VanillaDisplayData ?: run {
             MessageUtil.sendMessage(player, "noDisplay")

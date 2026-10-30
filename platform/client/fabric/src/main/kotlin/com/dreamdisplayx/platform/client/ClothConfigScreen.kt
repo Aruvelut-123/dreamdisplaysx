@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client
 
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.api.media.audio.model.AcousticQuality
 import com.dreamdisplayx.media.player.cdn.BilibiliCdnMirror
 import com.dreamdisplayx.platform.client.config.ConfigScreenText
@@ -25,7 +26,7 @@ object ClothConfigScreenProvider {
         val entryBuilder = ConfigEntryBuilder.create()
         val builder = ConfigBuilder.create()
             .setParentScreen(parent)
-            .setTitle(Component.translatable(ConfigScreenText.Keys.TITLE))
+            .setTitle(translatableText(ConfigScreenText.Keys.TITLE))
             .setSavingRunnable { config.save() }
 
         // Re-run the CDN bandwidth ranking whenever the config page is opened, so the
@@ -33,17 +34,17 @@ object ClothConfigScreenProvider {
         ClientStartupManager.refreshCdnRanking()
 
         val general: ConfigCategory = builder.getOrCreateCategory(
-            Component.translatable(ConfigScreenText.Keys.CATEGORY_GENERAL),
+            translatableText(ConfigScreenText.Keys.CATEGORY_GENERAL),
         )
 
         // Displays enabled
         general.addEntry(
             entryBuilder.startBooleanToggle(
-                Component.translatable(ConfigScreenText.Keys.DISPLAYS_ENABLED),
+                translatableText(ConfigScreenText.Keys.DISPLAYS_ENABLED),
                 config.displaysEnabled,
             )
                 .setDefaultValue(true)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.DISPLAYS_ENABLED_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.DISPLAYS_ENABLED_TOOLTIP))
                 .setSaveConsumer { v: Boolean -> config.displaysEnabled = v }
                 .build(),
         )
@@ -61,27 +62,27 @@ object ClothConfigScreenProvider {
         )
 
         general.addEntry(
-            entryBuilder.startBooleanToggle(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_HUD), config.flashbackRenderHud)
+            entryBuilder.startBooleanToggle(translatableText(ConfigScreenText.Keys.FLASHBACK_RENDER_HUD), config.flashbackRenderHud)
                 .setDefaultValue(true)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_HUD_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.FLASHBACK_RENDER_HUD_TOOLTIP))
                 .setSaveConsumer { v: Boolean -> config.flashbackRenderHud = v }
                 .build(),
         )
         general.addEntry(
-            entryBuilder.startBooleanToggle(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_DISPLAYS), config.flashbackRenderDisplays)
+            entryBuilder.startBooleanToggle(translatableText(ConfigScreenText.Keys.FLASHBACK_RENDER_DISPLAYS), config.flashbackRenderDisplays)
                 .setDefaultValue(true)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.FLASHBACK_RENDER_DISPLAYS_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.FLASHBACK_RENDER_DISPLAYS_TOOLTIP))
                 .setSaveConsumer { v: Boolean -> config.flashbackRenderDisplays = v }
                 .build(),
         )
         // Prefer 60fps
         general.addEntry(
             entryBuilder.startBooleanToggle(
-                Component.translatable(ConfigScreenText.Keys.PREFER_FPS60),
+                translatableText(ConfigScreenText.Keys.PREFER_FPS60),
                 config.preferFps60,
             )
                 .setDefaultValue(true)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.PREFER_FPS60_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.PREFER_FPS60_TOOLTIP))
                 .setSaveConsumer { v: Boolean -> config.preferFps60 = v }
                 .build(),
         )
@@ -89,11 +90,11 @@ object ClothConfigScreenProvider {
         // Hardware acceleration (toggle)
         general.addEntry(
             entryBuilder.startBooleanToggle(
-                Component.translatable(ConfigScreenText.Keys.USE_HW_ACCEL),
+                translatableText(ConfigScreenText.Keys.USE_HW_ACCEL),
                 config.useHwAccel,
             )
                 .setDefaultValue(true)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.USE_HW_ACCEL_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.USE_HW_ACCEL_TOOLTIP))
                 .setSaveConsumer { v: Boolean -> config.useHwAccel = v }
                 .build(),
         )
@@ -101,11 +102,11 @@ object ClothConfigScreenProvider {
         // Mute on alt-tab
         general.addEntry(
             entryBuilder.startBooleanToggle(
-                Component.translatable(ConfigScreenText.Keys.MUTE_ON_ALT_TAB),
+                translatableText(ConfigScreenText.Keys.MUTE_ON_ALT_TAB),
                 config.muteOnAltTab,
             )
                 .setDefaultValue(false)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.MUTE_ON_ALT_TAB_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.MUTE_ON_ALT_TAB_TOOLTIP))
                 .setSaveConsumer { v: Boolean -> config.muteOnAltTab = v }
                 .build(),
         )
@@ -113,11 +114,11 @@ object ClothConfigScreenProvider {
         // Binaural audio
         general.addEntry(
             entryBuilder.startBooleanToggle(
-                Component.translatable(ConfigScreenText.Keys.AUDIO_BINAURAL),
+                translatableText(ConfigScreenText.Keys.AUDIO_BINAURAL),
                 config.audioBinauralOutput,
             )
                 .setDefaultValue(true)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.AUDIO_BINAURAL_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.AUDIO_BINAURAL_TOOLTIP))
                 .setSaveConsumer { v: Boolean -> config.audioBinauralOutput = v }
                 .build(),
         )
@@ -125,11 +126,11 @@ object ClothConfigScreenProvider {
         // Default render distance (int field)
         general.addEntry(
             entryBuilder.startIntField(
-                Component.translatable(ConfigScreenText.Keys.DEFAULT_RENDER_DISTANCE),
+                translatableText(ConfigScreenText.Keys.DEFAULT_RENDER_DISTANCE),
                 config.defaultDistance,
             )
                 .setDefaultValue(96)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.DEFAULT_RENDER_DISTANCE_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.DEFAULT_RENDER_DISTANCE_TOOLTIP))
                 .setSaveConsumer { v: Int -> config.defaultDistance = v }
                 .build(),
         )
@@ -137,11 +138,11 @@ object ClothConfigScreenProvider {
         // Default volume (double field)
         general.addEntry(
             entryBuilder.startDoubleField(
-                Component.translatable(ConfigScreenText.Keys.DEFAULT_VOLUME),
+                translatableText(ConfigScreenText.Keys.DEFAULT_VOLUME),
                 config.defaultDisplayVolume,
             )
                 .setDefaultValue(0.5)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.DEFAULT_VOLUME_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.DEFAULT_VOLUME_TOOLTIP))
                 .setSaveConsumer { v: Double -> config.defaultDisplayVolume = v }
                 .build(),
         )
@@ -149,12 +150,12 @@ object ClothConfigScreenProvider {
         // Audio acoustics (enum selector)
         general.addEntry(
             entryBuilder.startEnumSelector(
-                Component.translatable(ConfigScreenText.Keys.AUDIO_ACOUSTICS),
+                translatableText(ConfigScreenText.Keys.AUDIO_ACOUSTICS),
                 AcousticQuality::class.java,
                 config.audioAcoustics,
             )
                 .setDefaultValue(AcousticQuality.ADVANCED)
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.AUDIO_ACOUSTICS_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.AUDIO_ACOUSTICS_TOOLTIP))
                 .setSaveConsumer { v: AcousticQuality -> config.audioAcoustics = v }
                 .build(),
         )
@@ -165,13 +166,13 @@ object ClothConfigScreenProvider {
             .let { v -> if (v in BilibiliCdnMirror.CONFIG_VALUES) v else v }
         general.addEntry(
             entryBuilder.startSelector(
-                Component.translatable(ConfigScreenText.Keys.CDN_MIRROR),
+                translatableText(ConfigScreenText.Keys.CDN_MIRROR),
                 cdnValues,
                 if (currentCdn in cdnValues) currentCdn else "auto",
             )
                 .setDefaultValue("auto")
                 .setNameProvider { v -> ConfigScreenText.cdnLabel(v) }
-                .setTooltip(Component.translatable(ConfigScreenText.Keys.CDN_MIRROR_TOOLTIP))
+                .setTooltip(translatableText(ConfigScreenText.Keys.CDN_MIRROR_TOOLTIP))
                 .setSaveConsumer { v: String -> config.bilibiliCdnMirror = v }
                 .build(),
         )

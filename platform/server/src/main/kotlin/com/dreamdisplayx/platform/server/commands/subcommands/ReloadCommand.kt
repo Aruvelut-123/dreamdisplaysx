@@ -50,12 +50,12 @@ object VanillaReloadCommand {
                 player?.let {
                     MessageUtil.sendMessage(it, "configReloaded")
                     MessageUtil.sendMessage(it, "configReloadSummary")
-                } ?: ctx.source.sendSystemMessage(Component.literal("Dream DisplaysX config reloaded."))
+                } ?: ctx.source.sendSystemMessage(literalText("Dream DisplaysX config reloaded."))
             },
             onFailure = { e ->
                 player?.let {
                     MessageUtil.sendMessage(it, "configReloadFailed")
-                } ?: ctx.source.sendFailure(Component.literal("Failed to reload config: ${e.message}"))
+                } ?: ctx.source.sendFailure(literalText("Failed to reload config: ${e.message}"))
             }
         )
         return 1
