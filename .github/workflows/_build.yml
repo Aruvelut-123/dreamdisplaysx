@@ -356,9 +356,27 @@ jobs:
 
       - name: Build loaders with Gradle
         run: |
+          # 1.18.2 / 1.19.4 / 1.20.1 ship Forge instead of NeoForge, so pick the
+          # loader tasks from the active version's own property set.
+          tasks=$(python3 - <<'EOF'
+          import json, os
+          with open("versions.json") as f:
+              data = json.load(f)
+          props = data["versions"][data["active"]]
+          tasks = []
+          if "fabric.api.version" in props:
+              tasks.append(":platform:client:fabric:publishJar")
+          if "neoforge.version" in props:
+              tasks.append(":platform:client:neoforge:shadowJar")
+          # The Forge client module is only built when the working tree has it; older
+          # revisions of this branch may declare forge.version without the loader yet.
+          if "forge.version" in props and os.path.isdir("platform/client/forge"):
+              tasks.append(":platform:client:forge:publishJar")
+          print(" ".join(tasks))
+          EOF
+          )
           ./gradlew \
-            :platform:client:fabric:publishJar \
-            :platform:client:neoforge:shadowJar \
+            $tasks \
             --no-daemon \
             --parallel
         env:
@@ -390,7 +408,9 @@ jobs:
           mkdir -p artifacts
           # The Paper jar is cross-version and the proxy plugins are loader-independent; they are
           # built only in the paper_build_version job and uploaded as their own artifact below.
-          cp build/libs/dreamdisplayx-fabric-*.jar build/libs/dreamdisplayx-neoforge-*.jar artifacts/
+          cp build/libs/dreamdisplayx-fabric-*.jar artifacts/ 2>/dev/null || true
+          cp build/libs/dreamdisplayx-neoforge-*.jar artifacts/ 2>/dev/null || true
+          cp build/libs/dreamdisplayx-forge-*.jar artifacts/ 2>/dev/null || true
 
       # Paper is one cross-version jar (1.21.1 through 26.x, dispatched at runtime) and the proxy
       # plugins are loader-independent, so they are built once in the paper_build_version job. Ship
