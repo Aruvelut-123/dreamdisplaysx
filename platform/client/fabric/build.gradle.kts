@@ -112,7 +112,8 @@ configurations.register("mappedFabricApiElements") {
 }
 
 dependencies {
-    compileOnly(libs.platformweaverAnnotations)
+    "javaNewerCompileApis"(libs.platformweaverAnnotations)
+    compileOnly(files(configurations.getByName("javaNewerCompileApis")))
     compileOnly(libs.luckpermsApi)
     // ModMenu is a soft dependency: only needed at compile time so we can provide a config screen button.
     // Legacy (obfuscated) targets use modCompileOnly so Loom remaps ModMenu's Screen signature; 26.x
@@ -130,7 +131,7 @@ dependencies {
         compileOnly("net.neoforged:bus:8.0.5")
         compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
     }
-    compileOnly(libs.worldguardApi) {
+    "javaNewerCompileApis"(libs.worldguardApi) {
         exclude(group = "com.google.guava", module = "guava")
         exclude(group = "com.google.code.gson", module = "gson")
         exclude(group = "com.google.code.findbugs", module = "jsr305")

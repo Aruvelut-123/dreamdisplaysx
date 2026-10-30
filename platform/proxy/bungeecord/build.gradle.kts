@@ -11,7 +11,8 @@ platformweaver {
 }
 
 dependencies {
-    compileOnly(libs.platformweaverAnnotations)
+    "javaNewerCompileApis"(libs.platformweaverAnnotations)
+    compileOnly(files(configurations.getByName("javaNewerCompileApis")))
     compileOnly(libs.velocityApi)
     compileOnly(libs.bungeecordApi)
     compileOnly(libs.slf4jApi)

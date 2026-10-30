@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import support.chisel.chiselSource
 import support.stonecutter.StonecutterVersions
 import java.util.*
+import org.gradle.api.attributes.java.TargetJvmVersion
 
 /** `Stonecutter` conventions for Kotlin projects. */
 plugins {
@@ -82,6 +83,18 @@ scVersions.getOrNull("commons.compress.version")?.let { commonsCompressVersion -
     }
 }
 
+/**
+ * A detached, Java-21-targeted configuration for compile-only libraries that are themselves built
+ * for Java 21 (PlatformWeaver annotations, WorldGuard). Legacy targets compile on a 21 toolchain but
+ * emit 17 bytecode, so a plain `compileOnly` would reject those artifacts during variant selection.
+ * Resolving them through a configuration that requests `TargetJvmVersion = 21` decouples the
+ * artifact's class-file level from the module's own bytecode target.
+ */
+configurations.create("javaNewerCompileApis") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    attributes { attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21) }
+}
 /** Java and Kotlin conventions. */
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(toolchainVersion)) }
