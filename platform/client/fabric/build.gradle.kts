@@ -188,9 +188,11 @@ dependencies {
     shadow(libs.exposedMigrationJdbc)
     shadow(libs.hikari)
     shadow(libs.zxingCore)
+    // Bundled only where Minecraft has no JOML of its own; elsewhere the references are Minecraft's
+    scVersions.getOrNull("joml.version")?.let { shadow("org.joml:joml:$it") }
 }
 
-    scVersions.getOrNull("joml.version")?.let { shadow("org.joml:joml:$it") }
+
 tasks.processResources {
     from(generatedClassTweaker)
     from(project(":platform:resources").file("src/main/resources/assets/dreamdisplayx/lang/client")) {
@@ -235,6 +237,9 @@ tasks.shadowJar {
     }
     includeDreamDisplaysXSharedContents()
     relocateDreamDisplaysXSharedPackages()
+    if (scVersions.getOrNull("joml.version") != null) {
+        relocate("org.joml", "com.dreamdisplayx.libs.org.joml")
+    }
     excludeDreamDisplaysXSqliteNativeExtras()
 }
 
@@ -244,11 +249,6 @@ if (isLegacyObfuscated) {
     tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
         dependsOn(tasks.shadowJar)
         inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
-    // Bundled only where Minecraft has no JOML of its own; elsewhere the references are Minecraft's and must stay put
-    if (scVersions.getOrNull("joml.version") != null) {
-        dependencies { include(dependency("org.joml:joml")) }
-        relocate("org.joml", "com.dreamdisplayx.libs.org.joml")
-    }
         addNestedDependencies.set(false)
         archiveBaseName.set("dreamdisplayx-fabric")
         archiveVersion.set("$activeStonecutterVersion-${rootProject.version}")
