@@ -1,6 +1,6 @@
-# 1.10.0.5 Release
+# 1.10.6.1 Release
 
-Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplays/commit/42af16c320f962becc184590e93ebbf6dbf6d4d7).
+Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays/commit/ab46074057d02f31968473a08508cc1882e599b3).
 
 ## Server
 
