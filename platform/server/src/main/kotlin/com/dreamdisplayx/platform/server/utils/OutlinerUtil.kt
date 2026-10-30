@@ -145,7 +145,7 @@ object OutlinerUtil {
             val z = from.z + (to.z - from.z) * t
 
             player.spawnParticle(
-                Particle.DUST,
+                DUST,
                 x, y, z,
                 1, 0.0, 0.0, 0.0, 0.0,
                 dustOptions
