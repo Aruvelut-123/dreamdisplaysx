@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.net
 
+import com.dreamdisplayx.platform.client.utils.withChatColor
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
@@ -84,7 +85,7 @@ object ProtocolRouter {
         val mc = Minecraft.getInstance()
         mc.execute {
             val message = Component.translatable("dreamdisplayx.message.outdated_server")
-                .withStyle { it.withColor(ChatFormatting.RED) }
+                .withStyle { it.withChatColor(ChatFormatting.RED) }
             //? if >=26.2 {
             mc.gui.chatListener().handleSystemMessage(message, false)
             //?}

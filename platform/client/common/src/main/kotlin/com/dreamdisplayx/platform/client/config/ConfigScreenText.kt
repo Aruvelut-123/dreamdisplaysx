@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.config
 
+import com.dreamdisplayx.platform.client.utils.literalText
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.client.ConfigEntry
 import net.minecraft.network.chat.Component
 
@@ -60,13 +62,13 @@ object ConfigScreenText {
 
     /** Localized component for the decoder dropdown label. Falls back to the raw [value] when the key is unknown. */
     fun decoderLabel(value: String): Component =
-        if (value in KNOWN_DECODER_VALUES) Component.translatable("dreamdisplayx.config.decoder.$value")
-        else Component.literal(value)
+        if (value in KNOWN_DECODER_VALUES) translatableText("dreamdisplayx.config.decoder.$value")
+        else literalText(value)
 
     /** Localized component for the Bilibili CDN mirror dropdown label. */
     fun cdnLabel(value: String): Component {
         val label = com.dreamdisplayx.media.player.cdn.BilibiliCdnMirror.CDN_LABELS[value]
-            ?: return Component.literal(value)
-        return Component.translatable("dreamdisplayx.config.cdn.$label")
+            ?: return literalText(value)
+        return translatableText("dreamdisplayx.config.cdn.$label")
     }
 }

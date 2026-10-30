@@ -5,6 +5,10 @@ import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.mojang.blaze3d.vertex.PoseStack
 import net.minecraft.core.BlockPos
 import org.joml.Quaternionf
+//? if <1.19.3 {
+import com.dreamdisplayx.platform.client.render.compat.mulPose
+import com.dreamdisplayx.platform.client.render.compat.translate
+//?}
 import kotlin.math.max
 import kotlin.math.min
 

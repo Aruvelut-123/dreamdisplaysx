@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.utils.withChatColor
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
 import com.dreamdisplayx.platform.client.utils.vanillaIdentifier
@@ -67,7 +68,7 @@ class ToggleSwitch(
         //?} else
         /*g.blitSprite(handleSprite(), handleX, y, 8, height)*/
         val color = if (active) 0xFFFFFF else 0xA0A0A0
-        drawScrollingLabel(g, label(value).copy().withStyle { it.withColor(color) }, 2)
+        drawScrollingLabel(g, label(value).copy().withStyle { it.withChatColor(color) }, 2)
         //? if >=1.21.11 {
         if (isHovered) {
             g.requestCursor(if (active) CursorTypes.POINTING_HAND else CursorTypes.NOT_ALLOWED)

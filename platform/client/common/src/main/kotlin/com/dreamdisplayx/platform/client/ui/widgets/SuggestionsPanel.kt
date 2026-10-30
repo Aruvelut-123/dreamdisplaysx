@@ -44,7 +44,7 @@ import kotlin.math.roundToInt
 class SuggestionsPanel(
     private val onPick: (MediaSearchResult) -> Unit,
     private val controller: SuggestionsController,
-) : UiWidget(Component.translatable("dreamdisplayx.button.suggestions")) {
+) : UiWidget(translatableText("dreamdisplayx.button.suggestions")) {
 
     init {
         controller.onResults = { scrollOffset = 0 }
@@ -86,9 +86,9 @@ class SuggestionsPanel(
         val f = Minecraft.getInstance().font
         searchBox = EditBox(
             f, 0, 0, 100, SEARCH_H,
-            Component.translatable("dreamdisplayx.suggestions.search"),
+            translatableText("dreamdisplayx.suggestions.search"),
         )
-        searchBox.setHint(Component.translatable("dreamdisplayx.suggestions.search"))
+        searchBox.setHint(translatableText("dreamdisplayx.suggestions.search"))
         searchBox.setMaxLength(200)
         // The controller owns the text: Minecraft rebuilds this panel (and so this EditBox) whenever
         // DisplayMenu.init runs, e.g. on a window resize, and the user's typed/pasted link must survive.
@@ -214,7 +214,7 @@ class SuggestionsPanel(
         g.drawText(f, message, x + 10, y + 10, UiTheme.TEXT_PRIMARY, false)
 
         if (!available()) {
-            val notice = Component.translatable("dreamdisplayx.suggestions.unavailable").string
+            val notice = translatableText("dreamdisplayx.suggestions.unavailable").string
             g.drawText(f, notice, x + 10, stripTop() + 6, UiTheme.TEXT_SECONDARY, false)
             return
         }
@@ -475,7 +475,7 @@ class SuggestionsPanel(
             info.isRecent(7) -> drawCardTag(
                 g,
                 f,
-                Component.translatable("dreamdisplayx.ui.new").string,
+                translatableText("dreamdisplayx.ui.new").string,
                 UiTheme.ACCENT_NEW_TAG,
                 UiTheme.TEXT_PRIMARY,
                 thumbX,

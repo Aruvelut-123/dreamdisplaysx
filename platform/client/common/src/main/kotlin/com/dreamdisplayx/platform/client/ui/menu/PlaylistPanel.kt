@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
 import com.dreamdisplayx.api.playback.model.PlaylistEndBehavior
 import com.dreamdisplayx.api.playback.model.PlaylistEnqueuePolicy
@@ -27,11 +28,11 @@ import kotlin.math.roundToInt
 class PlaylistPanel(
     private val displayId: UUID,
     private val isOwnerOrAdmin: () -> Boolean,
-) : UiWidget(Component.translatable("dreamdisplayx.ui.playlist")) {
+) : UiWidget(translatableText("dreamdisplayx.ui.playlist")) {
 
     private val font = Minecraft.getInstance().font
-    private val urlBox = EditBox(font, 0, 0, 100, 18, Component.translatable("dreamdisplayx.ui.playlist_add_hint"))
-    private val titleBox = EditBox(font, 0, 0, 100, 18, Component.translatable("dreamdisplayx.ui.playlist_title_hint"))
+    private val urlBox = EditBox(font, 0, 0, 100, 18, translatableText("dreamdisplayx.ui.playlist_add_hint"))
+    private val titleBox = EditBox(font, 0, 0, 100, 18, translatableText("dreamdisplayx.ui.playlist_title_hint"))
     private val addButton = IconButton("search") { submit() }
     private val nextButton = IconButton("right") {
         PlaylistStateStore.send(displayId, PlaylistCommandAction.NEXT.wire)
@@ -153,7 +154,7 @@ class PlaylistPanel(
         val modeOn = modeEnabled()
         g.drawText(
             font,
-            Component.translatable(
+            translatableText(
                 if (modeOn) "dreamdisplayx.ui.playlist_mode_on" else "dreamdisplayx.ui.playlist_mode_off",
             ).string,
             innerX, topY - 2, if (modeOn) 0xFF7BD389.toInt() else UiTheme.TEXT_DIM, false,
@@ -173,14 +174,14 @@ class PlaylistPanel(
 
         if (s == null) {
             g.drawText(
-                font, Component.translatable("dreamdisplayx.ui.playlist_empty").string,
+                font, translatableText("dreamdisplayx.ui.playlist_empty").string,
                 innerX, addY + boxH + 8, UiTheme.TEXT_DIM, false,
             )
             return
         }
 
         val policy = PlaylistEnqueuePolicy.fromWire(s.enqueuePolicy)
-        val policyText = Component.translatable(
+        val policyText = translatableText(
             when (policy) {
                 PlaylistEnqueuePolicy.EVERYONE -> "dreamdisplayx.ui.playlist_policy_everyone"
                 PlaylistEnqueuePolicy.OWNER_APPROVAL -> "dreamdisplayx.ui.playlist_policy_approval"
@@ -188,7 +189,7 @@ class PlaylistPanel(
             },
         )
         val endBehavior = PlaylistEndBehavior.fromWire(s.endBehavior)
-        val endText = Component.translatable(
+        val endText = translatableText(
             when (endBehavior) {
                 PlaylistEndBehavior.PAUSE -> "dreamdisplayx.ui.playlist_end_pause"
                 PlaylistEndBehavior.CONTINUE -> "dreamdisplayx.ui.playlist_end_continue"
@@ -233,7 +234,7 @@ class PlaylistPanel(
             // Requester tag: show the player name resolved by the server; older servers may not
             // send one, in which case fall back to the short UUID. It reserves room for the three
             // row action glyphs (▲ ▼ ✕) so neither the title nor the tag can overlap the other.
-            val byText = Component.translatable("dreamdisplayx.ui.playlist_by").string
+            val byText = translatableText("dreamdisplayx.ui.playlist_by").string
             val requester = item.requesterName.ifBlank { item.requesterId.toString().take(8) }
             val tagW = font.width(byText + requester)
             val tagX = rowRect.right - tagW - 74

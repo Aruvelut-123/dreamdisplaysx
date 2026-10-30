@@ -25,8 +25,8 @@ class ModTitleLabel {
     /** Draws the label (and the update arrow when applicable) at ([x], [y]). */
     fun draw(g: GuiGraphicsCompat, x: Int, y: Int) {
         val font = Minecraft.getInstance().font
-        val name = Component.literal("Dream DisplaysX")
-        val ver = Component.literal(" ${GeneralUtil.getPrettyModVersion()}")
+        val name = literalText("Dream DisplaysX")
+        val ver = literalText(" ${GeneralUtil.getPrettyModVersion()}")
             .withStyle(Style.EMPTY.withColor(UiTheme.ACCENT_VERSION))
         val label = name.copy().append(ver)
         g.drawText(font, label, x, y, UiTheme.TEXT_PRIMARY, true)

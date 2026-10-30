@@ -493,7 +493,7 @@ class PreviewSection(
         val badge = PlatformBadge.forPlatform(info.platform)
         val tagText = when {
             badge != null -> translatableText(badge.labelKey).string
-            info.isNew -> Component.translatable("dreamdisplayx.ui.new").string
+            info.isNew -> translatableText("dreamdisplayx.ui.new").string
             else -> null
         }
         if (tagText != null) {
@@ -515,7 +515,7 @@ class PreviewSection(
         }
         if (info.likes.isNotEmpty()) {
             if (parts.isNotEmpty()) parts.append(" • ")
-            parts.append(info.likes).append(" ").append(Component.translatable("dreamdisplayx.ui.likes").string)
+            parts.append(info.likes).append(" ").append(translatableText("dreamdisplayx.ui.likes").string)
         }
         if (!info.published.isNullOrEmpty()) {
             if (parts.isNotEmpty()) parts.append(" • ")

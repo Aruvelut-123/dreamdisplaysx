@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.media.source.bilibili.BilibiliSearchType
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
@@ -98,7 +99,7 @@ class BilibiliFilterDropdown(
                 if (i == hovered || i == active) UiTheme.TEXT_PRIMARY else UiTheme.TEXT_DIM,
                 animProgress,
             )
-            val lbl = Component.translatable(option.labelKey).string
+            val lbl = translatableText(option.labelKey).string
             g.drawText(font, UiText.trim(font, lbl, WIDTH - 10), rect.x + 6, fy + ITEM_H * i, color, false)
         }
 
