@@ -24,6 +24,14 @@ private fun scVersion(name: String): String = scVersions.get(name)
 /** The Java version to target for the active Minecraft version. */
 private val javaVersion = scVersion("java.version").toInt()
 
+/**
+ * The JDK used to *compile* the active version. Legacy targets such as 1.18.2 / 1.19.4 / 1.20.1
+ * still emit Java 17 bytecode (see [bytecodeTarget]) but some of their third-party dependencies
+ * only ship Java 21 class files, so the compiler itself must run on a newer JDK. Versions that
+ * declare `java.toolchain` in `versions.json` opt in; everything else keeps [javaVersion].
+ */
+private val toolchainVersion = scVersions.getOrNull("java.toolchain")?.toInt() ?: javaVersion
+
 /** The lowest Java version to target for all Minecraft versions. */
 private val javaFloor: Int = rootProject.file("versions").listFiles()
     ?.filter { it.isDirectory }
@@ -76,7 +84,7 @@ scVersions.getOrNull("commons.compress.version")?.let { commonsCompressVersion -
 
 /** Java and Kotlin conventions. */
 java {
-    toolchain { languageVersion.set(JavaLanguageVersion.of(javaVersion)) }
+    toolchain { languageVersion.set(JavaLanguageVersion.of(toolchainVersion)) }
 }
 
 /** Every module compiles against the Kotlin stdlib and tests on JUnit 5 with kotlin-test. */
@@ -92,7 +100,7 @@ tasks.test {
 
 /** Kotlin conventions. */
 extensions.configure<KotlinJvmProjectExtension> {
-    jvmToolchain(javaVersion)
+    jvmToolchain(toolchainVersion)
 }
 
 /** Project conventions. */
@@ -104,6 +112,11 @@ tasks.withType<JavaCompile>().configureEach {
 /** Unstable API opt-in. */
 tasks.withType<KotlinCompile>().configureEach {
     compilerOptions.jvmTarget.set(JvmTarget.fromTarget(bytecodeTarget.toString()))
+    // Compiling legacy targets on a newer JDK would otherwise link against the newer JDK's
+    // class library; pin the API surface to the target release so Java 17 bytecode stays honest.
+    if (bytecodeTarget < toolchainVersion) {
+        compilerOptions.freeCompilerArgs.add("-Xjdk-release=$bytecodeTarget")
+    }
     compilerOptions.optIn.add("com.dreamdisplayx.api.DreamDisplaysXUnstableApi")
 }
 
