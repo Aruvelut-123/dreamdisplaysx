@@ -1,9 +1,15 @@
 package com.dreamdisplayx.platform.client.mixins
 
+//? if >=1.19 {
+
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import net.minecraft.client.OptionInstance
+//? if >=1.20.2 {
 import net.minecraft.client.gui.screens.options.SoundOptionsScreen
+//?} else if >=1.19 {
+/*import net.minecraft.client.gui.screens.SoundOptionsScreen*/
+//?}
 import net.minecraft.network.chat.Component
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.Pseudo
@@ -95,3 +101,4 @@ open class SoundOptionsScreenMixin {
         ) as OptionInstance<*>
     }.getOrNull()
 }
+//?}

@@ -3,6 +3,7 @@ package com.dreamdisplayx.platform.client.danmaku
 import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.render.DisplayUnlitRenderTypes
 import com.dreamdisplayx.platform.client.render.OverlayTextSupport
+import com.dreamdisplayx.platform.client.utils.identifier
 import com.mojang.blaze3d.platform.NativeImage
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.texture.DynamicTexture
@@ -93,7 +94,7 @@ object DanmakuTextLayoutCache {
         OverlayTextSupport.optionalOrNull("danmaku rasterization") {
             val raster = AwtDanmakuRasterizer.rasterize(text, argb, scale)
             val native = toNativeImage(raster)
-            val id = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "dynamic/danmaku_${INSTANCE_ID.incrementAndGet()}")
+            val id = identifier(Initializer.MOD_ID, "dynamic/danmaku_${INSTANCE_ID.incrementAndGet()}")
             var dynamic: DynamicTexture? = null
             try {
                 val created =
