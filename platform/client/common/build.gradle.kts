@@ -40,6 +40,7 @@ dependencies {
     api(libs.tomlj)
     compileOnly(libs.checkerQual)
     compileOnly(libs.kotlinStdlib)
+    scVersions.getOrNull("joml.version")?.let { api("org.joml:joml:$it") }
     if (scVersions.getOrNull("neoform.version") != null) {
         compileOnly("org.spongepowered:mixin:0.8.7")
         compileOnly("org.lwjgl:lwjgl:3.4.3")
@@ -52,6 +53,9 @@ dependencies {
 if (usesLegacyForge) {
     configure<net.neoforged.moddevgradle.legacyforge.dsl.LegacyForgeExtension> {
         enable { mcpVersion = scVersion("minecraft.version") }
+    }
+    dependencies {
+        compileOnly("net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7")
     }
 } else {
     configure<net.neoforged.moddevgradle.dsl.NeoForgeExtension> {
