@@ -141,12 +141,10 @@ dependencies {
     vendoredLibraries(libs.exposedJdbc)
     vendoredLibraries(libs.exposedMigrationJdbc)
     vendoredLibraries(libs.hikari)
-    vendoredLibraries(libs.newpipeExtractor)
     scVersions.getOrNull("joml.version")?.let { vendoredLibraries("org.joml:joml:$it") }
     vendoredLibraries(libs.tukaaniXz)
     shadow(project(":core"))
     shadow(project(":api"))
-    shadow(project(":shared"))
     shadow(project(":util"))
     shadow(project(":media:runtime"))
     shadow(project(":media:source"))
@@ -165,7 +163,6 @@ dependencies {
     shadow(libs.exposedJdbc)
     shadow(libs.exposedMigrationJdbc)
     shadow(libs.hikari)
-    shadow(libs.newpipeExtractor)
     scVersions.getOrNull("joml.version")?.let { shadow("org.joml:joml:$it") }
 }
 
@@ -206,7 +203,6 @@ legacyForge {
             sourceSet(mainSourceSetOf(":platform:client:common"))
             sourceSet(mainSourceSetOf(":core"))
             sourceSet(mainSourceSetOf(":api"))
-            sourceSet(mainSourceSetOf(":shared"))
             sourceSet(mainSourceSetOf(":util"))
             sourceSet(mainSourceSetOf(":media:runtime"))
             sourceSet(mainSourceSetOf(":media:source"))
