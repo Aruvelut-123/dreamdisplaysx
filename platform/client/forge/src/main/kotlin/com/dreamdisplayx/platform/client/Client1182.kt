@@ -17,13 +17,11 @@ import com.dreamdisplayx.platform.client.render.ScreenRenderer
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
 import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
 import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
-import com.dreamdisplayx.platform.client.ui.config.ClothConfigScreen
 import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket
 import net.minecraft.world.InteractionResult
-import net.minecraftforge.client.ConfigGuiHandler
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent
 import net.minecraftforge.client.event.DrawSelectionEvent
 import net.minecraftforge.client.event.RenderGameOverlayEvent
@@ -35,7 +33,6 @@ import net.minecraftforge.event.TickEvent
 import net.minecraftforge.event.entity.player.PlayerInteractEvent
 import net.minecraftforge.eventbus.api.SubscribeEvent
 import net.minecraftforge.fml.ModList
-import net.minecraftforge.fml.ModLoadingContext
 
 /** `Forge` 1.18.2 client side. */
 object Client : Mod {
@@ -48,11 +45,8 @@ object Client : Mod {
     )
 
     fun init() {
-        if (ModList.get().isLoaded("cloth_config")) {
-            ModLoadingContext.get().registerExtensionPoint(ConfigGuiHandler.ConfigGuiFactory::class.java) {
-                ConfigGuiHandler.ConfigGuiFactory { _, parent -> ClothConfigScreen.create(parent) }
-            }
-        }
+        // 1.18.2 ships no Cloth-backed config screen of its own (the shared Fabric one is built
+        // against Cloth 11.x); settings stay editable through the config file only.
 
         DreamServices.registry.register(PlatformServices.PLATFORM, ForgePlatformIntegrationProvider.create())
         Initializer.onModInit(this)

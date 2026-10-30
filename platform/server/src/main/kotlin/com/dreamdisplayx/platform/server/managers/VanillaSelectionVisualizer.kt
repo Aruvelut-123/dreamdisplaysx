@@ -149,5 +149,11 @@ object VanillaSelectionVisualizer {
         //? if >=1.21.11 {
         DustParticleOptions(CYAN_RGB, PARTICLE_SCALE)
         //?} else
-        /*DustParticleOptions(Vector3f(0f, 1f, 1f), PARTICLE_SCALE)*/
+        /*DustParticleOptions(
+            //? if >=1.19 {
+            Vector3f(0f, 1f, 1f)
+            //?} else
+            com.mojang.math.Vector3f(0f, 1f, 1f),
+            PARTICLE_SCALE,
+        )*/
 }

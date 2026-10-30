@@ -6,12 +6,18 @@ import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.util.toJsonString
+//? if <1.19 {
+import com.dreamdisplayx.platform.server.utils.sendSystemMessage
+//?}
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.serializer.json.JSONComponentSerializer
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+//? if >=1.19 {
 import net.minecraft.core.registries.BuiltInRegistries
+//?} else
+/*import net.minecraft.core.Registry*/
 //? if >=1.21.11 {
 import net.minecraft.data.AtlasIds
 //?}
@@ -327,7 +333,11 @@ object MessageUtil {
                 val spriteComponent =
                     //? if >=1.21.11 {
                     run {
-                        val item = BuiltInRegistries.ITEM.getValue(itemId)
+                        val item =
+                            //? if >=1.19 {
+                            BuiltInRegistries.ITEM.getValue(itemId)
+                            //?} else
+                            /*Registry.ITEM.get(itemId)*/
                         val isBlock = item is net.minecraft.world.item.BlockItem
                         val atlasId = if (isBlock) AtlasIds.BLOCKS else AtlasIds.ITEMS
                         val spriteId = Identifier.fromNamespaceAndPath(

@@ -41,17 +41,19 @@ import com.dreamdisplayx.platform.client.render.UnshadedDisplayPass
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
 import net.fabricmc.api.ClientModInitializer
+//? if >=1.19 {
 //? if >=26 {
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands
 //?} else
 /*import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager*/
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
+//?}
 import com.dreamdisplayx.platform.client.input.DisplayMenuInputHandler
 import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.minecraft.world.InteractionResult
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 //? if <1.19.4 {
-import com.dreamdisplayx.core.runtime.getOrNull
+import com.dreamdisplayx.api.runtime.registry.service.getOrNull
 import com.dreamdisplayx.platform.client.input.MouseButtons
 import com.dreamdisplayx.platform.client.overlay.OverlayManager
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
@@ -198,6 +200,7 @@ class Client : ClientModInitializer, Mod {
 
         // Opens the Bilibili login screen (QR code / phone + password) 鈥?only usable when not
         // already logged in and when the player is OP on the server.
+        //? if >=1.19 {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
                 clientLiteral("dlogin")
@@ -249,6 +252,7 @@ class Client : ClientModInitializer, Mod {
                     }
             )
         }
+        //?}
 
         UseBlockCallback.EVENT.register { _, world, _, _ ->
             if (!world.isClientSide) InteractionResult.PASS
@@ -270,11 +274,16 @@ class Client : ClientModInitializer, Mod {
         ClientLifecycleEvents.CLIENT_STOPPING.register { Initializer.onStop() }
     }
 
-    /** Client command literal builder; the Fabric command API moved from `ClientCommandManager` to `ClientCommands` in 26.x. */
+    /**
+     * Client command literal builder; the Fabric command API moved from `ClientCommandManager` to
+     * `ClientCommands` in 26.x and only exists at all from 1.19 (Fabric API's `command.v2` package).
+     */
+    //? if >=1.19 {
     //? if >=26 {
     private fun clientLiteral(name: String) = ClientCommands.literal(name)
     //?} else
     /*private fun clientLiteral(name: String) = ClientCommandManager.literal(name)*/
+    //?}
 
     /** Packet sender. */
     override fun sendPacket(packet: CustomPacketPayload) {
