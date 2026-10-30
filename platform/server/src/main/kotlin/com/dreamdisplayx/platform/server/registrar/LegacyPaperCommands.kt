@@ -27,7 +27,7 @@ class CommandSourceStack(val sender: CommandSender) {
 object LegacyPaperCommands {
     fun register(plugin: JavaPlugin, root: LiteralCommandNode<CommandSourceStack>, description: String) {
         val dispatcher = CommandDispatcher<CommandSourceStack>().also { it.root.addChild(root) }
-        val command = object : Command(root.name, description, "/${root.name}", []) {
+        val command = object : Command(root.name, description, "/${root.name}", emptyList()) {
             override fun execute(sender: CommandSender, label: String, args: Array<out String>): Boolean {
                 try {
                     dispatcher.execute(input(args), CommandSourceStack(sender))

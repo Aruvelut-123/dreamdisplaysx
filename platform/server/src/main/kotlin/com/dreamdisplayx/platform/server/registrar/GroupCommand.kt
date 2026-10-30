@@ -10,41 +10,41 @@ import com.dreamdisplayx.platform.server.playback.TimelineManager
 import com.mojang.brigadier.Command
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
+import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import io.papermc.paper.command.brigadier.CommandSourceStack
-import io.papermc.paper.command.brigadier.Commands
 import org.bukkit.entity.Player
 
 /** Experimental Paper `/display group` commands for V3 same-content playback. */
 @PaperOnly
 @DreamDisplaysXUnstableApi
 object GroupCommand {
-    fun node(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("group")
+    fun node(): LiteralArgumentBuilder<CommandSourceStack> = LiteralArgumentBuilder.literal("group")
         .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.video) }
-        .then(Commands.literal("create").then(Commands.argument("name", StringArgumentType.word()).executes { c ->
+        .then(LiteralArgumentBuilder.literal("create").then(RequiredArgumentBuilder.argument("name", StringArgumentType.word()).executes { c ->
             val name = StringArgumentType.getString(c, "name")
             c.source.sender.sendMessage(if (DisplayGroupManager.create(name)) "Created display group $name." else "Group already exists: $name.")
             Command.SINGLE_SUCCESS
         }))
-        .then(Commands.literal("delete").then(Commands.argument("name", StringArgumentType.word()).executes { c ->
+        .then(LiteralArgumentBuilder.literal("delete").then(RequiredArgumentBuilder.argument("name", StringArgumentType.word()).executes { c ->
             val name = StringArgumentType.getString(c, "name")
             c.source.sender.sendMessage(if (DisplayGroupManager.delete(name)) "Deleted display group $name." else "Unknown display group: $name.")
             Command.SINGLE_SUCCESS
         }))
-        .then(Commands.literal("add").then(Commands.argument("name", StringArgumentType.word()).then(Commands.argument("display", StringArgumentType.word()).executes { c ->
+        .then(LiteralArgumentBuilder.literal("add").then(RequiredArgumentBuilder.argument("name", StringArgumentType.word()).then(RequiredArgumentBuilder.argument("display", StringArgumentType.word()).executes { c ->
             val player = c.source.sender as Player
             val display = DisplayManager.resolveByIdOrPrefix(StringArgumentType.getString(c, "display"))
             val ok = display != null && DisplayGroupManager.add(StringArgumentType.getString(c, "name"), display)
             player.sendMessage(if (ok) "Display added to group." else "Unable to add display to group.")
             Command.SINGLE_SUCCESS
         })))
-        .then(Commands.literal("remove").then(Commands.argument("name", StringArgumentType.word()).then(Commands.argument("display", StringArgumentType.word()).executes { c ->
+        .then(LiteralArgumentBuilder.literal("remove").then(RequiredArgumentBuilder.argument("name", StringArgumentType.word()).then(RequiredArgumentBuilder.argument("display", StringArgumentType.word()).executes { c ->
             val display = DisplayManager.resolveByIdOrPrefix(StringArgumentType.getString(c, "display"))
             val ok = display != null && DisplayGroupManager.remove(StringArgumentType.getString(c, "name"), display.id)
             c.source.sender.sendMessage(if (ok) "Display removed from group." else "Display is not in that group.")
             Command.SINGLE_SUCCESS
         })))
-        .then(Commands.literal("play").then(Commands.argument("name", StringArgumentType.word()).then(Commands.argument("url", StringArgumentType.greedyString()).executes { c ->
+        .then(LiteralArgumentBuilder.literal("play").then(RequiredArgumentBuilder.argument("name", StringArgumentType.word()).then(RequiredArgumentBuilder.argument("url", StringArgumentType.greedyString()).executes { c ->
             val raw = StringArgumentType.getString(c, "url").trim()
             val parts = raw.split(" ")
             DisplayGroupManager.setVideo(StringArgumentType.getString(c, "name"), parts.first(), parts.getOrNull(1) ?: "") { display ->
@@ -56,7 +56,7 @@ object GroupCommand {
             c.source.sender.sendMessage("Group content updated and synchronized.")
             Command.SINGLE_SUCCESS
         })))
-        .then(Commands.literal("control").then(Commands.argument("name", StringArgumentType.word()).then(Commands.argument("action", StringArgumentType.word()).executes { c ->
+        .then(LiteralArgumentBuilder.literal("control").then(RequiredArgumentBuilder.argument("name", StringArgumentType.word()).then(RequiredArgumentBuilder.argument("action", StringArgumentType.word()).executes { c ->
             val action = when (StringArgumentType.getString(c, "action").lowercase()) {
                 "play" -> PlaybackAction.PLAY
                 "pause" -> PlaybackAction.PAUSE

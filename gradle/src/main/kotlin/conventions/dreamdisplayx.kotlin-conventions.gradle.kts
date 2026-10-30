@@ -133,6 +133,8 @@ tasks.withType<KotlinCompile>().configureEach {
         compilerOptions.freeCompilerArgs.add("-Xjdk-release=$bytecodeTarget")
     }
     compilerOptions.optIn.add("com.dreamdisplayx.api.DreamDisplaysXUnstableApi")
+    // The command DSL builds its suggestion lists with `[ ... ]` collection literals.
+    compilerOptions.freeCompilerArgs.add("-Xcollection-literals")
 }
 
 /**

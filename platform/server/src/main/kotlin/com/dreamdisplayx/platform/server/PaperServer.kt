@@ -45,9 +45,14 @@ class PaperServer : JavaPlugin() {
     override fun onLoad() {
         instance = this
         Companion.config = Config(this)
+        // 1.20.5 added paper-api's own brigadier surface (`LifecycleEvents.COMMANDS`); older
+        // Paper builds have neither, so the same tree goes in as a plain Bukkit command.
+        //? if >=1.20.5 {
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(CommandRegistrar.buildDisplayCommand(), "Main Dream DisplaysX command")
         }
+        //?} else
+        /*LegacyPaperCommands.register(this, CommandRegistrar.buildDisplayCommand(), "Main Dream DisplaysX command")*/
     }
 
     /** Standard `Bukkit` hook, delegates to [doEnable] so reload commands can reuse the logic. */
