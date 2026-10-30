@@ -154,11 +154,15 @@ object VanillaSelectionVisualizer {
     /**
      * `DustParticleOptions` takes a joml `Vector3f` from 1.19 but still wants Mojang's own vector
      * class on 1.18.2. Kept as its own single-level gate: nesting `//? if` inside a commented else
-     * block makes the chisel parser treat the inner directive as top-level.
+     * block makes the chisel parser treat the inner directive as top-level. The outer gate also
+     * keeps the function out of the 1.21.11+ sources, where the constructor takes an int rgb and
+     * `Vector3f` is not imported at all.
      */
+    //? if <1.21.11 {
     private fun cyanVector() =
         //? if >=1.19 {
         Vector3f(0f, 1f, 1f)
         //?} else
         /*com.mojang.math.Vector3f(0f, 1f, 1f)*/
+    //?}
 }
