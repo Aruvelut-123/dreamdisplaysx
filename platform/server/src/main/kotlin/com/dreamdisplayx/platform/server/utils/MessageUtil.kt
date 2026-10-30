@@ -1,5 +1,8 @@
 package com.dreamdisplayx.platform.server.utils
 
+import com.dreamdisplayx.platform.client.utils.emptyText
+import com.dreamdisplayx.platform.client.utils.literalText
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.util.toJsonString
@@ -43,7 +46,7 @@ object MessageUtil {
 
     /** Legacy and JSON serializers for `Adventure Components`. */
     @PaperOnly
-    private val jsonSerializer = GsonComponentSerializer.gson()
+    private val jsonSerializer = JSONComponentSerializer.json()
 
     /** Sends a localized message identified by [messageKey] to [sender]. */
     @PaperOnly
