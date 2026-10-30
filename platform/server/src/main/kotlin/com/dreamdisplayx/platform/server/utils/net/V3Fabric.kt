@@ -10,6 +10,8 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 @FabricOnly
 object FabricV3Networking {
     fun registerReceivers() {
+        // V3 envelopes ride the typed-payload API, so a pre-1.20.5 server only ever speaks V2.
+        //? if >=1.20.5 {
         ServerPlayNetworking.registerGlobalReceiver(V3Payload.TYPE) { payload, context ->
             runCatching {
                 PacketRegistry.decodeV3(payload.bytes, PacketDirection.CLIENT_TO_SERVER).forEach {
@@ -17,5 +19,6 @@ object FabricV3Networking {
                 }
             }
         }
+        //?}
     }
 }

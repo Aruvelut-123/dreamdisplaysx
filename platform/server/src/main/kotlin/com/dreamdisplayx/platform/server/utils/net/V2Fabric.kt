@@ -95,6 +95,9 @@ object FabricV2Networking {
 
     /** Registers the single v2 envelope receiver. */
     fun registerReceivers() {
+        // 1.20.5 replaced the raw-buffer receiver with the typed payload one; below it the channel
+        // id plus the buffer is all Fabric hands over.
+        //? if >=1.20.5 {
         ServerPlayNetworking.registerGlobalReceiver(V2Payload.TYPE) { payload, context ->
             runCatching {
                 dispatch(
@@ -106,6 +109,20 @@ object FabricV2Networking {
                 logger.warn("Failed to handle v2 packet", e)
             }
         }
+        //?} else
+        /*ServerPlayNetworking.registerGlobalReceiver(V2Payload.TYPE.id()) { server, player, _, buf, _ ->
+            runCatching {
+                val bytes = ByteArray(buf.readableBytes()).also(buf::readBytes)
+                dispatch(
+                    player,
+                    server,
+                    PacketRegistry.decode(bytes, PacketDirection.CLIENT_TO_SERVER) ?: return@runCatching,
+                )
+            }.onFailure { e ->
+                logger.warn("Failed to handle v2 packet", e)
+            }
+        }*/
+        //?}
     }
 
     /** Routes a decoded serverbound packet to the shared action handlers. */
