@@ -59,7 +59,6 @@ import com.dreamdisplayx.platform.client.overlay.OverlayManager
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
 import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
 import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
-import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 //?}
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
@@ -75,9 +74,12 @@ import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket*/
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
+import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
+//? if >=1.19 {
 import net.minecraft.ChatFormatting
 import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.client.utils.withChatColor
+//?}
 
 class Client : ClientModInitializer, Mod {
     /** If the `LevelRenderContext` has a `BufferSource` API, this is set to true. */
@@ -201,7 +203,7 @@ class Client : ClientModInitializer, Mod {
 
         ClientTickEvents.END_CLIENT_TICK.register { Initializer.onEndTick(it) }
 
-        // Opens the Bilibili login screen (QR code / phone + password) 鈥?only usable when not
+        // Opens the Bilibili login screen (QR code / phone + password); only usable when not
         // already logged in and when the player is OP on the server.
         //? if >=1.19 {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
@@ -292,6 +294,7 @@ class Client : ClientModInitializer, Mod {
     /*private fun clientLiteral(name: String) = ClientCommandManager.literal(name)*/
     //?}
 
+    //? if >=1.19 {
     /** Sends [text] to this client's chat HUD in [color], on the client thread. */
     private fun sendClientChat(text: String, color: ChatFormatting = ChatFormatting.RED) {
         val mc = Minecraft.getInstance()
@@ -308,6 +311,7 @@ class Client : ClientModInitializer, Mod {
             //?}
         }
     }
+    //?}
 
     /** Packet sender. */
     override fun sendPacket(packet: CustomPacketPayload) {
