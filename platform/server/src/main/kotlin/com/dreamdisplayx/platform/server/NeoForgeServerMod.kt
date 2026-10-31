@@ -5,7 +5,6 @@ import com.dreamdisplayx.platform.server.listeners.NeoForgePlayerListener
 import com.dreamdisplayx.platform.server.listeners.NeoForgeProtectionListener
 import com.dreamdisplayx.platform.server.listeners.NeoForgeSelectionListener
 import com.dreamdisplayx.platform.server.managers.StorageManager
-import com.dreamdisplayx.platform.server.registrar.NeoForgeBareTokenArgumentType
 import com.dreamdisplayx.platform.server.managers.VanillaSelectionVisualizer
 import com.dreamdisplayx.platform.server.registrar.NeoForgeCommandRegistrar
 import com.dreamdisplayx.platform.server.utils.net.NeoForgeNetworkingAdapter
@@ -45,7 +44,6 @@ class NeoForgeServer(modEventBus: IEventBus) {
         VanillaServerState.platformName = "neoforge"
         VanillaNetworking.adapter = NeoForgeNetworkingAdapter
 
-        modEventBus.addListener(::registerArgumentTypes)
         modEventBus.addListener(::registerPayloads)
         NeoForge.EVENT_BUS.register(this)
         NeoForge.EVENT_BUS.register(NeoForgePlayerListener)
@@ -56,16 +54,6 @@ class NeoForgeServer(modEventBus: IEventBus) {
         logger.info("Server-side initialization complete.")
     }
 
-    /**
-     * Registers [NeoForgeBareTokenArgumentType] once `NeoForge` unfreezes `COMMAND_ARGUMENT_TYPE`
-     * for this event; doing it eagerly from the constructor is too early - that registry is still
-     * frozen at mod-construction time and only opens up for this `RegisterEvent` pass.
-     */
-    private fun registerArgumentTypes(event: RegisterEvent) {
-        if (event.registryKey == Registries.COMMAND_ARGUMENT_TYPE) {
-            NeoForgeBareTokenArgumentType.register()
-        }
-    }
 
     /** Registers all custom payload types for clientbound and serverbound play channels. */
     private fun registerPayloads(event: RegisterPayloadHandlersEvent) {
