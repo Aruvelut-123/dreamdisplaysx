@@ -24,6 +24,23 @@ object BilibiliUrls {
     /** A bangumi season id: `ss` followed by digits. */
     private val SS_RE = Regex("^[sS][sS](\\d+)$")
 
+    /** Route names that may follow an optional locale prefix. */
+    private val ROUTES = setOf("video", "bangumi")
+
+    /** A Bilibili locale path prefix such as `zh-Hans`, `zh-CN` or `en`. */
+    private val LOCALE_PREFIX_RE = Regex("^[a-z]{2,3}(?:[-_][a-z]{2,4})?$", RegexOption.IGNORE_CASE)
+
+    /**
+     * Drops a leading locale segment (`/zh-Hans/video/...`) so route parsing always starts at the
+     * real route. Only strips when a known route follows, so `/video/...` keeps its first segment.
+     */
+    private fun routeSegments(segments: List<String>): List<String> {
+        val first = segments.firstOrNull() ?: return segments
+        if (!LOCALE_PREFIX_RE.matches(first)) return segments
+        val rest = segments.drop(1)
+        return if (rest.firstOrNull()?.lowercase(Locale.ROOT) in ROUTES) rest else segments
+    }
+
     /** True when [url] points at a BIlibili VOD, live room, or short link. */
     fun isBilibili(url: String): Boolean = parse(url) != null
 
@@ -90,10 +107,11 @@ object BilibiliUrls {
         }
 
         if (host != "bilibili.com") return null
+        val route = routeSegments(segments)
 
         // Bangumi / movie: /bangumi/play/ep<id> or /bangumi/play/ss<id>.
-        if (segments.getOrNull(0) == "bangumi" && segments.getOrNull(1) == "play") {
-            val id = segments.getOrNull(2) ?: return null
+        if (route.getOrNull(0) == "bangumi" && route.getOrNull(1) == "play") {
+            val id = route.getOrNull(2) ?: return null
             EP_RE.matchEntire(id)?.let { m ->
                 val epId = m.groupValues[1].toLongOrNull() ?: return null
                 return MediaSource.Bilibili(url = normalized, epId = epId)
@@ -105,8 +123,8 @@ object BilibiliUrls {
             return null
         }
 
-        if (segments.getOrNull(0) != "video") return null
-        val id = segments.getOrNull(1) ?: return null
+        if (route.getOrNull(0) != "video") return null
+        val id = route.getOrNull(1) ?: return null
         val part = partQueryParam(parsed.uri.rawQuery)?.toIntOrNull()
 
         if (BVID_RE.matches(id)) return MediaSource.Bilibili(url = normalized, bvid = id, part = part)
@@ -117,7 +135,7 @@ object BilibiliUrls {
         return null
     }
 
-    /** Returns the value of th`p`p` (part index) query parameter in [rawQuery], or null when absent. */
+    /** Returns the value of the `p` (part index) query parameter in [rawQuery], or null when absent. */
     private fun partQueryParam(rawQuery: String?): String? =
         rawQuery?.split('&')?.firstNotNullOfOrNull { pair ->
             val idx = pair.indexOf('=')

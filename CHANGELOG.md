@@ -27,6 +27,7 @@ Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays
 - `/dlogin` and `/dlogoff` are no longer hidden by the admin check; they answer with an error instead of doing nothing.
 - Chat colour codes in the client commands no longer render as a literal look-alike character.
 - Bilibili live share links with a route prefix (`/h5/<room>`, `/blanc/<room>`) resolve to the room again.
+- Bilibili share links with a locale prefix (`/zh-Hans/video/<id>`) resolve to the video instead of being handed to libvlc as an HTML page.
 - Forge jars now bundle the SQLite JDBC driver; fixes the server crashing with "No suitable driver".
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
