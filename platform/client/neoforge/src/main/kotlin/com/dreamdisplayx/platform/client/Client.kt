@@ -9,7 +9,6 @@ import com.dreamdisplayx.platform.client.login.BilibiliLoginManager
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
 import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
-import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 import com.dreamdisplayx.platform.client.Mod as DreamMod
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.mojang.blaze3d.systems.RenderSystem
@@ -80,12 +79,11 @@ class Client(modEventBus: IEventBus) : DreamMod {
                             net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false)*/
                         return@executes 1
                     }
-                    // Defer opening the screen one tick so the client command dispatch (which
-                    // closes any screen it opened synchronously) has fully finished first.
-                    // Not 26.2-specific: every version drops a screen opened from inside the
-                    // command handler, which made /dlogin look like a no-op.
-                    val mc = Minecraft.getInstance()
-                    mc.execute { MinecraftScreenUtil.setScreen(mc, PlatformLoginScreen()) }
+                    // Queue the screen for the next client tick. `Minecraft.execute` runs
+                    // synchronously when already on the render thread, so deferring through it
+                    // still opened (and immediately closed) the screen inside this dispatch,
+                    // which made /dlogin look like a no-op on every version.
+                    Initializer.openScreenNextTick(PlatformLoginScreen())
                     1
                 }
         )

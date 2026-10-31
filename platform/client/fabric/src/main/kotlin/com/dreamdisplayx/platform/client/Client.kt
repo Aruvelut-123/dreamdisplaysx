@@ -74,7 +74,6 @@ import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket*/
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
-import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 //? if >=1.19 {
 import net.minecraft.ChatFormatting
 import com.dreamdisplayx.platform.client.utils.literalText
@@ -223,12 +222,11 @@ class Client : ClientModInitializer, Mod {
                                 net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false)*/
                             return@executes 1
                         }
-                        // Defer opening the screen one tick so the client command dispatch (which
-                        // closes any screen it opened synchronously) has fully finished first.
-                        // This is not 26.2-specific: every version drops a screen opened from
-                        // inside the command handler, which made /dlogin look like a no-op.
-                        val mc = Minecraft.getInstance()
-                        mc.execute { MinecraftScreenUtil.setScreen(mc, PlatformLoginScreen()) }
+                        // Queue the screen for the next client tick. `Minecraft.execute` runs
+                        // synchronously when already on the render thread, so deferring through it
+                        // still opened (and immediately closed) the screen inside this dispatch,
+                        // which made /dlogin look like a no-op on every version.
+                        Initializer.openScreenNextTick(PlatformLoginScreen())
                         1
                     }
             )

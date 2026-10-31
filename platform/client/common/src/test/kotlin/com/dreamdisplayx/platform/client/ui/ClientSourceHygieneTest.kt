@@ -11,8 +11,9 @@ import kotlin.test.assertTrue
  *    colour code silently rendered as a literal `\u6402`. `Component.literal` does not translate them,
  *    but nothing detected the wrong codepoint either — it compiled and shipped.
  * 2. `/dlogin` opened the login screen synchronously from inside the command handler, which closes
- *    any screen it just opened, so the command appeared to be a no-op on every version below 26.2
- *    (the deferred path was gated to `>=26.2`).
+ *    any screen it just opened, so the command appeared to be a no-op. `Minecraft.execute` did not
+ *    help: on the render thread it runs the task immediately. Only a queued open drained by the
+ *    client tick (Initializer.openScreenNextTick) survives the dispatch.
  *
  * These are source-level assertions on purpose: both bugs are invisible to a compiler and to any
  * runtime test that never opens the real GUI.
@@ -37,7 +38,7 @@ class ClientSourceHygieneTest {
     }
 
     @Test
-    fun `the login screen is opened on a later tick, never inline in the command handler`() {
+    fun `the login screen is queued for a later tick, never opened inside the command handler`() {
         for (file in listOf(
             "platform/client/fabric/src/main/kotlin/com/dreamdisplayx/platform/client/Client.kt",
             "platform/client/neoforge/src/main/kotlin/com/dreamdisplayx/platform/client/Client.kt",
@@ -46,19 +47,49 @@ class ClientSourceHygieneTest {
             if (!path.isFile) continue
             val text = path.readText()
             if (!text.contains("PlatformLoginScreen()")) continue
-            val openAt = text.indexOf("PlatformLoginScreen()")
-            val deferAt = text.lastIndexOf("execute {", openAt)
+
+            // `Minecraft.execute` is NOT a deferral: it runs the task immediately when the caller
+            // already is on the render thread, which is exactly where a command handler runs. So
+            // the screen still opened (and closed) inside the same dispatch. Only a real queued
+            // open, drained by the client tick, survives that.
             assertTrue(
-                deferAt > 0 && openAt - deferAt < 200,
-                "$file must defer opening PlatformLoginScreen with Minecraft.execute { } — " +
-                    "opening it inline is closed again by the command dispatch itself.",
+                text.contains("openScreenNextTick(PlatformLoginScreen())"),
+                "$file must queue PlatformLoginScreen via Initializer.openScreenNextTick; " +
+                    "opening it inline (or via Minecraft.execute, which is synchronous on the " +
+                    "render thread) is closed again by the command dispatch itself.",
             )
             assertTrue(
                 !text.contains(".setScreen(PlatformLoginScreen())") &&
-                    !text.contains(".setScreenAndShow(PlatformLoginScreen())"),
+                    !text.contains(".setScreenAndShow(PlatformLoginScreen())") &&
+                    !text.contains("execute { MinecraftScreenUtil.setScreen(mc, PlatformLoginScreen()) }"),
                 "$file still opens PlatformLoginScreen synchronously.",
             )
         }
+    }
+
+    @Test
+    fun `the queued login screen is drained by the client tick`() {
+        val path = File(
+            repoRoot(),
+            "platform/client/common/src/main/kotlin/com/dreamdisplayx/platform/client/Initializer.kt",
+        )
+        assertTrue(path.isFile, "Initializer.kt is missing.")
+        val text = path.readText()
+        assertTrue(
+            text.contains("private var pendingScreen: Screen? = null"),
+            "Initializer must keep the queued screen in pendingScreen.",
+        )
+        assertTrue(
+            text.contains("fun openScreenNextTick(screen: Screen)"),
+            "Initializer must expose openScreenNextTick(screen).",
+        )
+        val tickAt = text.indexOf("fun onEndTick(minecraft: Minecraft)")
+        assertTrue(tickAt >= 0, "Initializer.onEndTick is missing.")
+        val drainAt = text.indexOf("pendingScreen?.let", tickAt)
+        assertTrue(
+            drainAt > tickAt,
+            "onEndTick must drain pendingScreen, otherwise the queued screen never opens.",
+        )
     }
 
     /** Walks up from the working directory until the Gradle + source layout root is found. */

@@ -18,6 +18,7 @@ import com.dreamdisplayx.util.GeneralUtil
 import com.dreamdisplayx.util.OsInfo
 import com.dreamdisplayx.util.natives.NativesDownloader
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.Screen
 //? if >=26 {
 import net.minecraft.client.gui.GuiGraphicsExtractor
 
@@ -119,12 +120,31 @@ object Initializer {
     }
 
     /**
+     * Screen queued by [openScreenNextTick], applied on the next client tick.
+     *
+     * `Minecraft.execute` runs the task *immediately* when the caller is already on the render
+     * thread, so a command handler that used it to defer a screen still opened and closed that
+     * screen inside the same command dispatch - which is why `/dlogin` looked like a no-op. This
+     * field is drained by [onEndTick] instead, one full tick later.
+     */
+    private var pendingScreen: Screen? = null
+
+    /** Queues [screen] to be opened on the next client tick instead of right now. */
+    fun openScreenNextTick(screen: Screen) {
+        pendingScreen = screen
+    }
+
+    /**
      * Main client tick handler. Detects level changes, manages render-distance unloading / restoring,
      * handles the right-click shortcut, and applies focus-mode blindness.
      */
     fun onEndTick(minecraft: Minecraft) {
         DisplayYuvRenderTypes.solidColorType()
         ClientTickManager.tick(minecraft)
+        pendingScreen?.let { screen ->
+            pendingScreen = null
+            MinecraftScreenUtil.setScreen(minecraft, screen)
+        }
     }
 
     /** Renders the fullscreen and PiP overlays on the HUD when the player is in-world and no screen is open. */
