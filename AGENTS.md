@@ -90,6 +90,12 @@
 - `ServerAnsweredTest` pins the contract: the client-facing tree carries exactly one vanilla `greedyString` node and no custom type.
 - Consequence to accept: completions round-trip to the server (slight latency) instead of being computed client-side.
 
+### SQLite JDBC must be a `shadow` dependency on every platform
+- `org.xerial:sqlite-jdbc` is un-relocated (absent from `dreamDisplaysShadedPackages`) and only reaches a fat jar through `shadow(libs.sqliteJdbc)`. `runtimeOnly` is not enough: `ShadowJar` only unpacks the `shadow` configuration.
+- Forge has no jarJar on 1.18.2-1.20.1, so a nested `META-INF/dreamdisplayx/sqlite-jdbc.jar` is dead weight; the `trimmedSqliteJdbc` + `isolatedSqliteJdbc` pair existed only to build that nested jar and was removed. Forge now mirrors Fabric: `shadow(libs.sqliteJdbc)` plus `excludeDreamDisplaysXSqliteNativeExtras()` inside `tasks.shadowJar`.
+- Symptom of a regression: `StorageManager` dies on server start with `java.sql.SQLException: No suitable driver`, and the jar has zero `org/sqlite/` entries plus no `META-INF/services/java.sql.Driver`. Verify an artifact with `unzip -l <jar> | grep -c 'org/sqlite/'` (expect >0) instead of trusting the build script.
+- `vendoredLibraries(libs.sqliteJdbc)` stays: it feeds the `runClient`/`runServer` dev classpath and is a different configuration from `shadow`. Do not delete it as a "duplicate".
+
 ### Optional animated video-loading screen
 - `animated-loading-screen` is a client-only TOML/Cloth toggle, default false; missing or invalid values must not opt existing users in.
 - `LoadingScreenAnimation` and `LoadingScreenClock` own JVM-only timing/layout, while `LoadingScreenRenderer` batches static icon/glyph/round-brush textures on both flat and conforming world displays. Keep the real first frame and legacy error/disabled paths higher priority than the intro.

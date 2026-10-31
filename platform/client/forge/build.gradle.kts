@@ -96,12 +96,6 @@ configurations.all {
 // Declared once by dreamdisplayx.kotlin-conventions; reused here.
 val javaNewerCompileApis: Configuration = configurations.getByName("javaNewerCompileApis")
 
-val isolatedSqliteJdbc = configurations.register("isolatedSqliteJdbc") {
-    isCanBeConsumed = false
-    isCanBeResolved = true
-    isTransitive = false
-}
-
 dependencies {
     javaNewerCompileApis(libs.platformweaverAnnotations)
     compileOnly(files(javaNewerCompileApis))
@@ -126,7 +120,6 @@ dependencies {
     implementation(libs.kotlinxSerializationProtobuf)
     implementation(libs.kotlinxSerializationJson)
     runtimeOnly(libs.sqliteJdbc)
-    isolatedSqliteJdbc(libs.sqliteJdbc)
     vendoredLibraries(libs.kotlinStdlib)
     vendoredLibraries(libs.kotlinxCoroutinesCore)
     vendoredLibraries(libs.kotlinxSerializationProtobuf)
@@ -163,6 +156,12 @@ dependencies {
     shadow(libs.exposedJdbc)
     shadow(libs.exposedMigrationJdbc)
     shadow(libs.hikari)
+    // sqlite-jdbc has to be a shadow dependency, exactly like on Fabric: Forge 1.18.2-1.20.1 has no
+    // jarJar, so a nested `META-INF/dreamdisplayx/sqlite-jdbc.jar` is never loaded by anything. Without
+    // the flattened classes and its `META-INF/services/java.sql.Driver` entry, Hikari's DriverManager
+    // lookup fails with `java.sql.SQLException: No suitable driver`. `excludeDreamDisplaysXSqliteNativeExtras()`
+    // trims the native binaries for platforms this mod never runs on.
+    shadow(libs.sqliteJdbc)
     scVersions.getOrNull("joml.version")?.let { shadow("org.joml:joml:$it") }
 }
 
@@ -260,12 +259,6 @@ java {
     withSourcesJar()
 }
 
-val trimmedSqliteJdbc = tasks.register<Zip>("trimmedSqliteJdbc") {
-    from(isolatedSqliteJdbc.map { configuration -> configuration.map { zipTree(it) } })
-    excludeDreamDisplaysXSqliteNativeExtras()
-    archiveFileName.set("sqlite-jdbc.jar")
-    destinationDirectory.set(layout.buildDirectory.dir("generated/isolatedSqliteJdbc"))
-}
 
 tasks.shadowJar {
     configurations = listOf(project.configurations.getByName("shadow"))
@@ -278,9 +271,7 @@ tasks.shadowJar {
         dependencies { include(dependency("org.joml:joml")) }
         relocate("org.joml", "com.dreamdisplayx.libs.org.joml")
     }
-    from(trimmedSqliteJdbc) {
-        into("META-INF/dreamdisplayx")
-    }
+    excludeDreamDisplaysXSqliteNativeExtras()
 }
 
 val reobfShadowJar = obfuscation.reobfuscate(tasks.shadowJar, sourceSets.main.get()) {

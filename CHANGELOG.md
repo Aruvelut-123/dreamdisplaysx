@@ -21,6 +21,7 @@ Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays
 
 ### Fixes
 
+- Forge jars now bundle the SQLite JDBC driver; fixes the server crashing with "No suitable driver".
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
 - Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.
