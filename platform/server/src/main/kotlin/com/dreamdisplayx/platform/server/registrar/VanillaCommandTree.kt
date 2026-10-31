@@ -9,6 +9,7 @@ import com.dreamdisplayx.platform.server.managers.DisplayGroupManager
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import com.dreamdisplayx.platform.server.playback.TimelineManager
+import com.dreamdisplayx.platform.server.commands.brigadier.answeredByServer
 import com.dreamdisplayx.platform.server.commands.subcommands.*
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.playback.FullscreenBroadcastManager
@@ -74,6 +75,7 @@ object VanillaCommandTree {
             .then(loginNode())
             .then(logoutNode())
             .build()
+            .answeredByServer()
 
     /** `/display login <platform> <token>` — saves an encrypted global credential (OP-only) and broadcasts to all players. */
     private fun loginNode(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")

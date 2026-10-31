@@ -8,7 +8,6 @@ import com.dreamdisplayx.platform.server.listeners.FabricProtectionListener
 import com.dreamdisplayx.platform.server.listeners.FabricSelectionListener
 import com.dreamdisplayx.platform.server.managers.StorageManager
 import com.dreamdisplayx.platform.server.managers.VanillaSelectionVisualizer
-import com.dreamdisplayx.platform.server.registrar.FabricBareTokenArgumentType
 import com.dreamdisplayx.platform.server.registrar.FabricCommandRegistrar
 import com.dreamdisplayx.platform.server.storage.StorageBackend
 import com.dreamdisplayx.platform.server.utils.net.FabricNetworkingAdapter
@@ -51,7 +50,6 @@ class Server : ModInitializer {
         VanillaServerState.platformName = "fabric"
         VanillaNetworking.adapter = FabricNetworkingAdapter
 
-        FabricBareTokenArgumentType.register()
         //? if >=1.20.5 {
         registerPayloadTypes()
         //?}

@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.server.registrar
 
 import com.dreamdisplayx.platform.server.PaperServer
+import com.dreamdisplayx.platform.server.commands.brigadier.answeredByServer
 import com.dreamdisplayx.platform.server.commands.subcommands.*
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -129,6 +130,7 @@ object CommandRegistrar {
         .then(loginSubCommand())
         .then(logoutSubCommand())
         .build()
+        .answeredByServer()
 
     /** `/display login <platform> <token>` — saves an encrypted global credential (OP-only) and broadcasts to all players. */
     private fun loginSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")
