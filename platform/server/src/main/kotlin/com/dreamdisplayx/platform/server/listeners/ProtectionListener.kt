@@ -9,7 +9,6 @@ import net.neoforged.neoforge.event.level.block.BreakBlockEvent as NeoForgeBreak
 //?}
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.PlayerManager
-import com.dreamdisplayx.platform.server.managers.SelectionManager
 import com.dreamdisplayx.platform.server.utils.MessageUtil
 import com.dreamdisplayx.platform.server.utils.RegionUtil
 import io.github.arnodoelinger.platformweaver.FabricOnly
@@ -118,10 +117,10 @@ class ProtectionListener : Listener {
     }
 
     /**
-     * Checks if a location is in a protected area, considering both existing displays and current selections.
+     * Checks if a location is inside an existing display.
      */
     private fun isLocationProtected(loc: Location): Boolean =
-        DisplayManager.isContains(loc) != null || SelectionManager.isLocationSelected(loc)
+        DisplayManager.isContains(loc) != null
 }
 
 /**
@@ -132,8 +131,7 @@ class ProtectionListener : Listener {
 object VanillaProtectionListener {
     /** Returns true if the break at [pos] in [worldKey] should be cancelled; warns [player] if known. */
     fun handleBreak(worldKey: String, pos: BlockPos, player: ServerPlayer?): Boolean {
-        val isProtected = DisplayManager.isContains(worldKey, pos) != null ||
-                SelectionManager.isLocationSelected(pos, worldKey)
+        val isProtected = DisplayManager.isContains(worldKey, pos) != null
 
         if (isProtected && player != null && PlayerManager.getVersion(player.uuid) == null) {
             MessageUtil.sendMessage(player, "displayBlockBreak")
@@ -144,7 +142,7 @@ object VanillaProtectionListener {
     /** Removes every protected position in [worldKey] from an explosion's destruction list. */
     fun filterExplosionBlocks(worldKey: String, positions: MutableList<BlockPos>) {
         positions.removeIf { pos ->
-            DisplayManager.isContains(worldKey, pos) != null || SelectionManager.isLocationSelected(pos, worldKey)
+            DisplayManager.isContains(worldKey, pos) != null
         }
     }
 }

@@ -5,7 +5,6 @@ import com.dreamdisplayx.platform.server.datatypes.selection.PaperSelectionData
 import com.dreamdisplayx.platform.server.datatypes.selection.SelectionData
 import com.dreamdisplayx.platform.server.datatypes.selection.VanillaSelectionData
 import com.dreamdisplayx.platform.server.utils.MessageUtil
-import com.dreamdisplayx.platform.server.utils.RegionUtil
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
@@ -85,17 +84,6 @@ object SelectionManager {
         MessageUtil.sendMessage(player, "secondPointSelected")
     }
 
-    /** Returns true if [loc] lies within any player's finalized selection. */
-    @PaperOnly
-    fun isLocationSelected(loc: Location): Boolean =
-        selectionPoints.values.filterIsInstance<PaperSelectionData>().any { it.isReady && it.contains(loc) }
-
-    /** Returns true if [pos] lies within any player's finalized selection in [worldKey]. */
-    fun isLocationSelected(pos: BlockPos, worldKey: String): Boolean =
-        selectionPoints.values.filterIsInstance<VanillaSelectionData>().any { sel ->
-            sel.isReady && sel.worldKey == worldKey && sel.contains(pos)
-        }
-
     /** Clears the selection for the player identified by [uuid]. */
     fun resetSelection(uuid: UUID) = selectionPoints.remove(uuid)?.reset()
 
@@ -105,12 +93,4 @@ object SelectionManager {
 
     /** Clears [player]'s current selection. */
     fun resetSelection(player: ServerPlayer) = resetSelection(player.uuid)
-
-    /** Returns true if [loc] is inside the bounding box defined by this selection. */
-    @PaperOnly
-    private fun PaperSelectionData.contains(loc: Location): Boolean {
-        val p1 = pos1 ?: return false
-        val p2 = pos2 ?: return false
-        return RegionUtil.isInBoundaries(p1, p2, loc)
-    }
 }
