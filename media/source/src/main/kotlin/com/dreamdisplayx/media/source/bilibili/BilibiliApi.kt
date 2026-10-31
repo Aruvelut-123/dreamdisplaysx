@@ -103,7 +103,7 @@ object BilibiliApi {
         synchronized(deviceCookieLock) {
             if (!force && deviceCookies.isNotEmpty()) return deviceCookies
             val now = Clock.System.now()
-            if (force && now - lastDeviceCookieAttempt < DEVICE_COOKIE_RETRY_MS.duration) {
+            if (force && now - lastDeviceCookieAttempt < DEVICE_COOKIE_RETRY_MS) {
                 // A WAF ban is sticky for a while; hammering the endpoint keeps it alive. Keep using
                 // whatever we already have and let the caller fail fast instead.
                 return deviceCookies
@@ -210,7 +210,7 @@ object BilibiliApi {
             source.avid?.let { put("aid", it.toString()) }
         }
         if (viewParams.isEmpty()) return null
-        val data = getJson("https://api.bilibili.com/x/web-interface/view?${plainQuery(viewParams)}")?.obj("data")
+        val data = fetchView("https://api.bilibili.com/x/web-interface/view?${plainQuery(viewParams)}")?.obj("data")
             ?: return null
         val pages = data.array("pages")?.mapNotNull { it.asJsonObjectOrNull() }
         val part = source.part ?: 1
@@ -846,11 +846,14 @@ object BilibiliApi {
     internal fun isBannedResponse(error: Throwable): Boolean {
         val text = generateSequence(error as Throwable?) { it.cause }
             .joinToString(" ") { it.message.orEmpty() }
-        return text.contains("HTTP 412") || text.contains(""code":-412") || text.contains("request was banned")
+        return text.contains("HTTP 412") || text.contains("code\":-412") || text.contains("request was banned")
     }
 
     /** Records a WAF block and refreshes the device fingerprint, at most once per cooldown. */
     private fun noteWafBlock(url: String) {
+        // Already parked: re-recording the block would push the cooldown forward forever, so a
+        // 412-per-attempt loop would never expire. Let the first one run its course.
+        if (remainingWafCooldownMs() > 0) return
         wafBlockedAt = Clock.System.now()
         logger.warn(
             "Bilibili blocked this client (HTTP 412) on {}; pausing Bilibili requests for {} and requesting a fresh fingerprint.",
