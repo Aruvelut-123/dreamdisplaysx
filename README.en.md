@@ -11,209 +11,100 @@ Watch videos, livestreams, and more directly on in-game displays — together wi
 
 Create a display, paste a link and that's it!
 
+[中文 README](README.md) · [Repository](https://github.com/Aruvelut-123/dreamdisplaysx)
+
 ![Player watching on displays](https://i.imgur.com/JoARVeu.png)
 
-Dream DisplaysX is a fork of [Dream Displays](https://github.com/arnodoelinger/dreamdisplays). If you encounter any
-error on this version, **do not** submit issues to the original repository — open an issue
-[here](https://github.com/Aruvelut-123/dreamdisplaysx/issues) instead. Thanks!
+Dream DisplaysX is a fork of [Dream Displays](https://github.com/arnodoelinger/dreamdisplays). Report problems with
+this fork [here](https://github.com/Aruvelut-123/dreamdisplaysx/issues), not upstream.
 
 # Watch anything
 
-![Display menu](https://i.imgur.com/wGnDzrT.png)
-
-|                                                                                                                                                                                                                                                                           | Source                        | What works                                                                     |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|--------------------------------------------------------------------------------|
-| <img src="https://cdn.simpleicons.org/twitch" width="32" height="32" alt="Twitch">                                                                                                                                                                                        | **Twitch**                    | Live channels, VODs, and clips                                                 |
-| <img src="https://cdn.simpleicons.org/kick" width="32" height="32" alt="Kick">                                                                                                                                                                                            | **Kick**                      | Live channels and VODs                                                         |
-| <img src="https://cdn.simpleicons.org/vimeo" width="32" height="32" alt="Vimeo">                                                                                                                                                                                          | **Vimeo**                     | Public videos and live events                                                  |
-| <img src="https://cdn.simpleicons.org/bilibili" width="32" height="32" alt="Bilibili">                                                                                                                                                                                    | **Bilibili**                  | Videos, live channels, and bangumi episodes/seasons/movies                     |
-| <img src="https://cdn.simpleicons.org/ffmpeg" width="32" height="32" alt="Video file">                                                                                                                                                                                    | **Any video link**            | Direct video files and live streams (`.m3u8` / `.mpd`) just work               |
-| <img src="https://cdn.simpleicons.org/googledrive" width="32" height="32" alt="Google Drive"><br><img src="https://cdn.simpleicons.org/dropbox" width="32" height="32" alt="Dropbox"><br><img src="https://cdn.simpleicons.org/imgur" width="32" height="32" alt="Imgur"> | **Share links**               | Google Drive, Dropbox, and Imgur links are rewritten to the file they point at |
-| <img src="https://cdn.simpleicons.org/googlechrome" width="32" height="32" alt="Web">                                                                                                                                                                                     | **Pretty much anywhere else** | Not on the list? Try it anyway — chances are it'll play                        |
-
-# Built for multiplayer
-
-Create a display, paste a link with `/display video <link>` — Dream DisplaysX figures out the rest.
-
-Watch together with your friends with seamless multiplayer synchronization. Choose between local, synchronized, and
-broadcast playback depending on how you want your displays to behave.
-
-Dream DisplaysX keeps playback synchronized across the server while keeping network usage extremely low.
-
-## Playback troubleshooting
-
-Local VOD resume positions are stored in nanoseconds. Positions within the final 500 ms are treated as completed rather than restored, preventing an immediate end-of-stream followed by a cold-start replay loop. The guard is enforced on every resume source — cold start, saved-time restore, server-broadcast display updates, end-of-stream recording, and periodic position reports — so a tail position is never re-applied, re-persisted, or re-reported as a resume point. Enabled playlists advance or pause at end-of-stream instead of replaying the current item. Seeking after a stalled player restarts at the requested position, while early stream termination is re-resolved with a bounded retry instead of looping the opening segment.
-
-Two seek / video-switch robustness guards complete that set: audio-to-video snapping is suppressed for a settle window after a far seek (the video demuxer takes seconds to flush toward the target while the audio player is already there, so an eager snap used to rewind playback to the pre-seek position), and a `set_time` dropped by libvlc during that flush is detected by sampling the video clock twice and re-applied only when the old timeline is demonstrably still advancing — a stalled clock means the demuxer is still flushing, and re-asserting would just restart it. While the seek settles, stale pre-seek frames are held so the display freezes on its last picture instead of visibly continuing the old timeline like a second player; the freeze always releases once the video clock reaches the target or a bounded timeout expires. A stream that dies while its duration is still unresolved — the "new video plays 0.5 s then pauses" case — is classified as an early end and re-resolved instead of firing the ended-pause or advancing the playlist.
-
-## Protocol compatibility
-
-Clients negotiate the batch-capable **V3** envelope (`dreamdisplayx:v3`) when available and fall back to the compatible **V2** envelope (`dreamdisplayx:v2`) otherwise. V3 same-content snapshots bind multiple displays to one URL and playback timeline. Legacy **V1** traffic is detected and the affected player is notified in chat, but V1 packets are not processed. The V2/V3 client hello advertises conforming-display support; servers send flat geometry to older clients that do not advertise it.
-
-V3, `/display group`, the Paper remote-control stick, and the Flashback / ReplayMod bridges are experimental and may change.
-
-![Cinema](https://i.imgur.com/PKxe0oG.png)
-
-# Made for you
-
-Dream DisplaysX is built to make watching videos in Minecraft feel as natural as possible.
-
-<table>
-<tr>
-<td valign="top" width="50%" align="center">
-
-## Your experience
-
-<div align="left">
-
-- **Seamless multiplayer playback** — local, synced, and broadcast modes
-- **Powerful media player** — search, Picture-in-Picture & more
-- **Immersive audio** — 3D sound, volume up to 200% & more
-- **Adjustable resolutions** — from 144p up to 4K; unknown direct-stream sizes are never forced to 4K
-- **Multi-track playback** — choose audio and subtitle renditions per viewer, with bilingual subtitle rendering and bounded HLS WebVTT loading; desktop audio switches keep video running, while Android rebuilds its native session and avoids duplicate muxed output
-- **Bounded HLS master parsing** — unused child renditions are kept lazy, so malformed or oversized masters do not trigger a serial probe storm
-- **Hardware-accelerated playback** — libvlc hardware decode (d3d11va / vaapi / videotoolbox)
-- **Video-derived dynamic lighting** — display frames light the world when LambDynamicLights is installed
-- **Complementary shader patcher** — patches Complementary r5.8.1 packs into disposable copies, leaving other packs untouched
-- **Customizable displays** — size, brightness, stretch mode & orientation
-
-</div>
-
-</td>
-<td valign="top" width="50%" align="center">
-
-## Your server
-
-<div align="left">
-
-- **Broad server support** — Paper, Fabric, NeoForge, Velocity, BungeeCord
-- **Fullscreen mode** — great for events and presentations
-- **Simple config** — precise control over displays and playback
-- **Permissions** — fine-grained control with LuckPerms support
-- **Claim protection** — display creation respects WorldGuard and optional claim plugins (GriefPrevention, Residence, Lands, Towny)
-- **Experimental ReplayMod & Flashback compatibility** — replay rendering can freeze display media and follow the replay timeline, with pause / seek / video-change / GUI actions using replay markers. Flashback support is optional and reflection-based (works through Sinytra Connector on NeoForge). A global display-audio multiplier lives in Minecraft's Sound Options; display audio is not yet captured into replay exports.
-- **Ultra-low network impact** — minimal impact for your traffic
-- **Persistent displays** — settings survive server restarts and unloading
-- **Per-display playlists** — database-backed queue (SQLite/MySQL) with add/approve/remove/skip, configurable end-of-queue behavior (pause / continue / loop), pending items excluded from playback, and add-permission policies (everyone / owner approval / owner only), all persisted in the database
-- **Conforming displays** — stairs, slabs and mixed-shaped surfaces share one fitted mesh for video, subtitles and danmaku; clients without conforming support receive a flat compatibility representation
-
-</div>
-
-</td>
-</tr>
-</table>
-
-# What's new in this fork?
-
-Compared to the original Dream Displays, this fork adds:
-
-- **Bilibili account login** — QR-code login screen (`/dlogin`); `SESSDATA` is stored **encrypted** on the server
-  (AES-256-GCM) and pushed back to unlock higher-quality / VIP Bilibili streams.
-- **Global Bilibili login** — single account per server/network, broadcast to all players,
-  OP-only with LuckPerms support and cross-server credential sync (SQLite/MySQL).
-- **Bilibili VIP badge** — official VIP badge image, differentiating normal and annual VIP.
-- **Bilibili built-in** — Simplified Chinese translation, Bilibili search in suggestions, unreleased-content filter.
-- **Bilibili danmaku** — viewer-local scrolling comments over displays, with per-display toggle and global speed/density/filter settings.
-- **RTMP / RTMPS / SRT ingest** — feed an OBS-style live stream into a display.
-- **Built-in Simplified Chinese** (`zh_cn`) language file.
-- **libvlc playback engine** — low-level JNA libvlc binding (no vlcj, no FFmpeg binary, no Rust, no Python).
-  Video and audio run on decoupled clocks for full-framerate playback; native runtimes are downloaded automatically
-  on first boot.
-- Updated for **Minecraft 1.21.1, 1.21.11, 26.1.2, 26.2, and 26.3**.
+| Source | What works |
+|---|---|
+| **Twitch** | Live channels, VODs, and clips |
+| **Kick** | Live channels and VODs |
+| **Vimeo** | Public videos and live events |
+| **Bilibili** | Videos, live channels, and bangumi episodes/seasons/movies |
+| **Any video link** | Direct video files and live streams (`.m3u8` / `.mpd`) |
+| **Share links** | Google Drive, Dropbox, and Imgur links are rewritten to the file they point at |
+| **Pretty much anywhere else** | Not on the list? Try it anyway |
 
 # Get started
 
-Build your first display, invite your friends, and make displays a part of your world.
+Build a display out of black concrete, select it with a diamond axe and type `/display create`. Then look at it and
+run `/display video <link> [language]`. Shift-right-click opens the display menu.
 
-Set up a display using black concrete, select it with a diamond axe, and type `/display create`. During selection,
-Paper, Fabric, and NeoForge show a cyan particle outline so you can confirm the region size; set `display.particles = false`
-in `config.toml` to disable it. After the display is created, type `/display video <link> [language]`. Done! To customize the
-display, look at it and press `Shift + RMB`.
+| Command | Side | What it does |
+|---|---|---|
+| `/display create` / `delete` | Server | Create / remove a display |
+| `/display video <link> [language]` | Server | Play a video, stream, or ingest URL |
+| `/display list` / `info` | Server | List / inspect displays |
+| `/display on` / `off` | Server | Enable / disable every display |
+| `/display login bilibili <sessdata>` | Server | Store the global Bilibili credential (OP only) |
+| `/display logout bilibili` | Server | Delete the global Bilibili credential (OP only) |
+| `/dlogin` / `/dlogoff` | Client | Open the Bilibili QR login screen / log out (OP only) |
 
-## Command reference
+`/dlogin` opens a QR code to scan with the Bilibili mobile app. The resulting `SESSDATA` is sent to the server,
+stored AES-256-GCM encrypted, then synced across the server network and to online clients.
 
-| Command                                          | Where      | What it does                                              |
-|--------------------------------------------------|------------|-----------------------------------------------------------|
-| `/display create` / `/display delete`            | Server     | Create / delete a display                                 |
-| `/display video <link> [language]`               | Server     | Play a video, live stream, or ingest URL                  |
-| `/display list` / `/display info`                | Server     | List / inspect displays                                   |
-| `/display on` / `/display off`                   | Server     | Toggle all displays                                       |
-| `/display login bilibili <sessdata>`             | Server     | Store Bilibili credential globally (OP-only)              |
-| `/display logout bilibili`                       | Server     | Remove stored Bilibili credential (OP-only)               |
-| `/dlogin`                                        | Client     | Open the Bilibili login screen (OP-only)                  |
-| `/dlogoff`                                       | Client     | Log out of Bilibili (OP-only)                             |
+# Supported versions
 
-> **Bilibili login tip:** run `/dlogin` in-game and scan the QR code with the Bilibili mobile app.
-> On success the mod sends your `SESSDATA` to the server, which stores it encrypted, syncs it across
-> the server network, and broadcasts it to all online players — everyone gets the unlocked streams.
+Current version **1.10.6.1**, built for:
 
-## Optional loading animation
+| Minecraft | Fabric | Forge | NeoForge | Paper |
+|---|---|---|---|---|
+| 1.18.2 | ✅ | ✅ | — | — |
+| 1.19.4 | ✅ | ✅ | — | — |
+| 1.20.1 | ✅ | ✅ | — | — |
+| 1.21.1 | ✅ | — | ✅ | ✅ |
+| 1.21.11 | ✅ | — | ✅ | ✅ |
+| 26.1.2 | ✅ | — | ✅ | ✅ |
+| 26.2 | ✅ | — | ✅ | ✅ |
+| 26.3 | ✅ | — | ✅ | ✅ |
 
-Enable **Mods → Dream DisplaysX → Configure / Config → General → Animated loading screen** to replace the in-world video-loading placeholder. It is **off by default**; disabling it preserves the original loading bar. The settings UI needs Cloth Config (and ModMenu on Fabric). Alternatively set `animated-loading-screen = true` in the game's `config/dreamdisplayx/config.toml` and restart the client.
+The Paper plugin is cross-version: one jar covers 1.21.1 – 26.3. Velocity and BungeeCord proxies are
+version-independent as well.
 
-The icon fades in at the center, then moves left as the name slides up into a centered icon/name lockup. The name has a seamlessly looping rainbow gradient flowing from left to right and a gentle per-letter vertical wave. A Windows 11-style rotating arc appears directly below the name after the entrance finishes. Flat and curved displays share the animation; the first video frame replaces it immediately without an artificial delay, and errors retain the existing error placeholder.
-
-## Download
+# Download
 
 Grab the `.jar` for your loader and Minecraft version from the
 [latest release](https://github.com/Aruvelut-123/dreamdisplaysx/releases/latest):
 
 - `dreamdisplayx-fabric-<mc>-<version>.jar` — Fabric / Quilt client or server mod
-- `dreamdisplayx-neoforge-<mc>-<version>.jar` — NeoForge client or server mod
-- `dreamdisplayx-paper-<version>.jar` — Paper plugin (cross-version, 1.21.1 – 26.3)
+- `dreamdisplayx-forge-<mc>-<version>.jar` — Forge client or server mod (1.18.2 – 1.20.1)
+- `dreamdisplayx-neoforge-<mc>-<version>.jar` — NeoForge client or server mod (1.21.1+)
+- `dreamdisplayx-paper-<version>.jar` — Paper plugin
 - `dreamdisplayx-velocity-<version>.jar` / `dreamdisplayx-bungeecord-<version>.jar` — proxy plugins
 
-On the **client**, install the mod into your mods folder. On the **server**, install the matching jar (plugin or mod).
-That's it — no extra dependencies required. LambDynamicLights is an optional client integration for video-derived dynamic lighting.
+On the **client**, drop the jar into your mods folder. On the **server**, install the matching mod or plugin.
 
-## Supported versions
+# Features
 
-| Minecraft | Fabric | NeoForge | Paper | Notes             |
-|-----------|--------|----------|-------|-------------------|
-| 1.21.1    | ✅      | ✅        | ✅     | Legacy LTS line   |
-| 1.21.11   | ✅      | ✅        | ✅     | Upstream default  |
-| 26.1.2    | ✅      | ✅        | ✅     |                   |
-| 26.2      | ✅      | ✅        | ✅     |                   |
-| 26.3      | ✅      | ✅        | ✅     |                   |
+- **Seamless multiplayer playback** — local, synced, and broadcast modes; V3 batches packets and falls back to V2
+- **Adjustable resolutions** up to 4K, with per-viewer audio and subtitle renditions (bilingual subtitles, HLS WebVTT)
+- **Conforming displays** — stairs, slabs and mixed shapes share one fitted mesh for video, subtitles and danmaku
+- **Per-display playlists** — database-backed queue (SQLite/MySQL) with approval, skip and end-of-queue policies
+- **Permissions and claim protection** — LuckPerms, WorldGuard, and optional claim plugins
+- **Video-derived dynamic lighting** (LambDynamicLights) and a Complementary shader patcher
+- **Experimental ReplayMod / Flashback compatibility**
 
-## Android (PojavLauncher / FCL / Zalith)
+# What's new in this fork
 
-- Runs on **ARM64** and **x86_64** launchers (PojavLauncher / FCL / Zalith).
-- Audio uses libvlc's OpenSL ES output; muxed media stays on the video player while separate DASH renditions (e.g. Bilibili) use a dedicated audio-only player. Desktop 3D positional audio (`javax.sound`) is unavailable.
-- Video decode defaults to software avcodec because the Pojav/FCL JVM does not expose `android.media.MediaCodecList`; opt into a launcher-provided MediaCodec bridge with a non-empty `-Ddreamdisplayx.hwDecode=<module>` override.
-- MobileGlues automatically uses a smaller avcodec thread pool to reduce native-memory contention between translated GL buffers and video buffers; player replacement waits briefly for the old vout to report paused.
-- Android libvlc players are paused (never stopped or released) during active teardown; libvlc initializes JNI before JNA and keeps callback threads attached to reduce TLS `SIGSEGV` risk when natural EOF workers exit.
-- Vmem callbacks use 32-byte-aligned strides, format generations, and leased slots; retired players and scrub sessions retain callback buffers until process exit.
-- MobileGlues bypasses the direct PBO/BGRA upload path, which can produce black frames, and uses Minecraft's command-encoder texture path instead.
-- Subtitle and danmaku textures load an Android system CJK font (such as Noto Sans CJK) when the launcher provides Cacio/AWT; runtimes without AWT safely skip text textures.
-- Bundles Android SQLite and a uniquely-named `libc++`; all `.so` files load from executable app-internal storage (emulated storage is `noexec`).
-- Ships a safe libvlc JNI bridge and an `android.os.Environment` stub; `libvlcjni.so` and Android-incompatible libvlc options are never used.
+- **Bilibili account login** — QR login (`/dlogin`), AES-256-GCM `SESSDATA` storage, global cross-server sync,
+  VIP badge, search, Simplified Chinese, and danmaku
+- **RTMP / RTMPS / SRT ingest** — feed an OBS-style stream into a display
+- **libvlc playback engine** — JNA binding with decoupled video and audio clocks
+- **Every platform** — Fabric, Forge, NeoForge, Paper, Velocity and BungeeCord builds
 
-## JVM arguments (advanced tuning & diagnostics)
+# Android (PojavLauncher / FCL / Zalith)
 
-Add these to your launcher's JVM arguments (e.g. Prism: `Settings → Java → JVM arguments`). All are
-optional — defaults work fine.
+- Runs on **ARM64** and **x86_64** launchers; audio uses libvlc's OpenSL ES output
+- Decode defaults to software `avcodec`; opt into a launcher MediaCodec bridge with `-Ddreamdisplayx.hwDecode=<module>`
+- MobileGlues bounds the decoder thread pool and bypasses the PBO upload path that can produce black frames
+- Subtitle and danmaku textures load an Android system CJK font when Cacio/AWT is available and degrade safely otherwise
 
-| Argument | Default | What it does |
-|----------|---------|--------------|
-| `-Ddreamdisplayx.hwDecode=<backend>` | `d3d11va` (Win) / `vaapi` (Linux) / `videotoolbox` (Mac) / `avcodec` (Android) | libvlc decoder module; Android defaults to software `avcodec`, while a non-empty value explicitly opts into a launcher MediaCodec bridge and an empty value remains software. |
-| `-Ddreamdisplayx.androidAvcodecThreads=<n>` | `2` on MobileGlues, `4` on other Android launchers | Bound Android software-decoder threads to `1..8` to reduce native-memory peaks. |
-| `-Ddreamdisplayx.audioBufferMs=<ms>` | `100` | Java Sound line buffer for audio. Larger is safer (45ms crashed historically); lower tightens lip-sync. |
-| `-Ddreamdisplayx.networkCachingMs=<ms>` | `300` | libvlc `--network-caching` / `--file-caching`. Raise if streams stutter on slow networks. |
-| `-Ddreamdisplayx.debugFps=true` | off | Draw the live delivered video FPS on the display-menu preview. |
-| `-Ddreamdisplayx.verboseLibvlc=true` | off | Enable libvlc debug logging (shows decoder/backend selection, fallback reasons). |
-| `-Ddreamdisplayx.noDropLateFrames=true` | off | Add `--no-drop-late-frames --no-skip-frames` (diagnostic; causes old/new-frame flicker). |
-| `-Ddreamdisplayx.noAutoResync=true` | off | Disable the A/V drift correction entirely (bisection). |
-| `-Ddreamdisplayx.silentAudio=true` | off | Never open the audio line (bisection). |
-| `-Ddreamdisplayx.noAudioCallback=true` | off | Don't register libvlc audio callbacks (bisection). |
-| `-Ddreamdisplayx.noVideoCallback=true` | off | Don't register libvlc video callbacks (bisection). |
-| `-Ddreamdisplayx.noFrameSink=true` | off | Skip preview/popout frame sinks (bisection). |
-| `-Ddreamdisplayx.noVideoPublish=true` | off | Skip the GPU surface publish — video frozen, audio only (bisection). |
-| `-Ddreamdisplayx.noHardwareAccel=true` | off | Don't pass `--avcodec-hw` to libvlc at all (bisection). |
-
-![Display](https://i.imgur.com/yyIKdp8.png)
-
-## Building from source
+# Building from source
 
 ```bash
 git clone https://github.com/Aruvelut-123/dreamdisplaysx.git
@@ -221,16 +112,15 @@ cd dreamdisplaysx
 ./gradlew :platform:client:fabric:build :platform:client:neoforge:build
 ```
 
-The project uses [Stonecutter](https://github.com/kikugie/stonecutter) for multi-version builds (version properties in
-`versions.json`, active version in `versions/active.txt`). The libvlc + SQLite natives are built by the CI
-"Build Natives" workflow from official VideoLAN distributions and **downloaded at runtime** on first boot into
-`./dreamdisplayx/natives/<os>/<arch>/` (never bundled, keeping the jar small).
+Multi-version builds use [Stonecutter](https://github.com/kikugie/stonecutter); version properties live in
+`versions.json` and the active one in `versions/active.txt`. libvlc and SQLite natives are produced by CI and
+downloaded on first boot into `./dreamdisplayx/natives/<os>/<arch>/`, never bundled into the jar.
 
-## Disclaimer
+# Disclaimer
 
-Dream DisplaysX is not affiliated with original Dream Display nor Mojang Studio.
+Dream DisplaysX is not affiliated with the original Dream Displays project or Mojang Studios.
 
-## Credits
+# Credits
 
-- **[Dream Displays](https://github.com/arnodoelinger/dreamdisplays)** — the original upstream project that this fork is based on.
-- **[VideoPlayer-Library](https://github.com/squi2rel/VideoPlayer-Library)** — reference for libvlc native build and packaging (used during CI workflow development).
+- **[Dream Displays](https://github.com/arnodoelinger/dreamdisplays)** — the upstream project this fork is based on
+- **[VideoPlayer-Library](https://github.com/squi2rel/VideoPlayer-Library)** — reference for the libvlc native build and packaging
