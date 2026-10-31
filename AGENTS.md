@@ -96,6 +96,10 @@
 - Symptom of a regression: `StorageManager` dies on server start with `java.sql.SQLException: No suitable driver`, and the jar has zero `org/sqlite/` entries plus no `META-INF/services/java.sql.Driver`. Verify an artifact with `unzip -l <jar> | grep -c 'org/sqlite/'` (expect >0) instead of trusting the build script.
 - `vendoredLibraries(libs.sqliteJdbc)` stays: it feeds the `runClient`/`runServer` dev classpath and is a different configuration from `shadow`. Do not delete it as a "duplicate".
 
+### Per-platform GUI sprite assets must be real PNGs
+- `platform/client/{fabric,neoforge,forge}/src/main/resources/.../textures/gui/sprites/widgets/` each hold their own `panel.png`/`dropdown.png`. The Forge copies were committed as **zero-byte files**, and pre-1.20.2 `LegacyGuiSprites` reads a sprite with `NativeImage.read` to learn its size, so opening the display menu threw `IOException: Image not of any type, or corrupt` on the render thread.
+- `LegacyGuiSprites.load()` wraps those reads in `runCatching` and degrades to a 16x16 fill; a broken sprite must never crash rendering.
+- `GuiSpriteAssetsTest` asserts every platform's `panel.png`/`dropdown.png` exists, is non-trivial and carries the PNG magic bytes. Extend its list when adding a per-platform sprite.
 ### Optional animated video-loading screen
 - `animated-loading-screen` is a client-only TOML/Cloth toggle, default false; missing or invalid values must not opt existing users in.
 - `LoadingScreenAnimation` and `LoadingScreenClock` own JVM-only timing/layout, while `LoadingScreenRenderer` batches static icon/glyph/round-brush textures on both flat and conforming world displays. Keep the real first frame and legacy error/disabled paths higher priority than the intro.

@@ -61,12 +61,18 @@ private object LegacyGuiSprites {
         val resources = Minecraft.getInstance().resourceManager
         val meta = ResourceLocation(id.namespace, "textures/gui/sprites/${id.path}.png.mcmeta")
         //? if >=1.19 {
-        val (w, h) = resources.getResource(texture).map { res ->
-            res.open().use { NativeImage.read(it).use { img -> img.width to img.height } }
-        }.orElse(16 to 16)
-        val border = resources.getResource(meta)
-            .map { res -> res.open().use { nineSliceBorder(JsonParser.parseReader(it.reader()).asJsonObject) } }
-            .orElse(null)
+        // A missing or corrupt sprite must degrade to a plain 16x16 fill, never crash the render thread:
+        // a zero-length .png shipped in a platform's resources used to throw `Image not of any known type`.
+        val (w, h) = runCatching {
+            resources.getResource(texture).map { res ->
+                res.open().use { NativeImage.read(it).use { img -> img.width to img.height } }
+            }.orElse(16 to 16)
+        }.getOrDefault(16 to 16)
+        val border = runCatching {
+            resources.getResource(meta)
+                .map { res -> res.open().use { nineSliceBorder(JsonParser.parseReader(it.reader()).asJsonObject) } }
+                .orElse(null)
+        }.getOrNull()
         //?} else
         /*val (w, h) = runCatching {
             resources.getResource(texture).inputStream.use { NativeImage.read(it).use { img -> img.width to img.height } }

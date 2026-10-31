@@ -21,6 +21,7 @@ Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays
 
 ### Fixes
 
+- Fixed the Forge client crashing when opening a display menu: its bundled GUI panel textures were empty files.
 - Forge jars now bundle the SQLite JDBC driver; fixes the server crashing with "No suitable driver".
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
