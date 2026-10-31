@@ -47,7 +47,7 @@ Dream DisplaysX 可以把视频、直播和更多媒体直接放进游戏里的�
 
 # 支持的版本
 
-当前版本 **1.10.6.1**，支持以下 Minecraft 版本：
+当前支持以下 Minecraft 版本（最新版本号见页面顶部的 release 徽章）：
 
 | Minecraft | Fabric | Forge | NeoForge | Paper |
 |---|---|---|---|---|

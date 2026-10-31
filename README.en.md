@@ -50,7 +50,7 @@ stored AES-256-GCM encrypted, then synced across the server network and to onlin
 
 # Supported versions
 
-Current version **1.10.6.1**, built for:
+Built for the following Minecraft versions (see the release badge above for the current version):
 
 | Minecraft | Fabric | Forge | NeoForge | Paper |
 |---|---|---|---|---|
