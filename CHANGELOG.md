@@ -1,12 +1,16 @@
 # 1.10.6.1 Release
 
 Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays/commit/ab46074057d02f31968473a08508cc1882e599b3).
-
 ## Server
 
 ### Features
 
 - Added `DisplayVeto`, so plugins can refuse a display creation, deletion or video change before it happens.
+
+### Fixes
+
+- `/display` now answers every completion on the server, so a client never has to resolve a custom argument type; fixes the Forge "Unrecognized argument type" crash on world join.
+
 
 ## Client
 

@@ -83,6 +83,13 @@
 - The shim's signatures MUST mirror paper-api exactly: `literal(name)` returns a **non-generic** `LiteralArgumentBuilder<CommandSourceStack>`, and `argument(name, type)` returns `RequiredArgumentBuilder<CommandSourceStack, T>`. Paper pins `S` to `CommandSourceStack`; a generic `fun <S> literal(...)` instead loses the inferred sender type and every `.requires { it.sender ... }` fails with `Cannot infer type for type parameter 'S'` across all versions — that mistake turned the whole CI matrix red once (commit `f6600d2e`, reverted by `c9b24e68`). Do not "simplify" the shim back to brigadier's generic factories.
 - Paper-only argument types must not leak below the gate either: `CustomArgumentType` (1.20.5+) is replaced by a plain brigadier `ArgumentType<String>` implementation.
 
+### `/display` is answered by the server (never wire a custom ArgumentType)
+- `BareTokenArgumentType` (and any future custom type) MUST stay server-side. `ServerAnswered.kt`'s `answeredByServer()` wraps the root literal into `/display <command: greedyString()>` and answers every completion itself, so a client only ever sees vanilla `greedyString`.
+- Both `/display` roots must call it: `VanillaCommandTree.build()` (Fabric/NeoForge/Forge) and `CommandRegistrar.buildDisplayCommand()` (Paper). Missing either one reintroduces the bug.
+- Do NOT add a registry entry, a `NETWORK_FALLBACK`, a platform registrar or a wire-fallback mixin for `BareTokenArgumentType`. That whole apparatus existed only to compensate for the missing wrapper; Forge never got a registrar and crashed on world join with `Unrecognized argument type ... BareTokenArgumentType`. Fabric/NeoForge registered it and still shipped the type to clients.
+- `ServerAnsweredTest` pins the contract: the client-facing tree carries exactly one vanilla `greedyString` node and no custom type.
+- Consequence to accept: completions round-trip to the server (slight latency) instead of being computed client-side.
+
 ### Optional animated video-loading screen
 - `animated-loading-screen` is a client-only TOML/Cloth toggle, default false; missing or invalid values must not opt existing users in.
 - `LoadingScreenAnimation` and `LoadingScreenClock` own JVM-only timing/layout, while `LoadingScreenRenderer` batches static icon/glyph/round-brush textures on both flat and conforming world displays. Keep the real first frame and legacy error/disabled paths higher priority than the intro.
