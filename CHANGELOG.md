@@ -27,6 +27,7 @@ Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays
 - `/dlogin` now actually opens the login screen: the screen is queued for the next client tick instead of being opened inside the command dispatch.
 - Forge now registers `/dlogin` and `/dlogoff` at all; both answered "unknown or incomplete command" on 1.19.4–1.20.1 Forge.
 - Bilibili resolution failures now name the failing step and Bilibili's own error code (`-404`, `-412`, `-10403`) instead of only "Bilibili video/room could not be reached.".
+- Bilibili playback no longer fails with `412 request was banned`: the client now sends the anonymous `buvid3`/`buvid4` device fingerprint Bilibili expects, falls back to the WBI-signed `wbi/view` endpoint when the plain one is throttled, and parks Bilibili requests for a minute after a block instead of retrying ~30 times a second.
 - `/dlogin` and `/dlogoff` are no longer hidden by the admin check; they answer with an error instead of doing nothing.
 - Chat colour codes in the client commands no longer render as a literal look-alike character.
 - Bilibili live share links with a route prefix (`/h5/<room>`, `/blanc/<room>`) resolve to the room again.

@@ -18,6 +18,8 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /** A resolved BIlibili VOD or live room: playable [streams] and [metadata]. */
@@ -75,17 +77,103 @@ object BilibiliApi {
     @Volatile
     var cookie: String = ""
 
-    /** BIlibili's API rejects requests without a browser-shaped `Referer` / `User-Agent`; the login cookie is added when present. */
+    /**
+     * The anonymous device fingerprint Bilibili hands out (`buvid3` / `buvid4`) and expects back on
+     * every subsequent request.
+     *
+     * Without it the API treats the caller as a fresh, unidentifiable bot: `x/web-interface/view`
+     * then answers `HTTP 412 {"code":-412,"message":"request was banned"}` while WBI-signed
+     * endpoints like search still work, which is exactly the split a tester reported (search showed
+     * thumbnails, opening any of them failed). Supplying the cookie fixes it.
+     */
+    @Volatile
+    private var deviceCookies: String = ""
+
+    /** Serialises the one-time fingerprint fetch so a burst of resolves cannot fire it N times. */
+    private val deviceCookieLock = Any()
+
+    /**
+     * Fetches `buvid3` / `buvid4` once, at most once per [DEVICE_COOKIE_RETRY_MS] after a 412.
+     *
+     * Returns the cookie fragment to append, or an empty string when the fetch failed — callers must
+     * keep working without it rather than failing the whole resolution.
+     */
+    private fun ensureDeviceCookies(force: Boolean = false): String {
+        deviceCookies.takeIf { it.isNotEmpty() && !force }?.let { return it }
+        synchronized(deviceCookieLock) {
+            if (!force && deviceCookies.isNotEmpty()) return deviceCookies
+            val now = Clock.System.now()
+            if (force && now - lastDeviceCookieAttempt < DEVICE_COOKIE_RETRY_MS.duration) {
+                // A WAF ban is sticky for a while; hammering the endpoint keeps it alive. Keep using
+                // whatever we already have and let the caller fail fast instead.
+                return deviceCookies
+            }
+            lastDeviceCookieAttempt = now
+            val fetched = runCatching {
+                val body = DreamHttpClient.readText(
+                    "https://api.bilibili.com/x/frontend/finger/spi",
+                    DreamHttpClient.RequestOptions(
+                        headers = DreamHttpClient.headersOf(
+                            "User-Agent" to USER_AGENT,
+                            "Accept" to "application/json",
+                            "Referer" to "https://www.bilibili.com",
+                        ),
+                        connectTimeoutMs = 8_000,
+                        readTimeoutMs = 8_000,
+                    ),
+                )
+                val data = DreamJson.compact.parseToJsonElement(body).asJsonObjectOrNull()?.obj("data")
+                listOfNotNull(
+                    data?.optString("b_3")?.takeIf { it.isNotBlank() }?.let { "buvid3=$it" },
+                    data?.optString("b_4")?.takeIf { it.isNotBlank() }?.let { "buvid4=$it" },
+                ).joinToString("; ")
+            }.getOrElse {
+                logger.warn("Bilibili device-fingerprint fetch failed: {}.", it.toString())
+                ""
+            }
+            if (fetched.isNotEmpty()) deviceCookies = fetched
+            return deviceCookies
+        }
+    }
+
+    /** When the last `buvid` attempt happened, so a WAF ban is not refreshed on every resolve. */
+    @Volatile
+    private var lastDeviceCookieAttempt: Instant = Instant.fromEpochMilliseconds(0)
+
+    /** BIlibili's API rejects requests without a browser-shaped `Referer` / `User-Agent`; the login cookie and the anonymous device fingerprint are added when present. */
     private fun headers(): Map<String, List<String>> =
         DreamHttpClient.headersOf(
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            "User-Agent" to USER_AGENT,
             "Accept" to "application/json",
             "Referer" to "https://www.bilibili.com",
-            "Cookie" to cookie,
+            "Cookie" to cookiesForRequest(),
         )
+
+    /** Joins the login cookie and the anonymous device fingerprint into one `Cookie` header. */
+    private fun cookiesForRequest(): String =
+        listOf(ensureDeviceCookies(), cookie.trim())
+            .filter { it.isNotEmpty() }
+            .joinToString("; ")
 
     /** `b23.tv` short links get followed for at most this many hops before giving up. */
     private const val MAX_REDIRECT_HOPS = 5
+
+    /** Browser-shaped UA; Bilibili rejects unknown clients outright. */
+    private const val USER_AGENT =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
+    /**
+     * How long a new `buvid` is withheld after a WAF ban. Re-requesting one on every failed resolve
+     * kept a 412 alive (a tester's log showed ~30 identical `view` requests inside one second); the
+     * ban needs to expire before a fresh fingerprint helps.
+     */
+    private val DEVICE_COOKIE_RETRY_MS = 5.minutes
+
+    /** How long Bilibili API calls are parked after a 412, so a short throttle is not extended. */
+    private val WAF_COOLDOWN = 60.seconds
+
+    /** Bilibili's WAF rejection code, delivered either as a 412 status or inside an HTTP-200 body. */
+    private const val WAF_BAN_CODE = -412
 
     /** Fixed permutation table BIlibili uses to derive the 32-char WBI mixin key. Publicly documented, stable! */
     private val MIXIN_KEY_ENC_TAB = intArrayOf(
@@ -361,7 +449,8 @@ object BilibiliApi {
         if (viewParams.isEmpty()) return null
 
         val viewUrl = "https://api.bilibili.com/x/web-interface/view?${plainQuery(viewParams)}"
-        val viewRoot = getJson(viewUrl) ?: return failResolve("view API request failed", viewUrl)
+        val viewRoot = fetchView(viewUrl)
+            ?: return failResolve("view API request failed", viewUrl)
         biliRejectionReason(viewRoot)?.let { return failResolve("view API returned $it", viewUrl) }
         val data = viewRoot.obj("data") ?: return failResolve("view API carried no data object", viewUrl)
 
@@ -699,13 +788,76 @@ object BilibiliApi {
     }
 
     /** GETs [url] and parses it as a JSON object, or null on any failure (offline, blocked, 404). */
-    private fun getJson(url: String): JsonObject? = runCatching {
-        val body = DreamHttpClient.readText(
-            url,
-            DreamHttpClient.RequestOptions(headers = headers(), connectTimeoutMs = 8_000, readTimeoutMs = 8_000),
+    private fun getJson(url: String): JsonObject? {
+        // Only the endpoints that actually get WAF-blocked are parked. Search was still working
+        // while `view` was banned, so pausing everything would break a feature that works.
+        if (isWafProneUrl(url)) {
+            val cooldown = remainingWafCooldownMs()
+            if (cooldown > 0) {
+                logger.warn(
+                    "Skipping Bilibili request for {}: still cooling down after a WAF block ({} ms left).",
+                    url.substringBefore('?'), cooldown,
+                )
+                return null
+            }
+        }
+        return runCatching {
+            val body = DreamHttpClient.readText(
+                url,
+                DreamHttpClient.RequestOptions(headers = headers(), connectTimeoutMs = 8_000, readTimeoutMs = 8_000),
+            )
+            DreamJson.compact.parseToJsonElement(body).asJsonObjectOrNull()
+        }.onFailure { error ->
+            logger.warn("Bilibili API fetch failed for {}: {}.", url, error.toString())
+            if (isBannedResponse(error)) noteWafBlock(url)
+        }.getOrNull()
+    }
+
+    /**
+     * Endpoints Bilibili's WAF actually throttles. `x/web-interface/view` is the one a tester hit;
+     * the WBI-signed search endpoints kept working through the same ban, so they stay unparked.
+     */
+    private fun isWafProneUrl(url: String): Boolean =
+        url.contains("/x/web-interface/view") ||
+            url.contains("/x/player/") ||
+            url.contains("/pgc/") ||
+            url.contains("/xlive/")
+
+    /** When the last WAF block was seen, so a burst of resolves cannot keep it alive. */
+    @Volatile
+    private var wafBlockedAt: Instant? = null
+
+    /**
+     * Milliseconds left in the post-412 cooldown, or 0 when requests may proceed.
+     *
+     * A tester's log showed ~30 identical `view` requests in one second, each rejected with 412.
+     * Retrying a WAF ban immediately is what turns a short throttle into a long one, and every retry
+     * also re-rendered a display the player could not watch, so requests are parked for
+     * [WAF_COOLDOWN] after the first block.
+     */
+    private fun remainingWafCooldownMs(): Long {
+        val since = wafBlockedAt ?: return 0
+        val elapsed = Clock.System.now() - since
+        val left = WAF_COOLDOWN - elapsed
+        return if (left.isPositive()) left.inWholeMilliseconds else 0
+    }
+
+    /** True when [error] is Bilibili's WAF rejection rather than a transport problem. */
+    internal fun isBannedResponse(error: Throwable): Boolean {
+        val text = generateSequence(error as Throwable?) { it.cause }
+            .joinToString(" ") { it.message.orEmpty() }
+        return text.contains("HTTP 412") || text.contains(""code":-412") || text.contains("request was banned")
+    }
+
+    /** Records a WAF block and refreshes the device fingerprint, at most once per cooldown. */
+    private fun noteWafBlock(url: String) {
+        wafBlockedAt = Clock.System.now()
+        logger.warn(
+            "Bilibili blocked this client (HTTP 412) on {}; pausing Bilibili requests for {} and requesting a fresh fingerprint.",
+            url.substringBefore('?'), WAF_COOLDOWN,
         )
-        DreamJson.compact.parseToJsonElement(body).asJsonObjectOrNull()
-    }.onFailure { logger.warn("Bilibili API fetch failed for {}: {}.", url, it.toString()) }.getOrNull()
+        ensureDeviceCookies(force = true)
+    }
 
     /**
      * Turns a Bilibili API payload into a human-readable rejection reason, or null when the call
@@ -721,8 +873,41 @@ object BilibiliApi {
         val code = root.optInt("code") ?: return null
         if (code == 0) return null
         val message = root.optString("message")?.takeIf { it.isNotBlank() } ?: "no message"
+        // Bilibili sometimes delivers the WAF rejection as HTTP 200 + `{"code":-412}`, not as a 412
+        // status, so the ban has to be recorded from the body as well. Otherwise the cooldown that
+        // stops the retry storm would only ever trigger on the status-code variant.
+        if (code == WAF_BAN_CODE) noteWafBlock("api.bilibili.com (code -412 in body)")
         return "code=$code ($message)"
     }
+
+    /**
+     * Reads `x/web-interface/view`, falling back to the WBI-signed `x/web-interface/wbi/view`.
+     *
+     * The plain endpoint is what Bilibili's WAF throttles first: a tester's log showed it answering
+     * `HTTP 412 {"code":-412,"message":"request was banned"}` while the WBI-signed search endpoint
+     * kept working from the same client. The WBI variant is signed with the same `img_key`/`sub_key`
+     * keys already cached for `playurl`, so trying it turns a hard failure into a working play.
+     */
+    private fun fetchView(plainViewUrl: String): JsonObject? {
+        val query = plainViewUrl.substringAfter('?', "")
+        val signed = "https://api.bilibili.com/x/web-interface/wbi/view?${signedQuery(queryParamsOf(query))}"
+        // Try the signed endpoint first once a ban has been seen; it is the one that survives.
+        if (wafBlockedAt != null) {
+            getJson(signed)?.let { if (biliRejectionReason(it) == null) return it }
+        }
+        val plain = getJson(plainViewUrl)
+        if (plain != null && biliRejectionReason(plain) == null) return plain
+        return getJson(signed) ?: plain
+    }
+
+    /** Splits an already-encoded `a=1&b=2` query back into a map for re-signing. */
+    private fun queryParamsOf(query: String): Map<String, String> =
+        query.split('&')
+            .filter { it.isNotBlank() }
+            .associate { pair ->
+                val key = pair.substringBefore('=')
+                key to pair.substringAfter('=', "")
+            }
 
     /**
      * Records why a resolution attempt produced nothing and returns null, so callers can keep

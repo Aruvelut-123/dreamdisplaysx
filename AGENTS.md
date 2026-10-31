@@ -381,6 +381,18 @@
   (entitlement), so reading only `data` collapses all of them plus real network timeouts into the same
   opaque "Bilibili video/room could not be reached." line. `getJson` logs at `warn`, not `debug`, or a
   shipped `latest.log` contains no cause at all.
+- Bilibili needs its anonymous device fingerprint (`buvid3`/`buvid4` from
+  `x/frontend/finger/spi`) or `x/web-interface/view` answers `HTTP 412 {"code":-412,"message":"request
+  was banned"}` while WBI-signed search still works — the exact search-works/open-fails split a tester
+  reported. `BilibiliApi.headers()` must send it, and `fetchView` must fall back to the WBI-signed
+  `x/web-interface/wbi/view` when the plain endpoint is throttled. This is invisible without the
+  `failResolve`/warn logging above: the old code just said "could not be reached".
+- Never retry a WAF block immediately. A tester's `latest.log` had ~30 identical `view` requests in
+  one second, each rejected; that keeps a short throttle alive and re-renders a display that cannot
+  play. `getJson` parks only the WAF-prone endpoints (`isWafProneUrl`) for `WAF_COOLDOWN` after the
+  first 412 — parking everything would break search, which kept working through the same ban. The
+  ban arrives both as a 412 status and as `{"code":-412}` inside an HTTP-200 body, so
+  `biliRejectionReason` records it too.
 - Diagnosing a user report from logs: check the reported build hash first
   (`Dream DisplaysX v… (<hash>) starting...`) and `md5sum` the attachments. A `libvlc.log`
   byte-identical to an earlier round is a re-upload of the old scene, not evidence about a new build.
