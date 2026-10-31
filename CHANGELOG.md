@@ -22,6 +22,11 @@ Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays
 ### Fixes
 
 - Fixed the Forge client crashing when opening a display menu: its bundled GUI panel textures were empty files.
+- Fixed the search box crashing the client on 1.20.1: `buttonClickSound()` called itself instead of returning the vanilla sound.
+- `/dlogin` now actually opens the login screen; the deferred open was gated to 26.2, so every older version closed it again immediately.
+- `/dlogin` and `/dlogoff` are no longer hidden by the admin check; they answer with an error instead of doing nothing.
+- Chat colour codes in the client commands no longer render as a literal look-alike character.
+- Bilibili live share links with a route prefix (`/h5/<room>`, `/blanc/<room>`) resolve to the room again.
 - Forge jars now bundle the SQLite JDBC driver; fixes the server crashing with "No suitable driver".
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.

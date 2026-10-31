@@ -9,6 +9,7 @@ import com.dreamdisplayx.platform.client.login.BilibiliLoginManager
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.render.ScreenRenderer
 import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
+import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 import com.dreamdisplayx.platform.client.Mod as DreamMod
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.mojang.blaze3d.systems.RenderSystem
@@ -29,6 +30,9 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent
 import net.neoforged.neoforge.client.event.lifecycle.ClientStoppingEvent
 //?}
 import net.neoforged.neoforge.common.NeoForge
+import net.minecraft.ChatFormatting
+import com.dreamdisplayx.platform.client.utils.literalText
+import com.dreamdisplayx.platform.client.utils.withChatColor
 
 @Mod(value = Initializer.MOD_ID, dist = [Dist.CLIENT])
 class Client(modEventBus: IEventBus) : DreamMod {
@@ -62,8 +66,11 @@ class Client(modEventBus: IEventBus) : DreamMod {
         // already logged in and when the player is OP on the server.
         event.dispatcher.register(
             Commands.literal("dlogin")
-                .requires { ClientStateManager.isAdmin }
                 .executes {
+                    if (!ClientStateManager.isAdmin) {
+                        sendClientChat("You need OP on this server to log in to Bilibili.")
+                        return@executes 0
+                    }
                     if (BilibiliApi.cookie.isNotBlank()) {
                         //? if >=26 {
                         Minecraft.getInstance().player?.sendSystemMessage(
@@ -73,22 +80,23 @@ class Client(modEventBus: IEventBus) : DreamMod {
                             net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false)*/
                         return@executes 1
                     }
-                    //? if >=26.2 {
                     // Defer opening the screen one tick so the client command dispatch (which
-                    // may close any screen it opened synchronously) has fully finished first.
-                    Minecraft.getInstance().execute {
-                        Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
-                    }
-                    //?} else
-                    /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
+                    // closes any screen it opened synchronously) has fully finished first.
+                    // Not 26.2-specific: every version drops a screen opened from inside the
+                    // command handler, which made /dlogin look like a no-op.
+                    val mc = Minecraft.getInstance()
+                    mc.execute { MinecraftScreenUtil.setScreen(mc, PlatformLoginScreen()) }
                     1
                 }
         )
         // Logs out of Bilibili — only usable when logged in and OP.
         event.dispatcher.register(
             Commands.literal("dlogoff")
-                .requires { ClientStateManager.isAdmin }
                 .executes {
+                    if (!ClientStateManager.isAdmin) {
+                        sendClientChat("You need OP on this server to log out of Bilibili.")
+                        return@executes 0
+                    }
                     if (BilibiliApi.cookie.isBlank()) {
                         //? if >=26 {
                         Minecraft.getInstance().player?.sendSystemMessage(
@@ -110,6 +118,23 @@ class Client(modEventBus: IEventBus) : DreamMod {
                     1
                 }
         )
+    }
+
+    /** Sends [text] to this client's chat HUD in [color], on the client thread. */
+    private fun sendClientChat(text: String, color: ChatFormatting = ChatFormatting.RED) {
+        val mc = Minecraft.getInstance()
+        val message = literalText(text).withStyle { it.withChatColor(color) }
+        mc.execute {
+            //? if >=26.2 {
+            mc.gui.chatListener().handleSystemMessage(message, false)
+            //?}
+            //? if >=26.1 <26.2 {
+            mc.gui.chat.addClientSystemMessage(message)
+            //?}
+            //? if <26.1 {
+            mc.gui.chat.addMessage(message)
+            //?}
+        }
     }
 
     /** On server join / leave events. */

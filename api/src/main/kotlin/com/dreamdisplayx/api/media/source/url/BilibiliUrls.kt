@@ -83,7 +83,9 @@ object BilibiliUrls {
         }
 
         if (host == "live.bilibili.com") {
-            val roomId = segments.firstOrNull()?.toLongOrNull() ?: return null
+            // Mobile share links put a route in front of the room id (`/h5/<id>`, `/blanc/<id>`), so the
+            // room id is the first purely numeric segment, not necessarily the first one.
+            val roomId = segments.firstNotNullOfOrNull { it.toLongOrNull() } ?: return null
             return MediaSource.Bilibili(url = normalized, roomId = roomId)
         }
 

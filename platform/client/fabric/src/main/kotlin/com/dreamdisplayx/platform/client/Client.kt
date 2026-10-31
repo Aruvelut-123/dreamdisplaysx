@@ -75,6 +75,9 @@ import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket*/
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
+import net.minecraft.ChatFormatting
+import com.dreamdisplayx.platform.client.utils.literalText
+import com.dreamdisplayx.platform.client.utils.withChatColor
 
 class Client : ClientModInitializer, Mod {
     /** If the `LevelRenderContext` has a `BufferSource` API, this is set to true. */
@@ -204,39 +207,43 @@ class Client : ClientModInitializer, Mod {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
                 clientLiteral("dlogin")
-                    .requires { ClientStateManager.isAdmin }
                     .executes {
+                        if (!ClientStateManager.isAdmin) {
+                            sendClientChat("You need OP on this server to log in to Bilibili.")
+                            return@executes 0
+                        }
                         if (BilibiliApi.cookie.isNotBlank()) {
                             //? if >=26 {
                             Minecraft.getInstance().player?.sendSystemMessage(
-                                net.minecraft.network.chat.Component.literal("搂eAlready logged in. Use /dlogoff first."))
+                                net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."))
                             //?} else
                             /*Minecraft.getInstance().player?.displayClientMessage(
-                                net.minecraft.network.chat.Component.literal("搂eAlready logged in. Use /dlogoff first."), false)*/
+                                net.minecraft.network.chat.Component.literal("§eAlready logged in. Use /dlogoff first."), false)*/
                             return@executes 1
                         }
-                        //? if >=26.2 {
                         // Defer opening the screen one tick so the client command dispatch (which
-                        // may close any screen it opened synchronously) has fully finished first.
-                        Minecraft.getInstance().execute {
-                            Minecraft.getInstance().setScreenAndShow(PlatformLoginScreen())
-                        }
-                        //?} else
-                        /*Minecraft.getInstance().setScreen(PlatformLoginScreen())*/
+                        // closes any screen it opened synchronously) has fully finished first.
+                        // This is not 26.2-specific: every version drops a screen opened from
+                        // inside the command handler, which made /dlogin look like a no-op.
+                        val mc = Minecraft.getInstance()
+                        mc.execute { MinecraftScreenUtil.setScreen(mc, PlatformLoginScreen()) }
                         1
                     }
             )
             dispatcher.register(
                 clientLiteral("dlogoff")
-                    .requires { ClientStateManager.isAdmin }
                     .executes {
+                        if (!ClientStateManager.isAdmin) {
+                            sendClientChat("You need OP on this server to log out of Bilibili.")
+                            return@executes 0
+                        }
                         if (BilibiliApi.cookie.isBlank()) {
                             //? if >=26 {
                             Minecraft.getInstance().player?.sendSystemMessage(
-                                net.minecraft.network.chat.Component.literal("搂eNot logged in."))
+                                net.minecraft.network.chat.Component.literal("§eNot logged in."))
                             //?} else
                             /*Minecraft.getInstance().player?.displayClientMessage(
-                                net.minecraft.network.chat.Component.literal("搂eNot logged in."), false)*/
+                                net.minecraft.network.chat.Component.literal("§eNot logged in."), false)*/
                             return@executes 1
                         }
                         BilibiliLoginManager.logout()
@@ -244,10 +251,10 @@ class Client : ClientModInitializer, Mod {
                         BilibiliAccountLabel.invalidate()
                         //? if >=26 {
                         Minecraft.getInstance().player?.sendSystemMessage(
-                            net.minecraft.network.chat.Component.literal("搂aLogged out of Bilibili."))
+                            net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."))
                         //?} else
                         /*Minecraft.getInstance().player?.displayClientMessage(
-                            net.minecraft.network.chat.Component.literal("搂aLogged out of Bilibili."), false)*/
+                            net.minecraft.network.chat.Component.literal("§aLogged out of Bilibili."), false)*/
                         1
                     }
             )
@@ -284,6 +291,23 @@ class Client : ClientModInitializer, Mod {
     //?} else
     /*private fun clientLiteral(name: String) = ClientCommandManager.literal(name)*/
     //?}
+
+    /** Sends [text] to this client's chat HUD in [color], on the client thread. */
+    private fun sendClientChat(text: String, color: ChatFormatting = ChatFormatting.RED) {
+        val mc = Minecraft.getInstance()
+        val message = literalText(text).withStyle { it.withChatColor(color) }
+        mc.execute {
+            //? if >=26.2 {
+            mc.gui.chatListener().handleSystemMessage(message, false)
+            //?}
+            //? if >=26.1 <26.2 {
+            mc.gui.chat.addClientSystemMessage(message)
+            //?}
+            //? if <26.1 {
+            mc.gui.chat.addMessage(message)
+            //?}
+        }
+    }
 
     /** Packet sender. */
     override fun sendPacket(packet: CustomPacketPayload) {
