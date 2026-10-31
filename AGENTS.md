@@ -365,6 +365,26 @@
   class init, before the instance `dataSource` Hikari pool — also covers `SqlCredentialSyncBackend`
   and Paper, both of which construct storage after `StorageManager`)
 
+### 2026-11-01 — Client commands must exist on every loader; Bilibili failures must name a cause
+- `/dlogin` and `/dlogoff` are registered per loader. Fabric uses `ClientCommandRegistrationCallback`,
+  NeoForge and Forge use `RegisterClientCommandsEvent`. Forge's `Client.kt` had registered **no**
+  client command at all, so both commands answered "unknown or incomplete command" on
+  1.19.4–1.20.1 Forge while the other two loaders worked. `RegisterClientCommandsEvent` extends
+  `net.minecraftforge.eventbus.api.Event`, so it belongs on `MinecraftForge.EVENT_BUS`, not the mod bus.
+- `ClientSourceHygieneTest`'s login-screen case must list every loader's `Client.kt` and assert
+  unconditionally. It previously did `if (!text.contains("PlatformLoginScreen()")) continue`, which
+  silently excused Forge exactly because the reference was missing — the check can never skip the
+  thing it is supposed to detect.
+- `BilibiliApi` reports failures through `failResolve(reason, url)`, never a bare `return null`, and
+  every API response passes `biliRejectionReason(root)` first. Bilibili answers HTTP **200** with
+  `{"code":-404}` (missing/region-locked), `{"code":-412}` (WAF block) or `{"code":-10403}`
+  (entitlement), so reading only `data` collapses all of them plus real network timeouts into the same
+  opaque "Bilibili video/room could not be reached." line. `getJson` logs at `warn`, not `debug`, or a
+  shipped `latest.log` contains no cause at all.
+- Diagnosing a user report from logs: check the reported build hash first
+  (`Dream DisplaysX v… (<hash>) starting...`) and `md5sum` the attachments. A `libvlc.log`
+  byte-identical to an earlier round is a re-upload of the old scene, not evidence about a new build.
+
 ### 2026-11-01 — Pose-aware scissor clipping and reachable permission nodes
 - Every `GuiGraphics` scissor call in the client UI MUST go through
   `enableScissorPoseAware` (gated `//? if >=1.21.11 { g.enableScissor(...) //?} else

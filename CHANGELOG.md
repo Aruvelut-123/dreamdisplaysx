@@ -25,6 +25,8 @@ Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays
 - Fixed the Forge client crashing when opening a display menu: its bundled GUI panel textures were empty files.
 - Fixed the search box crashing the client on 1.20.1: `buttonClickSound()` called itself instead of returning the vanilla sound.
 - `/dlogin` now actually opens the login screen: the screen is queued for the next client tick instead of being opened inside the command dispatch.
+- Forge now registers `/dlogin` and `/dlogoff` at all; both answered "unknown or incomplete command" on 1.19.4–1.20.1 Forge.
+- Bilibili resolution failures now name the failing step and Bilibili's own error code (`-404`, `-412`, `-10403`) instead of only "Bilibili video/room could not be reached.".
 - `/dlogin` and `/dlogoff` are no longer hidden by the admin check; they answer with an error instead of doing nothing.
 - Chat colour codes in the client commands no longer render as a literal look-alike character.
 - Bilibili live share links with a route prefix (`/h5/<room>`, `/blanc/<room>`) resolve to the room again.

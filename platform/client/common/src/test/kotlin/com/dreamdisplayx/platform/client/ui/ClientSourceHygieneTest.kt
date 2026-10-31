@@ -42,11 +42,21 @@ class ClientSourceHygieneTest {
         for (file in listOf(
             "platform/client/fabric/src/main/kotlin/com/dreamdisplayx/platform/client/Client.kt",
             "platform/client/neoforge/src/main/kotlin/com/dreamdisplayx/platform/client/Client.kt",
+            "platform/client/forge/src/main/kotlin/com/dreamdisplayx/platform/client/Client.kt",
         )) {
             val path = File(repoRoot(), file)
-            if (!path.isFile) continue
+            // Every listed loader's Client.kt is checked unconditionally. The earlier version of
+            // this test skipped any file without "PlatformLoginScreen()", which silently excused
+            // Forge: its client registered no commands at all, so /dlogin and /dlogoff answered
+            // "unknown or incomplete command" on 1.19.4-1.20.1 Forge for months while this test
+            // stayed green. A loader client that cannot open the login screen is a bug, not a skip.
+            assertTrue(path.isFile, "$file is missing.")
             val text = path.readText()
-            if (!text.contains("PlatformLoginScreen()")) continue
+            assertTrue(
+                text.contains("PlatformLoginScreen()"),
+                "$file never references PlatformLoginScreen(), so it registers no /dlogin command. " +
+                    "Every loader client needs its own client-command registration for that.",
+            )
 
             // `Minecraft.execute` is NOT a deferral: it runs the task immediately when the caller
             // already is on the render thread, which is exactly where a command handler runs. So

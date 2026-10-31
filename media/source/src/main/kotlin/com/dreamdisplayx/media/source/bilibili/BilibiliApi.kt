@@ -360,12 +360,15 @@ object BilibiliApi {
         }
         if (viewParams.isEmpty()) return null
 
-        val viewRoot = getJson("https://api.bilibili.com/x/web-interface/view?${plainQuery(viewParams)}")
-        val data = viewRoot?.obj("data") ?: return null
+        val viewUrl = "https://api.bilibili.com/x/web-interface/view?${plainQuery(viewParams)}"
+        val viewRoot = getJson(viewUrl) ?: return failResolve("view API request failed", viewUrl)
+        biliRejectionReason(viewRoot)?.let { return failResolve("view API returned $it", viewUrl) }
+        val data = viewRoot.obj("data") ?: return failResolve("view API carried no data object", viewUrl)
 
         val pages = data.array("pages")?.mapNotNull { it.asJsonObjectOrNull() }
         val page = pages?.firstOrNull { it.optInt("page") == part } ?: pages?.firstOrNull()
-        val cid = page?.optLong("cid") ?: data.optLong("cid") ?: return null
+        val cid = page?.optLong("cid") ?: data.optLong("cid")
+            ?: return failResolve("view API carried no cid for part $part", viewUrl)
         val resolvedBvid = data.optString("bvid") ?: bvid
 
         val playurlParams = buildMap {
@@ -375,9 +378,11 @@ object BilibiliApi {
             put("fnval", "4048")
             put("fourk", "1")
         }
-        val playurlRoot = getJson("https://api.bilibili.com/x/player/playurl?${signedQuery(playurlParams)}")
-        val streams = buildStreams(playurlRoot?.obj("data"))
-        if (streams.isEmpty()) return null
+        val playurlUrl = "https://api.bilibili.com/x/player/playurl?${signedQuery(playurlParams)}"
+        val playurlRoot = getJson(playurlUrl) ?: return failResolve("playurl request failed", playurlUrl)
+        biliRejectionReason(playurlRoot)?.let { return failResolve("playurl returned $it", playurlUrl) }
+        val streams = buildStreams(playurlRoot.obj("data"))
+        if (streams.isEmpty()) return failResolve("playurl carried no usable streams", playurlUrl)
 
         val stat = data.obj("stat")
         val owner = data.obj("owner")
@@ -401,10 +406,13 @@ object BilibiliApi {
         }
         if (seasonParams.isEmpty()) return null
 
-        val seasonRoot = getJson("https://api.bilibili.com/pgc/view/web/season?${plainQuery(seasonParams)}")
-        val result = seasonRoot?.obj("result") ?: return null
+        val seasonUrl = "https://api.bilibili.com/pgc/view/web/season?${plainQuery(seasonParams)}"
+        val seasonRoot = getJson(seasonUrl) ?: return failResolve("season API request failed", seasonUrl)
+        biliRejectionReason(seasonRoot)?.let { return failResolve("season API returned $it", seasonUrl) }
+        val result = seasonRoot.obj("result") ?: return failResolve("season API carried no result object", seasonUrl)
 
-        val episodes = result.array("episodes")?.mapNotNull { it.asJsonObjectOrNull() } ?: return null
+        val episodes = result.array("episodes")?.mapNotNull { it.asJsonObjectOrNull() }
+            ?: return failResolve("season API carried no episodes array", seasonUrl)
         val sections = sectionEpisodes(result)
         val episode = selectBangumiEpisode(episodes, sections, epId)
         if (episode == null) {
@@ -414,12 +422,18 @@ object BilibiliApi {
             )
             return null
         }
-        val resolvedEpId = episode.optLong("ep_id") ?: return null
+        val resolvedEpId = episode.optLong("ep_id")
+            ?: return failResolve("season episode carried no ep_id", seasonUrl)
 
-        val playurlRoot =
-            getJson("https://api.bilibili.com/pgc/player/web/v2/playurl?fnval=12240&fourk=1&ep_id=$resolvedEpId")
-        val streams = buildStreams(playurlRoot?.obj("result")?.obj("video_info"))
-        if (streams.isEmpty()) return null
+        val bangumiPlayUrl =
+            "https://api.bilibili.com/pgc/player/web/v2/playurl?fnval=12240&fourk=1&ep_id=$resolvedEpId"
+        val playurlRoot = getJson(bangumiPlayUrl)
+            ?: return failResolve("bangumi playurl request failed", bangumiPlayUrl)
+        biliRejectionReason(playurlRoot)?.let { return failResolve("bangumi playurl returned $it", bangumiPlayUrl) }
+        val streams = buildStreams(playurlRoot.obj("result")?.obj("video_info"))
+        if (streams.isEmpty()) {
+            return failResolve("bangumi playurl carried no usable streams for ep $resolvedEpId", bangumiPlayUrl)
+        }
 
         val seasonTitle = result.optString("title")
         val episodeTitle = episode.optString("long_title")?.takeIf { it.isNotBlank() }
@@ -490,9 +504,11 @@ object BilibiliApi {
             "codec" to "0,1",
             "qn" to "10000",
         )
-        val playRoot = getJson(
-            "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?${signedQuery(playParams)}",
-        )
+        val livePlayUrl = "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?${signedQuery(playParams)}"
+        val playRoot = getJson(livePlayUrl)
+        if (playRoot == null) {
+            logger.warn("Bilibili live playinfo request failed for room {}; returning the room metadata without streams.", roomId)
+        }
         val streams = buildLiveStreams(playRoot?.obj("data"))
         return BilibiliPlayback(streams = streams, metadata = metadata, isSeekable = false)
     }
@@ -689,7 +705,35 @@ object BilibiliApi {
             DreamHttpClient.RequestOptions(headers = headers(), connectTimeoutMs = 8_000, readTimeoutMs = 8_000),
         )
         DreamJson.compact.parseToJsonElement(body).asJsonObjectOrNull()
-    }.onFailure { logger.debug("Bilibili API fetch failed for {}: {}.", url, it.message) }.getOrNull()
+    }.onFailure { logger.warn("Bilibili API fetch failed for {}: {}.", url, it.toString()) }.getOrNull()
+
+    /**
+     * Turns a Bilibili API payload into a human-readable rejection reason, or null when the call
+     * really succeeded.
+     *
+     * Bilibili reports failures inside an HTTP 200 body: `{"code":-404,"message":"啥都木有"}` for a
+     * missing or region-locked video, `{"code":-412}` when its WAF rejects the client (usually a
+     * missing/blocked `Referer`, or a datacenter IP), `{"code":-10403}` when the account lacks the
+     * needed entitlement. Reading only `data` made every one of those look like an unrelated null,
+     * so the player only ever saw "Bilibili video/room could not be reached." with no cause.
+     */
+    internal fun biliRejectionReason(root: JsonObject): String? {
+        val code = root.optInt("code") ?: return null
+        if (code == 0) return null
+        val message = root.optString("message")?.takeIf { it.isNotBlank() } ?: "no message"
+        return "code=$code ($message)"
+    }
+
+    /**
+     * Records why a resolution attempt produced nothing and returns null, so callers can keep
+     * returning `BilibiliPlayback?`. Without this every failure reached the player as the same
+     * opaque "Bilibili video/room could not be reached." line, with nothing in the log to say
+     * whether it was the network, Bilibili's WAF, or an unsupported video.
+     */
+    private fun failResolve(reason: String, url: String): BilibiliPlayback? {
+        logger.warn("Bilibili resolve failed: {} ({})", reason, url.substringBefore('?'))
+        return null
+    }
 
     /** GETs the raw binary body at [url] with a Bilibili-shaped [referer], or null on any failure. */
     private fun getBytes(url: String, referer: String): ByteArray? = runCatching {

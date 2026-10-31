@@ -7,7 +7,15 @@ import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.input.DisplayMenuInputHandler
 import com.dreamdisplayx.platform.client.input.MouseButtons
+import com.dreamdisplayx.platform.client.login.PlatformLoginScreen
+import com.dreamdisplayx.platform.client.login.BilibiliLoginManager
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
+import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
+import com.dreamdisplayx.media.source.bilibili.BilibiliApi
+import com.dreamdisplayx.platform.client.utils.literalText
+import com.dreamdisplayx.platform.client.utils.withChatColor
+import net.minecraft.ChatFormatting
+import net.minecraft.commands.Commands
 import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload
 import com.dreamdisplayx.platform.client.overlay.CrosshairPolicy
 import com.dreamdisplayx.platform.client.overlay.OverlayManager
@@ -26,6 +34,7 @@ import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket
 import net.minecraft.world.InteractionResult
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent
+import net.minecraftforge.client.event.RegisterClientCommandsEvent
 import net.minecraftforge.client.event.RenderGuiEvent
 import net.minecraftforge.client.event.RenderGuiOverlayEvent
 import net.minecraftforge.client.event.RenderHighlightEvent
@@ -59,6 +68,10 @@ object Client : Mod {
         Initializer.onModInit(this)
 
         MinecraftForge.EVENT_BUS.register(this)
+        // RegisterClientCommandsEvent is a game-bus event on Forge too, and it is the only way to
+        // get a client-only command (/dlogin, /dlogoff). This module previously registered none,
+        // so both commands answered "unknown or incomplete command" on 1.18.2-1.20.1 Forge.
+        MinecraftForge.EVENT_BUS.addListener(this::onRegisterClientCommands)
     }
 
     /** On server join event. */
@@ -179,6 +192,68 @@ object Client : Mod {
                 mc, graphics, event.mouseX, event.mouseY, MouseButtons.hardwareLeftDown(), event.partialTick,
             )
         )
+    }
+
+    /** Registers the client-only Bilibili commands; Forge 1.18.2-1.20.1 needs this explicitly. */
+    private fun onRegisterClientCommands(event: RegisterClientCommandsEvent) {
+        // Opens the Bilibili login screen (QR code / phone + password) — only usable when not
+        // already logged in and when the player is OP on the server.
+        event.dispatcher.register(
+            Commands.literal("dlogin")
+                .executes {
+                    if (!ClientStateManager.isAdmin) {
+                        sendClientChat("You need OP on this server to log in to Bilibili.")
+                        return@executes 0
+                    }
+                    if (BilibiliApi.cookie.isNotBlank()) {
+                        chatToPlayer("Already logged in. Use /dlogoff first.")
+                        return@executes 1
+                    }
+                    // Queue the screen for the next client tick. `Minecraft.execute` runs
+                    // synchronously when already on the render thread, so deferring through it
+                    // still opened (and immediately closed) the screen inside this dispatch,
+                    // which made /dlogin look like a no-op on every version.
+                    Initializer.openScreenNextTick(PlatformLoginScreen())
+                    1
+                }
+        )
+        // Logs out of Bilibili — only usable when logged in and OP.
+        event.dispatcher.register(
+            Commands.literal("dlogoff")
+                .executes {
+                    if (!ClientStateManager.isAdmin) {
+                        sendClientChat("You need OP on this server to log out of Bilibili.")
+                        return@executes 0
+                    }
+                    if (BilibiliApi.cookie.isBlank()) {
+                        chatToPlayer("Not logged in.")
+                        return@executes 1
+                    }
+                    BilibiliLoginManager.logout()
+                    BilibiliApi.cookie = ""
+                    BilibiliAccountLabel.invalidate()
+                    chatToPlayer("Logged out of Bilibili.", ChatFormatting.GREEN)
+                    1
+                }
+        )
+    }
+
+    /** Sends [text] to this client's chat HUD in [color], on the client thread. */
+    private fun sendClientChat(text: String, color: ChatFormatting = ChatFormatting.RED) {
+        val mc = Minecraft.getInstance()
+        val message = literalText(text).withStyle { it.withChatColor(color) }
+        mc.execute {
+            mc.gui.chat.addMessage(message)
+        }
+    }
+
+    /** Sends a pre-coloured [text] line to this client's chat HUD. */
+    private fun chatToPlayer(text: String, color: ChatFormatting = ChatFormatting.YELLOW) {
+        val mc = Minecraft.getInstance()
+        val message = literalText(text).withStyle { it.withChatColor(color) }
+        mc.execute {
+            mc.player?.displayClientMessage(message, false)
+        }
     }
 
     override fun sendPacket(packet: CustomPacketPayload) {
