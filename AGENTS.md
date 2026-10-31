@@ -75,6 +75,8 @@
 ### Chisel gate syntax (hard rule)
 - A `//?} else` branch MUST start its commented body on the next line with `/*` on that first line and close with `*/`. `Chisel.kt`'s `takeCommentedElse()` scans forward for `*/`; if the body never opens with `/*` it runs to EOF and every `chiselSource` task dies with `Unclosed /* else-branch */ starting at line N`.
 - Never nest a `//? if` directive inside a commented else body. Chisel parses the inner directive as top level and the enclosing block stops matching. Extract the inner choice into a sibling function with its own gate instead (`VanillaSelectionVisualizer.cyanVector()`).
+- Import and declaration gates must cover the same version range. `MinecraftScreenUtil` was imported inside `//? if <1.19.4 {` while `/dlogin` (gated `>=1.19`) calls it, so Chisel stripped the import from every generated source at 1.20.1+ and all seven version jobs died with `Unresolved reference 'MinecraftScreenUtil'`. Before pushing, grep the generated `build/<ver>/generated/chisel/` tree for the symbol, or check that its import sits in the ungated block.
+- Legacy API shims belong in the gate of their *callers*, not of their users. `literalText`/`withChatColor` exist at every version (Texts.kt gates their bodies), but `ChatFormatting` and the helpers themselves only compile against the 1.19+ Component API, so both the imports and `sendClientChat` need `//? if >=1.19`.
 - Gate the helper itself at the same bounds as its imports: a helper only referenced from an `else` body still gets compiled for every version that satisfies its own gate, so an unguarded helper that names a since-removed type breaks the modern versions it was never meant for (`Vector3f` above 1.21.11).
 
 ### Legacy (<1.20.5) server command trees
