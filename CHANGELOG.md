@@ -1,14 +1,12 @@
 # 1.10.6.1 Release
-
-Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays/commit/ab46074057d02f31968473a08508cc1882e599b3).
+Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
 ## Server
-
 ### Features
-
 - Added `DisplayVeto`, so plugins can refuse a display creation, deletion or video change before it happens.
-
 ### Fixes
-
+- A pending selection no longer protects blocks: explosions, pistons and block breaks inside a region that has not been turned into a display yet all work again.
+- `/display create` rejects an oversized selection before measuring it block by block.
+- Selections are dropped when a player disconnects.
 - `/display` now answers every completion on the server, so a client never has to resolve a custom argument type; fixes the Forge "Unrecognized argument type" crash on world join.
 - `/display login`, `/display logout`, `/display stats` and `/display reload` answer with a missing-permission message instead of looking like unknown commands.
 
