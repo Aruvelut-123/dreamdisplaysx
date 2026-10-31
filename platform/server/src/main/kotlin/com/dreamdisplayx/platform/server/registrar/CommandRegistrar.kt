@@ -134,7 +134,8 @@ object CommandRegistrar {
 
     /** `/display login <platform> <token>` — saves an encrypted global credential (OP-only) and broadcasts to all players. */
     private fun loginSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")
-        .requires { it.sender.isOp || it.sender.hasPermission(PaperServer.config.permissions.login) }
+        // Checked inside `executes`: a failing `requires` removes the node from the tree, so the
+        // player would only see "unknown or incomplete command" instead of a permission message.
         .then(
             Commands.argument("platform", StringArgumentType.word())
                 .then(
@@ -142,6 +143,10 @@ object CommandRegistrar {
                         .executes { ctx ->
                             val sender = ctx.source.sender
                             val player = sender as? Player ?: return@executes 0
+                            if (!sender.isOp && !sender.hasPermission(PaperServer.config.permissions.login)) {
+                                MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+                                return@executes 1
+                            }
                             val platform = StringArgumentType.getString(ctx, "platform")
                             val token = StringArgumentType.getString(ctx, "token")
                             if (token.isBlank()) {
@@ -166,12 +171,16 @@ object CommandRegistrar {
 
     /** `/display logout <platform>` — removes the global credential (OP-only) and broadcasts to all players. */
     private fun logoutSubCommand(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("logout")
-        .requires { it.sender.isOp || it.sender.hasPermission("dreamdisplayx.logout") }
+        // See [loginSubCommand]: keep the node reachable so a denied player gets a message.
         .then(
             Commands.argument("platform", StringArgumentType.word())
                 .executes { ctx ->
                     val sender = ctx.source.sender
                     val player = sender as? Player ?: return@executes 0
+                    if (!sender.isOp && !sender.hasPermission("dreamdisplayx.logout")) {
+                        MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+                        return@executes 1
+                    }
                     val platform = StringArgumentType.getString(ctx, "platform")
                     val snapshot = CredentialActions.globalLogout(platform)
                     // Broadcast to all online players

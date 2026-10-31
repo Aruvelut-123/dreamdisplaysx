@@ -10,6 +10,7 @@ Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays
 ### Fixes
 
 - `/display` now answers every completion on the server, so a client never has to resolve a custom argument type; fixes the Forge "Unrecognized argument type" crash on world join.
+- `/display login`, `/display logout`, `/display stats` and `/display reload` answer with a missing-permission message instead of looking like unknown commands.
 
 
 ## Client
@@ -28,6 +29,7 @@ Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays
 - Chat colour codes in the client commands no longer render as a literal look-alike character.
 - Bilibili live share links with a route prefix (`/h5/<room>`, `/blanc/<room>`) resolve to the room again.
 - Bilibili share links with a locale prefix (`/zh-Hans/video/<id>`) resolve to the video instead of being handed to libvlc as an HTML page.
+- Fixed the GUI card strip disappearing while still clickable on small windows and mobile GUI scales: clip rects now follow the screen's own scale transform.
 - Forge jars now bundle the SQLite JDBC driver; fixes the server crashing with "No suitable driver".
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.

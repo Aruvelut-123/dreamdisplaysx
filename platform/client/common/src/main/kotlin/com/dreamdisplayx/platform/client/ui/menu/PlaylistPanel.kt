@@ -10,6 +10,9 @@ import com.dreamdisplayx.core.protocol.common.packets.PlaylistItem
 import com.dreamdisplayx.platform.client.managers.PlaylistStateStore
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
+//? if <1.21.11 {
+import com.dreamdisplayx.platform.client.ui.enableScissorPoseAware
+//?}
 import com.dreamdisplayx.platform.client.ui.kit.UiRect
 import com.dreamdisplayx.platform.client.ui.kit.UiTheme
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
@@ -323,7 +326,10 @@ class PlaylistPanel(
             return
         }
         // Overflowing: clip, then marquee on hover after the dwell.
+        //? if >=1.21.11 {
         g.enableScissor(x, y - 2, x + maxW, y + font.lineHeight + 2)
+        //?} else
+        /*g.enableScissorPoseAware(x, y - 2, x + maxW, y + font.lineHeight + 2)*/
         val now = System.currentTimeMillis()
         if (hovered) {
             if (marqueeItem != itemId) {

@@ -365,6 +365,24 @@
   class init, before the instance `dataSource` Hikari pool — also covers `SqlCredentialSyncBackend`
   and Paper, both of which construct storage after `StorageManager`)
 
+### 2026-11-01 — Pose-aware scissor clipping and reachable permission nodes
+- Every `GuiGraphics` scissor call in the client UI MUST go through
+  `enableScissorPoseAware` (gated `//? if >=1.21.11 { g.enableScissor(...) //?} else
+  /*g.enableScissorPoseAware(...)*/`). `UiScreenBase.renderScaled` renders the whole screen through a
+  `PoseStack` scale whenever the window is smaller than `MIN_CONTENT_W` x `MIN_CONTENT_H` (640x410) —
+  which every mobile GUI scale is — and `GuiGraphics.enableScissor` only multiplies by
+  `Window.getGuiScale()`, ignoring that matrix. The clip rect then lands outside the real window and
+  hides content while the (virtual-coordinate) hit boxes keep working: the classic "invisible but
+  clickable, with a click sound" report. `UiScissorAndCommandGateTest` pins this.
+- Never gate a user-facing subcommand with `.requires { ... }` when the desired UX is a permission
+  message. Brigadier prunes a node whose requirement fails, so the player gets "unknown or incomplete
+  command" — indistinguishable from the command not existing. Check inside `executes` and reply with
+  `displayCommandMissingPermission` instead (`/display login`, `/display logout`, `/display stats`,
+  `/display reload`). Same rule applies to the Paper `CommandRegistrar`.
+- `Minecraft.execute` is NOT a deferral: on the render thread it runs the task immediately.
+  Opening a screen from a command handler needs a real queue drained by the client tick
+  (`Initializer.openScreenNextTick`).
+
 ## Workflow Rules
 
 ### Post-Change Checklist (MANDATORY)

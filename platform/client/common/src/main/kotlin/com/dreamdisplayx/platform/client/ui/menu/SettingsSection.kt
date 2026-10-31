@@ -3,6 +3,9 @@ package com.dreamdisplayx.platform.client.ui.menu
 import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
+//? if <1.21.11 {
+import com.dreamdisplayx.platform.client.ui.enableScissorPoseAware
+//?}
 import com.dreamdisplayx.platform.client.ui.kit.UiRect
 import com.dreamdisplayx.platform.client.ui.kit.UiTheme
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
@@ -279,7 +282,10 @@ class SettingsSection(
      */
     fun beginChildClip(g: GuiGraphicsCompat) {
         if (maxScroll <= 0) return
+        //? if >=1.21.11 {
         g.enableScissor(clipLeft, areaTop, clipRight, areaBottom)
+        //?} else
+        /*g.enableScissorPoseAware(clipLeft, areaTop, clipRight, areaBottom)*/
     }
 
     /** Ends the child-widget scissor started by [beginChildClip]. */

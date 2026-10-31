@@ -261,7 +261,10 @@ class SuggestionsPanel(
         scrollOffset = scrollOffset.coerceIn(0, maxOff)
 
         val cards = controller.visibleCards
+        //? if >=1.21.11 {
         g.enableScissor(stripLeft, stripTop, stripRight, stripBottom)
+        //?} else
+        /*g.enableScissorPoseAware(stripLeft, stripTop, stripRight, stripBottom)*/
         hoveredCard = -1
         val rowY = if (vertical) 0 else stripTop + max(0, (viewportH - refCh) / 2)
         var pos = (if (vertical) stripTop else stripLeft) - scrollOffset

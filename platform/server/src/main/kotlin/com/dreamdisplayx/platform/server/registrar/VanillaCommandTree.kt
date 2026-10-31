@@ -79,13 +79,19 @@ object VanillaCommandTree {
 
     /** `/display login <platform> <token>` — saves an encrypted global credential (OP-only) and broadcasts to all players. */
     private fun loginNode(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("login")
-        .requires { requiresNode(it, { _ -> "dreamdisplayx.login" }, VanillaPermissions.Fallback.OP) }
+        // The permission is checked inside `executes` rather than via `requires`: Brigadier drops a
+        // node whose requirement fails, so a plain player would see "unknown or incomplete command"
+        // with no hint instead of the missing-permission message.
         .then(
             Commands.argument("platform", StringArgumentType.word())
                 .then(
                     Commands.argument("token", StringArgumentType.greedyString())
                         .executes { ctx ->
                             val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                            if (!requiresNode(ctx.source, { _ -> "dreamdisplayx.login" }, VanillaPermissions.Fallback.OP)) {
+                                MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+                                return@executes 0
+                            }
                             val platform = StringArgumentType.getString(ctx, "platform")
                             val token = StringArgumentType.getString(ctx, "token")
                             if (token.isBlank()) {
@@ -110,11 +116,15 @@ object VanillaCommandTree {
 
     /** `/display logout <platform>` — removes the global credential (OP-only) and broadcasts to all players. */
     private fun logoutNode(): LiteralArgumentBuilder<CommandSourceStack> = Commands.literal("logout")
-        .requires { requiresNode(it, { _ -> "dreamdisplayx.logout" }, VanillaPermissions.Fallback.OP) }
+        // See [loginNode]: keep the node reachable so a denied player gets a message, not silence.
         .then(
             Commands.argument("platform", StringArgumentType.word())
                 .executes { ctx ->
                     val player = ctx.source.entity as? ServerPlayer ?: return@executes 0
+                    if (!requiresNode(ctx.source, { _ -> "dreamdisplayx.logout" }, VanillaPermissions.Fallback.OP)) {
+                        MessageUtil.sendMessage(player, "displayCommandMissingPermission")
+                        return@executes 0
+                    }
                     val platform = StringArgumentType.getString(ctx, "platform")
                     val snapshot = CredentialActions.globalLogout(platform)
                     // Broadcast to all online players
@@ -214,16 +224,22 @@ object VanillaCommandTree {
 
     /** Builds the `/display stats` subcommand. */
     private fun statsNode() = Commands.literal("stats")
-        .requires { requiresNode(it, { p -> p.stats }, VanillaPermissions.Fallback.OP) }
         .executes { ctx ->
+            if (!requiresNode(ctx.source, { p -> p.stats }, VanillaPermissions.Fallback.OP)) {
+                MessageUtil.sendMessage(ctx.source.entity as? ServerPlayer, "displayCommandMissingPermission")
+                return@executes 0
+            }
             VanillaStatsCommand.execute(ctx)
             Command.SINGLE_SUCCESS
         }
 
     /** Builds the `/display reload` subcommand. */
     private fun reloadNode() = Commands.literal("reload")
-        .requires { requiresNode(it, { p -> p.reload }, VanillaPermissions.Fallback.OP) }
         .executes { ctx ->
+            if (!requiresNode(ctx.source, { p -> p.reload }, VanillaPermissions.Fallback.OP)) {
+                MessageUtil.sendMessage(ctx.source.entity as? ServerPlayer, "displayCommandMissingPermission")
+                return@executes 0
+            }
             VanillaReloadCommand.execute(ctx)
             Command.SINGLE_SUCCESS
         }
