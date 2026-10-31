@@ -4,6 +4,7 @@ import com.dreamdisplayx.api.display.geometry.ConformQuad
 import com.dreamdisplayx.api.display.geometry.ConformVertex
 import com.dreamdisplayx.api.display.geometry.clipToUvRect
 import com.dreamdisplayx.platform.client.Initializer
+import com.dreamdisplayx.platform.client.utils.identifier
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import com.dreamdisplayx.platform.client.render.LoadingScreenGeometry.CONTENT_LIFT
@@ -35,7 +36,7 @@ internal object LoadingScreenRenderer {
     private val brushType by lazy { texture("textures/gui/loading_dot.png", "loading-ring") }
 
     private fun texture(path: String, name: String): RenderType = DisplayUnlitRenderTypes.create(
-        "dream-displays-$name", Identifier.fromNamespaceAndPath(Initializer.MOD_ID, path), translucent = true,
+        "dream-displays-$name", identifier(Initializer.MOD_ID, path), translucent = true,
     )
 
     /** Called before the flat/curved split; the real first frame always wins over the intro. */
@@ -160,8 +161,13 @@ internal object LoadingScreenRenderer {
     }
 
     private fun vertex(pose: PoseStack.Pose, builder: VertexConsumer, x: Float, y: Float, z: Float, u: Float, v: Float, rgb: Int, alpha: Float) {
-        builder.addVertex(pose, x, y, z).setUv(u, v).setColor(
-            (rgb shr 16) and 255, (rgb shr 8) and 255, rgb and 255, (alpha.coerceIn(0f, 1f) * 255f).toInt(),
-        )
+        val r = (rgb shr 16) and 255
+        val g = (rgb shr 8) and 255
+        val b = rgb and 255
+        val a = (alpha.coerceIn(0f, 1f) * 255f).toInt()
+        //? if >=1.21.1 {
+        builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, a)
+        //?} else
+        /*builder.vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, a).endVertex()*/
     }
 }

@@ -143,7 +143,9 @@ internal class TimelineFollower(private val screen: DisplayScreen) {
                 )
             } else target
 
-            screen.clearRenderedFrameForTimeline()
+            // While paused the last decoded frame is what the user should keep seeing: clearing it would
+            // fade the display back to its placeholder until playback resumes. Upstream 5c794ade.
+            if (!packet.paused) screen.clearRenderedFrameForTimeline()
             screen.seekVideoTo(seekMs * 1_000_000L)
             lastSeekNanos = System.nanoTime()
             screen.markInitialTimelineReady()

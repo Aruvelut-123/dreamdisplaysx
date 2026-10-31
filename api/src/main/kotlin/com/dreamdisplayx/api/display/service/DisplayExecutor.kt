@@ -1,13 +1,12 @@
 package com.dreamdisplayx.api.display.service
 
+import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.display.model.Display
 import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.model.settings.DisplaySettings
 import com.dreamdisplayx.api.media.model.VideoQuality
-import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.PlaybackMode
-import kotlin.time.Duration
 
 /**
  * Dispatcher for display commands.
@@ -41,10 +40,10 @@ interface DisplayExecutor {
     fun stop(displayId: DisplayId): Boolean = false
 
     /** Seek to a specific position. */
-    fun seek(displayId: DisplayId, position: Duration): Display? = null
+    fun seek(displayId: DisplayId, positionMs: Long): Display? = null
 
-    /** Seek [delta] relative to the current position. */
-    fun seekRelative(displayId: DisplayId, delta: Duration): Display? = null
+    /** Seek [deltaMs] relative to the current position. */
+    fun seekRelative(displayId: DisplayId, deltaMs: Long): Display? = null
 
     /** Set the volume. */
     fun setVolume(displayId: DisplayId, volume: Float): Display? = null
@@ -55,10 +54,10 @@ interface DisplayExecutor {
     /** Set the active audio track, identified by its resolved stream URL. */
     fun setAudioTrack(displayId: DisplayId, trackUrl: String): Display? = null
 
-    /** Set the stable subtitle identity, or null to turn subtitles off. */
+    /** Sets the subtitle track language, or null to turn subtitles off. */
     fun setSubtitleTrack(displayId: DisplayId, lang: String?): Display? = null
 
-    /** Set primary and optional secondary subtitle identities for bilingual rendering. */
+    /** Sets a primary and optional secondary subtitle language for bilingual rendering. */
     fun setSubtitleTracks(displayId: DisplayId, primaryLang: String?, secondaryLang: String?): Display? =
         setSubtitleTrack(displayId, primaryLang)
 

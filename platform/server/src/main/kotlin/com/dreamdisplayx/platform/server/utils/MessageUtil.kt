@@ -1,14 +1,23 @@
 package com.dreamdisplayx.platform.server.utils
 
+import com.dreamdisplayx.platform.client.utils.emptyText
+import com.dreamdisplayx.platform.client.utils.literalText
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.util.toJsonString
+//? if <1.19 {
+import com.dreamdisplayx.platform.server.utils.sendSystemMessage
+//?}
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.serializer.json.JSONComponentSerializer
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+//? if >=1.19 {
 import net.minecraft.core.registries.BuiltInRegistries
+//?} else
+/*import net.minecraft.core.Registry*/
 //? if >=1.21.11 {
 import net.minecraft.data.AtlasIds
 //?}
@@ -219,11 +228,11 @@ object MessageUtil {
 
     /** NMS component builder from a JSON component map. */
     private fun nmsComponentFromJsonValue(value: Any?): NmsComponent? = when (value) {
-        is String -> NmsComponent.literal(value)
+        is String -> literalText(value)
         is Map<*, *> -> {
             val root = when {
-                value.string("translate") != null -> NmsComponent.translatable(value.string("translate")!!)
-                else -> NmsComponent.literal(value.string("text") ?: "")
+                value.string("translate") != null -> translatableText(value.string("translate")!!)
+                else -> literalText(value.string("text") ?: "")
             }
             value.list("extra")?.forEach { child ->
                 nmsComponentFromJsonValue(child)?.let(root::append)
@@ -232,7 +241,7 @@ object MessageUtil {
         }
 
         is List<*> -> {
-            val root = NmsComponent.empty()
+            val root = emptyText()
             value.forEach { child -> nmsComponentFromJsonValue(child)?.let(root::append) }
             root
         }
@@ -244,7 +253,10 @@ object MessageUtil {
     private fun MutableComponent.withJsonStyle(value: Map<*, *>): MutableComponent = withStyle { base ->
         var style = base
         value.string("color")?.let { color ->
+            //? if >=1.20.5 {
             val parsedColor = net.minecraft.network.chat.TextColor.parseColor(color).result().orElse(null)
+            //?} else
+            /*val parsedColor = net.minecraft.network.chat.TextColor.parseColor(color)*/
             if (parsedColor != null) style = style.withColor(parsedColor)
         }
         value.bool("bold")?.let { style = style.withBold(it) }
@@ -270,7 +282,7 @@ object MessageUtil {
         val hoverEvent = value.map("hoverEvent")
         if (hoverEvent?.string("action") == "show_text") {
             val hoverComponent = nmsComponentFromJsonValue(hoverEvent["value"])
-                ?: hoverEvent.string("value")?.let(NmsComponent::literal)
+                ?: hoverEvent.string("value")?.let(::literalText)
             hoverComponent?.let {
                 //? if >=1.21.11 {
                 style = style.withHoverEvent(net.minecraft.network.chat.HoverEvent.ShowText(it))
@@ -307,18 +319,25 @@ object MessageUtil {
             return
         }
         val pattern = Regex("""\{(\d+)}""")
-        val root = NmsComponent.literal("")
+        val root = literalText("")
         var lastIndex = 0
         for (match in pattern.findAll(rawMessage)) {
             val textBefore = rawMessage.substring(lastIndex, match.range.first)
             if (textBefore.isNotEmpty()) root.append(parseAmpersandLegacy(textBefore))
             val index = match.groupValues[1].toIntOrNull()
             if (index != null && index < materialKeys.size) {
+                //? if >=1.21.1 {
                 val itemId = Identifier.parse(materialKeys[index])
+                //?} else
+                /*val itemId = Identifier(materialKeys[index])*/
                 val spriteComponent =
                     //? if >=1.21.11 {
                     run {
-                        val item = BuiltInRegistries.ITEM.getValue(itemId)
+                        val item =
+                            //? if >=1.19 {
+                            BuiltInRegistries.ITEM.getValue(itemId)
+                            //?} else
+                            /*Registry.ITEM.get(itemId)*/
                         val isBlock = item is net.minecraft.world.item.BlockItem
                         val atlasId = if (isBlock) AtlasIds.BLOCKS else AtlasIds.ITEMS
                         val spriteId = Identifier.fromNamespaceAndPath(
@@ -335,7 +354,7 @@ object MessageUtil {
                         spriteComponent.withStyle { it.withHoverEvent(hoverEvent) }
                     }
                 //?} else
-                /*NmsComponent.literal(itemId.toString())*/
+                /*literalText(itemId.toString())*/
                 root.append(spriteComponent)
             }
             lastIndex = match.range.last + 1
@@ -347,5 +366,5 @@ object MessageUtil {
 
     /** Converts `&` color codes to a plain NMS text component (strips formatting on `Fabric`/`NeoForge`). */
     private fun parseAmpersandLegacy(text: String): NmsComponent =
-        NmsComponent.literal(text.replace(Regex("&[0-9a-fA-FrRlLoOnNmMkK]"), ""))
+        literalText(text.replace(Regex("&[0-9a-fA-FrRlLoOnNmMkK]"), ""))
 }

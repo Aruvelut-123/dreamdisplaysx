@@ -1,6 +1,7 @@
 //? if >=1.21.11 {
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.platform.client.utils.identifier
 import com.dreamdisplayx.platform.client.Initializer
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
@@ -72,13 +73,13 @@ internal object Yuv262Reflect {
         val quads = RenderPipelineCompat.reflectiveEnumValue(topologyClass, "QUADS")
         builderClass.getMethod("withPrimitiveTopology", topologyClass).invoke(builder, quads)
 
-        builder.withLocation(Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "pipeline/display_yuv"))
-        builder.withVertexShader(Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_fog" +
+        builder.withLocation(identifier(Initializer.MOD_ID, "pipeline/display_yuv"))
+        builder.withVertexShader(identifier(Initializer.MOD_ID, "core/display_fog" +
             //? if >=26.3 {
             "_rp"
             //?} else
             /*""*/))
-        builder.withFragmentShader(Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "core/display_yuv" +
+        builder.withFragmentShader(identifier(Initializer.MOD_ID, "core/display_yuv" +
             //? if >=26.3 {
             "_rp"
             //?} else

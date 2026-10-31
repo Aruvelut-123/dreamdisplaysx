@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.listeners
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.core.protocol.common.packets.RemoteControlOpen
@@ -9,6 +10,9 @@ import com.dreamdisplayx.platform.server.utils.RegionUtil
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
+//? if <1.19 {
+import com.dreamdisplayx.platform.server.utils.sendSystemMessage
+//?}
 import net.minecraft.network.chat.Component
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
@@ -17,8 +21,10 @@ import net.minecraft.world.InteractionResult
 import net.minecraft.world.item.Items
 import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.fabricmc.fabric.api.event.player.UseItemCallback
+//? if >=1.21.1 {
 import net.neoforged.bus.api.SubscribeEvent
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent
+//?}
 
 /** Experimental cross-loader remote-control stick behavior. */
 @ModLoaderOnly
@@ -35,7 +41,7 @@ object VanillaRemoteControlListener {
         }
         val display = target(player, level) ?: return false
         RemoteControlItemAdapter.writeLinked(stack, display.id, "Display Remote — ${display.name ?: display.id.toString().take(8)}")
-        player.sendSystemMessage(Component.literal("Remote linked to display ${display.name ?: display.id.toString().take(8)}."))
+        player.sendSystemMessage(literalText("Remote linked to display ${display.name ?: display.id.toString().take(8)}."))
         return true
     }
 
@@ -78,6 +84,7 @@ object FabricVanillaRemoteControlListener {
     }
 }
 
+//? if >=1.21.1 {
 /** NeoForge adapters for block and air right-clicks. */
 @NeoForgeOnly
 @ModLoaderOnly
@@ -96,3 +103,4 @@ object NeoForgeVanillaRemoteControlListener {
         if (VanillaRemoteControlListener.handle(player, level)) event.cancellationResult = InteractionResult.SUCCESS
     }
 }
+//?}

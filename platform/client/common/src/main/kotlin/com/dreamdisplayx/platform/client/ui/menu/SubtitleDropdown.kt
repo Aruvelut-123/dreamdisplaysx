@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.utils.translatableText
+import com.dreamdisplayx.platform.client.utils.buttonClickSound
 import com.dreamdisplayx.api.media.source.model.SubtitleTrack
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
@@ -70,7 +72,7 @@ class SubtitleDropdown(
     private fun maxScrollIndex(): Int = (items.size - MAX_VISIBLE).coerceAtLeast(0)
 
     private fun label(track: SubtitleTrack?): String =
-        track?.name ?: track?.language ?: Component.translatable("dreamdisplayx.ui.subtitles_off").string
+        track?.name ?: track?.language ?: translatableText("dreamdisplayx.ui.subtitles_off").string
 
     fun draw(g: GuiGraphicsCompat, anchorCenterX: Int, anchorY: Int, mouseX: Int, mouseY: Int) {
         val now = System.nanoTime()
@@ -193,7 +195,7 @@ class SubtitleDropdown(
         if (!inside || items.isEmpty()) return false
         val rowTop = rect.y + PAD_V
         val index = ((my - rowTop + scrollPx) / ITEM_H).toInt().coerceIn(0, items.size - 1)
-        val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+        val s = SimpleSoundInstance.forUI(buttonClickSound(), 1.0f)
         Minecraft.getInstance().soundManager.play(s)
         onSelect(items[index])
         return true

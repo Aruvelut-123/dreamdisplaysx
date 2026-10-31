@@ -30,7 +30,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer
 import com.mojang.blaze3d.vertex.VertexFormat
 //?}
 import net.minecraft.client.Camera
-import net.minecraft.world.phys.Vec3
 import kotlin.math.sin
 
 /** Renders screens in the world. Better not to touch this shit. */
@@ -91,10 +90,10 @@ object ScreenRenderer : ClientRenderService {
 
                 stack.pushPose()
 
+                // Upstream 1d9120aa: translate by raw deltas instead of building (and subtracting) a Vec3
+                // per screen per frame — this loop runs for every display on every rendered frame.
                 val pos = displayScreen.pos
-                val screenCenter = Vec3.atLowerCornerOf(pos)
-                val relativePos = screenCenter.subtract(cameraPos)
-                stack.translate(relativePos.x, relativePos.y, relativePos.z)
+                stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z)
 
                 renderScreenTexture(displayScreen, stack, replay, drawQuad)
 
@@ -476,18 +475,29 @@ object ScreenRenderer : ClientRenderService {
         v1: Float = 1f,
     ) {
         val rot = rotation.quarterTurns
-        // Corner UVs in vertex order (0,0),(1,0),(1,1),(0,1); rotating the list by [rotation] spins the image.
-        val uv = arrayOf(
-            u0 to v1,
-            u1 to v1,
-            u1 to v0,
-            u0 to v0,
-        )
-        addVertex(pose, builder, qx0, qy0, 0f, r, g, b, uv[rot % 4].first, uv[rot % 4].second)
-        addVertex(pose, builder, qx1, qy0, 0f, r, g, b, uv[(1 + rot) % 4].first, uv[(1 + rot) % 4].second)
-        addVertex(pose, builder, qx1, qy1, 0f, r, g, b, uv[(2 + rot) % 4].first, uv[(2 + rot) % 4].second)
-        addVertex(pose, builder, qx0, qy1, 0f, r, g, b, uv[(3 + rot) % 4].first, uv[(3 + rot) % 4].second)
+        // Upstream 1d9120aa: corner UVs are resolved through arithmetic instead of materialising a
+        // 4-element Pair array per quad per frame. Vertex order is (0,0),(1,0),(1,1),(0,1); rotating
+        // the index list by [rotation] spins the image.
+        val i0 = rot % 4
+        val i1 = (1 + rot) % 4
+        val i2 = (2 + rot) % 4
+        val i3 = (3 + rot) % 4
+        addVertex(pose, builder, qx0, qy0, 0f, r, g, b, cornerU(i0, u0, u1), cornerV(i0, v0, v1))
+        addVertex(pose, builder, qx1, qy0, 0f, r, g, b, cornerU(i1, u0, u1), cornerV(i1, v0, v1))
+        addVertex(pose, builder, qx1, qy1, 0f, r, g, b, cornerU(i2, u0, u1), cornerV(i2, v0, v1))
+        addVertex(pose, builder, qx0, qy1, 0f, r, g, b, cornerU(i3, u0, u1), cornerV(i3, v0, v1))
     }
+
+    /**
+     * U coordinate of rotated corner [index]; corners 0 and 3 sit at [u0], 1 and 2 at [u1].
+     * Keeping this as a method (rather than a Pair array) avoids a per-quad allocation every frame.
+     */
+    private fun cornerU(index: Int, u0: Float, u1: Float): Float =
+        if (index == 1 || index == 2) u1 else u0
+
+    /** V coordinate of rotated corner [index]; corners 0 and 1 sit at [v1], 2 and 3 at [v0]. */
+    private fun cornerV(index: Int, v0: Float, v1: Float): Float =
+        if (index == 2 || index == 3) v0 else v1
 
     /** Adds a vertex with the given [r,g,b] (0..255) and [u,v] (0..1) coordinates. */
     private fun addVertex(
@@ -502,7 +512,13 @@ object ScreenRenderer : ClientRenderService {
         u: Float,
         v: Float,
     ) {
+        //? if >=1.21.1 {
+        //? if >=1.21.1 {
         builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, 255)
+        //?} else
+        /*builder.vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, 255).endVertex()*/
+        //?} else
+        /*builder.vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, 255).endVertex()*/
     }
 
     /** Adds a textured vertex with an explicit alpha for transparent danmaku glyphs. */
@@ -519,7 +535,10 @@ object ScreenRenderer : ClientRenderService {
         v: Float,
         opacity: Float,
     ) {
+        //? if >=1.21.1 {
         builder.addVertex(pose, x, y, z).setUv(u, v).setColor(r, g, b, (opacity.coerceIn(0f, 1f) * 255f).toInt())
+        //?} else
+        /*builder.vertex(pose.pose(), x, y, z).uv(u, v).color(r, g, b, (opacity.coerceIn(0f, 1f) * 255f).toInt()).endVertex()*/
     }
 
     /** Draws a quad using the given [type] and [appendVertices] function. A bit of a hack. */
@@ -538,9 +557,22 @@ object ScreenRenderer : ClientRenderService {
                 RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
                 //?}
                 try {
+                    //? if >=1.21.1 {
                     val builder = Tesselator.getInstance().begin(type.mode(), type.format())
                     appendVertices(stack.last(), builder)
                     type.draw(builder.buildOrThrow())
+                    //?}
+                    //? if <1.21.1 {
+                    val builder = Tesselator.getInstance().builder
+                    builder.begin(type.mode(), type.format())
+                    appendVertices(stack.last(), builder)
+                    //? if >=1.20 {
+                    type.end(builder, RenderSystem.getVertexSorting())
+                    //?}
+                    //? if <1.20 {
+                    type.end(builder, 0, 0, 0)
+                    //?}
+                    //?}
                 } finally {
                     //? if <1.21.11 {
                     RenderSystem.setShaderColor(1f, 1f, 1f, 1f)

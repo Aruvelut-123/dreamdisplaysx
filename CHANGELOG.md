@@ -1,11 +1,18 @@
-# 1.10.0.5 Release
+# 1.10.6.1 Release
 
-Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplays/commit/42af16c320f962becc184590e93ebbf6dbf6d4d7).
+Based on Dream Displays [ab46074](https://github.com/arnodoelinger/dreamdisplays/commit/ab46074057d02f31968473a08508cc1882e599b3).
+
+## Server
+
+### Features
+
+- Added `DisplayVeto`, so plugins can refuse a display creation, deletion or video change before it happens.
 
 ## Client
 
 ### Features
 
+- Added 1.18.2, 1.19.4 and 1.20.1 builds for Fabric and Forge.
 - Added an opt-in loading animation with a centered logo, flowing-rainbow waving title, and Windows 11-style spinner.
 
 ### Fixes
@@ -18,6 +25,9 @@ Based on Dream Displays [42af16c3](https://github.com/arnodoelinger/dreamdisplay
 - Disabled MobileGlues direct PBO/BGRA uploads in favor of the command-encoder texture path.
 - Kept Android scrub callback sessions rooted after pause-only teardown.
 - Hardened Android libvlc EOF teardown by loading JNI before JNA and retaining callback-thread attachment.
+- Published display state as soon as the first frame lands (upstream `ab46074`).
+- Kept the last decoded frame when a timeline seek arrives while paused (upstream `5c794ade`).
+- Removed per-frame allocations and repeated reflection lookups from the render path (upstream `1d9120aa`).
 
 ## Server
 

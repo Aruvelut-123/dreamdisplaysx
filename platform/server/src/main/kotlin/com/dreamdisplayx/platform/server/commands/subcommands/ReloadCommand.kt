@@ -1,5 +1,9 @@
 package com.dreamdisplayx.platform.server.commands.subcommands
 
+//? if <1.19 {
+import com.dreamdisplayx.platform.server.utils.sendSystemMessage
+//?}
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.VanillaServerState
@@ -46,12 +50,12 @@ object VanillaReloadCommand {
                 player?.let {
                     MessageUtil.sendMessage(it, "configReloaded")
                     MessageUtil.sendMessage(it, "configReloadSummary")
-                } ?: ctx.source.sendSystemMessage(Component.literal("Dream DisplaysX config reloaded."))
+                } ?: ctx.source.sendSystemMessage(literalText("Dream DisplaysX config reloaded."))
             },
             onFailure = { e ->
                 player?.let {
                     MessageUtil.sendMessage(it, "configReloadFailed")
-                } ?: ctx.source.sendFailure(Component.literal("Failed to reload config: ${e.message}"))
+                } ?: ctx.source.sendFailure(literalText("Failed to reload config: ${e.message}"))
             }
         )
         return 1

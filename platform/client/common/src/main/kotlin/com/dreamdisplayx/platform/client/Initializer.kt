@@ -22,7 +22,14 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 import org.slf4j.LoggerFactory
 
 /** Main mod initializer. */

@@ -10,6 +10,7 @@ import com.dreamdisplayx.api.playback.policy.PlaybackPermissions
 import com.dreamdisplayx.api.playback.model.WatchPartyAction
 import com.dreamdisplayx.api.security.policy.MediaUrlPolicy
 import com.dreamdisplayx.platform.server.VanillaServerState
+import com.dreamdisplayx.platform.server.api.ServerVetoes
 import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplayx.platform.server.managers.ActionThrottle
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -127,6 +128,11 @@ object VanillaDisplayActions {
             return MessageUtil.sendMessage(player, "noDisplay")
         }
 
+        ServerVetoes.askDelete(displayData, player.uuid)?.let { reason ->
+            if (reason.isNotEmpty()) MessageUtil.sendColoredMessage(player, reason)
+            return
+        }
+
         DisplayManager.delete(displayData)
         MessageUtil.sendMessage(player, "displayDeleted")
     }
@@ -151,8 +157,14 @@ object VanillaDisplayActions {
         if (!DisplayManager.isPlayerInRange(player, displayData)) return
         if (!setVideoThrottle.tryAcquire(displayId, SET_VIDEO_COOLDOWN_MS)) return
 
+        val sanitizedLang = MediaUrlPolicy.sanitizeLang(lang)
+        ServerVetoes.askSetUrl(displayData, url, sanitizedLang, player.uuid)?.let { reason ->
+            if (reason.isNotEmpty()) MessageUtil.sendColoredMessage(player, reason)
+            return
+        }
+
         displayData.url = url
-        displayData.lang = MediaUrlPolicy.sanitizeLang(lang)
+        displayData.lang = sanitizedLang
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(displayData) }
 
         TimelineManager.resetVideo(displayData)
@@ -308,7 +320,14 @@ object VanillaDisplayActions {
             //? if >=1.21.11 {
             player.level().server
         //?} else
-        /*player.serverLevel().server*/
+        /*
+        //? if >=1.20 {
+        player.serverLevel().server
+        //?}
+        //? if <1.20 {
+        player.getLevel().server
+        //?}
+        */
         return server.playerList.isOp(
             //? if >=1.21.11 {
             NameAndId(player.gameProfile)

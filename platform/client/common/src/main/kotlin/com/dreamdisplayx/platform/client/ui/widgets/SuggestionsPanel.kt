@@ -1,10 +1,14 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.utils.buttonClickSound
+import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.api.media.search.model.MediaSearchResult
 import com.dreamdisplayx.platform.client.input.MouseButtons
 import com.dreamdisplayx.platform.client.render.FirstFrameThumbnails
 import com.dreamdisplayx.platform.client.render.Thumbnails
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
+import com.dreamdisplayx.platform.client.ui.editBoxHasFocus
+import com.dreamdisplayx.platform.client.ui.editBoxSetFocused
 import com.dreamdisplayx.platform.client.ui.drawText
 //? if <1.21.11 {
 import com.dreamdisplayx.platform.client.ui.enableScissorPoseAware
@@ -42,7 +46,7 @@ import kotlin.math.roundToInt
 class SuggestionsPanel(
     private val onPick: (MediaSearchResult) -> Unit,
     private val controller: SuggestionsController,
-) : UiWidget(Component.translatable("dreamdisplayx.button.suggestions")) {
+) : UiWidget(translatableText("dreamdisplayx.button.suggestions")) {
 
     init {
         controller.onResults = { scrollOffset = 0 }
@@ -84,9 +88,12 @@ class SuggestionsPanel(
         val f = Minecraft.getInstance().font
         searchBox = EditBox(
             f, 0, 0, 100, SEARCH_H,
-            Component.translatable("dreamdisplayx.suggestions.search"),
+            translatableText("dreamdisplayx.suggestions.search"),
         )
-        searchBox.setHint(Component.translatable("dreamdisplayx.suggestions.search"))
+        //? if >=1.19.4 {
+        searchBox.setHint(translatableText("dreamdisplayx.suggestions.search"))
+        //?} else
+        /*searchBox.setSuggestion(translatableText("dreamdisplayx.suggestions.search").string)*/
         searchBox.setMaxLength(200)
         // The controller owns the text: Minecraft rebuilds this panel (and so this EditBox) whenever
         // DisplayMenu.init runs, e.g. on a window resize, and the user's typed/pasted link must survive.
@@ -94,7 +101,7 @@ class SuggestionsPanel(
         searchBox.setResponder { controller.searchText = it }
         clearButton = IconButton(icon = { IconButton.modIcon("cross") }, margin = 4) {
             searchBox.value = ""
-            searchBox.isFocused = true
+            editBoxSetFocused(searchBox, true)
         }
         sortButton = IconButton(icon = { IconButton.modIcon("filter") }, margin = 4) {
             sortDropdown.toggle()
@@ -212,7 +219,7 @@ class SuggestionsPanel(
         g.drawText(f, message, x + 10, y + 10, UiTheme.TEXT_PRIMARY, false)
 
         if (!available()) {
-            val notice = Component.translatable("dreamdisplayx.suggestions.unavailable").string
+            val notice = translatableText("dreamdisplayx.suggestions.unavailable").string
             g.drawText(f, notice, x + 10, stripTop() + 6, UiTheme.TEXT_SECONDARY, false)
             return
         }
@@ -233,7 +240,7 @@ class SuggestionsPanel(
         lastStripH = stripH
 
         controller.statusKey?.let { key ->
-            val base = Component.translatable(key).string
+            val base = translatableText(key).string
             val msg = if (controller.isLoading) {
                 val elapsed = maxOf(0L, (System.currentTimeMillis() - controller.loadStartedAtMs) / 1000L)
                 base.replace(Regex("\\.+$"), "") + " • " + elapsed + "s"
@@ -463,7 +470,7 @@ class SuggestionsPanel(
             badge != null -> drawCardTag(
                 g,
                 f,
-                Component.translatable(badge.labelKey).string,
+                translatableText(badge.labelKey).string,
                 badge.bgColor,
                 badge.textColor,
                 thumbX,
@@ -473,7 +480,7 @@ class SuggestionsPanel(
             info.isRecent(7) -> drawCardTag(
                 g,
                 f,
-                Component.translatable("dreamdisplayx.ui.new").string,
+                translatableText("dreamdisplayx.ui.new").string,
                 UiTheme.ACCENT_NEW_TAG,
                 UiTheme.TEXT_PRIMARY,
                 thumbX,
@@ -577,7 +584,13 @@ class SuggestionsPanel(
         /*g.blit(id, x, y, 0f, 0f, w, h, w, h)*/
     }
 
+    //? if >=1.20.2 {
     override fun mouseScrolled(mouseX: Double, mouseY: Double, dx: Double, dy: Double): Boolean {
+        //?} else
+        /*override fun mouseScrolled(mouseX: Double, mouseY: Double, delta: Double): Boolean =
+            mouseScrolled(mouseX, mouseY, 0.0, delta)
+
+        fun mouseScrolled(mouseX: Double, mouseY: Double, dx: Double, dy: Double): Boolean {*/
         if (!available()) return false
         if (!isMouseOver(mouseX, mouseY)) return false
         val stripTop = stripTop()
@@ -616,10 +629,10 @@ class SuggestionsPanel(
         if (searchButton.isMouseOver(mouseX, mouseY)) return searchButton.mouseClicked(event, dbl)
         if (searchBox.isMouseOver(mouseX, mouseY)) {
             val handled = searchBox.mouseClicked(event, dbl)
-            searchBox.isFocused = true
+            editBoxSetFocused(searchBox, true)
             return handled
         }
-        searchBox.isFocused = false
+        editBoxSetFocused(searchBox, false)
         if (MouseButtons.isLeft(event.button()) && overScrollbar(mouseX, mouseY)) {
             draggingScrollbar = true
             scrollFromPos(if (sbVertical) mouseY else mouseX)
@@ -629,7 +642,7 @@ class SuggestionsPanel(
         if (MouseButtons.isRight(event.button()) && forgetCardAt(mx, my)) return true
         val card = if (MouseButtons.isLeft(event.button())) cardAt(mouseX, mouseY) else -1
         if (card in controller.visibleCards.indices) {
-            val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+            val s = SimpleSoundInstance.forUI(buttonClickSound(), 1.0f)
             Minecraft.getInstance().soundManager.play(s)
             onPick(controller.visibleCards[card])
             return true
@@ -664,10 +677,10 @@ class SuggestionsPanel(
         if (searchButton.isMouseOver(mouseX, mouseY)) return searchButton.mouseClicked(mouseX, mouseY, button)
         if (searchBox.isMouseOver(mouseX, mouseY)) {
             val handled = searchBox.mouseClicked(mouseX, mouseY, button)
-            searchBox.isFocused = true
+            editBoxSetFocused(searchBox, true)
             return handled
         }
-        searchBox.isFocused = false
+        editBoxSetFocused(searchBox, false)
         if (MouseButtons.isLeft(button) && overScrollbar(mouseX, mouseY)) {
             draggingScrollbar = true
             scrollFromPos(if (sbVertical) mouseY else mouseX)
@@ -677,7 +690,7 @@ class SuggestionsPanel(
         if (MouseButtons.isRight(button) && forgetCardAt(mx, my)) return true
         val card = if (MouseButtons.isLeft(button)) cardAt(mouseX, mouseY) else -1
         if (card in controller.visibleCards.indices) {
-            val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f)
+            val s = SimpleSoundInstance.forUI(buttonClickSound(), 1.0f)
             Minecraft.getInstance().soundManager.play(s)
             onPick(controller.visibleCards[card])
             return true
@@ -710,7 +723,7 @@ class SuggestionsPanel(
         val card = cardAt(mx.toDouble(), my.toDouble())
         val result = controller.visibleCards.getOrNull(card) ?: return false
         if (!controller.forgetCustom(result)) return false
-        val s = SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 0.7f)
+        val s = SimpleSoundInstance.forUI(buttonClickSound(), 0.7f)
         Minecraft.getInstance().soundManager.play(s)
         return true
     }
@@ -745,12 +758,12 @@ class SuggestionsPanel(
     }
 
     /** True while the search box has keyboard focus, so screen-level hotkeys must stand aside. */
-    val isTyping: Boolean get() = searchBox.isFocused
+    val isTyping: Boolean get() = editBoxHasFocus(searchBox)
 
     //? if >=1.21.11 {
     override fun keyPressed(event: KeyEvent): Boolean {
         if (!available()) return super.keyPressed(event)
-        if (searchBox.isFocused) {
+        if (editBoxHasFocus(searchBox)) {
             if (event.key() ==
                 //? if >=26.3 {
                 InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER
@@ -766,13 +779,13 @@ class SuggestionsPanel(
     }
 
     override fun charTyped(event: CharacterEvent): Boolean {
-        if (searchBox.isFocused) return searchBox.charTyped(event)
+        if (editBoxHasFocus(searchBox)) return searchBox.charTyped(event)
         return super.charTyped(event)
     }
     //?} else
     /*override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
         if (!available()) return super.keyPressed(keyCode, scanCode, modifiers)
-        if (searchBox.isFocused) {
+        if (editBoxHasFocus(searchBox)) {
             if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
                 controller.runSearch(searchBox.value)
                 return true
@@ -783,7 +796,7 @@ class SuggestionsPanel(
     }
 
     override fun charTyped(chr: Char, modifiers: Int): Boolean {
-        if (searchBox.isFocused) return searchBox.charTyped(chr, modifiers)
+        if (editBoxHasFocus(searchBox)) return searchBox.charTyped(chr, modifiers)
         return super.charTyped(chr, modifiers)
     }*/
 

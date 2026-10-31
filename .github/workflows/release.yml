@@ -169,24 +169,6 @@ jobs:
           path: build/libs
           merge-multiple: true
 
-      - name: Extract Paper game versions
-        if: needs.build.outputs.is_marketplace_publishable == 'true'
-        id: versions
-        run: |
-          python - <<'EOF'
-          import os
-
-          paper_1_21 = ["1.21"] + [f"1.21.{p}" for p in range(1, 12)]
-          paper_26 = ["26.1", "26.1.1", "26.1.2", "26.2", "26.3"]
-          paper_versions = paper_1_21 + paper_26
-
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write("paper_versions<<VERSIONS_EOF\n")
-              f.write("\n".join(paper_versions) + "\n")
-              f.write("VERSIONS_EOF\n")
-              f.write("paper_label=1.21+\n")
-          EOF
-
       - name: Extract changelog
         if: needs.build.outputs.is_marketplace_publishable == 'true' && (needs.build.outputs.is_release == 'true' || needs.build.outputs.is_preview == 'true')
         run: |
@@ -239,71 +221,6 @@ jobs:
               f.write("\n".join(lines).strip() + "\n")
           EOF
 
-      - name: Generate incremental preview changelog for platforms
-        if: needs.build.outputs.is_marketplace_publishable == 'true' && needs.build.outputs.is_preview == 'true'
-        env:
-          CHANGELOG_VERSION: ${{ needs.build.outputs.version }}
-          CHANGELOG_IS_PREVIEW: true
-          CHANGELOG_TAG: v${{ needs.build.outputs.version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python .github/scripts/generate_changelog.py
-
-      - name: Publish BungeeCord to Modrinth
-        if: needs.build.outputs.is_marketplace_publishable == 'true'
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: 'Dream DisplaysX ${{ needs.build.outputs.pretty_version }} — BungeeCord'
-          version: ${{ needs.build.outputs.version }}
-          version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
-          files: build/libs/dreamdisplayx-bungeecord-${{ needs.build.outputs.version }}.jar
-          changelog-file: changelog.md
-          modrinth-id: O9VrWVkP
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          loaders: bungeecord
-          game-versions: ${{ steps.versions.outputs.paper_versions }}
-          game-version-filter: none
-          dependencies: |
-            luckperms(optional){modrinth:Vebnzrzj}
-
-      - name: Publish Velocity to Modrinth
-        if: needs.build.outputs.is_marketplace_publishable == 'true'
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: 'Dream DisplaysX ${{ needs.build.outputs.pretty_version }} — Velocity'
-          version: ${{ needs.build.outputs.version }}
-          version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
-          files: build/libs/dreamdisplayx-velocity-${{ needs.build.outputs.version }}.jar
-          changelog-file: changelog.md
-          modrinth-id: O9VrWVkP
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          loaders: velocity
-          game-versions: ${{ steps.versions.outputs.paper_versions }}
-          game-version-filter: none
-          dependencies: |
-            luckperms(optional){modrinth:Vebnzrzj}
-
-      - name: Publish Paper to Modrinth
-        if: needs.build.outputs.is_marketplace_publishable == 'true'
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: 'Dream DisplaysX ${{ needs.build.outputs.pretty_version }} — Paper ${{ steps.versions.outputs.paper_label }}'
-          version: ${{ needs.build.outputs.version }}
-          version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
-          files: build/libs/dreamdisplayx-paper-${{ needs.build.outputs.version }}.jar
-          changelog-file: changelog.md
-          modrinth-id: O9VrWVkP
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          loaders: |
-            folia
-            paper
-            purpur
-          game-versions: ${{ steps.versions.outputs.paper_versions }}
-          game-version-filter: none
-          dependencies: |
-            luckperms(optional){modrinth:Vebnzrzj}
-            worldguard(optional){modrinth:DKY9btbd}
-
       - name: Download all build artifacts for GitHub Release
         if: needs.build.outputs.is_marketplace_publishable == 'true' && needs.build.outputs.is_release == 'true'
         uses: actions/download-artifact@v8.0.1
@@ -333,14 +250,14 @@ jobs:
           changelog-file: changelog.md
 
   prepare-loader-matrix:
-    name: Filter NeoForge / Fabric matrix
+    name: Filter Forge matrix
     runs-on: ubuntu-latest
     needs: build
     outputs:
       tasks: ${{ steps.filter.outputs.tasks }}
 
     steps:
-      - name: Filter tasks to NeoForge / Fabric only
+      - name: Filter tasks to Forge only
         id: filter
         run: |
           python - <<'EOF'
@@ -348,7 +265,7 @@ jobs:
           import os
 
           tasks = json.loads(os.environ["TASKS_JSON"])
-          filtered = [t for t in tasks if t["kind"] in ("neoforge", "fabric")]
+          filtered = [t for t in tasks if t["kind"] == "forge"]
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"tasks={json.dumps(filtered)}\n")
@@ -458,39 +375,20 @@ jobs:
               f.write("\n".join(lines).strip() + "\n")
           EOF
 
-      - name: Publish Fabric to Modrinth
-        if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'fabric'
+      - name: Publish Forge to CurseForge
+        if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'forge' && steps.versions.outputs.curseforge_publishable == 'true'
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          name: 'Dream DisplaysX ${{ needs.build.outputs.pretty_version }} — Fabric ${{ matrix.task.mc }}'
+          name: 'Dream Displays ${{ needs.build.outputs.pretty_version }} — Forge ${{ matrix.task.mc }}'
           version: ${{ needs.build.outputs.version }}
           version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
-          files: build/libs/dreamdisplayx-fabric-${{ matrix.task.mc }}-${{ needs.build.outputs.version }}.jar
+          files: build/libs/dreamdisplayx-forge-${{ matrix.task.mc }}-${{ needs.build.outputs.version }}.jar
           changelog-file: changelog.md
-          modrinth-id: O9VrWVkP
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          loaders: |
-            fabric
-            quilt
+          curseforge-id: ${{ secrets.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          loaders: forge
           game-versions: ${{ steps.versions.outputs.mc_versions }}
-          game-version-filter: none
           dependencies: |
-            fabric-api(required){modrinth:P7dR8mSH}
-            luckperms(optional){modrinth:Vebnzrzj}
+            luckperms(optional){curseforge:431733}
+            cloth-config(optional){curseforge:348521}
 
-      - name: Publish NeoForge to Modrinth
-        if: needs.build.outputs.is_marketplace_publishable == 'true' && matrix.task.kind == 'neoforge'
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: 'Dream DisplaysX ${{ needs.build.outputs.pretty_version }} — NeoForge ${{ matrix.task.mc }}'
-          version: ${{ needs.build.outputs.version }}
-          version-type: ${{ needs.build.outputs.is_preview == 'true' && 'alpha' || 'release' }}
-          files: build/libs/dreamdisplayx-neoforge-${{ matrix.task.mc }}-${{ needs.build.outputs.version }}.jar
-          changelog-file: changelog.md
-          modrinth-id: O9VrWVkP
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          loaders: neoforge
-          game-versions: ${{ steps.versions.outputs.mc_versions }}
-          game-version-filter: none
-          dependencies: |
-            luckperms(optional){modrinth:Vebnzrzj}

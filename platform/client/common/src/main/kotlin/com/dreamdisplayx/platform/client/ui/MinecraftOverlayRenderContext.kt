@@ -8,7 +8,14 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 
 /**
  * Minecraft-backed [OverlayRenderContext]. This is the platform adapter that lets the platform-agnostic [OverlayManager]

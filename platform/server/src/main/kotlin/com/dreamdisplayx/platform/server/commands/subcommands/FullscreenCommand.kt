@@ -1,5 +1,9 @@
 package com.dreamdisplayx.platform.server.commands.subcommands
 
+//? if <1.19 {
+import com.dreamdisplayx.platform.server.utils.sendSystemMessage
+//?}
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.api.media.model.VideoQuality
 import com.dreamdisplayx.api.playback.model.FullscreenMode
@@ -435,7 +439,7 @@ object VanillaFullscreenCommand {
         token.equals("@s", ignoreCase = true) -> setOf(sender.uuid)
         token.equals("@p", ignoreCase = true) ->
             online
-                .filter { it.level() == sender.level() }
+                .filter { RegionUtil.levelOf(it) == RegionUtil.levelOf(sender) }
                 .minByOrNull { it.distanceToSqr(sender) }
                 ?.let { setOf(it.uuid) } ?: emptySet()
 
@@ -480,7 +484,7 @@ object VanillaFullscreenCommand {
         if (player != null) MessageUtil.sendColoredMessage(
             player,
             line
-        ) else ctx.source.sendSystemMessage(Component.literal(line))
+        ) else ctx.source.sendSystemMessage(literalText(line))
         return count
     }
 
@@ -495,7 +499,7 @@ object VanillaFullscreenCommand {
             if (player != null) MessageUtil.sendColoredMessage(
                 player,
                 line
-            ) else ctx.source.sendSystemMessage(Component.literal(line))
+            ) else ctx.source.sendSystemMessage(literalText(line))
             return 0
         }
         local.forEach { s ->
@@ -506,7 +510,7 @@ object VanillaFullscreenCommand {
             if (player != null) MessageUtil.sendColoredMessage(
                 player,
                 line
-            ) else ctx.source.sendSystemMessage(Component.literal(line))
+            ) else ctx.source.sendSystemMessage(literalText(line))
         }
         network.forEach { n ->
             val line = MessageUtil.formatIndexed(
@@ -516,7 +520,7 @@ object VanillaFullscreenCommand {
             if (player != null) MessageUtil.sendColoredMessage(
                 player,
                 line
-            ) else ctx.source.sendSystemMessage(Component.literal(line))
+            ) else ctx.source.sendSystemMessage(literalText(line))
         }
         return local.size + network.size
     }

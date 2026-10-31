@@ -1,5 +1,9 @@
 package com.dreamdisplayx.platform.client.ui
 
+import com.dreamdisplayx.platform.client.utils.withChatColor
+import com.dreamdisplayx.platform.client.utils.emptyText
+import com.dreamdisplayx.platform.client.utils.literalText
+import com.dreamdisplayx.platform.client.utils.translatableText
 //? if >=1.21.11 {
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
@@ -48,7 +52,6 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * The display configuration screen: video preview with playback controls, the settings rows, and
@@ -56,7 +59,7 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class DisplayMenu private constructor(
     val displayScreen: DisplayScreen,
-) : UiScreenBase(Component.translatable("dreamdisplayx.ui.title")) {
+) : UiScreenBase(translatableText("dreamdisplayx.ui.title")) {
 
     private val openedDuringReplay =
         com.dreamdisplayx.platform.client.render.ReplayModCompat.isReplayActive
@@ -146,7 +149,7 @@ class DisplayMenu private constructor(
         volume = addUi(
             ValueSlider(
                 initial = ds.volume.toDouble(),
-                label = { Component.literal("${(it * 200).roundToInt()}%") },
+                label = { literalText("${(it * 200).roundToInt()}%") },
                 // Volume's fraction maps to 0-200%, so a 5%-of-displayed-value stop is 0.025 of the fraction.
                 step = 0.025,
             ) { playback.setVolume(displayId, it.toFloat()) })
@@ -159,9 +162,9 @@ class DisplayMenu private constructor(
                 label = {
                     when {
                         // Broadcast pins everyone to the highest quality within the cap; show that, not the saved setting
-                        ds.qualityCap > 0 -> Component.literal("${broadcastQuality()}p")
-                        ds.qualityList.isNotEmpty() -> Component.literal("${qualityFromFraction(it)}p")
-                        else -> Component.literal(qualityDisplayLabel(ds.quality))
+                        ds.qualityCap > 0 -> literalText("${broadcastQuality()}p")
+                        ds.qualityList.isNotEmpty() -> literalText("${qualityFromFraction(it)}p")
+                        else -> literalText(qualityDisplayLabel(ds.quality))
                     }
                 },
                 // One stop per available quality, so the handle can only ever rest exactly on a real option
@@ -181,7 +184,7 @@ class DisplayMenu private constructor(
         brightness = addUi(
             ValueSlider(
                 initial = ds.brightness.toDouble().coerceIn(0.0, 1.0),
-                label = { Component.literal("${(it * 100).roundToInt()}%") },
+                label = { literalText("${(it * 100).roundToInt()}%") },
                 step = 0.05,
             ) { playback.setBrightness(displayId, it.toFloat()) })
         brightness.enabledWhen = { !ds.isSync || ds.canEdit }
@@ -193,7 +196,7 @@ class DisplayMenu private constructor(
                 initial = ClientStateManager.config.audioAcoustics,
                 current = { ClientStateManager.config.audioAcoustics },
                 enabledFor = { true },
-                label = { Component.translatable(audio3dModeLabel(it)) },
+                label = { translatableText(audio3dModeLabel(it)) },
             ) { quality ->
                 ClientStateManager.config.audioAcoustics = quality
                 ClientStateManager.config.save()
@@ -213,7 +216,7 @@ class DisplayMenu private constructor(
                         it != PlaybackMode.WATCH_PARTY && ds.canSetModeHere
                     }
                 },
-                label = { Component.translatable(syncModeLabel(it)) },
+                label = { translatableText(syncModeLabel(it)) },
             ) { mode ->
                 when {
                     mode == ds.effectiveMode -> Unit
@@ -232,7 +235,7 @@ class DisplayMenu private constructor(
                 initial = ds.stretchMode,
                 current = { ds.stretchMode },
                 enabledFor = { true },
-                label = { Component.translatable(stretchModeLabel(it)) },
+                label = { translatableText(stretchModeLabel(it)) },
             ) { mode ->
                 if (mode != ds.stretchMode) ds.stretchMode = mode
             })
@@ -250,7 +253,7 @@ class DisplayMenu private constructor(
             initial = cfg.danmakuRollingRangePercent,
             current = { cfg.danmakuRollingRangePercent },
             enabledFor = { true },
-            label = { Component.literal("${it}%") },
+            label = { literalText("${it}%") },
         ) { value -> cfg.danmakuRollingRangePercent = value; cfg.save() })
         danmakuArea.visibleWhen = notErrored
 
@@ -263,7 +266,7 @@ class DisplayMenu private constructor(
             initial = cfg.danmakuSpeedPreset,
             current = { cfg.danmakuSpeedPreset },
             enabledFor = { true },
-            label = { Component.translatable(danmakuSpeedLabel(it)) },
+            label = { translatableText(danmakuSpeedLabel(it)) },
         ) { value -> cfg.danmakuSpeedPreset = value; cfg.save() })
         danmakuSpeed.visibleWhen = notErrored
 
@@ -276,7 +279,7 @@ class DisplayMenu private constructor(
             initial = cfg.danmakuDensityPreset,
             current = { cfg.danmakuDensityPreset },
             enabledFor = { true },
-            label = { Component.translatable(danmakuDensityLabel(it)) },
+            label = { translatableText(danmakuDensityLabel(it)) },
         ) { value -> cfg.danmakuDensityPreset = value; cfg.save() })
         danmakuDensity.visibleWhen = notErrored
 
@@ -286,7 +289,7 @@ class DisplayMenu private constructor(
 
         danmakuScale = addUi(ValueSlider(
             initial = (cfg.danmakuScalePercent - 50) / 120.0,
-            label = { Component.literal("${(50 + it * 120).roundToInt()}%") },
+            label = { literalText("${(50 + it * 120).roundToInt()}%") },
             step = 1.0 / 120.0,
         ) { value -> cfg.danmakuScalePercent = (50 + value * 120).roundToInt(); cfg.save() })
         danmakuScale.visibleWhen = notErrored
@@ -297,7 +300,7 @@ class DisplayMenu private constructor(
 
         danmakuOpacity = addUi(ValueSlider(
             initial = (cfg.danmakuOpacity - 20) / 80.0,
-            label = { Component.literal("${(20 + it * 80).roundToInt()}%") },
+            label = { literalText("${(20 + it * 80).roundToInt()}%") },
             step = 1.0 / 80.0,
         ) { value -> cfg.danmakuOpacity = (20 + value * 80).roundToInt(); cfg.save() })
         danmakuOpacity.visibleWhen = notErrored
@@ -410,15 +413,15 @@ class DisplayMenu private constructor(
                         key?.let { ScrubPreview.frameAt(it, nanos) }
                     }
                 },
-                waitingLabel = { if (!ds.isVideoStarted) Component.translatable("dreamdisplayx.ui.waiting").string else null },
+                waitingLabel = { if (!ds.isVideoStarted) translatableText("dreamdisplayx.ui.waiting").string else null },
                 scheduleLabel = { scheduleCountdownText() },
                 statusLabels = listOf(
-                    { Component.translatable("dreamdisplayx.ui.quality_applying").string.takeIf { ds.isApplyingQuality } },
-                    { Component.translatable("dreamdisplayx.ui.audio_track_loading").string.takeIf { ds.isSwitchingAudioTrack } },
+                    { translatableText("dreamdisplayx.ui.quality_applying").string.takeIf { ds.isApplyingQuality } },
+                    { translatableText("dreamdisplayx.ui.audio_track_loading").string.takeIf { ds.isSwitchingAudioTrack } },
                 ),
             ) { nanos ->
                 if (ds.canSeek() && !ds.isLive && ds.canSeekHere) {
-                    playback.seek(displayId, (nanos / 1_000_000L).milliseconds)
+                    playback.seek(displayId, nanos / 1_000_000L)
                 }
             })
         progress.enabledWhen = { videoReady() && ds.canSeek() && !ds.isLive && ds.canSeekHere }
@@ -488,10 +491,10 @@ class DisplayMenu private constructor(
                 lockButton to {
                     ds.isLocked?.let { locked ->
                         listOf(
-                            Component.translatable(if (locked) "dreamdisplayx.button.unlock.tooltip.1" else "dreamdisplayx.button.lock.tooltip.1")
-                                .withStyle { it.withColor(ChatFormatting.WHITE).withBold(true) },
-                            Component.translatable(if (locked) "dreamdisplayx.button.unlock.tooltip.2" else "dreamdisplayx.button.lock.tooltip.2")
-                                .withStyle { it.withColor(ChatFormatting.GRAY) },
+                            translatableText(if (locked) "dreamdisplayx.button.unlock.tooltip.1" else "dreamdisplayx.button.lock.tooltip.1")
+                                .withStyle { it.withChatColor(ChatFormatting.WHITE).withBold(true) },
+                            translatableText(if (locked) "dreamdisplayx.button.unlock.tooltip.2" else "dreamdisplayx.button.lock.tooltip.2")
+                                .withStyle { it.withChatColor(ChatFormatting.GRAY) },
                         )
                     }
                 },
@@ -516,13 +519,13 @@ class DisplayMenu private constructor(
                 val tip = mutableListOf(
                     tooltipTitle("dreamdisplayx.button.quality.tooltip.1"),
                     tooltipBody("dreamdisplayx.button.quality.tooltip.2"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue("dreamdisplayx.button.quality.tooltip.4", qualityFromFraction(quality.value)),
                 )
                 if ((ds.quality.targetHeight ?: 0) > 1080) {
                     tip.add(
-                        Component.translatable("dreamdisplayx.button.quality.tooltip.5")
-                            .withStyle { it.withColor(ChatFormatting.YELLOW) },
+                        translatableText("dreamdisplayx.button.quality.tooltip.5")
+                            .withStyle { it.withChatColor(ChatFormatting.YELLOW) },
                     )
                 }
                 tip
@@ -531,7 +534,7 @@ class DisplayMenu private constructor(
                 listOf(
                     tooltipTitle("dreamdisplayx.button.brightness.tooltip.1"),
                     tooltipBody("dreamdisplayx.button.brightness.tooltip.2"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue("dreamdisplayx.button.brightness.tooltip.3", floor(brightness.value * 100).toInt()),
                 )
             },
@@ -539,14 +542,14 @@ class DisplayMenu private constructor(
                 listOf(
                     tooltipTitle("dreamdisplayx.button.audio3d.tooltip.1"),
                     tooltipBody("dreamdisplayx.button.audio3d.tooltip.2"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipModeBullet("dreamdisplayx.mode.audio_off", "dreamdisplayx.button.audio3d.tooltip.3"),
                     tooltipModeBullet("dreamdisplayx.mode.audio_enhanced", "dreamdisplayx.button.audio3d.tooltip.4"),
                     tooltipModeBullet("dreamdisplayx.mode.audio_advanced", "dreamdisplayx.button.audio3d.tooltip.5"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue(
                         "dreamdisplayx.button.audio3d.tooltip.6",
-                        Component.translatable(audio3dModeLabel(audio3d.mode)),
+                        translatableText(audio3dModeLabel(audio3d.mode)),
                     ),
                 )
             },
@@ -554,14 +557,14 @@ class DisplayMenu private constructor(
                 listOf(
                     tooltipTitle("dreamdisplayx.button.synchronization.tooltip.1"),
                     tooltipBody("dreamdisplayx.button.synchronization.tooltip.2"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipModeBullet("dreamdisplayx.mode.local", "dreamdisplayx.button.synchronization.tooltip.3"),
                     tooltipModeBullet("dreamdisplayx.mode.synced", "dreamdisplayx.button.synchronization.tooltip.4"),
                     tooltipModeBullet("dreamdisplayx.mode.broadcast", "dreamdisplayx.button.synchronization.tooltip.6"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue(
                         "dreamdisplayx.button.synchronization.tooltip.5",
-                        Component.translatable(syncModeLabel(sync.mode)),
+                        translatableText(syncModeLabel(sync.mode)),
                     ),
                 )
             },
@@ -569,14 +572,14 @@ class DisplayMenu private constructor(
                 listOf(
                     tooltipTitle("dreamdisplayx.button.stretch.tooltip.1"),
                     tooltipBody("dreamdisplayx.button.stretch.tooltip.2"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipModeBullet("dreamdisplayx.mode.letterbox", "dreamdisplayx.button.stretch.tooltip.3"),
                     tooltipModeBullet("dreamdisplayx.mode.stretch", "dreamdisplayx.button.stretch.tooltip.4"),
                     tooltipModeBullet("dreamdisplayx.mode.crop", "dreamdisplayx.button.stretch.tooltip.5"),
-                    Component.literal(""),
+                    literalText(""),
                     tooltipValue(
                         "dreamdisplayx.button.stretch.tooltip.6",
-                        Component.translatable(stretchModeLabel(stretch.mode)),
+                        translatableText(stretchModeLabel(stretch.mode)),
                     ),
                 )
             },
@@ -627,24 +630,24 @@ class DisplayMenu private constructor(
         } else {
             "dreamdisplayx.ui.schedule_play"
         }
-        return Component.translatable(key, UiText.formatTime(remainingMs * 1_000_000L)).string
+        return translatableText(key, UiText.formatTime(remainingMs * 1_000_000L)).string
     }
 
     private fun tooltipTitle(key: String): Component =
-        Component.translatable(key).withStyle { it.withColor(ChatFormatting.WHITE).withBold(true) }
+        translatableText(key).withStyle { it.withChatColor(ChatFormatting.WHITE).withBold(true) }
 
     private fun tooltipBody(key: String): Component =
-        Component.translatable(key).withStyle { it.withColor(ChatFormatting.GRAY) }
+        translatableText(key).withStyle { it.withChatColor(ChatFormatting.GRAY) }
 
     private fun tooltipValue(key: String, arg: Any): Component =
-        Component.translatable(key, arg).withStyle { it.withColor(ChatFormatting.GOLD) }
+        translatableText(key, arg).withStyle { it.withChatColor(ChatFormatting.GOLD) }
 
     /** Bullet line naming a playback mode ([modeKey], e.g. `dreamdisplayx.mode.local`) plus its short [descKey]. */
     private fun tooltipModeBullet(modeKey: String, descKey: String): Component =
-        Component.literal("• ").withStyle { it.withColor(ChatFormatting.GRAY) }
-            .append(Component.translatable(modeKey).withStyle { it.withColor(ChatFormatting.GRAY) })
-            .append(Component.literal(": ").withStyle { it.withColor(ChatFormatting.GRAY) })
-            .append(Component.translatable(descKey).withStyle { it.withColor(ChatFormatting.GRAY) })
+        literalText("• ").withStyle { it.withChatColor(ChatFormatting.GRAY) }
+            .append(translatableText(modeKey).withStyle { it.withChatColor(ChatFormatting.GRAY) })
+            .append(literalText(": ").withStyle { it.withChatColor(ChatFormatting.GRAY) })
+            .append(translatableText(descKey).withStyle { it.withChatColor(ChatFormatting.GRAY) })
 
     /** Two-line white/gray tooltip used by the delete and report buttons. */
     private fun buttonTooltip(prefix: String): List<Component> = listOf(
@@ -700,7 +703,7 @@ class DisplayMenu private constructor(
         val layout = MenuLayout.compute(width, height, font.lineHeight)
         suggestionsRect = layout.suggestions
 
-        g.drawPanel(font, layout.preview, Component.translatable("dreamdisplayx.ui.preview").string)
+        g.drawPanel(font, layout.preview, translatableText("dreamdisplayx.ui.preview").string)
         // The settings column carries a two-tab header: display settings / playlist. Content is laid
         // out below the header so neither panel overlaps the tab strip.
         drawPanelTabs(g, layout.settings)
@@ -798,8 +801,8 @@ class DisplayMenu private constructor(
                 rect.y + (rect.h - f.lineHeight) / 2,
                 if (selected) UiTheme.TEXT_PRIMARY else UiTheme.TEXT_DIM, false)
         }
-        drawTab(playlistTab, Component.translatable("dreamdisplayx.ui.playlist"), showPlaylistTab)
-        drawTab(settingsTab, Component.translatable("dreamdisplayx.ui.settings"), !showPlaylistTab)
+        drawTab(playlistTab, translatableText("dreamdisplayx.ui.playlist"), showPlaylistTab)
+        drawTab(settingsTab, translatableText("dreamdisplayx.ui.settings"), !showPlaylistTab)
 
         // Vanilla children are re-synced to their own visibleWhen every frame (UiScreenBase.syncState)
         // before drawScreen runs, so re-assert the tab-driven visibility here, right before
@@ -951,7 +954,7 @@ class DisplayMenu private constructor(
         val canSeek = videoReady && ds.canSeek() && !ds.isLive && ds.canSeekHere
         fun seekTo(nanos: Long) {
             val target = nanos.coerceIn(0L, ds.mediaPlayerDurationNanos.coerceAtLeast(0L))
-            playback.seek(displayId, (target / 1_000_000L).milliseconds)
+            playback.seek(displayId, target / 1_000_000L)
         }
         fun nudgeVolume(delta: Double) {
             val next = (((volume.value + delta) / VOLUME_STEP).roundToInt() * VOLUME_STEP).coerceIn(0.0, 1.0)

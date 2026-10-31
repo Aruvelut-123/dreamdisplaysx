@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.utils.translatableText
+import com.dreamdisplayx.platform.client.utils.identifier
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.RenderPipelines
 //?}
@@ -462,7 +464,7 @@ class PreviewSection(
 
     /** Formats a viewer / view count, labelling it "watching" while live and "views" otherwise. */
     private fun watchOrViewCount(count: Long?, isLive: Boolean): String = count?.let {
-        formatCompactCount(it) + " " + Component.translatable(
+        formatCompactCount(it) + " " + translatableText(
             if (isLive) "dreamdisplayx.ui.watching" else "dreamdisplayx.ui.views_short",
         ).string
     } ?: ""
@@ -490,8 +492,8 @@ class PreviewSection(
         // The platform tag (Twitch / Vimeo / Kick / Link) takes precedence over the generic "New"
         val badge = PlatformBadge.forPlatform(info.platform)
         val tagText = when {
-            badge != null -> Component.translatable(badge.labelKey).string
-            info.isNew -> Component.translatable("dreamdisplayx.ui.new").string
+            badge != null -> translatableText(badge.labelKey).string
+            info.isNew -> translatableText("dreamdisplayx.ui.new").string
             else -> null
         }
         if (tagText != null) {
@@ -513,7 +515,7 @@ class PreviewSection(
         }
         if (info.likes.isNotEmpty()) {
             if (parts.isNotEmpty()) parts.append(" • ")
-            parts.append(info.likes).append(" ").append(Component.translatable("dreamdisplayx.ui.likes").string)
+            parts.append(info.likes).append(" ").append(translatableText("dreamdisplayx.ui.likes").string)
         }
         if (!info.published.isNullOrEmpty()) {
             if (parts.isNotEmpty()) parts.append(" • ")
@@ -726,7 +728,7 @@ class PreviewSection(
                 tex = DynamicTexture({ "dreamdisplayx:ambient" }, img)
                 //?} else
                 /*tex = DynamicTexture(img)*/
-                textureId = Identifier.fromNamespaceAndPath(
+                textureId = identifier(
                     Initializer.MOD_ID,
                     "ambient/${ds.uuid}-${UUID.randomUUID()}",
                 )

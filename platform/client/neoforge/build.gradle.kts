@@ -91,9 +91,10 @@ configurations.all {
 }
 
 dependencies {
-    compileOnly(libs.platformweaverAnnotations)
+    "javaNewerCompileApis"(libs.platformweaverAnnotations)
+    compileOnly(files(configurations.getByName("javaNewerCompileApis")))
     compileOnly(libs.luckpermsApi)
-    compileOnly(libs.worldguardApi) {
+    "javaNewerCompileApis"(libs.worldguardApi) {
         exclude(group = "com.google.guava", module = "guava")
         exclude(group = "com.google.code.gson", module = "gson")
         exclude(group = "it.unimi.dsi", module = "fastutil")

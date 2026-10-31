@@ -41,22 +41,38 @@ import com.dreamdisplayx.platform.client.render.UnshadedDisplayPass
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
 import net.fabricmc.api.ClientModInitializer
+//? if >=1.19 {
 //? if >=26 {
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands
 //?} else
 /*import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager*/
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
+//?}
 import com.dreamdisplayx.platform.client.input.DisplayMenuInputHandler
 import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.minecraft.world.InteractionResult
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
+//? if <1.19.4 {
+import com.dreamdisplayx.api.runtime.registry.service.getOrNull
+import com.dreamdisplayx.platform.client.input.MouseButtons
+import com.dreamdisplayx.platform.client.overlay.OverlayManager
+import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
+import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
+import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
+import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
+//?}
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
+//? if >=1.20.5 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
+//?} else
+/*import com.dreamdisplayx.platform.client.net.compat.CompatPayloads
+import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload
+import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket*/
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
 
@@ -81,6 +97,7 @@ class Client : ClientModInitializer, Mod {
         // Note: PayloadTypeRegistry registrations are done in platform/server/ (it's a main entrypoint)
         // which runs on both integrated and dedicated servers, before the client entrypoint.
 
+        //? if >=1.20.5 {
         // Protocol v2: every packet arrives as one opaque envelope payload
         ClientPlayNetworking.registerGlobalReceiver(V2Payload.TYPE) { payload, _ ->
             Initializer.onV2Packet(payload.bytes)
@@ -93,6 +110,15 @@ class Client : ClientModInitializer, Mod {
         ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID) { _, _ ->
             Initializer.onLegacyServerDetected()
         }
+        //?} else
+        /*
+        ClientPlayNetworking.registerGlobalReceiver(V2Payload.TYPE.id()) { client, _, buf, _ ->
+            val bytes = ByteArray(buf.readableBytes()).also(buf::readBytes)
+            client.execute { Initializer.onV2Packet(bytes) }
+        }
+        ClientPlayNetworking.registerGlobalReceiver(LegacyProbe.Premium.PACKET_ID.id()) { client, _, _, _ ->
+            client.execute { Initializer.onLegacyServerDetected() }
+        }*/
 
         //? if >=26 {
         LevelRenderEvents.BEFORE_GIZMOS.register { context ->
@@ -154,8 +180,19 @@ class Client : ClientModInitializer, Mod {
         //?} else
         /*HudRenderCallback.EVENT.register { graphics, deltaTracker ->
             Initializer.onRenderHud(
-                Minecraft.getInstance(), graphics,
+                Minecraft.getInstance(),
+                //? if >=1.20 {
+                graphics,
+                //?}
+                //? if <1.20 {
+                com.dreamdisplayx.platform.client.ui.compat.GuiGraphics(graphics),
+                //?}
+                //? if >=1.21.1 {
                 deltaTracker.getGameTimeDeltaPartialTick(false)
+                //?}
+                //? if <1.21.1 {
+                deltaTracker
+                //?}
             )
         }*/
 
@@ -163,6 +200,7 @@ class Client : ClientModInitializer, Mod {
 
         // Opens the Bilibili login screen (QR code / phone + password) 鈥?only usable when not
         // already logged in and when the player is OP on the server.
+        //? if >=1.19 {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
                 clientLiteral("dlogin")
@@ -214,6 +252,7 @@ class Client : ClientModInitializer, Mod {
                     }
             )
         }
+        //?}
 
         UseBlockCallback.EVENT.register { _, world, _, _ ->
             if (!world.isClientSide) InteractionResult.PASS
@@ -235,15 +274,25 @@ class Client : ClientModInitializer, Mod {
         ClientLifecycleEvents.CLIENT_STOPPING.register { Initializer.onStop() }
     }
 
-    /** Client command literal builder; the Fabric command API moved from `ClientCommandManager` to `ClientCommands` in 26.x. */
+    /**
+     * Client command literal builder; the Fabric command API moved from `ClientCommandManager` to
+     * `ClientCommands` in 26.x and only exists at all from 1.19 (Fabric API's `command.v2` package).
+     */
+    //? if >=1.19 {
     //? if >=26 {
     private fun clientLiteral(name: String) = ClientCommands.literal(name)
     //?} else
     /*private fun clientLiteral(name: String) = ClientCommandManager.literal(name)*/
+    //?}
 
     /** Packet sender. */
     override fun sendPacket(packet: CustomPacketPayload) {
+        //? if >=1.20.5 {
         ClientPlayNetworking.send(packet)
+        //?} else
+        /*Minecraft.getInstance().connection?.send(
+            ServerboundCustomPayloadPacket(packet.type().id(), CompatPayloads.encode(packet)),
+        )*/
     }
 
     private fun isDisplayBlock(pos: BlockPos): Boolean =
@@ -263,6 +312,11 @@ class Client : ClientModInitializer, Mod {
 
     /** Whether the `LevelRenderContext` runtime class exposes `bufferSource` (probed once). */
     private var hasBufferSourceCache: Boolean? = null
+
+    // Upstream 1d9120aa: cache the reflective lookups so the render path stops re-resolving them every frame.
+    private var bufferSourceMethod: java.lang.reflect.Method? = null
+    private var getBufferMethod: java.lang.reflect.Method? = null
+    private var endBatchMethod: java.lang.reflect.Method? = null
 
     /** Renders the screen using the `submitNodeCollector` API. */
     private fun renderSubmittedScreens(context: LevelRenderContext, mc: Minecraft) {
@@ -314,12 +368,16 @@ class Client : ClientModInitializer, Mod {
     /** Renders the screen using the `BufferSource` API. */
     private fun renderWithBufferSource(context: LevelRenderContext, camera: Camera) {
         val bufferSource = runCatching {
-            context.javaClass.getMethod("bufferSource").invoke(context)
+            val method = bufferSourceMethod?.takeIf { it.declaringClass.isAssignableFrom(context.javaClass) }
+                ?: context.javaClass.getMethod("bufferSource").also { bufferSourceMethod = it }
+            method.invoke(context)
         }.getOrNull() ?: return
-        val getBuffer = runCatching { bufferSource.javaClass.getMethod("getBuffer", RenderType::class.java) }
-            .getOrNull() ?: return
-        val endBatch = runCatching { bufferSource.javaClass.getMethod("endBatch") }
-            .getOrNull() ?: return
+        val getBuffer = getBufferMethod?.takeIf { it.declaringClass.isAssignableFrom(bufferSource.javaClass) }
+            ?: runCatching { bufferSource.javaClass.getMethod("getBuffer", RenderType::class.java) }
+                .getOrNull()?.also { getBufferMethod = it } ?: return
+        val endBatch = endBatchMethod?.takeIf { it.declaringClass.isAssignableFrom(bufferSource.javaClass) }
+            ?: runCatching { bufferSource.javaClass.getMethod("endBatch") }
+                .getOrNull()?.also { endBatchMethod = it } ?: return
 
         ScreenRenderer.render(context.poseStack(), camera) { type, appendVertices ->
             appendVertices(context.poseStack().last(), getBuffer.invoke(bufferSource, type) as VertexConsumer)

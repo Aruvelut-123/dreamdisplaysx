@@ -4,7 +4,6 @@ import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.session.property.MediaSessionState
 import com.dreamdisplayx.api.media.source.model.MediaMetadata
-import kotlin.time.Duration
 
 /**
  * Events emitted by a [com.dreamdisplayx.api.media.session.service.MediaSessionService] as its state, timeline, and metadata change.
@@ -19,8 +18,8 @@ sealed interface MediaSessionEvent {
         val current: MediaSessionState,
     ) : MediaSessionEvent
 
-    /** Playback position advanced or was corrected to [position]. */
-    data class PositionChanged(val position: Duration) : MediaSessionEvent
+    /** Playback position advanced or was corrected to [positionMs]. */
+    data class PositionChanged(val positionMs: Long) : MediaSessionEvent
 
     /** Playback failed with [cause]. Fatal errors usually move the session into [MediaSessionState.Error]. */
     data class Error(val cause: DreamMediaException) : MediaSessionEvent

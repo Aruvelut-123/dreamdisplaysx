@@ -4,12 +4,26 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import support.chisel.chiselSource
 import support.stonecutter.StonecutterVersions
 import java.util.*
+import org.gradle.api.attributes.java.TargetJvmVersion
 
 /** `Stonecutter` conventions for Kotlin projects. */
 plugins {
     java
     id("org.jetbrains.kotlin.jvm")
-    id("org.jetbrains.kotlinx.atomicfu")
+}
+
+/**
+ * `atomicfu` rewrites `atomic(...)` into plain JVM atomics, and to do that it resolves the common
+ * superclasses of every class it visits through a class loader. Applying it to *every* module made
+ * that resolution run over the loader source sets, which compile `:platform:server`'s chiseled
+ * output: on the legacy Forge targets the Minecraft superclass (`ServerPlayer`) then has to be read
+ * out of a signed Forge jar, whose `IForgePlayer.class` fails the SHA-384 digest check and aborts
+ * the build. Only the modules that actually call `atomic(...)` need the transformer, so apply it
+ * there and leave every other module's bytecode untouched.
+ */
+private val atomicfuModules = setOf(":media:audio", ":platform:client:common")
+if (project.path in atomicfuModules) {
+    apply(plugin = "org.jetbrains.kotlinx.atomicfu")
 }
 
 /** Shared `Stonecutter` version reader, published once by the dreamdisplayx.stonecutter-versions settings plugin. */
@@ -23,6 +37,14 @@ private fun scVersion(name: String): String = scVersions.get(name)
 
 /** The Java version to target for the active Minecraft version. */
 private val javaVersion = scVersion("java.version").toInt()
+
+/**
+ * The JDK used to *compile* the active version. Legacy targets such as 1.18.2 / 1.19.4 / 1.20.1
+ * still emit Java 17 bytecode (see [bytecodeTarget]) but some of their third-party dependencies
+ * only ship Java 21 class files, so the compiler itself must run on a newer JDK. Versions that
+ * declare `java.toolchain` in `versions.json` opt in; everything else keeps [javaVersion].
+ */
+private val toolchainVersion = scVersions.getOrNull("java.toolchain")?.toInt() ?: javaVersion
 
 /** The lowest Java version to target for all Minecraft versions. */
 private val javaFloor: Int = rootProject.file("versions").listFiles()
@@ -42,7 +64,8 @@ private val platformIndependentModules =
     )
 
 /** The bytecode target for all Minecraft versions. */
-private val bytecodeTarget: Int = if (project.path in platformIndependentModules) javaFloor else javaVersion
+private val bytecodeTarget: Int =
+    if (project.path in platformIndependentModules || project.path == ":platform:server") javaFloor else javaVersion
 
 /**
  * Version-sensitive modules (everything outside [platformIndependentModules]: `:platform:server`
@@ -74,9 +97,22 @@ scVersions.getOrNull("commons.compress.version")?.let { commonsCompressVersion -
     }
 }
 
+/**
+ * A detached, Java-21-targeted configuration for compile-only libraries that are themselves built
+ * for Java 21 (PlatformWeaver annotations, WorldGuard). Legacy targets compile on a 21 toolchain but
+ * emit 17 bytecode, so a plain `compileOnly` would reject those artifacts during variant selection.
+ * Resolving them through a configuration that requests `TargetJvmVersion = 21` decouples the
+ * artifact's class-file level from the module's own bytecode target.
+ */
+configurations.findByName("javaNewerCompileApis") ?: configurations.create("javaNewerCompileApis") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    attributes { attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21) }
+}
+
 /** Java and Kotlin conventions. */
 java {
-    toolchain { languageVersion.set(JavaLanguageVersion.of(javaVersion)) }
+    toolchain { languageVersion.set(JavaLanguageVersion.of(toolchainVersion)) }
 }
 
 /** Every module compiles against the Kotlin stdlib and tests on JUnit 5 with kotlin-test. */
@@ -92,7 +128,7 @@ tasks.test {
 
 /** Kotlin conventions. */
 extensions.configure<KotlinJvmProjectExtension> {
-    jvmToolchain(javaVersion)
+    jvmToolchain(toolchainVersion)
 }
 
 /** Project conventions. */
@@ -104,7 +140,14 @@ tasks.withType<JavaCompile>().configureEach {
 /** Unstable API opt-in. */
 tasks.withType<KotlinCompile>().configureEach {
     compilerOptions.jvmTarget.set(JvmTarget.fromTarget(bytecodeTarget.toString()))
+    // Compiling legacy targets on a newer JDK would otherwise link against the newer JDK's
+    // class library; pin the API surface to the target release so Java 17 bytecode stays honest.
+    if (bytecodeTarget < toolchainVersion) {
+        compilerOptions.freeCompilerArgs.add("-Xjdk-release=$bytecodeTarget")
+    }
     compilerOptions.optIn.add("com.dreamdisplayx.api.DreamDisplaysXUnstableApi")
+    // The command DSL builds its suggestion lists with `[ ... ]` collection literals.
+    compilerOptions.freeCompilerArgs.add("-Xcollection-literals")
 }
 
 /**

@@ -19,6 +19,7 @@ pluginManagement {
         maven("https://oss.sonatype.org/content/repositories/snapshots")
         maven("https://maven.neoforged.net/releases")
         maven("https://prmaven.neoforged.net/NeoForge/pr3403")
+        maven("https://maven.minecraftforge.net/")
         maven("https://maven.fabricmc.net/")
         maven("https://maven.parchmentmc.org")
         maven("https://maven.quiltmc.org/repository/release/")
@@ -33,7 +34,7 @@ pluginManagement {
                     if (scVersion("minecraft.version").startsWith("1.")) useVersion(loomVersion)
                     else useModule("net.fabricmc:fabric-loom:$loomVersion")
 
-                "net.neoforged.moddev" -> useVersion(scVersion("moddev.version"))
+                "net.neoforged.moddev", "net.neoforged.moddev.legacyforge" -> useVersion(scVersion("moddev.version"))
             }
         }
     }
@@ -75,15 +76,22 @@ include(":platform")
 include(":platform:resources")
 include(":platform:client")
 include(":platform:client:common")
-include(":platform:client:fabric")
 include(":platform:server")
 include(":platform:proxy")
 include(":platform:proxy:common")
 include(":platform:proxy:velocity")
 include(":platform:proxy:bungeecord")
 
-// Not my problem
-if (!java.lang.Boolean.getBoolean("idea.sync.active")) {
+// The loader set differs per Minecraft target: 1.21+ uses Fabric/NeoForge, while
+// 1.18.2 / 1.19.4 / 1.20.1 use Fabric/Forge. Include only what the active version declares.
+@Suppress("UNCHECKED_CAST")
+val activeLoaderProps: Map<String, Any?> = run {
+    val root = groovy.json.JsonSlurper().parse(file("versions.json")) as Map<String, Any?>
+    (root["versions"] as Map<String, Map<String, Any?>>)[root["active"] as String].orEmpty()
+}
+if ("fabric.api.version" in activeLoaderProps) include(":platform:client:fabric")
+if ("forge.version" in activeLoaderProps) include(":platform:client:forge")
+if ("neoforge.version" in activeLoaderProps && !java.lang.Boolean.getBoolean("idea.sync.active")) {
     include(":platform:client:neoforge")
 }
 

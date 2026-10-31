@@ -1,11 +1,18 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.utils.emptyText
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
+import com.dreamdisplayx.platform.client.utils.vanillaIdentifier
+//? if <1.20.2 {
+import com.dreamdisplayx.platform.client.ui.blitSprite
+//?}
 //? if >=1.21.11 {
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 //?}
+//? if >=1.21.1 {
 import net.minecraft.client.InputType
+//?}
 import net.minecraft.client.Minecraft
 //? if >=1.21.11 {
 import net.minecraft.client.input.MouseButtonEvent
@@ -26,7 +33,7 @@ class ToggleSwitch(
     initial: Boolean,
     private val label: (Boolean) -> Component,
     private val onApply: (Boolean) -> Unit,
-) : UiWidget(Component.empty()) {
+) : UiWidget(emptyText()) {
 
     /** Current toggle state. Use [set] to change it programmatically with the apply action. */
     var value: Boolean = initial
@@ -88,6 +95,8 @@ class ToggleSwitch(
         return true
     }*/
 
+    // Minecraft.lastInputType / InputType land in 1.21.1; older versions treat any focus as keyboard focus.
+    //? if >=1.21.1 {
     override fun setFocused(focused: Boolean) {
         super.setFocused(focused)
         if (!focused) {
@@ -97,11 +106,16 @@ class ToggleSwitch(
             if (t == InputType.MOUSE || t == InputType.KEYBOARD_TAB) sliderFocused = true
         }
     }
+    //?} else
+    /*override fun setFocused(focused: Boolean) {
+        super.setFocused(focused)
+        sliderFocused = focused
+    }*/
 
     companion object {
-        private val TRACK = Identifier.withDefaultNamespace("widget/slider")
-        private val TRACK_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_highlighted")
-        private val HANDLE = Identifier.withDefaultNamespace("widget/slider_handle")
-        private val HANDLE_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/slider_handle_highlighted")
+        private val TRACK = vanillaIdentifier("widget/slider")
+        private val TRACK_HIGHLIGHTED = vanillaIdentifier("widget/slider_highlighted")
+        private val HANDLE = vanillaIdentifier("widget/slider_handle")
+        private val HANDLE_HIGHLIGHTED = vanillaIdentifier("widget/slider_handle_highlighted")
     }
 }

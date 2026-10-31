@@ -62,7 +62,11 @@ class RemoteControlListener(private val plugin: PaperServer) : Listener {
         val meta = item.itemMeta ?: return
         meta.persistentDataContainer.set(key, PersistentDataType.STRING, display.id.toString())
         meta.displayName(Component.text("Display Remote — ${display.name ?: display.id.toString().take(8)}"))
+        // `ItemMeta#setEnchantmentGlintOverride` only exists from 1.20.5; below it the custom
+        // display name alone marks a bound stick.
+        //? if >=1.20.5 {
         meta.setEnchantmentGlintOverride(true)
+        //?}
         item.itemMeta = meta
     }
 

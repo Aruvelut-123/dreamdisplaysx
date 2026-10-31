@@ -44,9 +44,13 @@ val scVersions = gradle.extensions.getByType<StonecutterVersions>()
 val activeStonecutterVersion = scVersions.active
 fun scVersion(name: String): String = scVersions.get(name)
 
+// 1.18.2 / 1.19.4 / 1.20.1 target Forge instead of NeoForge, so neoforge.* is absent there.
+val hasNeoForge = scVersions.getOrNull("neoforge.version") != null
+
 // Legacy (obfuscated) Minecraft targets need layered Mojang+Parchment mappings and modImplementation;
 // year-versioned (deobfuscated) targets resolve the source set directly with plain implementation.
 val isLegacyObfuscated = scVersion("minecraft.version").startsWith("1.")
+val clothConfigFabric = scVersions.getOrNull("cloth.config.fabric") ?: "${scVersion("cloth.config.version")}+fabric"
 
 fun fancyModLoaderVersion(neoForgeVersion: String): String = when (neoForgeVersion) {
     "21.1.233" -> "4.0.42"
@@ -72,6 +76,7 @@ platformweaver {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     dependsOn(":platform:server:chiselSource")
+    if (!hasNeoForge) exclude("**/*NeoForge*.kt")
 }
 tasks.matching { it.name == "sourcesJar" }.configureEach {
     dependsOn(":platform:server:chiselSource")
@@ -109,7 +114,8 @@ configurations.register("mappedFabricApiElements") {
 }
 
 dependencies {
-    compileOnly(libs.platformweaverAnnotations)
+    "javaNewerCompileApis"(libs.platformweaverAnnotations)
+    compileOnly(files(configurations.getByName("javaNewerCompileApis")))
     compileOnly(libs.luckpermsApi)
     // ModMenu is a soft dependency: only needed at compile time so we can provide a config screen button.
     // Legacy (obfuscated) targets use modCompileOnly so Loom remaps ModMenu's Screen signature; 26.x
@@ -122,10 +128,12 @@ dependencies {
         compileOnly("me.shedaniel.cloth:cloth-config-fabric:${scVersion("cloth.config.version")}")
     }
     compileOnly("io.papermc.paper:paper-api:${scVersion("paper.api.version")}")
-    compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
-    compileOnly("net.neoforged:bus:8.0.5")
-    compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
-    compileOnly(libs.worldguardApi) {
+    if (hasNeoForge) {
+        compileOnly("net.neoforged:neoforge:${scVersion("neoforge.version")}:universal")
+        compileOnly("net.neoforged:bus:8.0.5")
+        compileOnly("net.neoforged.fancymodloader:loader:${fancyModLoaderVersion(scVersion("neoforge.version"))}")
+    }
+    "javaNewerCompileApis"(libs.worldguardApi) {
         exclude(group = "com.google.guava", module = "guava")
         exclude(group = "com.google.code.gson", module = "gson")
         exclude(group = "com.google.code.findbugs", module = "jsr305")
@@ -180,7 +188,10 @@ dependencies {
     shadow(libs.exposedMigrationJdbc)
     shadow(libs.hikari)
     shadow(libs.zxingCore)
+    // Bundled only where Minecraft has no JOML of its own; elsewhere the references are Minecraft's
+    scVersions.getOrNull("joml.version")?.let { shadow("org.joml:joml:$it") }
 }
+
 
 tasks.processResources {
     from(generatedClassTweaker)
@@ -226,6 +237,9 @@ tasks.shadowJar {
     }
     includeDreamDisplaysXSharedContents()
     relocateDreamDisplaysXSharedPackages()
+    if (scVersions.getOrNull("joml.version") != null) {
+        relocate("org.joml", "com.dreamdisplayx.libs.org.joml")
+    }
     excludeDreamDisplaysXSqliteNativeExtras()
 }
 

@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
 import com.dreamdisplayx.platform.client.ui.kit.UiRect
@@ -24,8 +25,8 @@ class ModTitleLabel {
     /** Draws the label (and the update arrow when applicable) at ([x], [y]). */
     fun draw(g: GuiGraphicsCompat, x: Int, y: Int) {
         val font = Minecraft.getInstance().font
-        val name = Component.literal("Dream DisplaysX")
-        val ver = Component.literal(" ${GeneralUtil.getPrettyModVersion()}")
+        val name = literalText("Dream DisplaysX")
+        val ver = literalText(" ${GeneralUtil.getPrettyModVersion()}")
             .withStyle(Style.EMPTY.withColor(UiTheme.ACCENT_VERSION))
         val label = name.copy().append(ver)
         g.drawText(font, label, x, y, UiTheme.TEXT_PRIMARY, true)
@@ -39,7 +40,7 @@ class ModTitleLabel {
                 val p = t / 0.25f
                 arrowYOffset = (-sin(p * Math.PI) * 3.0).toInt()
             }
-            val arrow = Component.literal(" ▲")
+            val arrow = literalText(" ▲")
                 .withStyle(Style.EMPTY.withColor(UiTheme.ACCENT_UPDATE))
             g.drawText(font, arrow, x + textW, y + arrowYOffset, UiTheme.TEXT_PRIMARY, true)
             totalW += font.width(arrow)

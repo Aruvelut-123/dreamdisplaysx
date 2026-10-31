@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.login
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
 import com.dreamdisplayx.platform.client.ui.kit.UiScreenBase
@@ -20,7 +21,7 @@ import kotlin.math.min
  * On success the `SESSDATA` is handed to [BilibiliLoginManager], which sends it to the
  * server for encrypted storage and playback use, and this screen closes itself.
  */
-class PlatformLoginScreen : UiScreenBase(Component.literal("Bilibili Login")) {
+class PlatformLoginScreen : UiScreenBase(literalText("Bilibili Login")) {
     private var qrMatrix: BitMatrix? = null
     private var tickCount = 0
 

@@ -72,6 +72,17 @@
 
 ## Changes & Commits
 
+### Chisel gate syntax (hard rule)
+- A `//?} else` branch MUST start its commented body on the next line with `/*` on that first line and close with `*/`. `Chisel.kt`'s `takeCommentedElse()` scans forward for `*/`; if the body never opens with `/*` it runs to EOF and every `chiselSource` task dies with `Unclosed /* else-branch */ starting at line N`.
+- Never nest a `//? if` directive inside a commented else body. Chisel parses the inner directive as top level and the enclosing block stops matching. Extract the inner choice into a sibling function with its own gate instead (`VanillaSelectionVisualizer.cyanVector()`).
+- Gate the helper itself at the same bounds as its imports: a helper only referenced from an `else` body still gets compiled for every version that satisfies its own gate, so an unguarded helper that names a since-removed type breaks the modern versions it was never meant for (`Vector3f` above 1.21.11).
+
+### Legacy (<1.20.5) server command trees
+- `paper-api`'s `io.papermc.paper.command.brigadier.Commands` only exists from 1.20.5. `CommandRegistrar` and `GroupCommand` keep calling `Commands.literal` / `Commands.argument` verbatim; only their Paper imports sit inside `//? if >=1.20.5 { ... //?}`.
+- Below that gate both names resolve from `registrar/LegacyPaperCommands.kt`, which lives in the same package (so no import is needed) and is itself wrapped in `//? if <1.20.5 {`.
+- The shim's signatures MUST mirror paper-api exactly: `literal(name)` returns a **non-generic** `LiteralArgumentBuilder<CommandSourceStack>`, and `argument(name, type)` returns `RequiredArgumentBuilder<CommandSourceStack, T>`. Paper pins `S` to `CommandSourceStack`; a generic `fun <S> literal(...)` instead loses the inferred sender type and every `.requires { it.sender ... }` fails with `Cannot infer type for type parameter 'S'` across all versions — that mistake turned the whole CI matrix red once (commit `f6600d2e`, reverted by `c9b24e68`). Do not "simplify" the shim back to brigadier's generic factories.
+- Paper-only argument types must not leak below the gate either: `CustomArgumentType` (1.20.5+) is replaced by a plain brigadier `ArgumentType<String>` implementation.
+
 ### Optional animated video-loading screen
 - `animated-loading-screen` is a client-only TOML/Cloth toggle, default false; missing or invalid values must not opt existing users in.
 - `LoadingScreenAnimation` and `LoadingScreenClock` own JVM-only timing/layout, while `LoadingScreenRenderer` batches static icon/glyph/round-brush textures on both flat and conforming world displays. Keep the real first frame and legacy error/disabled paths higher priority than the intro.
@@ -105,6 +116,14 @@
 - Verbose libvlc logging rotates a previous `libvlc.log` to a timestamped gzip archive (keeping the newest ten) before opening a fresh UTF-8 log.
 - Player teardown wakes the first-frame wait immediately and exposes an asynchronous stop path for display swaps, so a stream that never delivers its first frame cannot hold later video changes behind the ten-second start timeout.
 - `DisplayMediaController` coalesces duplicate pending URL/language loads, discards stale player errors before installing a newer generation, and waits for asynchronous teardown before creating the replacement.
+
+### 2026-10-29 — Upstream ab46074 sync (lineage + hand-ported patches)
+- Branch `merge/upstream-ab46074`, PR #7. Upstream was **92 commits** ahead of `42af16c3`.
+- **A plain `git merge ab46074` was attempted and rejected**: after normalising every path/content back to `dreamdisplays`, the merge produced **289 conflicting files / 419 conflicting hunks** across all modules, and sampling showed genuine divergence, not rename noise — `util/UpdateCheck.kt` conflicts on the repo URL, `api/DisplayId.kt` is `value class` here vs `data class` upstream. Upstream's overhaul (data-class ids, the new `shared` module, addons, Forge/Quilt platforms) is a deliberate fork divergence; merging would overwrite both sides.
+- Procedure used instead: `git merge -s ours ab46074` to record lineage, then port individual commits by hand. **Do not** try the normalise-then-merge route again for this fork.
+- Ported: `ab46074` (`DisplayScreen.publishStartedFlip()` publishes state on the first frame), `5c794ade` (`TimelineFollower` keeps the paused frame when a seek lands during pause), `1d9120aa` (render path: `ScreenRenderer` raw translation + allocation-free quad UVs, `TextureUploadUtil` `writeToTexture` overload cache, `GpuFrameUploader` hoisted lambdas, fabric `Client` `bufferSource` reflection cache).
+- Skipped as absent in this fork: `bc27d4f2` (no `SIZE_LOD_*`/`lodRungFor`), `b0fca428` (no `platform/client/common/.../utils/Sounds.kt`). Always `grep` for the target symbols before porting a patch.
+- Local `--offline` builds cannot verify: the cached paper dev-bundle and the fabric-loom 1.17.13 plugin are missing on this machine. CI is the verification gate for these render-path changes (no pure-JVM seam for a unit test). `gh pr edit` fails with a Projects-classic GraphQL error — patch PRs via `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> --input file.json` instead.
 
 ### 2026-02-DD — Upstream 42af16c3 sync (1.10.0.3): curved displays, keyboard shortcuts, protocol v1 drop
 - Synced upstream `42af16c3` (= tag `v1.10.0-preview.3`) on top of `6102d461`, then ported the changes worth having into the fork's own paths.
@@ -390,6 +409,15 @@ Every task MUST be tracked in the session's `todo` task list at all times:
   ```
 - Never merge upstream changelog into our version's section
 - The CI release pipeline extracts the matching section from CHANGELOG.md by the `pretty_version` title
+
+## Display vetoes
+
+`api/display/event/DisplayVeto` (port of upstream `023357e3`) lets a plugin refuse a display change before it happens. The fork could not take the upstream shape: upstream hangs `DisplayVetoes` off `DreamDisplaysServer` / `ServerDisplay` / `ServerEvents`, and this fork has none of those (it exposes `api.display.service.DisplayService` + `DisplayMutationPort` instead). So the fork ships a standalone `DisplayVetoRegistry` plus `platform/server/api/ServerVetoes`, which both loaders call directly.
+
+- `DisplayVeto` carries a flattened `Target` (id, owner, size, url, name, virtual) rather than an API `Display`, because the world position/facing types (`PaperDisplayData` vs `VanillaDisplayData`) never unify across loaders. Do not try to build a full `Display` in the veto path.
+- The three call sites are `DisplayActions` / `VanillaDisplayActions` `delete` and `setVideo`, plus `CreateCommand` (both the Paper and vanilla branch). `setVideo` sanitizes the language BEFORE asking, so a listener sees the value that would actually be stored.
+- `ServerVetoes.ask*` short-circuits on an empty registry, logs a throwing listener instead of propagating, and returns `null` for allowed / a possibly-empty string for denied. The first denial wins.
+- `DisplayVetoRegistryTest` covers dispatch, first-denial-wins, empty denials, throwing listeners, unsubscribe and clear. Keep it green: it is the only pure-JVM coverage of this path.
 
 ## Experimental Remote Control
 

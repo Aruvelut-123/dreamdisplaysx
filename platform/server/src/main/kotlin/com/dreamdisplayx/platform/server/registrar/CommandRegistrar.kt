@@ -28,9 +28,10 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder
 import com.mojang.brigadier.tree.CommandNode
 import com.mojang.brigadier.tree.LiteralCommandNode
 import io.github.arnodoelinger.platformweaver.PaperOnly
+//? if >=1.20.5 {
 import io.papermc.paper.command.brigadier.CommandSourceStack
 import io.papermc.paper.command.brigadier.Commands
-import io.papermc.paper.command.brigadier.argument.CustomArgumentType
+//?}
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
@@ -85,7 +86,7 @@ object CommandRegistrar {
             Commands.literal("rename")
                 .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.name) }
                 .then(
-                    Commands.argument("id", PaperBareTokenArgumentType)
+                    Commands.argument("id", BareTokenCommandArgumentType)
                         .suggests { _, b ->
                             b.suggest("this")
                             FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
@@ -214,7 +215,7 @@ object CommandRegistrar {
                 }
             )
             .then(
-                Commands.argument("id", PaperBareTokenArgumentType)
+                Commands.argument("id", BareTokenCommandArgumentType)
                     .suggests { _, b ->
                         FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
                         b.buildFuture()
@@ -234,7 +235,7 @@ object CommandRegistrar {
         .requires { it.sender is Player && it.sender.hasPermission(PaperServer.config.permissions.video) }
         .then(Commands.literal("this").then(videoUrlArgument { "this" }))
         .then(
-            Commands.argument("id", PaperBareTokenArgumentType)
+            Commands.argument("id", BareTokenCommandArgumentType)
                 .suggests { _, b ->
                     FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
                     b.buildFuture()
@@ -286,7 +287,7 @@ object CommandRegistrar {
                 .then(scheduleActionNode("pause") { "this" })
         )
         .then(
-            Commands.argument("id", PaperBareTokenArgumentType)
+            Commands.argument("id", BareTokenCommandArgumentType)
                 .suggests { _, b ->
                     FullscreenBroadcastManager.displayIdSuggestions().forEach { b.suggest(it) }
                     b.buildFuture()
@@ -329,7 +330,7 @@ object CommandRegistrar {
      * suggesting every minute of the player's local day.
      */
     private fun scheduleTimeArgument(action: String, token: (CommandContext<CommandSourceStack>) -> String) =
-        Commands.argument("time", PaperBareTokenArgumentType)
+        Commands.argument("time", BareTokenCommandArgumentType)
             .suggests { ctx, builder -> scheduleTimeSuggestions(ctx.source.sender as? Player, builder) }
             .executes { ctx ->
                 ScheduleCommand().execute(
@@ -441,7 +442,7 @@ object CommandRegistrar {
         literalName: String,
         flags: List<CommandNode<CommandSourceStack>>,
     ) = Commands.literal(literalName).then(
-        Commands.argument("id", PaperBareTokenArgumentType)
+        Commands.argument("id", BareTokenCommandArgumentType)
             .suggests { _, builder ->
                 if (literalName == "id") {
                     builder.suggest("this")
@@ -454,7 +455,7 @@ object CommandRegistrar {
     )
 
     /** Bare space-delimited token argument type with custom character validation. */
-    private object PaperBareTokenArgumentType : CustomArgumentType<String, String> {
+    private object BareTokenCommandArgumentType : ArgumentType<String> {
         private val MISSING = SimpleCommandExceptionType(LiteralMessage("Expected a value."))
 
         override fun parse(reader: StringReader): String {
@@ -463,8 +464,6 @@ object CommandRegistrar {
             if (reader.cursor == start) throw MISSING.create()
             return reader.string.substring(start, reader.cursor)
         }
-
-        override fun getNativeType(): ArgumentType<String> = StringArgumentType.greedyString()
     }
 
     /**
@@ -512,7 +511,7 @@ object CommandRegistrar {
 
             "target" -> Commands.literal("target").then(
                 terminate(
-                    Commands.argument("players", PaperBareTokenArgumentType)
+                    Commands.argument("players", BareTokenCommandArgumentType)
                         .suggests { _, builder -> suggestPlayerNames(builder) },
                     children,
                 )

@@ -1,5 +1,8 @@
 package com.dreamdisplayx.platform.client.audio
 
+//? if <1.19.3 {
+import com.dreamdisplayx.platform.client.render.compat.toJoml
+//?}
 import com.dreamdisplayx.api.media.audio.model.ListenerPose
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
@@ -15,7 +18,10 @@ internal object ListenerPoseTracker {
             camera.position()
         //?} else
         /*camera.getPosition()*/
+        //? if >=1.19.3 {
         val rotation = camera.rotation()
+        //?} else
+        /*val rotation = camera.rotation().toJoml()*/
         val forward = Vector3f(0f, 0f, -1f).rotate(rotation)
         val up = Vector3f(0f, 1f, 0f).rotate(rotation)
         return ListenerPose(

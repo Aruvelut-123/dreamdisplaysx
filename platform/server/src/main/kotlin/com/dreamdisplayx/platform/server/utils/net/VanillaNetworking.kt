@@ -3,8 +3,15 @@ package com.dreamdisplayx.platform.server.utils.net
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
 import io.github.arnodoelinger.platformweaver.FabricOnly
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
+//? if >=1.20.5 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
+//?} else
+/*import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload*/
 import net.minecraft.server.level.ServerPlayer
+//? if <1.20.5 {
+import com.dreamdisplayx.platform.client.net.compat.CompatPayloads
+import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket
+//?}
 
 /** Loader-specific seam for the protocol-v2 envelope. */
 interface VanillaNetworkingAdapter {
@@ -23,15 +30,24 @@ interface VanillaNetworkingAdapter {
 object VanillaNetworking {
     lateinit var adapter: VanillaNetworkingAdapter
 }
+// Forge adapter lives in :platform:client:forge
+
 
 /** Fabric v2 networking adapter. */
 @FabricOnly
 object FabricNetworkingAdapter : VanillaNetworkingAdapter {
     override fun sendV2(players: List<ServerPlayer>, packet: DreamPacket) = FabricV2Networking.send(players, packet)
     override fun sendV3Batch(players: List<ServerPlayer>, packets: List<DreamPacket>) = FabricV2Networking.sendBatch(players, packets)
-    override fun sendProxy(player: ServerPlayer, packet: CustomPacketPayload) = net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, packet)
+    override fun sendProxy(player: ServerPlayer, packet: CustomPacketPayload) {
+        //? if >=1.20.5 {
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, packet)
+        //?} else
+        /*player.connection.send(ClientboundCustomPayloadPacket(packet.type().id(), CompatPayloads.encode(packet)))*/
+    }
 }
 
+// NeoForge only exists from 1.21.1; below it this adapter must not be compiled at all.
+//? if >=1.21.1 {
 /** NeoForge v2 networking adapter. */
 @NeoForgeOnly
 object NeoForgeNetworkingAdapter : VanillaNetworkingAdapter {
@@ -39,3 +55,4 @@ object NeoForgeNetworkingAdapter : VanillaNetworkingAdapter {
     override fun sendV3Batch(players: List<ServerPlayer>, packets: List<DreamPacket>) = NeoForgeV2Networking.sendBatch(players, packets)
     override fun sendProxy(player: ServerPlayer, packet: CustomPacketPayload) = net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, packet)
 }
+//?}

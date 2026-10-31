@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui
 
+import com.dreamdisplayx.platform.client.utils.identifier
 //? if >=1.21.11 {
 //?} else
 /*import com.mojang.blaze3d.systems.RenderSystem*/
@@ -26,7 +27,14 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 
 //?} else
-/*import net.minecraft.client.gui.GuiGraphics*/
+/*
+//? if >=1.20 {
+import net.minecraft.client.gui.GuiGraphics
+//?}
+//? if <1.20 {
+import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
+//?}
+*/
 import net.minecraft.client.renderer.texture.DynamicTexture
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -131,7 +139,7 @@ class FullscreenOverlay(
             tex = DynamicTexture({ "dreamdisplayx:fullscreen" }, img)
             //?} else
             /*tex = DynamicTexture(img)*/
-            textureId = Identifier.fromNamespaceAndPath(
+            textureId = identifier(
                 Initializer.MOD_ID, "fullscreen/${displayScreen.uuid}-${UUID.randomUUID()}"
             )
             mc.textureManager.register(textureId!!, tex)

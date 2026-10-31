@@ -1,9 +1,11 @@
 package com.dreamdisplayx.platform.server.commands.subcommands
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.api.display.geometry.SurfaceCensus
 import com.dreamdisplayx.api.display.geometry.SurfaceRole
 import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.platform.server.*
+import com.dreamdisplayx.platform.server.api.ServerVetoes
 import com.dreamdisplayx.platform.server.datatypes.selection.PaperSelectionData
 import com.dreamdisplayx.platform.server.datatypes.selection.VanillaSelectionData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -20,7 +22,10 @@ import kotlinx.coroutines.launch
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
+//? if >=1.19.3 {
 import net.minecraft.core.registries.BuiltInRegistries
+//?} else
+/*import net.minecraft.core.Registry as BuiltInRegistries*/
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
@@ -122,6 +127,11 @@ class CreateCommand : SubCommand {
             displayData.name = normalized
         }
 
+        ServerVetoes.askCreate(displayData, player.uniqueId)?.let { reason ->
+            if (reason.isNotEmpty()) MessageUtil.sendColoredMessage(player, reason)
+            return
+        }
+
         DisplayManager.register(displayData)
         MessageUtil.sendMessage(player, "successfulCreation")
     }
@@ -194,7 +204,7 @@ object VanillaCreateCommand {
     /** Command execution logic. */
     fun execute(ctx: CommandContext<CommandSourceStack>, requestedName: String?): Int {
         val player = ctx.source.entity as? ServerPlayer
-            ?: return ctx.source.sendFailure(Component.literal("This command can only be used by a player.")).let { 0 }
+            ?: return ctx.source.sendFailure(literalText("This command can only be used by a player.")).let { 0 }
 
         val sel = SelectionManager.selectionPoints[player.uuid] as? VanillaSelectionData
             ?: return MessageUtil.sendMessageWithMaterials(
@@ -261,6 +271,11 @@ object VanillaCreateCommand {
         }
 
         SelectionManager.selectionPoints.remove(player.uuid)
+
+        ServerVetoes.askCreate(displayData, player.uuid)?.let { reason ->
+            if (reason.isNotEmpty()) MessageUtil.sendColoredMessage(player, reason)
+            return 0
+        }
 
         DisplayManager.register(displayData)
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(displayData) }

@@ -1,5 +1,8 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.utils.emptyText
+import com.dreamdisplayx.platform.client.utils.identifier
+import com.dreamdisplayx.platform.client.utils.vanillaIdentifier
 import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.kit.UiWidget
@@ -7,7 +10,11 @@ import com.dreamdisplayx.platform.client.ui.kit.UiWidget
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 //?}
 import net.minecraft.client.Minecraft
+//? if >=1.20.2 {
 import net.minecraft.client.gui.components.WidgetSprites
+//?} else
+/*import com.dreamdisplayx.platform.client.ui.WidgetSprites
+import com.dreamdisplayx.platform.client.ui.blitSprite*/
 //? if >=1.21.11 {
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.renderer.RenderPipelines
@@ -31,7 +38,7 @@ class IconButton(
     private val sprites: WidgetSprites = DEFAULT_SPRITES,
     private val margin: Int = 2,
     private val onPress: () -> Unit,
-) : UiWidget(Component.empty()) {
+) : UiWidget(emptyText()) {
 
     constructor(icon: String, onPress: () -> Unit) :
             this(icon = { modIcon(icon) }, onPress = onPress)
@@ -78,19 +85,19 @@ class IconButton(
 
     companion object {
         val DEFAULT_SPRITES = WidgetSprites(
-            Identifier.withDefaultNamespace("widget/button"),
-            Identifier.withDefaultNamespace("widget/button_disabled"),
-            Identifier.withDefaultNamespace("widget/button_highlighted"),
+            vanillaIdentifier("widget/button"),
+            vanillaIdentifier("widget/button_disabled"),
+            vanillaIdentifier("widget/button_highlighted"),
         )
 
         /** Red variant used for destructive actions (delete, report). */
         val RED_SPRITES = WidgetSprites(
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/red_button"),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/red_button_disabled"),
-            Identifier.fromNamespaceAndPath(Initializer.MOD_ID, "widgets/red_button_highlighted"),
+            identifier(Initializer.MOD_ID, "widgets/red_button"),
+            identifier(Initializer.MOD_ID, "widgets/red_button_disabled"),
+            identifier(Initializer.MOD_ID, "widgets/red_button_highlighted"),
         )
 
         /** Resolves a mod-namespaced icon sprite by [name]. */
-        fun modIcon(name: String): Identifier = Identifier.fromNamespaceAndPath(Initializer.MOD_ID, name)
+        fun modIcon(name: String): Identifier = identifier(Initializer.MOD_ID, name)
     }
 }

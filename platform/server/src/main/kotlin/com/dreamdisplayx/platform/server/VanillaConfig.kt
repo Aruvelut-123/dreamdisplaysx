@@ -101,7 +101,10 @@ class VanillaConfig(private val configDir: File) {
     }
 
     fun getMessageForPlayer(player: ServerPlayer?, key: String): Any? {
+        //? if >=1.20.2 {
         val locale = player?.clientInformation()?.language() ?: "en"
+        //?} else
+        /*val locale = player?.let(VanillaServerState.playerLanguage) ?: "en"*/
         return langStore.getMessage(locale, language.default_language, key)
     }
 }

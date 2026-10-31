@@ -1,12 +1,16 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.api.display.geometry.DisplayGeometry as PublicDisplayGeometry
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.mojang.blaze3d.vertex.PoseStack
 import net.minecraft.core.BlockPos
 import org.joml.Quaternionf
+//? if <1.19.3 {
+import com.dreamdisplayx.platform.client.render.compat.mulPose
+import com.dreamdisplayx.platform.client.render.compat.translate
+//?}
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sqrt
 
 /**
  * Pose-stack math for positioning a display quad in the world: facing-dependent translation,
@@ -15,10 +19,7 @@ import kotlin.math.sqrt
  * Also owns the block-space bounding-box math (containment and distance) shared by display logic.
  */
 internal object DisplayGeometry {
-    /**
-     * Computes the inclusive far corner of a screen anchored at ([x], [y], [z]) with [width] x [height] blocks
-     * facing [facing]. Width extends along the horizontal axis perpendicular to [facing]; height extends up.
-     */
+    /** Inclusive far corner of a screen anchored at ([x], [y], [z]) facing [facing]. */
     private inline fun <T> withBounds(
         x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
         block: (maxX: Int, maxY: Int, maxZ: Int) -> T,
@@ -27,21 +28,9 @@ internal object DisplayGeometry {
         var maxZ = z
         var maxY = y + height - 1
         when (facing) {
-            DisplayFacing.NORTH, DisplayFacing.SOUTH -> {
-                maxX += width - 1
-                maxZ += depth - 1
-            }
-
-            DisplayFacing.EAST, DisplayFacing.WEST -> {
-                maxZ += width - 1
-                maxX += depth - 1
-            }
-
-            DisplayFacing.UP, DisplayFacing.DOWN -> {
-                maxX += width - 1
-                maxZ += height - 1
-                maxY = y + depth - 1
-            }
+            DisplayFacing.NORTH, DisplayFacing.SOUTH -> { maxX += width - 1; maxZ += depth - 1 }
+            DisplayFacing.EAST, DisplayFacing.WEST -> { maxZ += width - 1; maxX += depth - 1 }
+            DisplayFacing.UP, DisplayFacing.DOWN -> { maxX += width - 1; maxZ += height - 1; maxY = y + depth - 1 }
         }
         return block(maxX, maxY, maxZ)
     }
@@ -49,21 +38,12 @@ internal object DisplayGeometry {
     /** Returns true if [pos] falls within the block bounding box of the described screen. */
     fun isInBounds(
         pos: BlockPos, x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
-    ): Boolean =
-        withBounds(x, y, z, width, height, facing, depth) { maxX, maxY, maxZ ->
-            pos.x in x..maxX && pos.y in y..maxY && pos.z in z..maxZ
-        }
+    ): Boolean = PublicDisplayGeometry.isInBounds(pos.x, pos.y, pos.z, x, y, z, width, height, facing, depth)
 
     /** Returns the shortest Euclidean distance from [pos] to any block in the described screen's bounding box. */
     fun distanceTo(
         pos: BlockPos, x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
-    ): Double =
-        withBounds(x, y, z, width, height, facing, depth) { maxX, maxY, maxZ ->
-            val clampedX = min(max(pos.x, x), maxX)
-            val clampedY = min(max(pos.y, y), maxY)
-            val clampedZ = min(max(pos.z, z), maxZ)
-            sqrt(pos.distSqr(BlockPos(clampedX, clampedY, clampedZ)))
-        }
+    ): Double = PublicDisplayGeometry.distanceTo(pos.x, pos.y, pos.z, x, y, z, width, height, facing, depth)
 
     /**
      * World-space center and orientation basis for a screen anchored at ([x], [y], [z]) with the given

@@ -156,43 +156,47 @@ object TextureUploadUtil {
         }
     }
 
-    /** Write to a Minecraft texture using the `writeToTexture` method. */
-    private fun writeToTexture(texture: GpuTexture, pixels: ByteBuffer, w: Int, h: Int, format: NativeImage.Format) {
-        val encoder = RenderSystem.getDevice().createCommandEncoder()
-        val encoderClass = encoder.javaClass
+    /** Cached `writeToTexture` overload for one command-encoder class. */
+    private class WriteMethod(val method: Method, val takesFormat: Boolean)
 
-        try {
-            encoderClass
-                .getMethod(
+    /** Upstream 1d9120aa: resolves each encoder class' overload once instead of per uploaded frame. */
+    private val writeMethods = java.util.concurrent.ConcurrentHashMap<Class<*>, WriteMethod>()
+
+    private fun resolveWriteMethod(encoderClass: Class<*>): WriteMethod {
+        val int = Int::class.javaPrimitiveType
+        return try {
+            WriteMethod(
+                encoderClass.getMethod(
                     "writeToTexture",
                     GpuTexture::class.java,
                     ByteBuffer::class.java,
                     NativeImage.Format::class.java,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                    Int::class.javaPrimitiveType,
-                )
-                .invokeOrThrowTarget(encoder, texture, pixels, format, 0, 0, 0, 0, w, h)
-            return
-        } catch (_: NoSuchMethodException) {
-        }
-
-        encoderClass
-            .getMethod(
-                "writeToTexture",
-                GpuTexture::class.java,
-                ByteBuffer::class.java,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
+                    int, int, int, int, int, int,
+                ),
+                takesFormat = true,
             )
-            .invokeOrThrowTarget(encoder, texture, pixels, 0, 0, 0, 0, w, h)
+        } catch (_: NoSuchMethodException) {
+            WriteMethod(
+                encoderClass.getMethod(
+                    "writeToTexture",
+                    GpuTexture::class.java,
+                    ByteBuffer::class.java,
+                    int, int, int, int, int, int,
+                ),
+                takesFormat = false,
+            )
+        }
+    }
+
+    /** Write to a Minecraft texture using the `writeToTexture` method. */
+    private fun writeToTexture(texture: GpuTexture, pixels: ByteBuffer, w: Int, h: Int, format: NativeImage.Format) {
+        val encoder = RenderSystem.getDevice().createCommandEncoder()
+        val write = writeMethods.getOrPut(encoder.javaClass) { resolveWriteMethod(encoder.javaClass) }
+        if (write.takesFormat) {
+            write.method.invokeOrThrowTarget(encoder, texture, pixels, format, 0, 0, 0, 0, w, h)
+        } else {
+            write.method.invokeOrThrowTarget(encoder, texture, pixels, 0, 0, 0, 0, w, h)
+        }
     }
 
     /** Invokes the given method on the given target. Throws the target exception if any. */

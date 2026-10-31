@@ -17,6 +17,9 @@ enum class PlatformId(override val wire: String) : WireEnum {
     /** `NeoForge` mod loader. */
     NEOFORGE("neoforge"),
 
+    /** `Forge` mod loader (Minecraft 1.20.1). */
+    FORGE("forge"),
+
     /** `Paper` server. */
     PAPER("paper"),
 
@@ -25,6 +28,6 @@ enum class PlatformId(override val wire: String) : WireEnum {
 
     companion object {
         /** Returns the enum value corresponding to the given wire value, or [UNKNOWN] if not found. */
-        fun fromWire(raw: String?): PlatformId = wireEnumValueOf(raw, UNKNOWN)
+        fun fromWire(raw: String?): PlatformId = wireEnumValueOf(raw, UNKNOWN, entries)
     }
 }

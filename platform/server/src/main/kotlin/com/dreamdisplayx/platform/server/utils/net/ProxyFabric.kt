@@ -17,10 +17,19 @@ object FabricProxyNetworking {
 
     /** Registers the single proxy envelope receiver. */
     fun registerReceivers() {
+        //? if >=1.20.5 {
         ServerPlayNetworking.registerGlobalReceiver(ProxyPayload.TYPE) { payload, context ->
             runCatching {
                 VanillaProxyBridge.onMessage(context.player(), context.server(), payload.bytes)
             }.onFailure { e -> logger.warn("Failed to handle proxy packet.", e) }
         }
+        //?} else
+        /*ServerPlayNetworking.registerGlobalReceiver(ProxyPayload.TYPE.id()) { server, player, _, buf, _ ->
+            val bytes = ByteArray(buf.readableBytes()).also(buf::readBytes)
+            server.execute {
+                runCatching { VanillaProxyBridge.onMessage(player, server, bytes) }
+                    .onFailure { e -> logger.warn("Failed to handle proxy packet.", e) }
+            }
+        }*/
     }
 }

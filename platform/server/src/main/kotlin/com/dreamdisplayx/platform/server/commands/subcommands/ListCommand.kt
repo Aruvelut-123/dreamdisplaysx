@@ -1,5 +1,9 @@
 package com.dreamdisplayx.platform.server.commands.subcommands
 
+//? if <1.19 {
+import com.dreamdisplayx.platform.server.utils.sendSystemMessage
+//?}
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.PaperServer
 import com.dreamdisplayx.platform.server.VanillaServerState
@@ -446,7 +450,7 @@ object VanillaListCommand {
         if (player != null) {
             MessageUtil.sendColoredMessage(player, msg)
         } else {
-            ctx.source.sendSystemMessage(Component.literal(msg))
+            ctx.source.sendSystemMessage(literalText(msg))
         }
     }
 
@@ -455,7 +459,7 @@ object VanillaListCommand {
         if (player != null) {
             MessageUtil.sendColoredMessage(player, msg)
         } else {
-            ctx.source.sendSystemMessage(Component.literal(msg))
+            ctx.source.sendSystemMessage(literalText(msg))
         }
     }
 }

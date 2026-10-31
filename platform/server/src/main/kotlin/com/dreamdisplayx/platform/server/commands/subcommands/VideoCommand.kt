@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.commands.subcommands
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.api.media.source.url.YouTubeUrls
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
@@ -145,7 +146,7 @@ object VanillaVideoCommand {
     /** Assigns a YouTube URL (and optional language) to the targeted display, after validating ownership. */
     fun execute(ctx: CommandContext<CommandSourceStack>, token: String, urlAndLang: String): Int {
         val player = ctx.source.entity as? ServerPlayer
-            ?: return ctx.source.sendFailure(Component.literal("Players only.")).let { 0 }
+            ?: return ctx.source.sendFailure(literalText("Players only.")).let { 0 }
 
         val parts = urlAndLang.trim().split(" ")
         val urlRaw = parts[0]

@@ -11,8 +11,10 @@ import com.mojang.brigadier.Command
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import io.github.arnodoelinger.platformweaver.PaperOnly
+//? if >=1.20.5 {
 import io.papermc.paper.command.brigadier.CommandSourceStack
 import io.papermc.paper.command.brigadier.Commands
+//?}
 import org.bukkit.entity.Player
 
 /** Experimental Paper `/display group` commands for V3 same-content playback. */

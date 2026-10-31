@@ -19,8 +19,10 @@ import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
+//? if >=1.21.1 {
 import net.neoforged.bus.api.SubscribeEvent
 import net.neoforged.neoforge.event.entity.player.PlayerEvent
+//?}
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
@@ -118,6 +120,8 @@ object VanillaPlayerListener {
     }
 }
 
+// Forge adapter lives in :platform:client:forge
+
 /** `Fabric` event-subscription adapter for [VanillaPlayerListener]. */
 @FabricOnly
 object FabricPlayerListener {
@@ -131,6 +135,8 @@ object FabricPlayerListener {
     }
 }
 
+// NeoForge only exists from 1.21.1, so both the imports above and this adapter are gated.
+//? if >=1.21.1 {
 /** `NeoForge` event-subscription adapter for [VanillaPlayerListener]. */
 @NeoForgeOnly
 object NeoForgePlayerListener {
@@ -146,3 +152,4 @@ object NeoForgePlayerListener {
         VanillaPlayerListener.onLeave(player.uuid)
     }
 }
+//?}

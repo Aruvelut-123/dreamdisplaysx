@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.platform.client.render.Thumbnails
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
@@ -130,7 +131,7 @@ object BilibiliAccountLabel {
 
         // Name
         val nameX = x + avatarSize + gap
-        g.drawText(font, Component.literal(name), nameX, y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
+        g.drawText(font, literalText(name), nameX, y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
 
         // VIP badge — use the official Bilibili image when available, fall back to coloured text
         if (info.isVip) {
@@ -155,7 +156,7 @@ object BilibiliAccountLabel {
                     g.fill(badgeX, y, badgeX + avatarSize, y + avatarSize, badgeColor)
                     val vipLabel = if (info.vipType >= 2) "大" else "V"
                     val labelW = font.width(vipLabel)
-                    g.drawText(font, Component.literal(vipLabel), badgeX + (avatarSize - labelW) / 2,
+                    g.drawText(font, literalText(vipLabel), badgeX + (avatarSize - labelW) / 2,
                         y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
                 }
             } else {
@@ -163,7 +164,7 @@ object BilibiliAccountLabel {
                 g.fill(badgeX, y, badgeX + avatarSize, y + avatarSize, badgeColor)
                 val vipLabel = if (info.vipType >= 2) "大" else "V"
                 val labelW = font.width(vipLabel)
-                g.drawText(font, Component.literal(vipLabel), badgeX + (badgeWidth - labelW) / 2,
+                g.drawText(font, literalText(vipLabel), badgeX + (badgeWidth - labelW) / 2,
                     y + (avatarSize - fontHeight) / 2, 0xFFFFFFFF.toInt(), true)
             }
         }
