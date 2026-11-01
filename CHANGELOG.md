@@ -1,4 +1,4 @@
-# 1.10.6.1 Release
+# 1.10.8.1 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
 ## Server
 ### Features
