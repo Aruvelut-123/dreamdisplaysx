@@ -54,6 +54,8 @@ object ClientStartupManager {
         ClientInputModule,
         ClientRenderModule,
         ClientCapabilityModule,
+        // Must come last: it publishes the compatible `DreamDisplays` API on top of every service above.
+        ClientApiBridgeModule,
     )
 
     /** Loads config, wires services, hosts the application, prewarms backends, and launches maintenance loops. */

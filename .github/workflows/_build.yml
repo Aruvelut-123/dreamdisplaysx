@@ -134,7 +134,7 @@ jobs:
               TRUNK_ESC="${TRUNK//./\.}"
               # `|| true`: when no preview tag exists yet, the final grep matches nothing and exits
               # non-zero, and under `set -euo pipefail` that would abort the whole step before the
-              # empty-MAX_N fallback below can run (NEXT=0). Swallow the no-match exit code so the
+              # empty-MAX_N fallback below can run (NEXT=1). Swallow the no-match exit code so the
               # command substitution yields an empty string and the fallback handles it.
               MAX_N=$(
                 git ls-remote --tags origin "refs/tags/v${TRUNK}-preview.*" 2>/dev/null \
@@ -143,9 +143,10 @@ jobs:
                   | sort -n \
                   | tail -1
               ) || true
-              # No existing preview tag for this version -> preview.0, else latest + 1.
+              # No existing preview tag for this version -> preview.1 (previews are 1-based, so
+              # there is no "Preview 0"), else latest + 1.
               if [[ -z "$MAX_N" ]]; then
-                NEXT=0
+                NEXT=1
               else
                 NEXT=$(( MAX_N + 1 ))
               fi

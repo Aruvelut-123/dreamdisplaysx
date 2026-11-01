@@ -576,6 +576,20 @@ Every task MUST be tracked in the session's `todo` task list at all times:
 - Never merge upstream changelog into our version's section
 - The CI release pipeline extracts the matching section from CHANGELOG.md by the `pretty_version` title
 
+## Upstream developer API compatibility
+
+`api/src/main/kotlin/com/dreamdisplays/` is a **verbatim copy** of upstream's `com.dreamdisplays.api` tree (101 files), and `core/src/main/kotlin/com/dreamdisplays/core/addon/` is the matching `AddonManager`/binders. The point is binary compatibility: an addon compiled against upstream references `com.dreamdisplays.api.addon.Addon` and friends, and those fully-qualified names must exist here at runtime too.
+
+Rules that keep this honest:
+- **Never rename or relocate `com.dreamdisplays`.** `dreamDisplaysShadedPackages` in `gradle/src/main/kotlin/support/shadow/DreamDisplaysXShadow.kt` must never gain a `com.dreamdisplays` entry; `relocateDreamDisplaysXSharedPackages()` runs on every loader's `shadowJar` and would silently rewrite the compatible package into `com.dreamdisplayx.libs.com.dreamdisplays`.
+- The copy stays dependency-free: upstream's api imports only `java.*`, `kotlin.*` and `kotlinx.serialization`. Do not add Minecraft, libvlc or platform types to it, or `api` stops being a pure-Kotlin module that both loaders share.
+- Bridging lives in `core/src/main/kotlin/com/dreamdisplays/core/bridge/`, not inside the copied tree. `ForkApiBackend` implements upstream's `ApiBackend` on top of the fork's `DisplayService`/`PlaybackService`; `CompatPlatform.kt` adapts `com.dreamdisplayx.api.platform.identity.Platform` to upstream's `Platform` (two *different* interfaces — passing one where the other is expected is a `ClassCastException`, hence `PlatformBridge`, `SchedulerBridge`, `TaskHandleBridge`, `LoggerBridge`, `PathsBridge`).
+- `ForkAddonHandle` implements only the fork `ForkAddonContext`; `UpstreamContextView` wraps it as an upstream `AddonContext`. Both cannot be implemented by one class because both declare `side` with a different enum type. They share one `owned` queue, so a resource is closed exactly once whichever interface obtained it.
+- Registration matches upstream: there is **no addon scanning**. `DreamDisplays.register(addon)` → `ApiHolder.whenReady` → `ForkApiBackend.registerAddon` → `ForkAddonManager.register`. `DreamDisplaysX.register(addon)` is the fork-side twin with the same plumbing. `ApiHolder.attach` must run **before** `ForkAddonManager.start()`, otherwise registrations made during boot stay queued forever (`ApiHolder.detach` only clears `current`, it does not drain).
+- `kotlin`/`kotlinx` *are* relocated (`com.dreamdisplayx.libs.*`) — upstream does the same with its own prefix, so this is upstream-native behaviour, not a fork regression. Keep public signatures taking `Any`/`Consumer`/plain JVM types (as `DreamDisplays.register(addon: Any)` and `Events.on(T::class.java, Consumer)` do) instead of `Function0`/`Function1`, so relocated descriptors cannot differ from what an addon compiled against upstream expects.
+- `ForkAddonManager` is deliberately **not** a subclass of upstream's `AddonManager`: that one rejects anything not carrying `@Addon`, and `@ForkAddon` must share the same dependency graph, enable order and reverse-order teardown. `ForkAddonEntry.Kind` is the discriminator.
+- Client wiring is `ClientApiBridgeModule` (`platform/client/common`), registered last in `ClientStartupManager.defaultModules` with `dependencies = listOf(CoreDisplayModule.id, CorePlaybackModule.id, MediaResolverModule.id)`.
+
 ## Display vetoes
 
 `api/display/event/DisplayVeto` (port of upstream `023357e3`) lets a plugin refuse a display change before it happens. The fork could not take the upstream shape: upstream hangs `DisplayVetoes` off `DreamDisplaysServer` / `ServerDisplay` / `ServerEvents`, and this fork has none of those (it exposes `api.display.service.DisplayService` + `DisplayMutationPort` instead). So the fork ships a standalone `DisplayVetoRegistry` plus `platform/server/api/ServerVetoes`, which both loaders call directly.

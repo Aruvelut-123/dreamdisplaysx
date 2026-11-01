@@ -12,11 +12,11 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 
 
 ## Client
-
 ### Features
-
 - Added 1.18.2, 1.19.4 and 1.20.1 builds for Fabric and Forge.
 - Added an opt-in loading animation with a centered logo, flowing-rainbow waving title, and Windows 11-style spinner.
+- Added the upstream developer API (`com.dreamdisplays.*`), so an addon built for Dream Displays loads as-is instead of needing a recompile.
+- Added fork-specific addon extensions: `@ForkAddon` with quality, volume, brightness, position, state, first-frame and ended handlers, plus `DreamDisplaysX.register`.
 
 ### Fixes
 
