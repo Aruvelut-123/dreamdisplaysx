@@ -203,13 +203,13 @@ object BilibiliApi {
      * removes those renditions from the response, so the value is spelled out here instead of being
      * scattered as a magic number at each call site.
      */
-    private const val FNVAL_DASH_ALL = 4048
+    private const val FNVAL_DASH_ALL = "4048"
 
     /**
      * `fnval` for the PGC (bangumi / movie) endpoint: the full ladder above plus the PGC-only
      * 8192 bit = 12240. The PGC player rejects the plain video bitfield and answers with no streams.
      */
-    private const val FNVAL_DASH_ALL_PGC = 12240
+    private const val FNVAL_DASH_ALL_PGC = "12240"
 
 
     /** Fixed permutation table BIlibili uses to derive the 32-char WBI mixin key. Publicly documented, stable! */
@@ -872,7 +872,7 @@ object BilibiliApi {
      * known, else the encoded height as reported.
      */
     private fun canonicalHeight(video: JsonObject): Int? {
-        val encoded = video.optInt("height").takeIf { it > 0 }
+        val encoded = video.optInt("height")?.takeIf { it > 0 }
         return qnToStandardHeight(video.optInt("id")) ?: encoded
     }
 
@@ -887,8 +887,8 @@ object BilibiliApi {
      * carries a canonical rung the quality selector can compare against a target height.
      */
     private fun canonicalWidth(video: JsonObject): Int? {
-        val encodedW = video.optInt("width").takeIf { it > 0 }
-        val encodedH = video.optInt("height").takeIf { it > 0 }
+        val encodedW = video.optInt("width")?.takeIf { it > 0 }
+        val encodedH = video.optInt("height")?.takeIf { it > 0 }
         val canonical = canonicalHeight(video) ?: return encodedW
         if (encodedW == null || encodedH == null) return encodedW
         val scaled = (encodedW.toDouble() / encodedH.toDouble() * canonical.toDouble()).roundToInt()
