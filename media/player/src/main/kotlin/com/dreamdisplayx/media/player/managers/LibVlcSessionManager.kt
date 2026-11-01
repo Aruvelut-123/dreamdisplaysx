@@ -1914,11 +1914,29 @@ internal class LibVlcSessionManager(
         fun setup(opaque: com.sun.jna.ptr.PointerByReference?, chroma: Pointer?, width: Pointer?, height: Pointer?,
                   pitches: Pointer?, lines: Pointer?): Int {
             if (!active || width == null || height == null || chroma == null || pitches == null || lines == null) return 0
-            val w = width.getInt(0)
-            val h = height.getInt(0)
+            var w = width.getInt(0)
+            var h = height.getInt(0)
             if (w <= 0 || h <= 0 || w > 16384 || h > 16384) {
                 logger.warn("$debugLabel rejected libvlc frame dimensions ${w}x$h")
                 return 0
+            }
+            // Ask libvlc to deliver a smaller frame when the source is far larger than the display
+            // texture. Writing `width`/`height` back from a format callback makes libvlc's own
+            // swscale stage do the downscale (it runs on the decoder thread and is SIMD-optimised),
+            // so the vmem lock/unlock path only copies the destination-sized frame. Without this a
+            // 1440p rendition fed a 1080x1080 display and every frame cost a full CPU resize.
+            if (capSourceToTexture) {
+                val targetW = expectedW
+                val targetH = expectedH
+                if (targetW > 0 && targetH > 0) {
+                    val capped = capToTexture(w, h, targetW, targetH)
+                    if (capped != null) {
+                        w = capped.first
+                        h = capped.second
+                        width.setInt(0, w)
+                        height.setInt(0, h)
+                    }
+                }
             }
             val pitch = align32(w * 4)
             val lineCount = align32(h)
@@ -2265,10 +2283,22 @@ internal class LibVlcSessionManager(
         }
     }
 
+    /**
+     * Nearest-neighbour RGBA resize.
+     *
+     * The dominant cost on Android is a source frame far larger than the display texture (a 1440p
+     * Bilibili rendition decoded at 2560x1442 for a 1080x1080 display). The previous implementation
+     * called `ByteBuffer.get`/`put` four times per output pixel, i.e. ~4.7M single-byte JNA buffer
+     * accesses per frame, which starved the game thread ("Can't keep up!" right after a frame).
+     *
+     * Two fast paths now cover the real cases:
+     * - same width: bulk row copies (one `put` per destination row);
+     * - integer downscale factor in both axes: copy 4-byte pixels directly, so a 2560->1280 halving
+     *   touches 4x fewer pixels than naive sampling and never re-reads the source.
+     */
     private fun resizeRgba(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
         src.rewind()
         val srcRow = srcW * 4
-        val dstRow = dstW * 4
         if (srcW == dstW) {
             // Same row width: bulk-copy whole rows (fast path, common when the texture only
             // differs in height from the decoded frame).
@@ -2277,14 +2307,48 @@ internal class LibVlcSessionManager(
                 src.position(sy * srcRow).limit(sy * srcRow + srcRow)
                 dst.put(src)
             }
+            src.rewind()
             return
         }
+        // Integer downscale on both axes: step a whole pixel at a time. `dstW - 1`/`dstH - 1`
+        // keep the last output row/column on the last source pixel instead of leaving a black edge.
+        val xStep = srcW / dstW
+        val yStep = srcH / dstH
+        if (xStep >= 1 && yStep >= 1 && srcW % dstW == 0 && srcH % dstH == 0) {
+            val dstRowBytes = dstW * 4
+            val row = ByteArray(dstRowBytes)
+            for (dy in 0 until dstH) {
+                val srcRowStart = (dy * yStep) * srcRow
+                var di = 0
+                var sx = 0
+                while (sx < srcW) {
+                    val p = srcRowStart + sx * 4
+                    row[di] = src.get(p)
+                    row[di + 1] = src.get(p + 1)
+                    row[di + 2] = src.get(p + 2)
+                    row[di + 3] = src.get(p + 3)
+                    di += 4
+                    sx += xStep
+                }
+                dst.put(row, 0, dstRowBytes)
+            }
+            src.rewind()
+            return
+        }
+        // Arbitrary ratio: bulk-copy the nearest source row into a reusable line buffer, then pick
+        // pixels out of that (heap array access instead of per-byte ByteBuffer.get on a direct buffer).
+        val line = ByteArray(srcRow)
         for (dy in 0 until dstH) {
             val sy = (dy * srcH / dstH).coerceIn(0, srcH - 1)
+            src.position(sy * srcRow).limit(sy * srcRow + srcRow)
+            src.get(line, 0, srcRow)
             for (dx in 0 until dstW) {
                 val sx = (dx * srcW / dstW).coerceIn(0, srcW - 1)
-                val p = sy * srcW * 4 + sx * 4
-                dst.put(src.get(p)); dst.put(src.get(p + 1)); dst.put(src.get(p + 2)); dst.put(src.get(p + 3))
+                val p = sx * 4
+                dst.put(line[p])
+                dst.put(line[p + 1])
+                dst.put(line[p + 2])
+                dst.put(line[p + 3])
             }
         }
         src.rewind()
@@ -2320,6 +2384,37 @@ internal class LibVlcSessionManager(
          * that never emits another PLAYING event.
          */
         private const val VOLUME_CHECK_INTERVAL_MS = 1_000L
+
+        /**
+         * Whether [TextureRenderCallback.setup] may ask libvlc for a frame smaller than the decoded
+         * one. Enabled by default: it shifts the downscale from our single-threaded CPU loop into
+         * libvlc's SIMD swscale stage. `-Ddreamdisplayx.capSourceToTexture=false` disables it for
+         * bisection (some exotic codecs misbehave when a format callback rewrites the size).
+         */
+        private val capSourceToTexture: Boolean =
+            System.getProperty("dreamdisplayx.capSourceToTexture")?.toBooleanStrictOrNull() ?: true
+
+        /**
+         * Returns the size to request from libvlc for a [srcW]x[srcH] source on a
+         * [targetW]x[targetH] texture, or `null` when downscaling is not worth the extra swscale
+         * work.
+         *
+         * The aspect ratio is preserved (a stretched request would distort the picture before the
+         * renderer's own letterbox/crop stage). Anything within ~10% of the target is left alone so
+         * a 1920x1080 source on a 1080x1080 texture is not resampled twice for a few pixels.
+         */
+        internal fun capToTexture(srcW: Int, srcH: Int, targetW: Int, targetH: Int): Pair<Int, Int>? {
+            if (srcW <= 0 || srcH <= 0 || targetW <= 0 || targetH <= 0) return null
+            // The renderer's texture is the ceiling; the picture may only be flattened down to the
+            // larger of the two target edges, exactly like a display's own fit box.
+            val limitW = maxOf(targetW, targetH)
+            if (srcW <= limitW * 1.1) return null
+            val scale = limitW.toDouble() / srcW
+            val w = (srcW * scale).toInt().coerceAtLeast(2)
+            val h = (srcH * scale).toInt().coerceAtLeast(2)
+            if (w >= srcW || h >= srcH) return null
+            return (w - (w % 2)) to (h - (h % 2))
+        }
         private fun align32(value: Int): Int = (value + 31) and -32
         private val RV32 = byteArrayOf('R'.code.toByte(), 'V'.code.toByte(), '3'.code.toByte(), '2'.code.toByte())
         private val DROP_TOKEN = Pointer.createConstant(0x7FFFFFFFL)
