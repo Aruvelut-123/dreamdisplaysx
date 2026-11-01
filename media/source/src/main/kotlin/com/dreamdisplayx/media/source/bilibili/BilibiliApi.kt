@@ -16,6 +16,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.security.MessageDigest
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -27,6 +29,12 @@ data class BilibiliPlayback(
     val streams: List<MediaStream>,
     val metadata: PlatformVideoMetadata,
     val isSeekable: Boolean,
+    /**
+     * True when the upload is a 360/VR panorama (equirectangular), which this mod cannot project.
+     * Resolvers turn this into a clear "not playable here" error instead of painting a warped
+     * sphere map onto a flat wall.
+     */
+    val panoramic: Boolean = false,
 )
 
 /** One search-result card from a Bilibili keyword search (video / bangumi / movie). */
@@ -174,6 +182,35 @@ object BilibiliApi {
 
     /** Bilibili's WAF rejection code, delivered either as a 412 status or inside an HTTP-200 body. */
     private const val WAF_BAN_CODE = -412
+
+
+    /**
+     * Bilibili's uppermost `qn` (quality number): 127 is the 8K / 4320p rung.
+     *
+     * `qn` is a *request* for one preferred rendition, NOT a menu. Asking for 1080p (80) made the
+     * server answer with only the renditions near that rung, which is why most videos exposed a
+     * single quality in the display menu while a handful (whose CDN payload happened to carry extra
+     * tracks) offered several. Requesting the top rung makes the server return every rendition the
+     * account is entitled to; entitlement is still enforced server-side and the client clamps the
+     * list in `DisplayScreen.getAvailableQualities()`.
+     */
+    private const val QN_MAX = "127"
+
+
+    /**
+     * `fnval` bitfield for the full DASH ladder: DASH (16) + HDR (64) + 4K (128) + Dolby audio (256)
+     * + Dolby vision (512) + 8K (1024) + AV1 (2048) = 4048. Withholding any of these bits silently
+     * removes those renditions from the response, so the value is spelled out here instead of being
+     * scattered as a magic number at each call site.
+     */
+    private const val FNVAL_DASH_ALL = 4048
+
+    /**
+     * `fnval` for the PGC (bangumi / movie) endpoint: the full ladder above plus the PGC-only
+     * 8192 bit = 12240. The PGC player rejects the plain video bitfield and answers with no streams.
+     */
+    private const val FNVAL_DASH_ALL_PGC = 12240
+
 
     /** Fixed permutation table BIlibili uses to derive the 32-char WBI mixin key. Publicly documented, stable! */
     private val MIXIN_KEY_ENC_TAB = intArrayOf(
@@ -463,8 +500,14 @@ object BilibiliApi {
         val playurlParams = buildMap {
             resolvedBvid?.let { put("bvid", it) }
             put("cid", cid.toString())
-            put("qn", "80")
-            put("fnval", "4048")
+            // `qn` is a *request* for one preferred rendition, not a menu. Requesting 1080p made
+            // Bilibili return only the renditions near that rung, so most videos exposed a single
+            // quality in the display menu while a few (where the CDN happened to include extra
+            // tracks) offered several. 127 is Bilibili's uppermost qn (8K/4320p): the server then
+            // answers with every rendition the account is entitled to and the display menu can list
+            // all of them, with entitlement still enforced server-side.
+            put("qn", QN_MAX)
+            put("fnval", FNVAL_DASH_ALL)
             put("fourk", "1")
         }
         val playurlUrl = "https://api.bilibili.com/x/player/playurl?${signedQuery(playurlParams)}"
@@ -472,6 +515,14 @@ object BilibiliApi {
         biliRejectionReason(playurlRoot)?.let { return failResolve("playurl returned $it", playurlUrl) }
         val streams = buildStreams(playurlRoot.obj("data"))
         if (streams.isEmpty()) return failResolve("playurl carried no usable streams", playurlUrl)
+
+        // Panorama detection reads the view API's *original* dimension, not the resolved
+        // streams: their height was just rewritten to a canonical rung, which would erase the
+        // 2:1 equirectangular shape this check depends on.
+        val dimension = data.obj("dimension")
+        val panoramic = resolvedBvid != null &&
+            isEquirectangularFrame(dimension?.optInt("width"), dimension?.optInt("height")) &&
+            hasPanoramicTag(fetchTagNames(resolvedBvid))
 
         val stat = data.obj("stat")
         val owner = data.obj("owner")
@@ -484,7 +535,9 @@ object BilibiliApi {
             durationSec = data.optLong("duration"),
             isLive = false,
         )
-        return BilibiliPlayback(streams = streams, metadata = metadata, isSeekable = true)
+        return BilibiliPlayback(
+            streams = streams, metadata = metadata, isSeekable = true, panoramic = panoramic,
+        )
     }
 
     /** Resolves a bangumi/movie episode identified by [epId], or the first episode of season [seasonId]. */
@@ -514,8 +567,11 @@ object BilibiliApi {
         val resolvedEpId = episode.optLong("ep_id")
             ?: return failResolve("season episode carried no ep_id", seasonUrl)
 
+        // Same reasoning as `resolveVod`: a non-top `qn` collapses the answer to the renditions near
+        // that one rung, which left the quality slider with a single stop. The PGC endpoint also
+        // needs its own (wider) `fnval` bitfield.
         val bangumiPlayUrl =
-            "https://api.bilibili.com/pgc/player/web/v2/playurl?fnval=12240&fourk=1&ep_id=$resolvedEpId"
+            "https://api.bilibili.com/pgc/player/web/v2/playurl?fnval=$FNVAL_DASH_ALL_PGC&fourk=1&qn=$QN_MAX&ep_id=$resolvedEpId"
         val playurlRoot = getJson(bangumiPlayUrl)
             ?: return failResolve("bangumi playurl request failed", bangumiPlayUrl)
         biliRejectionReason(playurlRoot)?.let { return failResolve("bangumi playurl returned $it", bangumiPlayUrl) }
@@ -619,11 +675,13 @@ object BilibiliApi {
                     // renditions (e.g. scrub extraction, which software-decodes and stalls on
                     // AV1/HEVC long-GOP streams).
                     codec = v.optString("codecs")?.takeIf { it.isNotEmpty() },
-                    width = v.optInt("width"),
+                    width = canonicalWidth(v),
                     // Bilibili movie / bangumi DASH streams report the actual encoded height
                     // (e.g. 808 instead of 1080), which makes the quality selector show "808p"
                     // instead of "1080p". Map the qn (id) to the canonical height when available.
-                    height = qnToStandardHeight(v.optInt("id")) ?: v.optInt("height"),
+                    // [canonicalWidth] rescales the width to match, or a portrait 1080x1920 source
+                    // would keep width=1080 next to height=1080 and collapse to a 1:1 texture.
+                    height = canonicalHeight(v),
                     fps = v.optString("frameRate")?.toDoubleOrNull(),
                     bitrate = v.optInt("bandwidth"),
                     audioTrackName = null,
@@ -771,6 +829,71 @@ object BilibiliApi {
 
     /** Maps [qn] to the canonical height, or null when [qn] is not a known Bilibili quality number. */
     private fun qnToStandardHeight(qn: Int?): Int? = if (qn != null) QN_TO_HEIGHT[qn] else null
+
+    /**
+     * True when [width]x[height] has the 2:1 equirectangular shape of a 360/VR panorama.
+     *
+     * Deliberately only a *pre-filter*: 2:1 is also a common widescreen-movie ratio, and refusing
+     * a video that would have played fine is worse than failing to flag one, so callers must still
+     * confirm a panorama tag before acting on this.
+     */
+    internal fun isEquirectangularFrame(width: Int?, height: Int?): Boolean {
+        if (width == null || height == null || width <= 0 || height <= 0) return false
+        val longEdge = maxOf(width, height).toDouble()
+        val shortEdge = minOf(width, height).toDouble()
+        return abs(longEdge / shortEdge - 2.0) <= 0.04
+    }
+
+    /** True when any of [tagNames] marks the upload as a 360 / VR panorama. */
+    internal fun hasPanoramicTag(tagNames: Collection<String>): Boolean = tagNames.any { raw ->
+        val tag = raw.trim().lowercase()
+        tag == "vr" || tag.startsWith("vr ") ||
+            tag.contains("全景") || tag.contains("panorama") ||
+            tag.contains("360°") || tag.contains("360度")
+    }
+
+    /**
+     * Tag names for [bvid], or an empty list when the request fails.
+     *
+     * Only called once a video already looks equirectangular, so a normal video (the overwhelming
+     * majority) never pays for this extra round trip. A failure here leaves the video playable
+     * rather than blocking it.
+     */
+    private fun fetchTagNames(bvid: String): List<String> {
+        val url = "https://api.bilibili.com/x/tag/archive/tags?bvid=$bvid"
+        val root = runCatching { getJson(url) }.getOrNull() ?: return emptyList()
+        return root.array("data")?.mapNotNull { element ->
+            element.asJsonObjectOrNull()?.optString("tag_name")?.takeIf { it.isNotBlank() }
+        } ?: emptyList()
+    }
+
+    /**
+     * Canonical rung height for one DASH `video` entry: the qn's standard height when the qn is
+     * known, else the encoded height as reported.
+     */
+    private fun canonicalHeight(video: JsonObject): Int? {
+        val encoded = video.optInt("height").takeIf { it > 0 }
+        return qnToStandardHeight(video.optInt("id")) ?: encoded
+    }
+
+    /**
+     * Width scaled to the canonical rung height.
+     *
+     * The qn mapping rewrites the *height* to a standard rung (808 -> 1080 for a widescreen movie),
+     * but Bilibili reports `height` as the long edge for portrait uploads too: a 1080x1920 phone
+     * video has `id=80` (the 1080p rung) with `width=1080, height=1920`. Mapping only the height
+     * turned that into 1080x1080, so the display allocated a square texture and squashed the
+     * picture. Rescaling the width by the *encoded* aspect keeps the shape while the height still
+     * carries a canonical rung the quality selector can compare against a target height.
+     */
+    private fun canonicalWidth(video: JsonObject): Int? {
+        val encodedW = video.optInt("width").takeIf { it > 0 }
+        val encodedH = video.optInt("height").takeIf { it > 0 }
+        val canonical = canonicalHeight(video) ?: return encodedW
+        if (encodedW == null || encodedH == null) return encodedW
+        val scaled = (encodedW.toDouble() / encodedH.toDouble() * canonical.toDouble()).roundToInt()
+        return scaled.coerceAtLeast(2)
+    }
 
     /** URL-encodes [value] for a query string, using `%20` (not `+`) for spaces. */
     private fun urlEncode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")

@@ -24,6 +24,10 @@ object BilibiliResolver : MediaResolverService {
      * serving e.g. 480p long after the user logged back in. */
     private val cache = LiveAwareResolvedMediaCache(maxSize = 64, liveTtlSeconds = 25, staticTtlMinutes = 0)
 
+    /** Shown when a video turns out to be a 360/VR panorama, which this mod cannot project. */
+    private const val PANORAMIC_MESSAGE =
+        "This is a 360/VR panorama video; Dream DisplaysX cannot project it onto a flat display yet."
+
     override fun canResolve(source: MediaSource): Boolean = source is MediaSource.Bilibili
 
     override fun prefetch(source: MediaSource): Boolean {
@@ -52,6 +56,12 @@ object BilibiliResolver : MediaResolverService {
         val playback = BilibiliApi.resolve(source)
             ?: throw DreamMediaException.NotFound("Bilibili video/room could not be reached.")
         BilibiliMetadataCache.put(source, playback.metadata)
+
+        // A 360/VR panorama is equirectangular: painting it onto a flat display shows a warped,
+        // letterboxed sphere. Say so plainly instead of letting it look like a broken video.
+        if (playback.panoramic) {
+            throw DreamMediaException.NotFound(PANORAMIC_MESSAGE)
+        }
 
         if (playback.streams.isEmpty()) {
             throw DreamMediaException.NotFound(

@@ -2427,11 +2427,15 @@ internal class LibVlcSessionManager(
          */
         internal fun capToTexture(srcW: Int, srcH: Int, targetW: Int, targetH: Int): Pair<Int, Int>? {
             if (srcW <= 0 || srcH <= 0 || targetW <= 0 || targetH <= 0) return null
-            // The renderer's texture is the ceiling; the picture may only be flattened down to the
-            // larger of the two target edges, exactly like a display's own fit box.
-            val limitW = maxOf(targetW, targetH)
-            if (srcW <= limitW * 1.1) return null
-            val scale = limitW.toDouble() / srcW
+            // The renderer's texture is the ceiling; the picture may only be flattened down to its
+            // LONG edge, exactly like a display's own fit box. Comparing (and scaling by) the width
+            // alone silently skipped every portrait source: a 1080x1920 phone clip has srcW == 1080,
+            // so it looked "already small enough" for a 1080-tall texture while libvlc kept handing
+            // over 1080x1920 frames that the CPU fit had to crop row by row on every single frame.
+            val srcLong = maxOf(srcW, srcH)
+            val dstLong = maxOf(targetW, targetH)
+            if (srcLong <= dstLong * 1.1) return null
+            val scale = dstLong.toDouble() / srcLong
             val w = (srcW * scale).toInt().coerceAtLeast(2)
             val h = (srcH * scale).toInt().coerceAtLeast(2)
             if (w >= srcW || h >= srcH) return null

@@ -459,6 +459,33 @@ Three reports shared one theme: state that only ever existed on the video player
   Opening a screen from a command handler needs a real queue drained by the client tick
   (`Initializer.openScreenNextTick`).
 
+### 2026-11-01 — Bilibili quality ladder, portrait frames, panorama refusal
+- `qn` on `x/player/playurl` is a **request for one preferred rendition**, not a menu. The old fixed
+  `qn=80` made Bilibili answer with only the renditions near 1080p, so most videos resolved to a
+  single height, `MediaPlayer.getAvailableQualities()` returned a one-element list and the menu's
+  quality slider had a single stop (which reads to a user as "only some videos can change quality").
+  `BilibiliApi.resolveVod` now sends `QN_MAX` (127, Bilibili's 8K rung) and the PGC path sends `qn`
+  too; entitlement stays server-side, and the client's own `cap` (2160 premium / 1080 otherwise) is
+  the second gate. `fnval` is `FNVAL_DASH_ALL` (4048 = DASH+HDR+4K+Dolby audio/Dolby vision+8K+AV1)
+  for VOD and `FNVAL_DASH_ALL_PGC` (12240) for PGC — withholding a bit silently drops those
+  renditions from the response.
+- **Never rewrite only one axis of a stream's size.** `QN_TO_HEIGHT` maps a qn to a canonical rung so
+  a movie's encoded 808 becomes a labelable 1080, but Bilibili reports `height` as the long edge for
+  portrait uploads: a 1080x1920 phone clip has `id=80`. Mapping the height alone produced
+  1080x1080, `MediaStream.contentAspect()` returned 1.0 and `DisplayTextureResource` allocated a
+  square texture, i.e. the picture was squashed. `buildStreams` now goes through `canonicalHeight()`
+  + `canonicalWidth()`; the width is rescaled by the *encoded* aspect.
+- Any "is this source too big for the texture" rule must compare the **long edge**, never the width.
+  `LibVlcSessionManager.capToTexture` used `srcW <= limitW * 1.1`, which is always true for a
+  portrait source whose width is already under the limit, so every vertical video skipped the cap and
+  libvlc kept delivering 1080x1920 frames for a 1080-tall display. `LibVlcSourceCapTest` pins both
+  the capped and the deliberately-not-capped portrait cases.
+- Panorama detection is a **shape pre-filter plus a tag confirmation**, and the tag fetch only runs
+  once the shape already matched, so an ordinary video pays no extra request. `dimension` comes from
+  `x/web-interface/view` (the pre-rewrite size), tags from `x/tag/archive/tags`; a failed tag fetch
+  leaves the video playable. Refusing a playable video is worse than missing a panorama, so do not
+  promote the shape test on its own. `BilibiliPanoramaTest` pins "VRChat"/"360p" as non-markers.
+
 ## Workflow Rules
 
 ### Post-Change Checklist (MANDATORY)

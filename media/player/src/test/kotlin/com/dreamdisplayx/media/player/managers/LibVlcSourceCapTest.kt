@@ -8,6 +8,11 @@ import kotlin.test.assertTrue
 /**
  * Pins the source-to-texture capping rule that keeps a 1440p rendition from being copied and
  * resampled on the game thread for a small display.
+ *
+ * The rule is expressed on the LONG edge on purpose: Bilibili reports portrait uploads with
+ * `width < height`, so a 1080x1920 phone clip used to look "already small enough" for a
+ * 1080-tall texture and was never capped, even though libvlc then handed over 2.1 Mpixel frames
+ * for every single frame of playback.
  */
 class LibVlcSourceCapTest {
 
@@ -22,11 +27,10 @@ class LibVlcSourceCapTest {
 
     @Test
     fun `a source at or near the texture size is left alone`() {
-        // Resampling 1920x1080 to 1080 is a loss with no bandwidth win of note, and the renderer
-        // already scales it. Anything within the 10% band stays untouched.
-        assertNull(LibVlcSessionManager.capToTexture(1920, 1080, 1080, 1080))
-        assertNull(LibVlcSessionManager.capToTexture(1080, 1080, 1080, 1080))
-        assertNull(LibVlcSessionManager.capToTexture(800, 450, 1080, 1080))
+        // Resampling a 1920x1080 source for a 1920x1080 texture is a loss with no bandwidth win
+        // of note, and the renderer already scales it. Anything within the 10% band stays untouched.
+        assertNull(LibVlcSessionManager.capToTexture(1920, 1080, 1920, 1080))
+        assertNull(LibVlcSessionManager.capToTexture(800, 450, 1920, 1080))
     }
 
     @Test
@@ -46,12 +50,22 @@ class LibVlcSourceCapTest {
     }
 
     @Test
-    fun `a portrait source keeps its portrait shape`() {
-        // The log showed a 1088x1922 vertical clip; it must stay taller than it is wide.
+    fun `a portrait source is capped by its long edge`() {
+        // The log showed a 1088x1922 vertical clip arriving for a 1080x1080 texture. Judging by
+        // width alone (1088 <= 1080 * 1.1) skipped it entirely; the long edge must decide.
         val capped = LibVlcSessionManager.capToTexture(1088, 1922, 1080, 1080)
-        if (capped != null) {
-            assertTrue(capped.second > capped.first, "portrait source became landscape: $capped")
-        }
+        assertTrue(capped != null, "a 1088x1922 portrait source must be capped, not skipped")
+        val (w, h) = capped
+        assertTrue(h > w, "portrait source became landscape: $capped")
+        assertEquals(1080, h, "the long edge must land on the texture's long edge")
+        assertTrue(w in 600..620, "width should follow the source aspect ratio, was $w")
+    }
+
+    @Test
+    fun `a portrait source on a landscape texture keeps its shape and is not over-capped`() {
+        // A 1080x1920 clip inside a 1920x1080 texture: the long edges already match, so it must
+        // stay untouched rather than being squashed down to the short edge.
+        assertNull(LibVlcSessionManager.capToTexture(1080, 1920, 1920, 1080))
     }
 
     @Test
@@ -68,6 +82,12 @@ class LibVlcSourceCapTest {
             val capped = LibVlcSessionManager.capToTexture(srcW, srcW / 2, 1080, 1080) ?: continue
             assertEquals(0, capped.first % 2, "odd width for source $srcW: ${capped.first}")
             assertEquals(0, capped.second % 2, "odd height for source $srcW: ${capped.second}")
+        }
+        // Portrait sources go through the same even-rounding step.
+        for (srcH in listOf(1922, 1920, 3844)) {
+            val capped = LibVlcSessionManager.capToTexture(1080, srcH, 1080, 1080) ?: continue
+            assertEquals(0, capped.first % 2, "odd width for portrait source $srcH: ${capped.first}")
+            assertEquals(0, capped.second % 2, "odd height for portrait source $srcH: ${capped.second}")
         }
     }
 }
