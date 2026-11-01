@@ -155,6 +155,17 @@
 - Skipped as **already present**: `cbc80455` (wrapper is 9.8.2), `aceb49e5` (`ThreadUtil` docs already carry the upstream wording), `74f488e1` (`_build.yml` already lists forge → neoforge → fabric), `ae856ad6`, `023357e3` (`DisplayVeto` present), `81e196f8` (`RenderBackend` docs already match), version bumps `140d22d4`/`ffb52f6a`/`3e9b02f9`/`c1824ffa` (the fork tracks its own version line).
 - Consequence to remember: because the upstream commits are **not** ancestors of this branch, `git log <commit>..HEAD` will keep listing them every time. The skip list above is the record of why each one is not ported; re-check it before re-investigating a "missing" commit.
 
+### 2026-11-01 — libvlc mixer resets on the Android OpenSL ES `aout`
+
+A user report ("the video sometimes gets quieter, replaying restores it, then it drops again") traced to libvlc's own software volume, not to our gain code:
+
+- `integer_mixer` volume belongs to the **audio-output instance**. The Android `opensles_android` aout is rebuilt on every input seek — each Bilibili DASH fragment seek triggers one, and a single `libvlc-1.log` showed `creating audio output` **18 times** in one playback, each preceded by `seeking to sidx moof` / `discarded audio buffer`. Every `libvlc_audio_set_volume` pushed before that rebuild was silently discarded, so the value set on attach evaporated a few seconds in. That is exactly "replay fixes it, then it degrades again": the replay re-attaches and re-pushes the value.
+- Two layers fix it in `LibVlcSessionManager`: `reassertVolume()` runs on every PLAYING event (the common rebuild case), and `verifyVolume()` polls `libvlc_audio_get_volume` once per second from `MediaPlayer.tick` (covers a seamless re-seek that rebuilds the aout without emitting PLAYING again). `verifyVolume` treats a **negative** return as "no aout yet" and does nothing — writing there races the aout setup.
+- `percentFor()` maps 0.0-2.0 to 0-200 percent. The previous `coerceIn(0.0, 1.0)` threw away every legitimately boosted value; libvlc's own ceiling is 200%, and clamping to 100 made a loud nearby display sound capped.
+- `VolumeController` gained `forceApply()`/`currentEffective()` and moved the curve into `attenuationFor()`. The old `0.25 + 0.75 * t^2` bottomed out at **25%** and already sat at ~67% a quarter of the way out, so walking around a screen sounded like the knob was being turned. The new `0.5 + 0.5 * t^2` is full next to the display, floors at 50% at the audio radius, and disables attenuation entirely for an unbounded or non-positive radius (the popout passes `Double.MAX_VALUE`).
+- `primeNewPlayerVolume()` used to `return` when `Minecraft.getInstance().player` was null, leaving `VolumeController` at its 100% default until the first `tick()` corrected it: the display started loud and then audibly dropped. It now seeds distance 0 in that case and still pushes the user volume.
+- `VolumeControllerTest` (9 cases) covers the curve, monotonicity, the popout bypass, the clamping and the `forceApply` re-assert. The native rebuild count above is the only manual evidence; that path cannot be unit-tested.
+
 ### 2026-02-DD — Upstream 42af16c3 sync (1.10.0.3): curved displays, keyboard shortcuts, protocol v1 drop
 - Synced upstream `42af16c3` (= tag `v1.10.0-preview.3`) on top of `6102d461`, then ported the changes worth having into the fork's own paths.
 - **Sync procedure** (the fork's package rename makes a plain merge unusable):

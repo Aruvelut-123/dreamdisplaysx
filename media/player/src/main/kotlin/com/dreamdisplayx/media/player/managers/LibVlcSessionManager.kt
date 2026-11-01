@@ -252,7 +252,9 @@ internal class LibVlcSessionManager(
     /** Last volume handed to [setVolume], re-asserted after an attach (libvlc volume is per-player). */
     @Volatile
     private var lastVolume = 1.0
-
+    /** When [verifyVolume] last read the mixer back, so the watchdog costs one JNA call per second. */
+    @Volatile
+    private var lastVolumeCheckMs = 0L
     /** Retired Android players stay strongly referenced and paused until process exit. */
     private val retiredAndroidPlayers = java.util.Collections.synchronizedList(mutableListOf<Pointer>())
 
@@ -416,6 +418,11 @@ internal class LibVlcSessionManager(
                     val tracks = LibVlc.lib.libvlc_audio_get_track_count(player)
                     val vol = LibVlc.lib.libvlc_audio_get_volume(player)
                     logger.debug("$debugLabel libvlc playing: audioTracks={} volume={}.", tracks, vol)
+                    // libvlc's software volume lives on the audio-output instance, so every aout
+                    // rebuild (each seek on a fragmented stream, each re-attach) silently resets
+                    // the mixer to its own default and the display gets quieter until the next
+                    // user volume change. Re-assert the volume we last committed on every PLAYING.
+                    reassertVolume(player)
                     // Update F3 decoder info — query immediately, and retry if the decoder isn't
                     // initialised yet (the info may not be available at the very first PLAYING event).
                     updateDecoderName(player, immediate = true)
@@ -518,7 +525,7 @@ internal class LibVlcSessionManager(
         audioOutput?.setVolume(volume)
         // libvlc's own output needs the volume as well on Android (system audio), where the PCM never
         // reaches [LibVlcAudioOutput] and libvlc volume is per-player.
-        val pct = (volume.coerceIn(0.0, 1.0) * 100).toInt()
+        val pct = percentFor(volume)
         lastVolume = volume
         if (systemAudio) {
             val mp = mediaPlayer
@@ -530,6 +537,59 @@ internal class LibVlcSessionManager(
                 runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, pct) }
             }
         }
+    }
+
+    /**
+     * Re-applies [lastVolume] to [player] (and to the dedicated audio player, if any).
+     *
+     * libvlc stores the software volume on the audio-output instance. The Android OpenSL ES `aout`
+     * gets rebuilt whenever the input seeks (each Bilibili DASH fragment seek does it) or the media
+     * is re-attached; the fresh `integer_mixer` then starts at its own default, so a value set once
+     * at attach time is silently forgotten — the display drifts quieter until the user touches the
+     * volume slider. Called on every PLAYING event to guarantee the mixer matches [lastVolume].
+     */
+    private fun reassertVolume(player: Pointer) {
+        if (!systemAudio) return
+        val pct = percentFor(lastVolume)
+        runCatching { LibVlc.lib.libvlc_audio_set_volume(player, pct) }
+        audioPlayer?.let { ap -> runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, pct) } }
+    }
+
+    /**
+     * Converts an effective volume into libvlc's 0..200 percent.
+     *
+     * [MediaPlayer] already multiplied user volume by distance attenuation (and the acoustics gain),
+     * so a value above 1.0 is legitimate up to libvlc's 200% ceiling. Clamping to 100 here silently
+     * threw away every boost and made a loud, nearby display sound capped — which reads as "the
+     * volume drops by itself" when a later [setVolume] lands below 1.0.
+     */
+    private fun percentFor(volume: Double): Int =
+        (volume.coerceIn(0.0, 2.0) * 100).toInt()
+
+    /**
+     * Cheap safety net for the aout-reset problem: read the mixer back at most once per second and
+     * restore [lastVolume] when libvlc silently replaced it.
+     *
+     * [reassertVolume] covers the common case (a rebuild that is followed by a PLAYING event), but a
+     * seamless DASH re-seek can rebuild the `aout` without ever emitting PLAYING again — that is the
+     * "it gets quiet a while after starting, and only a replay fixes it" report. Polling keeps the
+     * cost to a single JNA call per second per playing display.
+     */
+    fun verifyVolume() {
+        if (!systemAudio) return
+        val now = System.currentTimeMillis()
+        if (now - lastVolumeCheckMs < VOLUME_CHECK_INTERVAL_MS) return
+        lastVolumeCheckMs = now
+        val mp = mediaPlayer ?: return
+        val expected = percentFor(lastVolume)
+        // libvlc returns -1 while no audio output is attached yet (between fragments, or before the
+        // first frame decodes). That is not drift: writing a value there would race the aout setup,
+        // so only repair a mixer that reports a real, different level.
+        val actual = runCatching { LibVlc.lib.libvlc_audio_get_volume(mp) }.getOrDefault(-1)
+        if (actual < 0 || actual == expected) return
+        logger.debug("$debugLabel libvlc mixer drifted: {} -> {} (aout rebuild); restoring.", actual, expected)
+        runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, expected) }
+        audioPlayer?.let { ap -> runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, expected) } }
     }
 
     /** Opens (or reuses) the shared Java Sound audio line for this display. */
@@ -786,7 +846,7 @@ internal class LibVlcSessionManager(
                 // libvlc volume is per-player. Re-assert it after every fresh play so both the muxed
                 // video path and a separate Android audio player honor the user's pre-start volume.
                 if (systemAudio) {
-                    val volumePercent = (lastVolume.coerceIn(0.0, 1.0) * 100).toInt()
+                    val volumePercent = percentFor(lastVolume)
                     runCatching { LibVlc.lib.libvlc_audio_set_volume(activeMp, volumePercent) }
                     ap?.let { runCatching { LibVlc.lib.libvlc_audio_set_volume(it, volumePercent) } }
                 }
@@ -2253,6 +2313,13 @@ internal class LibVlcSessionManager(
          * oversized libvlc write (alignment drift / transient seek frame) lands in slack instead of
          * corrupting adjacent heap memory. The reader only copies the exact w*h*4 span. */
         private const val VIDEO_BUFFER_PADDING = 4096
+
+        /**
+         * How often [verifyVolume] reads the libvlc mixer back. One JNA call per second per playing
+         * display is negligible next to the per-frame vmem traffic, and it catches an `aout` rebuild
+         * that never emits another PLAYING event.
+         */
+        private const val VOLUME_CHECK_INTERVAL_MS = 1_000L
         private fun align32(value: Int): Int = (value + 31) and -32
         private val RV32 = byteArrayOf('R'.code.toByte(), 'V'.code.toByte(), '3'.code.toByte(), '2'.code.toByte())
         private val DROP_TOKEN = Pointer.createConstant(0x7FFFFFFFL)

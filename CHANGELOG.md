@@ -30,6 +30,8 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - Chat colour codes in the client commands no longer render as a literal look-alike character.
 - Bilibili live share links with a route prefix (`/h5/<room>`, `/blanc/<room>`) resolve to the room again.
 - Bilibili share links with a locale prefix (`/zh-Hans/video/<id>`) resolve to the video instead of being handed to libvlc as an HTML page.
+- Fixed the display randomly getting quieter while playing: libvlc rebuilds its OpenSL ES audio output on every DASH fragment seek and the fresh mixer forgot the volume, so the level is now re-asserted whenever playback settles and a second-level watchdog restores it.
+- Distance attenuation no longer bottoms out at 25% (now a 50% floor) and the volume is seeded even before the local player exists, so a display no longer starts loud and audibly drops a moment later.
 - Fixed the GUI card strip disappearing while still clickable on small windows and mobile GUI scales: clip rects now follow the screen's own scale transform.
 - Forge jars now bundle the SQLite JDBC driver; fixes the server crashing with "No suitable driver".
 - Android now defaults to software avcodec when the launcher cannot provide MediaCodec classes.

@@ -1348,9 +1348,12 @@ class DisplayScreen(
 
     /** Primes player volume before prelude audio to avoid blast on return. */
     internal fun primeNewPlayerVolume(mp: MediaPlayer) {
-        val player = Minecraft.getInstance().player ?: return
+        // The distance must be seeded even when the local player is not available yet (early join,
+        // dimension change): skipping the whole call left VolumeController at its 100% default, so
+        // the first seconds played unattenuated and the volume audibly dropped once tick() caught up.
         val maxRadius = if (isPopoutActive) Double.MAX_VALUE else ClientStateManager.config.defaultDistance.toDouble()
-        mp.primeVolume(if (muted || focusMuted) 0f else volume, getDistanceToScreen(player.blockPosition()), maxRadius)
+        val distance = Minecraft.getInstance().player?.let { getDistanceToScreen(it.blockPosition()) } ?: 0.0
+        mp.primeVolume(if (muted || focusMuted) 0f else volume, distance, maxRadius)
     }
 
     /** Whether this display can be parked warm when it leaves render distance (Local VOD on the

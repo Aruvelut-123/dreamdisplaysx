@@ -868,6 +868,9 @@ class MediaPlayer(
     fun tick(distance: Double, maxRadius: Double) {
         if (!isReady) return
         volume.updateAttenuation(distance, maxRadius)
+        // libvlc can silently rebuild its audio output (each DASH fragment seek does) and lose the
+        // mixer level we set; verifyVolume restores it, rate-limited internally to once per second.
+        sessionManager.verifyVolume()
     }
 
     /**
