@@ -395,6 +395,30 @@ Three reports shared one theme: state that only ever existed on the video player
   class init, before the instance `dataSource` Hikari pool — also covers `SqlCredentialSyncBackend`
   and Paper, both of which construct storage after `StorageManager`)
 
+### 2026-11-01 — Android AudioTrack budget ("sound works, then goes silent for good")
+- Report: on 1.20.1 (running under an Android launcher) the display has sound at first, then loses it
+  permanently. The attached `libvlc.log` is decisive: `creating audio output` **3354** times, only **25**
+  reaching `using audio output module "opensles_android"`, then a single
+  `FindClass(android/media/AudioTrack) failed` followed by **3329** consecutive `AudioTrack jni init
+  failed` with no recovery, and **zero** `destroying audio output` lines.
+- Cause: `retireAndroidPlayers()` only *pauses* retired players (it must — `stop`/`release` hit VLC-Android's
+  `pthread_key_clean_all` TLS UAF, see the Android teardown notes above), so every retirement leaks one
+  OpenSL ES aout **and its AudioTrack**, permanently. `start()` retires a player pair on every load, Bilibili
+  DASH fragment seeks make loads frequent, and the process eventually hits Android's hard cap of **32
+  AudioTrack** instances. From then on `FindClass(android/media/AudioTrack)` fails inside a game JVM that
+  has no `android.*` framework classes and never recovers — hence permanent silence rather than a flicker.
+- Fix, in this order of importance: (1) `AudioTrackBudget` caps retirements (`32 cap - 4 reserved slots) / 2
+  slots per retirement = 14`); (2) once the budget is spent, `start()` reuses the live player pair through
+  the **same** attach path instead of a parallel branch, so `setVolume` re-assertion, `isPlaying` and the
+  `started` latch all still run; (3) `retireAndroidPlayers()` pauses (does not retire) the live pair before
+  that reuse, because `set_media()` on a player whose old input is still draining is the crash the class
+  otherwise avoids; (4) retirements are logged as `n/budget (m AudioTrack slots left)`.
+- `AudioTrackBudget` is a pure object precisely so `AudioTrackBudgetTest` can pin the arithmetic; the native
+  aout itself stays untestable. Keep the budget strictly below the cap: the game's own sound engine also
+  allocates AudioTracks in the same process.
+- Do not "fix" this by calling `libvlc_media_player_release` on retirement. That is the documented crash.
+  The only safe levers are *retire less often* and *reuse in place*.
+
 ### 2026-11-01 — Client commands must exist on every loader; Bilibili failures must name a cause
 - `/dlogin` and `/dlogoff` are registered per loader. Fabric uses `ClientCommandRegistrationCallback`,
   NeoForge and Forge use `RegisterClientCommandsEvent`. Forge's `Client.kt` had registered **no**

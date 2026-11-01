@@ -258,6 +258,24 @@ internal class LibVlcSessionManager(
     /** Retired Android players stay strongly referenced and paused until process exit. */
     private val retiredAndroidPlayers = java.util.Collections.synchronizedList(mutableListOf<Pointer>())
 
+    /**
+     * Android player retirements so far, and the point at which further retirement is refused.
+     *
+     * VLC-Android's OpenSL ES aout takes one AudioTrack per player and this build never releases a
+     * retired player, so the process creeps toward Android's hard cap of 32 AudioTrack instances.
+     * A tester's `libvlc.log` showed the exact wall: 25 successful `using audio output module
+     * "opensles_android"`, then one `FindClass(android/media/AudioTrack) failed` and 3329
+     * consecutive `AudioTrack jni init failed` — sound gone for the rest of the session, which is
+     * the "it starts fine and then goes silent" report. Past [ANDROID_RETIRE_BUDGET] the session
+     * stops churning native players instead of burning the remaining quota.
+     */
+    @Volatile
+    private var androidRetireCount = 0
+
+    /** True once the AudioTrack budget is spent and native players must be reused in place. */
+    @Volatile
+    private var androidNativePlayerBudgetExhausted = false
+
     private val released = AtomicBoolean(false)
     private val stopped = AtomicBoolean(false)
     private val lifecycleLock = Any()
@@ -790,9 +808,25 @@ internal class LibVlcSessionManager(
             if (!lifecycleIsCurrent(lifecycleToken)) return@submit
             // Android never reuses a player that has already carried media: even set_media() may
             // tear down its old input/vout/aout and trigger VLC-Android's unsafe TLS destructor.
-            if (systemAudio) retireAndroidPlayers()
+            // That is only affordable while the AudioTrack budget lasts — once it is spent a fresh
+            // player cannot acquire an audio output at all, so reuse is the lesser evil (it costs a
+            // silent position reset, not the rest of the session).
+            if (systemAudio) {
+                retireAndroidPlayers()
+                if (!lifecycleIsCurrent(lifecycleToken)) return@submit
+            }
             if (!lifecycleIsCurrent(lifecycleToken)) return@submit
-            val mp = player()
+            // Once the AudioTrack budget is spent, [retireAndroidPlayers] stops retiring and leaves
+            // the current pair in place. Reuse them through the exact same attach path below (which
+            // already skips stop() on Android) rather than a parallel one, so volume re-assertion,
+            // isPlaying and the `started` latch all keep happening.
+            val reusingNativePlayers = systemAudio && androidNativePlayerBudgetExhausted
+            if (reusingNativePlayers && mediaPlayer != null) {
+                logger.warn("$debugLabel reusing the live Android players in place (AudioTrack budget spent).")
+            }
+            // A stop() between the budget check and here clears both pointers; fall back to a fresh
+            // player rather than reporting "libvlc player unavailable".
+            val mp = if (reusingNativePlayers) (mediaPlayer ?: player()) else player()
             if (mp == null) {
                 errorMessage = "libvlc player unavailable"
                 eosReached = true
@@ -804,10 +838,12 @@ internal class LibVlcSessionManager(
                 // format setup and crashes natively (EXCEPTION_ACCESS_VIOLATION right after the new
                 // "libvlc video setup" line, before the first frame). libvlc_media_player_stop is
                 // synchronous on the control executor, so the old input fully releases first.
-                // Android: NEVER call stop/release, and do not reuse a player after it has carried
+                // Android: NEVER call stop/release, and prefer a fresh player after it has carried
                 // media. Even set_media() can implicitly tear down the old input/vout/aout in this
-                // VLC-Android AAR and reach the same TLS destructor UAF. The old player was retired
-                // before this block; this player is fresh and may receive the new media.
+                // VLC-Android AAR and reach the same TLS destructor UAF. A fresh player is only
+                // available while the AudioTrack budget lasts; afterwards the live player is reused
+                // because a new one could not acquire an audio output at all (see
+                // AudioTrackBudget), and retiring without a replacement would leave silence.
                 if (!systemAudio) {
                     runCatching { LibVlc.lib.libvlc_media_player_stop(mp) }
                 }
@@ -1558,6 +1594,37 @@ internal class LibVlcSessionManager(
     private fun retireAndroidPlayers() {
         synchronized(lifecycleLock) {
             if (!systemAudio) return
+            // Every retirement permanently leaks one OpenSL ES aout (and its AudioTrack) on this
+            // build, so stop retiring once the budget is spent rather than burning the rest of
+            // Android's 32-AudioTrack quota. The caller then reuses the current players in place.
+            if (!AudioTrackBudget.allowsRetire(androidRetireCount, ANDROID_RETIRE_BUDGET)) {
+                if (!androidNativePlayerBudgetExhausted) {
+                    androidNativePlayerBudgetExhausted = true
+                    logger.warn(
+                        "$debugLabel Android native player budget spent ({} retirements); " +
+                            "quieting the current players for in-place reuse instead of leaking " +
+                            "more AudioTrack slots.",
+                        androidRetireCount,
+                    )
+                }
+                // The caller will re-attach media to these very players. set_media on a player whose
+                // old input is still draining is the crash this class otherwise avoids, so quiet
+                // them first even though they are not retired. They stay in the keep-alive list
+                // because the manager still owns them.
+                mediaPlayer?.let { runCatching { pauseAndroidPlayerAndAwait(it) } }
+                audioPlayer?.let { runCatching { pauseAndroidPlayerAndAwait(it) } }
+                return
+            }
+            androidRetireCount++
+            if (androidRetireCount == 1 || androidRetireCount % 4 == 0) {
+                logger.info(
+                    "$debugLabel Android native player retirements: {}/{} ({} AudioTrack slots " +
+                        "left; each retirement permanently holds one on this build).",
+                    androidRetireCount,
+                    ANDROID_RETIRE_BUDGET,
+                    AudioTrackBudget.remainingSlots(androidRetireCount, ANDROID_RETIRE_BUDGET),
+                )
+            }
             mediaPlayer?.let { player ->
                 deactivateVideoCallbacks(player)
                 pauseAndroidPlayerAndAwait(player)
@@ -2385,6 +2452,17 @@ internal class LibVlcSessionManager(
         private val ANDROID_KEEP_ALIVE = java.util.Collections.synchronizedList(
             mutableListOf<LibVlcSessionManager>(),
         )
+
+        /**
+         * How many Android players one session may retire before it stops churning native players.
+         *
+         * [AudioTrackBudget.retireBudget] derives this from Android's per-process cap. A tester's
+         * `libvlc.log` lost sound for the rest of the session right after the 25th successful
+         * `using audio output module "opensles_android"`, and every following attempt failed in
+         * `AudioTrack jni init failed`, so the cap is reached well before a session's worth of
+         * quality switches.
+         */
+        internal val ANDROID_RETIRE_BUDGET: Int = AudioTrackBudget.retireBudget
 
         private const val LIBVLC_MEDIA_PLAYER_LENGTH_CHANGED = 0x111
         private const val REPLAY_FPS = 30.0

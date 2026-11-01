@@ -45,6 +45,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - Fixed portrait (vertical phone) videos being squashed into a square: the quality-number mapping rewrote the height to a standard rung but left the width alone, turning 1080x1920 into 1080x1080.
 - Portrait videos are no longer decoded at full size on Android; the source-to-texture cap measured the width only and skipped every vertical source.
 - 360/VR panorama videos now report that they cannot be projected onto a flat display instead of painting a warped sphere map.
+- Fixed Android sound working at first and then stopping for the rest of the session: retired players permanently hold an OpenSL ES AudioTrack and the process ran into Android's 32-AudioTrack limit, after which every new audio output failed. Player retirement is now budgeted, and a spent budget reuses the live players instead of churning new ones.
 - Aligned libvlc vmem strides and retained per-generation callback buffers during Android playback.
 - Disabled MobileGlues direct PBO/BGRA uploads in favor of the command-encoder texture path.
 - Kept Android scrub callback sessions rooted after pause-only teardown.
