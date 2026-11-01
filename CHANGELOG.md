@@ -38,6 +38,9 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - MobileGlues playback uses a bounded software-decoder thread pool and safer player replacement timing.
 - Android subtitle and danmaku overlays load CJK-capable system fonts when AWT is available.
 - Isolated optional AWT overlays with mixed-script font fallback and fail-closed probing.
+- Fixed a frozen picture in CROP stretch mode: the crop copy pass narrowed its source window once per row, so the second row of every frame threw and the frame was never uploaded (audio and the progress bar kept running). Letterbox and crop now map destination pixels back to the source in a single pass.
+- Fixed a display coming back silent after rejoining a world: a Bilibili DASH rendition is video-only on the video player, so the separately played audio track's mixer was never watched or re-seeded after an audio-output rebuild.
+- Fixed long (60 min+) videos freezing into a slideshow and wasting bandwidth: a 1440p rendition was decoded at full 2560x1442 for a 1080x1080 display and resized per frame on the CPU. libvlc is now asked for a frame no larger than the display texture, and the resize loop gained bulk-copy and integer-downscale fast paths.
 - Aligned libvlc vmem strides and retained per-generation callback buffers during Android playback.
 - Disabled MobileGlues direct PBO/BGRA uploads in favor of the command-encoder texture path.
 - Kept Android scrub callback sessions rooted after pause-only teardown.

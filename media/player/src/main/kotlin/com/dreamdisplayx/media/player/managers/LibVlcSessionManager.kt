@@ -406,7 +406,16 @@ internal class LibVlcSessionManager(
     private fun handleEvent(event: Pointer?, sourcePlayer: Pointer) {
         // Android retires old players instead of stopping/releasing them. Their delayed events must
         // never mutate the state of the replacement player (especially END_REACHED / ERROR).
-        if (event == null || released.get() || stopped.get() || mediaPlayer !== sourcePlayer) return
+        if (event == null || released.get() || stopped.get()) return
+        // The dedicated Android audio player owns no session state: it exists only so a video-only
+        // Bilibili DASH rendition still produces sound. It is accepted here purely so its PLAYING
+        // event can re-seed the mixer (see below); every other event it emits stays ignored, which is
+        // why END_REACHED on a short DASH audio slave cannot end the session.
+        if (sourcePlayer === audioPlayer) {
+            if (event.getInt(0) == LibVlc.LIBVLC_MEDIA_PLAYER_PLAYING) reassertVolume(sourcePlayer)
+            return
+        }
+        if (mediaPlayer !== sourcePlayer) return
         val type = event.getInt(0)
         when (type) {
             LibVlc.LIBVLC_MEDIA_PLAYER_PLAYING -> {
@@ -580,16 +589,27 @@ internal class LibVlcSessionManager(
         val now = System.currentTimeMillis()
         if (now - lastVolumeCheckMs < VOLUME_CHECK_INTERVAL_MS) return
         lastVolumeCheckMs = now
-        val mp = mediaPlayer ?: return
         val expected = percentFor(lastVolume)
-        // libvlc returns -1 while no audio output is attached yet (between fragments, or before the
-        // first frame decodes). That is not drift: writing a value there would race the aout setup,
-        // so only repair a mixer that reports a real, different level.
-        val actual = runCatching { LibVlc.lib.libvlc_audio_get_volume(mp) }.getOrDefault(-1)
+        // A Bilibili DASH rendition is split: the video player carries `:no-audio` and the dedicated
+        // audio player owns the only audible output. Checking only the video player therefore left the
+        // audible mixer unverified forever (its `libvlc_audio_get_volume` answers -1 because no audio
+        // output is attached), which is how a display could come back from a world reload silent.
+        mediaPlayer?.let { repairMixer(it, expected) }
+        audioPlayer?.let { repairMixer(it, expected) }
+    }
+
+    /**
+     * Restores [expected] percent on [player] when its mixer reports a real, different level.
+     *
+     * libvlc returns -1 while no audio output is attached yet (between fragments, or before the first
+     * frame decodes). That is not drift: writing a value there would race the aout setup, so only a
+     * mixer that reports an actual different level is repaired.
+     */
+    private fun repairMixer(player: Pointer, expected: Int) {
+        val actual = runCatching { LibVlc.lib.libvlc_audio_get_volume(player) }.getOrDefault(-1)
         if (actual < 0 || actual == expected) return
         logger.debug("$debugLabel libvlc mixer drifted: {} -> {} (aout rebuild); restoring.", actual, expected)
-        runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, expected) }
-        audioPlayer?.let { ap -> runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, expected) } }
+        runCatching { LibVlc.lib.libvlc_audio_set_volume(player, expected) }
     }
 
     /** Opens (or reuses) the shared Java Sound audio line for this display. */
@@ -976,6 +996,20 @@ internal class LibVlcSessionManager(
                 lib.libvlc_audio_set_format_callbacks(ap, audioFormatSetupCallback, audioFormatCleanupCallback)
                 lib.libvlc_audio_set_callbacks(ap, audioPlayCallback, audioPauseCallback,
                     audioResumeCallback, audioFlushCallback, audioDrainCallback, null)
+            } else {
+                // Android: this player is the ONLY sound source for a video-only DASH rendition (the
+                // video player carries `:no-audio`), and its OpenSL ES aout is rebuilt on every
+                // fragment seek. Without a PLAYING subscription its mixer is never re-seeded after a
+                // rebuild, so a display that starts silent or drifts quiet stays that way until the
+                // user touches the volume slider — the "no sound after rejoining a world" report.
+                // Only PLAYING is acted on in handleEvent; its END_REACHED must not end the session.
+                val em = lib.libvlc_media_player_event_manager(ap)
+                if (em != null) {
+                    val callback = LibVlc.EventCallback { event, _ -> handleEvent(event, ap) }
+                    LibVlc.configureCallbackThread(callback)
+                    eventCallbacks += callback
+                    lib.libvlc_event_attach(em, LibVlc.LIBVLC_MEDIA_PLAYER_PLAYING, callback, null)
+                }
             }
             audioPlayer = ap
             if (MediaPlayer.DEBUG) logger.debug("$debugLabel created dedicated libvlc audio player.")
@@ -2203,85 +2237,73 @@ internal class LibVlcSessionManager(
     private var firstFrameFired = false
 
     // ── Frame conversion helpers ────────────────────────────────────────────
-
     private var rgbScratch: ByteBuffer? = null
-
-    /** Reusable buffer for the intermediate (fit-to-aspect) scale step of LETTERBOX/CROP. */
-    private var fitScratch: ByteBuffer? = null
-
-    /** Reusable zero-fill chunk for clearing letterbox/crop bars. */
-    private var zeroChunk: ByteArray? = null
 
     /**
      * Fits a source RGBA frame into the display-sized [dst] buffer honouring the active [getStretchMode]:
      * STRETCH scales to fill exactly (may distort); LETTERBOX scales to fit keeping aspect and pads the
      * remainder black; CROP scales to cover keeping aspect and centers-crops the overflow.
+     *
+     * LETTERBOX and CROP map destination pixels straight back to source pixels in one pass, with the
+     * letterbox bars written as a zeroed row. The previous implementation scaled into a `fitW`x`fitH`
+     * intermediate and then copied its centered sub-rectangle; on the CROP branch `fitW` exceeds `dstW`,
+     * and narrowing `scratch.limit()` once per row made the next row's offset exceed the limit, so
+     * `position()` threw `IllegalArgumentException` on the second row of every frame. `publishFrame`
+     * swallows frame-publish failures, so the picture stayed frozen on the last texture upload while
+     * audio and the progress bar kept running — the reported "CROP stops the picture" symptom.
      */
     private fun fitFrame(src: ByteBuffer, srcW: Int, srcH: Int, dst: ByteBuffer, dstW: Int, dstH: Int) {
+        if (srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) return
         val mode = getStretchMode()
         if (mode == StretchMode.STRETCH) {
             resizeRgba(src, srcW, srcH, dst, dstW, dstH)
             dst.position(dstW * dstH * 4)
             return
         }
-        val srcAspect = srcW.toDouble() / srcH
-        val dstAspect = dstW.toDouble() / dstH
-        val fitW: Int
-        val fitH: Int
-        if (mode == StretchMode.LETTERBOX) {
-            // scale to fit inside
-            val scale = if (srcAspect > dstAspect) dstW.toDouble() / srcW else dstH.toDouble() / srcH
-            fitW = (srcW * scale).toInt().coerceAtLeast(1)
-            fitH = (srcH * scale).toInt().coerceAtLeast(1)
-        } else { // CROP: scale to cover
-            val scale = if (srcAspect > dstAspect) dstH.toDouble() / srcH else dstW.toDouble() / srcW
-            fitW = (srcW * scale).toInt().coerceAtLeast(1)
-            fitH = (srcH * scale).toInt().coerceAtLeast(1)
-        }
-        // Scale the source into the fit-sized intermediate.
-        val scratch = fitScratch?.takeIf { it.capacity() >= fitW * fitH * 4 }?.also { it.clear() }
-            ?: ByteBuffer.allocateDirect(fitW * fitH * 4).also { fitScratch = it }
-        resizeRgba(src, srcW, srcH, scratch, fitW, fitH)
-        scratch.flip()
-
-        // Clear the whole destination to black first (spare.clear() only resets position — it does
-        // NOT zero the buffer, so letterbox bars would otherwise show stale pixels).
-        dst.clear()
-        fillZero(dst, dstW * dstH * 4)
-        dst.clear()
-
-        // Center the fit-sized frame, clipping to the destination bounds (CROP has negative offsets).
-        val offX = (dstW - fitW) / 2
-        val offY = (dstH - fitH) / 2
-        val x0 = maxOf(0, offX)
-        val x1 = minOf(dstW, offX + fitW)
-        val y0 = maxOf(0, offY)
-        val y1 = minOf(dstH, offY + fitH)
-        for (dy in y0 until y1) {
+        val win = fitWindow(mode, srcW, srcH, dstW, dstH)
+        val fitW = win.fitW
+        val fitH = win.fitH
+        val offX = win.offX
+        val offY = win.offY
+        val srcRowBytes = srcW * 4
+        val dstRowBytes = dstW * 4
+        val line = ByteArray(srcRowBytes)
+        val out = ByteArray(dstRowBytes)
+        var loadedRow = -1
+        src.rewind()
+        for (dy in 0 until dstH) {
+            // Bars stay black: `spare.clear()` only resets the position, it never zeroes the buffer.
+            out.fill(0)
             val sy = dy - offY
-            val srcOff = sy * fitW * 4 + (x0 - offX) * 4
-            val len = (x1 - x0) * 4
-            scratch.position(srcOff)
-            scratch.limit(srcOff + len)
-            dst.position(dy * dstW * 4 + x0 * 4)
-            dst.put(scratch)
+            if (sy >= 0 && sy < fitH) {
+                val srcSy = ((sy.toLong() * srcH) / fitH).toInt().coerceIn(0, srcH - 1)
+                if (srcSy != loadedRow) {
+                    src.limit(srcSy * srcRowBytes + srcRowBytes)
+                    src.position(srcSy * srcRowBytes)
+                    src.get(line, 0, srcRowBytes)
+                    loadedRow = srcSy
+                }
+                var di = 0
+                for (dx in 0 until dstW) {
+                    val sx = dx - offX
+                    if (sx >= 0 && sx < fitW) {
+                        val srcSx = ((sx.toLong() * srcW) / fitW).toInt().coerceIn(0, srcW - 1)
+                        val p = srcSx * 4
+                        out[di] = line[p]
+                        out[di + 1] = line[p + 1]
+                        out[di + 2] = line[p + 2]
+                        out[di + 3] = line[p + 3]
+                    }
+                    di += 4
+                }
+            }
+            dst.put(out, 0, dstRowBytes)
         }
         // Leave position at the full frame size so the caller's flip() exposes every byte.
         dst.position(dstW * dstH * 4)
-        scratch.rewind()
+        src.rewind()
     }
 
-    /** Fills [bytes] of [buf] with zeros from its current position (using a reusable chunk). */
-    private fun fillZero(buf: ByteBuffer, bytes: Int) {
-        if (zeroChunk == null) zeroChunk = ByteArray(8192)
-        val chunk = zeroChunk!!
-        var left = bytes
-        while (left > 0) {
-            val n = minOf(left, chunk.size)
-            buf.put(chunk, 0, n)
-            left -= n
-        }
-    }
 
     /**
      * Nearest-neighbour RGBA resize.
@@ -2416,12 +2438,50 @@ internal class LibVlcSessionManager(
             return (w - (w % 2)) to (h - (h % 2))
         }
         private fun align32(value: Int): Int = (value + 31) and -32
+
+        /**
+         * Placement of a [srcW]x[srcH] source inside a [dstW]x[dstH] destination for [mode].
+         *
+         * [fitW]/[fitH] is the scaled window (never smaller than 1). For CROP it is larger than the
+         * destination, and [offX]/[offY] are then negative, meaning the picture overflows the
+         * destination on both sides and [fitFrame] crops it away.
+         *
+         * Extracted from [fitFrame] so the geometry is unit-testable: the previous inline version fed
+         * a shrinking `limit()` on a CROP intermediate and threw on the second row of every frame.
+         */
+        internal fun fitWindow(mode: StretchMode, srcW: Int, srcH: Int, dstW: Int, dstH: Int): FitWindow {
+            if (srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) return FitWindow(dstW, dstH, 0, 0)
+            if (mode == StretchMode.STRETCH) return FitWindow(dstW, dstH, 0, 0)
+            val srcAspect = srcW.toDouble() / srcH
+            val dstAspect = dstW.toDouble() / dstH
+            val fitW: Int
+            val fitH: Int
+            if (mode == StretchMode.LETTERBOX) {
+                // Scale to fit inside the destination.
+                val scale = if (srcAspect > dstAspect) dstW.toDouble() / srcW else dstH.toDouble() / srcH
+                fitW = (srcW * scale).toInt().coerceIn(1, dstW)
+                fitH = (srcH * scale).toInt().coerceIn(1, dstH)
+            } else { // CROP: scale to cover, the overflow is cropped away by fitFrame.
+                val scale = if (srcAspect > dstAspect) dstH.toDouble() / srcH else dstW.toDouble() / srcW
+                fitW = (srcW * scale).toInt().coerceAtLeast(dstW)
+                fitH = (srcH * scale).toInt().coerceAtLeast(dstH)
+            }
+            return FitWindow(fitW, fitH, (dstW - fitW) / 2, (dstH - fitH) / 2)
+        }
+
         private val RV32 = byteArrayOf('R'.code.toByte(), 'V'.code.toByte(), '3'.code.toByte(), '2'.code.toByte())
         private val DROP_TOKEN = Pointer.createConstant(0x7FFFFFFFL)
         private val DROP_TOKEN_VALUE = 0x7FFFFFFFL
         private fun outputFps(sourceFps: Double?): Double =
             sourceFps?.takeIf { it.isFinite() && it > 1.0 && it <= 240.0 } ?: REPLAY_FPS
     }
+
+    /**
+     * Where a scaled video window sits inside a display texture, see `Companion.fitWindow`.
+     * For LETTERBOX the offsets are positive (bars around the picture); for CROP they are negative and
+     * the overflowing pixels are dropped.
+     */
+    internal data class FitWindow(val fitW: Int, val fitH: Int, val offX: Int, val offY: Int)
 }
 
 /** Verdict of a seek-landing clock-sample pair. */
