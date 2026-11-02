@@ -14,6 +14,7 @@ import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.managers.DisplayLifecycleManager.MAX_DISPLAY_BLOCKS
 import com.dreamdisplayx.platform.client.render.DisplayGeometry
+import com.dreamdisplayx.platform.client.render.ValkyrienClientCompat
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.util.FacingUtil
 import net.minecraft.client.Minecraft
@@ -61,7 +62,7 @@ object DisplayLifecycleManager {
                 val dist = distanceToScreen(
                     packet.x, packet.y, packet.z,
                     packet.width, packet.height, facing.toDisplayFacing(),
-                    player.blockPosition(), packet.depth,
+                    player.blockPosition(), packet.depth, packet.shipId,
                 )
                 if (dist > renderDistance) {
                     cacheUnloadedDisplay(packet, facing, mode, currentDimensionKey())
@@ -192,12 +193,34 @@ object DisplayLifecycleManager {
 
     /** Distance from [playerPos] to the persisted display [data]'s bounding box. */
     private fun distanceToData(data: FullDisplayData, playerPos: BlockPos) =
-        distanceToScreen(data.x, data.y, data.z, data.width, data.height, data.facing, playerPos, data.depth)
+        distanceToScreen(
+            data.x, data.y, data.z, data.width, data.height, data.facing, playerPos, data.depth, data.shipId,
+        )
 
-    /** Shortest distance from [playerPos] to the screen's block bounding box (facing- and depth-aware). */
+    /**
+     * Shortest distance from [playerPos] to the screen's block bounding box (facing- and depth-aware).
+     *
+     * A ship-anchored display stores structure-space coordinates, so on a ship that has moved the raw
+     * block comparison reports hundreds of blocks and the screen is dropped as "out of range". The
+     * observer is therefore mapped back through the ship transform first. When no transform is
+     * resolvable (mod absent, ship not streamed in yet) the structure-space result is used, which is
+     * exactly the old behaviour — such a display then keeps its old load/unload behaviour rather than
+     * vanishing.
+     */
     private fun distanceToScreen(
-        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, playerPos: BlockPos, depth: Int = 1,
-    ): Double = DisplayGeometry.distanceTo(playerPos, x, y, z, width, height, facing, depth.coerceAtLeast(1))
+        x: Int, y: Int, z: Int, width: Int, height: Int, facing: DisplayFacing, playerPos: BlockPos,
+        depth: Int = 1, shipId: Long = 0L,
+    ): Double {
+        val safeDepth = depth.coerceAtLeast(1)
+        if (shipId <= 0L) {
+            return DisplayGeometry.distanceTo(playerPos, x, y, z, width, height, facing, safeDepth)
+        }
+        return DisplayGeometry.distanceToOnShip(
+            playerPos.x.toDouble(), playerPos.y.toDouble(), playerPos.z.toDouble(),
+            ValkyrienClientCompat.transformFor(shipId),
+            x, y, z, width, height, facing, safeDepth,
+        )
+    }
 
     /** True if every dimension is within `1..`[MAX_DISPLAY_BLOCKS]. */
     private fun isValidDisplaySize(width: Int, height: Int, depth: Int = 1): Boolean =

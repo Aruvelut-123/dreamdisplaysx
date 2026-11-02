@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.api.display.geometry.AffineDecomposition
+import com.dreamdisplayx.api.display.geometry.AffineTransform
 import com.dreamdisplayx.api.display.geometry.DisplayGeometry as PublicDisplayGeometry
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.mojang.blaze3d.vertex.PoseStack
@@ -78,6 +80,46 @@ internal object DisplayGeometry {
             }
             ScreenPose(cx, cy, cz, nx, ny, nz, ux, uy, uz, vx, vy, vz)
         }
+
+    /**
+     * Places a display that rides a moving structure: translates the stack to the ship-transformed
+     * anchor corner (relative to the camera) and then applies the structure's rotation and scale, so
+     * every later local offset — surface clearance, facing correction, the `width` x `height` scale —
+     * is expressed in the structure's own frame.
+     *
+     * The order matters and mirrors the affine layout: `world = T * R * S * local`, so the
+     * translation goes on first, then the rotation, then the scale. Applying the rotation before the
+     * translation would spin the display around the camera instead of around the anchor.
+     *
+     * Returns `false` when the matrix has no `T * R * S` decomposition (shear, a collapsed or
+     * non-finite basis) and the caller must fall back to the untransformed placement. Never throws:
+     * a physics blow-up must leave the display where its structure coordinates put it, not blank
+     * every display in the world.
+     */
+    fun applyShipPlacement(
+        stack: PoseStack,
+        transform: AffineTransform,
+        x: Int, y: Int, z: Int,
+        cameraX: Double, cameraY: Double, cameraZ: Double,
+    ): Boolean {
+        val parts = AffineDecomposition.of(transform) ?: return false
+        // Transform the anchor corner itself rather than pre-multiplying a translation: the rotation
+        // pivot must be the structure origin, which is what `transformPoint` uses.
+        val world = transform.transformPoint(x.toDouble(), y.toDouble(), z.toDouble())
+        stack.translate(world[0] - cameraX, world[1] - cameraY, world[2] - cameraZ)
+        val rotation = Quaternionf(
+            parts.quaternionX.toFloat(),
+            parts.quaternionY.toFloat(),
+            parts.quaternionZ.toFloat(),
+            parts.quaternionW.toFloat(),
+        )
+        //? if >=26.3 {
+        stack.rotate(rotation)
+        //?} else
+        /*stack.mulPose(rotation)*/
+        stack.scale(parts.scaleX.toFloat(), parts.scaleY.toFloat(), parts.scaleZ.toFloat())
+        return true
+    }
 
     /**
      * Distance the quad floats in front of the supporting blocks, in local block space. This is a secondary safety margin

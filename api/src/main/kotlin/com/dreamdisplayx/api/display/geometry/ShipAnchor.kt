@@ -74,6 +74,49 @@ class AffineTransform(
         get() = m.indices.all { i -> kotlin.math.abs(m[i] - IDENTITY.m[i]) <= EPSILON }
 
     /**
+     * Maps a world point back into this transform's own space, or `null` when the transform has no
+     * inverse (a collapsed or non-finite basis).
+     *
+     * The inverse is built from the 3x3 cofactor matrix rather than assuming a rigid transform, so a
+     * structure with a non-uniform scale still maps back correctly. Callers use it to answer
+     * "is this world point near the display" without a per-frame matrix inversion in the renderer.
+     */
+    fun inversePoint(x: Double, y: Double, z: Double): DoubleArray? {
+        if (!isFinite) return null
+        val a = at(0, 0)
+        val b = at(1, 0)
+        val c = at(2, 0)
+        val d = at(0, 1)
+        val e = at(1, 1)
+        val f = at(2, 1)
+        val g = at(0, 2)
+        val h = at(1, 2)
+        val i = at(2, 2)
+        val det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+        if (!det.isFinite() || kotlin.math.abs(det) <= EPSILON) return null
+        val inv = 1.0 / det
+        // Cofactor inverse, still column-major: element (column, row) of the inverse.
+        val i00 = (e * i - f * h) * inv
+        val i10 = (f * g - d * i) * inv
+        val i20 = (d * h - e * g) * inv
+        val i01 = (c * h - b * i) * inv
+        val i11 = (a * i - c * g) * inv
+        val i21 = (b * g - a * h) * inv
+        val i02 = (b * f - c * e) * inv
+        val i12 = (c * d - a * f) * inv
+        val i22 = (a * e - b * d) * inv
+        val px = x - at(3, 0)
+        val py = y - at(3, 1)
+        val pz = z - at(3, 2)
+        val out = doubleArrayOf(
+            i00 * px + i01 * py + i02 * pz,
+            i10 * px + i11 * py + i12 * pz,
+            i20 * px + i21 * py + i22 * pz,
+        )
+        return if (out.all { it.isFinite() }) out else null
+    }
+
+    /**
      * Transforms the point ([x], [y], [z]) and returns the result as a new [DoubleArray] of length 3.
      * The implicit `w = 1` is applied, so a pure rotation+translation matrix maps correctly.
      */

@@ -644,6 +644,49 @@ artifact per Minecraft version times eleven targets is unmaintainable and VS doe
   `K2JVMCompiler` classpath — compile once *without* the stub types (the absent path, which every non-VS server
   takes) and once *with* them (the resolution path, including a matrix round-trip).
 
+### Client half: `ValkyrienClientCompat` and the render/aperture paths
+
+`platform/client/common/.../render/ValkyrienClientCompat` mirrors the server bridge. Two reflection traps were
+found only by running the bridge against stubs, so do not "simplify" them away:
+
+- **`getShipToWorld()` must be resolved on the transform's runtime class, not on `Ship`.** `Ship` declares the
+  same name, but invoking a `Ship`-typed `Method` with a `ShipTransform` receiver throws
+  `IllegalArgumentException: object is not an instance of declaring class`. The bridge therefore resolves it per
+  receiver class through `invokeMember`.
+- **VS's ship-world implementation class is package-private.** `getAllShips()` is public on the interface but
+  `Method.invoke` on the concrete class throws `IllegalAccessException: cannot access a member of class ...`,
+  so `invokeMember` calls `setAccessible(true)` and caches the result per class. Without this the whole client
+  bridge silently reported "no ship" and every display stayed at its structure coordinates.
+- `ClientShip.getRenderTransform()` (not the plain transform) is used on purpose: VS interpolates it between the
+  previous and current physics tick, so a display does not judder against the hull it is bolted to.
+- `Minecraft.getInstance()` must be stubbed as a **singleton** in any test harness. A stub that returns a fresh
+  instance per call leaves `level` permanently `null` and makes every transform identity, which reads exactly
+  like a bridge bug.
+
+Rendering has to compose `world = T * R * S * local`, i.e. `DisplayGeometry.applyShipPlacement` emits
+`translate(transformedAnchor - camera)` → `rotate/mulPose(quaternion)` → `scale`. `mulPoseMatrix` is avoided on
+purpose: the repo already compiles `translate`/`mulPose`(`rotate` at 26.3)/`scale` on all eleven versions, and
+`AffineDecomposition` decomposes `AffineTransform` into exactly that triple (Shepperd quaternion extraction, so a
+180° rotation does not divide by a near-zero trace). A matrix that cannot be decomposed returns `false` and the
+renderer falls back to the plain block translation — a physics blow-up must never blank the world.
+
+Three non-render consumers also read the anchor, and all three must map the observer through the **inverse**
+transform before comparing coordinates, or a ship that has sailed away looks "very far" while the player stands
+right in front of the picture:
+
+- `DisplayScreen.getDistanceToScreen` → `api` `DisplayGeometry.distanceToOnShip` (`AffineTransform.inversePoint`,
+  a 3x3 cofactor inverse so a non-uniformly scaled structure still maps back).
+- `DisplayLifecycleManager.handleInfoPacket` / `distanceToData` / `distanceToScreen` — the render-distance census
+  that decides whether a display is created, or restored by `restoreVisibleUnloadedScreens`. Both pass `shipId`.
+- `DisplayScreen.toSourcePlane` — the acoustic plane. Its **centre** goes through `transformPoint` and its three
+  basis axes through `transformDirection` (no translation, renormalised), otherwise the sound stays at the
+  shipyard while the hull sails off.
+
+`AffineDecomposition` (in `:api`) turned out to be a genuine JVM-testable seam even though the renderer is not:
+`rungeom.sh` compiles the real client `DisplayGeometry` against a recording `PoseStack` stub and asserts the
+operation order, the camera subtraction in world space and the `false` fallback. The renderer's GL output cannot
+be unit-tested, but the geometry that feeds it can, and that is where the P4 logic lives.
+
 ## Experimental Remote Control
 
 The Paper remote-control stick is experimental and uses a `PersistentDataContainer` entry named `remote_display_id`. A normal stick links to the nearest display under the player's look ray on right-click; the server adds a custom name and enchantment-glint override. Shift+right-click on a linked stick sends the experimental V3 `RemoteControlOpen` packet, and the client opens the linked `DisplayMenu` when that display is loaded. Keep the packet id append-only and validate the linked display server-side.

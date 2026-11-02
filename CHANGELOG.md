@@ -6,6 +6,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 ## Client
 ### Features
 - Hotkeys now appear in `Options -> Controls`, so players can rebind the display menu, play/pause, the display toggle and fullscreen; all ship unbound.
+- Valkyrien Skies support, second half: a display on a ship is drawn, sounds and stays loaded at the ship's position instead of its structure coordinates, and follows the hull as it moves.
 # 1.10.8.1 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
 ## Server

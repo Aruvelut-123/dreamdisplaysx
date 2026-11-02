@@ -75,6 +75,31 @@ object DisplayGeometry {
         sqrt((dx * dx + dy * dy + dz * dz).toDouble())
     }
 
+    /**
+     * Shortest distance from a world point to a display's box, for a display that rides a moving
+     * structure.
+     *
+     * The display's box is expressed in *structure* space (that is what it stores), so a raw
+     * block-coordinate comparison against a world position is meaningless — on a ship that has
+     * travelled a few hundred blocks it reports "very far" and the client unloads a screen the player
+     * is standing in front of. Mapping the observer back through the inverse transform recovers the
+     * structure-space point the existing box test expects, so no second distance implementation is
+     * needed.
+     *
+     * Falls back to [distanceTo] in structure space when the transform has no inverse (a collapsed or
+     * non-finite basis): wrong by the structure's own displacement, but never `NaN` and never far
+     * enough to hide a working display.
+     */
+    fun distanceToOnShip(
+        x: Double, y: Double, z: Double,
+        transform: AffineTransform,
+        minX: Int, minY: Int, minZ: Int, width: Int, height: Int,
+        facing: DisplayFacing, depth: Int = 1,
+    ): Double {
+        val local = transform.inversePoint(x, y, z) ?: return distanceTo(x, y, z, minX, minY, minZ, width, height, facing, depth)
+        return distanceTo(local[0], local[1], local[2], minX, minY, minZ, width, height, facing, depth)
+    }
+
     /** Distance from the point ([x], [y], [z]) to the display's box; `0` inside it. */
     @JvmStatic
     @JvmOverloads

@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.rendertype.RenderType
 import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
+import com.dreamdisplayx.api.display.geometry.AffineTransform
 import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
@@ -903,21 +904,65 @@ class DisplayScreen(
     fun isInScreen(pos: BlockPos): Boolean =
         DisplayGeometry.isInBounds(pos, x, y, z, width, height, facing)
 
-    /** Returns the shortest Euclidean distance from [pos] to any block in the screen's bounding box. */
+    /**
+     * Shortest distance from the player's block to this screen, honouring a ship anchor.
+     *
+     * A display on a Valkyrien Skies ship stores structure-space coordinates, so comparing them with a
+     * world position directly would report any ship that has moved as "far away" and unload a screen
+     * the player is standing in front of. When the anchor resolves, the observer is mapped back into
+     * structure space first. When it does not (mod absent, ship not loaded yet) the plain block
+     * comparison stays in place, which is exactly the old behaviour.
+     */
     fun getDistanceToScreen(pos: BlockPos): Double =
-        DisplayGeometry.distanceTo(pos, x, y, z, width, height, facing)
+        DisplayGeometry.distanceToOnShip(
+            pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble(),
+            shipTransformOrIdentity(), x, y, z, width, height, facing,
+        )
 
-    /** Builds the world-space planar sound source fed to the acoustics engine (see [tick]). */
+    /** The live structure transform, or identity for a world-anchored screen. */
+    private fun shipTransformOrIdentity(): AffineTransform =
+        if (shipId <= 0L) AffineTransform.IDENTITY else ValkyrienClientCompat.transformFor(shipId)
+
+    /** Whether this screen rides a structure whose transform is currently resolvable. */
+    val isOnLoadedShip: Boolean get() = shipId > 0L && !ValkyrienClientCompat.transformFor(shipId).isIdentity
+
+    /**
+     * Builds the world-space planar sound source fed to the acoustics engine (see [tick]).
+     *
+     * A ship-anchored display stores structure-space coordinates, so the plane has to be mapped into
+     * the world before it reaches the acoustic mixer — otherwise the sound stays behind at the
+     * shipyard while the hull (and the visible picture) sails away. Both the centre and the three
+     * basis axes go through the same transform; the axes use the no-translation variant, which
+     * renormalises so a scaled structure does not distort the plane's extent.
+     */
     private fun toSourcePlane(): SourcePlane {
         val pose = DisplayGeometry.worldPose(x, y, z, width, height, facing)
+        if (shipId <= 0L) return pose.toSourcePlane(width, height)
+
+        val transform = ValkyrienClientCompat.transformFor(shipId)
+        if (transform.isIdentity) return pose.toSourcePlane(width, height)
+
+        val centre = transform.transformPoint(pose.centerX, pose.centerY, pose.centerZ)
+        val normal = transform.transformDirection(pose.normalX, pose.normalY, pose.normalZ)
+        val uAxis = transform.transformDirection(pose.uAxisX, pose.uAxisY, pose.uAxisZ)
+        val vAxis = transform.transformDirection(pose.vAxisX, pose.vAxisY, pose.vAxisZ)
         return SourcePlane(
-            pose.centerX, pose.centerY, pose.centerZ,
-            pose.normalX, pose.normalY, pose.normalZ,
-            pose.uAxisX, pose.uAxisY, pose.uAxisZ,
-            pose.vAxisX, pose.vAxisY, pose.vAxisZ,
+            centre[0], centre[1], centre[2],
+            normal[0], normal[1], normal[2],
+            uAxis[0], uAxis[1], uAxis[2],
+            vAxis[0], vAxis[1], vAxis[2],
             width.toDouble(), height.toDouble(),
         )
     }
+
+    /** Packing step shared by the paired and the structure-space path, so both stay in sync. */
+    private fun ScreenPose.toSourcePlane(width: Int, height: Int): SourcePlane = SourcePlane(
+        centerX, centerY, centerZ,
+        normalX, normalY, normalZ,
+        uAxisX, uAxisY, uAxisZ,
+        vAxisX, vAxisY, vAxisZ,
+        width.toDouble(), height.toDouble(),
+    )
 
     /** Uploads the latest decoded frame to the GPU texture(s). Called on the render thread once per frame. */
     fun fitTexture() {

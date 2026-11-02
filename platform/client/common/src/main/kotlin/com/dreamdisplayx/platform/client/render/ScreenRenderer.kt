@@ -10,7 +10,9 @@ package com.dreamdisplayx.platform.client.render
 import net.minecraft.client.renderer.rendertype.RenderType
 //?} else
 /*import net.minecraft.client.renderer.RenderType*/
+import com.dreamdisplayx.api.display.geometry.AffineTransform
 import com.dreamdisplayx.api.display.geometry.ConformQuad
+import com.dreamdisplayx.api.display.geometry.ShipAnchorPolicy
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.dreamdisplayx.api.display.model.property.DisplayId
@@ -93,7 +95,20 @@ object ScreenRenderer : ClientRenderService {
                 // Upstream 1d9120aa: translate by raw deltas instead of building (and subtracting) a Vec3
                 // per screen per frame — this loop runs for every display on every rendered frame.
                 val pos = displayScreen.pos
-                stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z)
+                // A display on a Valkyrien Skies ship stores structure-space coordinates, so the world
+                // position is `shipToWorld * pos`. Resolving that here (rather than storing world
+                // coordinates) is what lets the picture follow a moving hull without a data update.
+                val shipTransform = shipTransformOf(displayScreen)
+                val placed = shipTransform != null &&
+                    DisplayGeometry.applyShipPlacement(
+                        stack, shipTransform, pos.x, pos.y, pos.z,
+                        cameraPos.x, cameraPos.y, cameraPos.z,
+                    )
+                if (!placed) {
+                    // World-anchored, mod absent, or a matrix that cannot be decomposed: draw at the
+                    // stored coordinates. A vanished ship must not teleport its display to the origin.
+                    stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z)
+                }
 
                 renderScreenTexture(displayScreen, stack, replay, drawQuad)
 
@@ -113,6 +128,22 @@ object ScreenRenderer : ClientRenderService {
 
     /** Distance the [UnshadedDisplayPass] replay is lifted off the level-pass quad it repeats, in blocks. */
     private const val REPLAY_LIFT = 0.01f
+
+    /**
+     * The structure transform to draw [screen] with, or `null` when it must use its stored world
+     * coordinates.
+     *
+     * Three cases return `null` and all of them are ordinary: a world-anchored display (`shipId`
+     * left at `0`), a client without the physics mod, and a ship that is not loaded — the last one is
+     * a per-frame condition on a client whose chunks have not caught up. `ShipAnchorPolicy` collapses
+     * all of them to [AffineTransform.IDENTITY], which is reported as `null` here so the caller can
+     * skip the extra pose work entirely instead of multiplying by an identity.
+     */
+    private fun shipTransformOf(screen: DisplayScreen): AffineTransform? {
+        if (!ShipAnchorPolicy.isShipAnchored(screen.shipId)) return null
+        val transform = ValkyrienClientCompat.transformFor(screen.shipId)
+        return if (transform.isIdentity) null else transform
+    }
 
     /**
      * Base depth lift for every flat display overlay, in blocks. Keeps the quads off the block face they
