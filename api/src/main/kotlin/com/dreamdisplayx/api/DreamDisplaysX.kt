@@ -1,44 +1,38 @@
 package com.dreamdisplayx.api
 
-import com.dreamdisplayx.api.addon.ForkAddon
-import com.dreamdisplayx.api.addon.ForkAddonContext
+import com.dreamdisplayx.api.display.model.Display
 import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.service.DisplayService
-import java.util.concurrent.CopyOnWriteArrayList
+import com.dreamdisplayx.api.runtime.registry.service.ServiceRegistry
 
 /**
- * Entry point for addons written **specifically for `Dream DisplaysX`**.
+ * The fork's additions on top of upstream's addon API.
  *
- * It sits beside upstream's `com.dreamdisplays.api.DreamDisplays`, which this fork also publishes verbatim:
+ * There is **one** kind of addon: a class carrying `com.dreamdisplays.api.addon.Addon`, registered with
+ * `com.dreamdisplays.api.DreamDisplays.register(...)`. Everything here works on exactly such a class, so an addon never
+ * has to pick a side and both flavours stay interchangeable in one dependency graph.
  *
- * | addon written against | registers with | gets |
- * |---|---|---|
- * | upstream `Dream Displays` | `DreamDisplays.register(addon)` | `@Addon`, `AddonLifecycle`, `@OnDisplay` / `@OnPlaying` / `@OnFailed` |
- * | this fork | `DreamDisplaysX.register(addon)` | `@ForkAddon`, `ForkAddonLifecycle`, plus every fork-only handler |
+ * What this fork adds:
  *
- * A fork addon also gets [ForkAddonContext.service], which hands out any service this side registered — that is the
- * part upstream has no equivalent for, and the reason a fork-only addon can reach `DisplayService`, the stream
- * selector, capability negotiation and so on without touching Minecraft classes.
- *
- * Both kinds of addon live in the same manager, so dependencies work across families: an `@ForkAddon` may list an
- * upstream `@Addon`'s id in its `dependsOn` and be enabled after it.
+ *  * handler annotations an upstream addon has no equivalent for — `@OnQualityChanged`, `@OnVolumeChanged`,
+ *    `@OnBrightnessChanged`, `@OnPlaybackPosition`, `@OnStateChanged`, `@OnFirstFrame`, `@OnEnded` (see
+ *    `com.dreamdisplayx.api.addon`);
+ *  * a service lookup, [service], which hands out any service the running side registered. Upstream's `AddonContext`
+ *    only offers `id`, `side` and `own`, so this is the only way an addon reaches `DisplayService` and the rest of
+ *    this fork's services without depending on Minecraft classes.
  *
  * ```kotlin
- * @ForkAddon(id = "example-overlay", name = "My Overlay")
- * class MyOverlay : ForkAddonLifecycle {
- *     override fun onEnable(context: ForkAddonContext) {
- *         val displays = context.service(DisplayService::class.java) ?: return
- *         context.own(displays.on { /* … */ })
+ * @Addon(id = "example-follow-volume")
+ * class FollowVolume {
+ *     @OnVolumeChanged
+ *     fun changed(display: Display, now: Float) {
+ *         val displays = DreamDisplaysX.displayService() ?: return
+ *         // …
  *     }
  * }
  *
- * // during your mod's client init:
- * DreamDisplaysX.register(MyOverlay())
+ * DreamDisplays.register(FollowVolume())
  * ```
- *
- * Registration may happen before the client finished booting: the backend is published later and the addon is
- * enabled at that point. It is disabled again on shutdown; registering the same id twice is a programming error and
- * throws.
  *
  * Not to be confused with [DreamDisplaysXUnstableApi], which marks *unstable* members of the fork's own API.
  *
@@ -47,75 +41,60 @@ import java.util.concurrent.CopyOnWriteArrayList
 object DreamDisplaysX {
 
     /**
-     * The registration hook, installed by the client bridge module.
+     * Where services are read from, installed by the side that hosts this API.
      *
-     * It is a settable function rather than a direct `ForkAddonManager` reference so the `api` module stays free of
-     * `core` — the api artifact must not depend on the implementation that hosts it.
+     * A provider rather than a [ServiceRegistry] so the `api` artifact keeps no `core` dependency and so a registry
+     * swapped during a reload is observed immediately.
      */
     @Volatile
-    private var registrar: ((Any) -> Unit)? = null
+    private var registryProvider: (() -> ServiceRegistry?)? = null
 
-    /** Addons queued through [onReady] before the API came up. */
-    private val pending = CopyOnWriteArrayList<Runnable>()
+    /** True once the hosting side published its services and [service] can return something. */
+    @JvmStatic
+    val isAvailable: Boolean get() = registryProvider?.invoke() != null
 
     /**
-     * Registers [addon], an instance of a class annotated with [ForkAddon] (or upstream's `@Addon`).
+     * The service bound to [type] on this side, or `null` when nothing is.
      *
-     * Throws when the class carries neither annotation, when the id is blank, or when the id is already registered.
+     * Returns `null` instead of throwing, so an addon can feature-detect: `DreamDisplaysX.service(X::class.java)
+     * ?: return` keeps it loadable on a side that does not have `X`.
      */
     @JvmStatic
-    fun register(addon: Any) {
-        val sink = registrar ?: error(
-            "Dream DisplaysX API is not available yet. Use DreamDisplaysX.onReady { register(MyAddon()) } " +
-                "or register from your mod's initialiser.",
-        )
-        sink(addon)
-    }
+    fun <T : Any> service(type: Class<T>): T? = registryProvider?.invoke()?.getOrNull(type)
 
-    /** True once `Dream DisplaysX` published its API and addons can be registered. */
+    /** The `DisplayService` of this side, or `null`. */
     @JvmStatic
-    val isAvailable: Boolean get() = registrar != null
+    fun displayService(): DisplayService? = service(DisplayService::class.java)
 
-    /** Runs [action] as soon as the API is available: right away if it already is, otherwise once it loads. */
+    /** The display with [id], or `null` when it does not exist. */
     @JvmStatic
-    fun onReady(action: Runnable) {
-        if (registrar != null) action.run() else pending += action
-    }
+    fun display(id: DisplayId): Display? = displayService()?.getDisplay(id)
+
+    /** Every display currently known to this side; empty when the service is not there. */
+    @JvmStatic
+    fun displays(): List<Display> = displayService()?.listDisplays().orEmpty()
 
     /**
-     * Installs the registration hook. Called by the fork's own bridge module, never by an addon.
+     * Installs the service provider. Called by the hosting bridge, never by an addon.
      *
-     * Passing `null` withdraws it again during shutdown. Queued [onReady] actions run as soon as a hook is installed.
+     * Passing `null` withdraws it again during shutdown, after which [isAvailable] is `false` and [service] returns
+     * `null` instead of reaching into a torn-down registry.
      */
     @JvmStatic
-    fun installRegistrar(sink: ((Any) -> Unit)?) {
-        registrar = sink
-        if (sink == null) return
-        val queued = pending.toList()
-        pending.clear()
-        queued.forEach { action -> runCatching { action.run() } }
+    fun installServices(provider: (() -> ServiceRegistry?)?) {
+        registryProvider = provider
     }
 }
 
+/** The service bound to [T] on this side, or `null` when nothing is. */
+@DreamDisplaysXUnstableApi
+inline fun <reified T : Any> service(): T? = DreamDisplaysX.service(T::class.java)
+
 /**
- * Convenience: true when [addon]'s class is annotated with [ForkAddon] or upstream's `@Addon`.
+ * True when [addon]'s class carries upstream's `@Addon`.
  *
- * Useful for a mod that optionally supports either flavour of this mod's API and wants to warn about a forgotten
- * annotation before calling [DreamDisplaysX.register].
+ * Useful for a mod that optionally supports this API and wants to warn about a forgotten annotation before calling
+ * `DreamDisplays.register`.
  */
 fun isAddon(addon: Any): Boolean =
-    addon.javaClass.isAnnotationPresent(ForkAddon::class.java) ||
-        addon.javaClass.isAnnotationPresent(com.dreamdisplays.api.addon.Addon::class.java)
-
-/**
- * The `DisplayService` of the running side, or `null` when it is not available.
- *
- * A shortcut for `context.service(DisplayService::class.java)`, kept here so the common case needs no generic dance.
- */
-fun ForkAddonContext.displayService(): DisplayService? = service(DisplayService::class.java)
-
-/** The display with [id], or `null` when it does not exist. */
-fun ForkAddonContext.display(id: DisplayId) = displayService()?.getDisplay(id)
-
-/** Every display currently known to this side. */
-fun ForkAddonContext.displays() = displayService()?.listDisplays().orEmpty()
+    addon.javaClass.isAnnotationPresent(com.dreamdisplays.api.addon.Addon::class.java)

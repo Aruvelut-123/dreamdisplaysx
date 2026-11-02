@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.managers
 
+import com.dreamdisplayx.core.addon.ServerAddonHooks
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
 import com.dreamdisplayx.platform.server.PaperServer.Companion.config
 import com.dreamdisplayx.platform.server.PaperServer.Companion.getInstance
@@ -123,6 +124,8 @@ object DisplayManager {
      */
     private fun removeDisplays(toRemove: List<DisplayData>, delete: (DisplayData) -> Unit): List<UUID> {
         return toRemove.map { display ->
+            // Same rule as `delete(...)` below: the event is published while the registry still has the row.
+            ServerAddonHooks.removed(display.id)
             displays.remove(display.id)
             proximityIndex.forgetDisplay(display.id)
             TimelineManager.remove(display.id)
@@ -167,6 +170,7 @@ object DisplayManager {
         displays[data.id] = data
         runAsync { getInstance().storage.saveDisplay(data) }
         broadcastUpdate(data)
+        ServerAddonHooks.created(data.id)
     }
 
     /** Returns the players currently in range of [display] in its world. */
@@ -283,6 +287,9 @@ object DisplayManager {
     /** Removes [displayData] from storage and the registry and notifies nearby clients. */
     @PaperOnly
     fun delete(displayData: PaperDisplayData) {
+        // Before the row leaves the registry: the addon event carries a readable display, and a listener that asks for
+        // it by id would otherwise only find nothing.
+        ServerAddonHooks.removed(displayData.id)
         runAsync { getInstance().storage.deleteDisplay(displayData) }
         broadcastDelete(displayData)
         TimelineManager.remove(displayData.id)
@@ -398,6 +405,7 @@ object DisplayManager {
     /** Registers a new display. Caller is responsible for broadcasting. */
     fun register(data: VanillaDisplayData) {
         displays[data.id] = data
+        ServerAddonHooks.created(data.id)
     }
 
     /** Returns the players currently in range of [display] in its world. */
@@ -436,6 +444,8 @@ object DisplayManager {
 
     /** Removes [data] from storage and the registry. The JDBC delete runs off-thread on [ServerCoroutines.io]. */
     fun delete(data: VanillaDisplayData) {
+        // Before the row leaves the registry, so a listener still resolves the display it is being told about.
+        ServerAddonHooks.removed(data.id)
         val receivers = VanillaServerState.server?.let { getReceivers(data, it) }.orEmpty()
         displays.remove(data.id)
         TimelineManager.remove(data.id)

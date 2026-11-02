@@ -21,6 +21,23 @@ object ServerVetoes {
     /** The registry plugins subscribe to. */
     val registry = DisplayVetoRegistry()
 
+    /**
+     * Resolves the world position of a display row.
+     *
+     * `DisplayData` deliberately carries no coordinates — they live on `PaperDisplayData.pos1` and
+     * `VanillaDisplayData.worldKey` + `pos1`, two types that cannot both be referenced from one file
+     * here. So each loader installs its own resolver at start-up, and a veto target gets its
+     * position back without this file knowing either type.
+     */
+    fun interface PositionResolver {
+        /** The place [data] stands, or `null` when it cannot be resolved. */
+        fun resolve(data: DisplayData): DisplayVeto.Position?
+    }
+
+    /** The resolver installed by the running loader, or `null`. */
+    @Volatile
+    var positionResolver: PositionResolver? = null
+
     /** Flattens [DisplayData] into the platform-independent [DisplayVeto.Target]. */
     fun DisplayData.toVetoTarget(): DisplayVeto.Target = DisplayVeto.Target(
         id = id,
@@ -30,6 +47,7 @@ object ServerVetoes {
         url = url,
         name = name,
         virtual = virtual,
+        position = positionResolver?.resolve(this),
     )
 
     /**

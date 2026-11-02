@@ -9,6 +9,7 @@ import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.playback.policy.PlaybackPermissions
 import com.dreamdisplayx.api.playback.model.WatchPartyAction
 import com.dreamdisplayx.api.security.policy.MediaUrlPolicy
+import com.dreamdisplayx.core.addon.ServerAddonHooks
 import com.dreamdisplayx.platform.server.VanillaServerState
 import com.dreamdisplayx.platform.server.api.ServerVetoes
 import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
@@ -162,15 +163,14 @@ object VanillaDisplayActions {
             if (reason.isNotEmpty()) MessageUtil.sendColoredMessage(player, reason)
             return
         }
-
         displayData.url = url
         displayData.lang = sanitizedLang
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(displayData) }
-
         TimelineManager.resetVideo(displayData)
         val receivers = DisplayManager.getReceivers(displayData, server)
         VanillaPacketUtil.sendDisplayInfo(receivers, displayData)
         TimelineManager.broadcastCurrent(displayData)
+        ServerAddonHooks.urlChanged(displayData.id, url)
     }
 
     /** Sets who may use a display owned by [player] and rebroadcasts. */

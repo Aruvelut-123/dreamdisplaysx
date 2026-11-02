@@ -1,6 +1,7 @@
 package com.dreamdisplayx.api.display.event
 
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
+import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import java.util.UUID
 import java.util.function.Consumer
 
@@ -44,8 +45,8 @@ sealed class DisplayVeto {
     /**
      * The display a veto is about, flattened so veto listeners stay platform independent.
      *
-     * The world position and facing are deliberately absent: a veto decision is about identity,
-     * ownership and content, and the position types differ per loader.
+     * The world position and facing travel in [position], a loader-neutral form: a veto decision is
+     * about identity, ownership, content and place, and the loader position types never unify.
      *
      * @since 1.10.x
      */
@@ -65,6 +66,36 @@ sealed class DisplayVeto {
         val name: String?,
         /** `true` for the synthetic displays backing a URL-only fullscreen broadcast. */
         val virtual: Boolean,
+        /** Where the display stands, or `null` when the caller could not resolve it. */
+        val position: Position? = null,
+    )
+
+    /**
+     * The place a display stands, in loader-neutral form.
+     *
+     * Every backend can resolve these from its own display row: Paper from `Location`, the vanilla
+     * loaders from `BlockPos` plus a dimension key.
+     *
+     * @since 1.10.x
+     */
+    @DreamDisplaysXUnstableApi
+    data class Position(
+        /** Dimension key, e.g. `minecraft:overworld`. */
+        val world: String,
+        /** Lowest corner, inclusive. */
+        val x1: Int,
+        /** Lowest corner, inclusive. */
+        val y1: Int,
+        /** Lowest corner, inclusive. */
+        val z1: Int,
+        /** Highest corner, inclusive. */
+        val x2: Int,
+        /** Highest corner, inclusive. */
+        val y2: Int,
+        /** Highest corner, inclusive. */
+        val z2: Int,
+        /** Facing of the screen. */
+        val facing: DisplayFacing,
     )
 
     /**

@@ -3,22 +3,33 @@ package com.dreamdisplayx.api.addon
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 
 /**
- * Handler annotations a [ForkAddon] can put on its methods.
+ * Extra handler annotations this fork offers on top of upstream's set.
  *
- * Every annotation follows the same contract as upstream's handlers: the method receives a *prefix* of the available
- * parameters, in order, and may declare fewer than offered. A method may be `private`; the binder makes it
- * accessible. Return values are ignored.
+ * They are put on the *same* class that carries `com.dreamdisplays.api.addon.Addon`, so an addon has exactly one
+ * identity, one dependency graph and one enable/disable order no matter how many of these it uses. An addon written
+ * against upstream simply has none of them and behaves as before.
  *
- * These cover events upstream has no equivalent for. The upstream set (`OnDisplay`, `OnPlaying`, `OnFailed`,
- * `OnDisplayCreated`, `OnDisplayRemoved`, `OnUrlChanged`) keeps working unchanged on a fork addon too — both binder
- * families run for every addon.
+ * Every annotation follows upstream's contract: the method receives a *prefix* of the available parameters, in
+ * order, and may declare fewer than offered. A method may be `private`; the binder makes it accessible. Return
+ * values are ignored, and a throwing handler is logged and skipped instead of taking the addon down.
+ *
+ * ```kotlin
+ * @Addon(id = "example-quality-watch", name = "Quality Watch")
+ * class QualityWatch {
+ *     @OnQualityChanged
+ *     fun quality(display: Display, now: VideoQuality, before: VideoQuality) { ... }
+ *
+ *     @OnEnded
+ *     fun ended(display: Display) { ... }
+ * }
+ * ```
  *
  * @since 1.10.x
  */
 
 /**
- * `(Display)`, `(Display, VideoQuality)` or `(Display, VideoQuality, VideoQuality)` — called when a display's
- * quality setting changes; the second argument is the new quality, the third (when declared) the previous one.
+ * `(Display)`, `(Display, VideoQuality)` or `(Display, VideoQuality, VideoQuality)` — called when a display's quality
+ * setting changes; the second argument is the new quality, the third (when declared) the previous one.
  */
 @DreamDisplaysXUnstableApi
 @Retention(AnnotationRetention.RUNTIME)

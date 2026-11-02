@@ -3,6 +3,11 @@ package com.dreamdisplayx.platform.server
 import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.credentials.CredentialStore
+import com.dreamdisplayx.platform.server.api.PaperAddonHost
+import com.dreamdisplayx.platform.server.api.ServerAddonRuntime
+import com.dreamdisplayx.platform.server.api.ServerVetoes
+import com.dreamdisplayx.platform.server.api.toAddonDisplay
+import com.dreamdisplayx.core.addon.toVetoPosition
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.managers.StorageManager
@@ -82,6 +87,12 @@ class PaperServer : JavaPlugin() {
         storage.createSchema()
         DisplayManager.register(storage.loadAllPaperDisplays())
 
+        // The addon API has to be live before any addon can observe a display, and it resolves veto positions through
+        // the same flattening the host uses, so both halves agree on where a display stands.
+        ServerAddonRuntime.start(PaperAddonHost(), ServerVetoes.PositionResolver { data ->
+            (data as? PaperDisplayData)?.toAddonDisplay()?.toVetoPosition()
+        })
+
         WatchPartyManager.init(PaperPlaybackTransport)
         TimelineManager.init(PaperPlaybackTransport)
         PlaylistManager.init(PaperPlaybackTransport, storage.loadAllPlaylists())
@@ -130,6 +141,7 @@ class PaperServer : JavaPlugin() {
      */
     fun doDisable() {
         if (!::storage.isInitialized) return
+        disableStep("detach addon API") { ServerAddonRuntime.stop() }
         disableStep("save displays") { DisplayManager.save { data: PaperDisplayData -> storage.saveDisplay(data) } }
         disableStep("stop background IO") { ServerCoroutines.shutdown() }
         disableStep("close storage") { storage.disconnect() }

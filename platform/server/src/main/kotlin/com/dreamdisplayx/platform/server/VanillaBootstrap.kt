@@ -1,6 +1,11 @@
 package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
+import com.dreamdisplayx.platform.server.api.ServerAddonRuntime
+import com.dreamdisplayx.platform.server.api.ServerVetoes
+import com.dreamdisplayx.platform.server.api.VanillaAddonHost
+import com.dreamdisplayx.platform.server.api.toAddonDisplay
+import com.dreamdisplayx.core.addon.toVetoPosition
 import com.dreamdisplayx.platform.server.credentials.CredentialStore
 import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.ModLoaderOnly
@@ -53,6 +58,11 @@ object VanillaBootstrap {
             DisplayManager.register(emptyList())
         }
         VanillaPlaybackTransport.bind(server)
+        // The addon API comes up before the managers that mutate displays, so the very first restore already reaches a
+        // listener; its veto positions resolve through the same flattening the host hands out.
+        ServerAddonRuntime.start(VanillaAddonHost(), ServerVetoes.PositionResolver { data ->
+            (data as? com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData)?.toAddonDisplay()?.toVetoPosition()
+        })
         WatchPartyManager.init(VanillaPlaybackTransport)
         TimelineManager.init(VanillaPlaybackTransport)
         PlaylistManager.init(VanillaPlaybackTransport, VanillaPlaybackTransport.loadAllPlaylists())
@@ -88,6 +98,7 @@ object VanillaBootstrap {
 
     /** Persists all displays and disconnects storage. */
     fun onServerStopping() {
+        ServerAddonRuntime.stop()
         DisplayManager.save { VanillaServerState.storage?.saveDisplay(it) }
         ServerCoroutines.shutdown()
         VanillaServerState.storage?.disconnect()
