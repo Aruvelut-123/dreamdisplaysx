@@ -12,6 +12,8 @@ import java.util.UUID
  * the row, so no loader type is ever named outside [ServerAddonHost].
  *
  * Every method returns immediately while nobody listens — one boolean read per mutation for an addon-free server.
+ * The event stream speaks upstream's `com.dreamdisplays.*` types, which is what an addon compiled against upstream
+ * expects; the host is the only place that translates from this fork's own model.
  *
  * @since 1.10.x
  */

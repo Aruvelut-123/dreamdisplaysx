@@ -1,8 +1,9 @@
 package com.dreamdisplayx.platform.server.api
 
-import com.dreamdisplayx.api.display.model.property.DisplayFacing
+import com.dreamdisplays.api.display.model.property.DisplayFacing
+import com.dreamdisplays.api.playback.model.DisplayAccess
+import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
-import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.security.policy.MediaUrlPolicy
 import com.dreamdisplayx.core.addon.ServerAddonDisplay
 import com.dreamdisplayx.core.addon.ServerAddonEvents
@@ -113,7 +114,7 @@ class VanillaAddonHost : ServerAddonHost {
     override fun setAccess(id: UUID, access: DisplayAccess): CommandResult {
         val data = DisplayManager.getDisplayData(id) as? VanillaDisplayData ?: return CommandResult.STALE
         val server = VanillaServerState.server ?: return CommandResult.REFUSED
-        data.access = access
+        data.access = access.toForkAccess()
         ServerCoroutines.io.launch { VanillaServerState.storage?.saveDisplay(data) }
         VanillaPacketUtil.sendDisplayInfo(DisplayManager.getReceivers(data, server), data)
         return CommandResult.OK
@@ -156,8 +157,8 @@ fun VanillaDisplayData.toAddonDisplay(): ServerAddonDisplay = ServerAddonDisplay
     name = name,
     url = url,
     lang = lang,
-    mode = mode,
-    access = access,
+    mode = mode.toUpstreamMode(),
+    access = access.toUpstreamAccess(),
 )
 
 /** Maps a Minecraft direction onto the shared facing. */
@@ -178,4 +179,30 @@ private fun DisplayFacing.toDirection(): Direction = when (this) {
     DisplayFacing.WEST -> Direction.WEST
     DisplayFacing.UP -> Direction.UP
     DisplayFacing.DOWN -> Direction.DOWN
+}
+
+/**
+ * The two enum families name the same thing and must not be mixed.
+ *
+ * `ServerAddonHost` speaks upstream's `com.dreamdisplays.*` enums so an addon compiled against upstream sees the types it
+ * knows, while a stored row uses this fork's `com.dreamdisplayx.*` ones. Both lists are identical, so the mapping is a
+ * rename per constant; keeping it in the loader that owns the row means `:core` never names either family twice.
+ */
+private fun com.dreamdisplayx.api.playback.model.PlaybackMode.toUpstreamMode(): PlaybackMode = when (this) {
+    com.dreamdisplayx.api.playback.model.PlaybackMode.LOCAL -> PlaybackMode.LOCAL
+    com.dreamdisplayx.api.playback.model.PlaybackMode.SYNCED -> PlaybackMode.SYNCED
+    com.dreamdisplayx.api.playback.model.PlaybackMode.WATCH_PARTY -> PlaybackMode.WATCH_PARTY
+    com.dreamdisplayx.api.playback.model.PlaybackMode.BROADCAST -> PlaybackMode.BROADCAST
+}
+
+private fun com.dreamdisplayx.api.playback.model.DisplayAccess.toUpstreamAccess(): DisplayAccess = when (this) {
+    com.dreamdisplayx.api.playback.model.DisplayAccess.EVERYONE -> DisplayAccess.EVERYONE
+    com.dreamdisplayx.api.playback.model.DisplayAccess.REGION -> DisplayAccess.REGION
+    com.dreamdisplayx.api.playback.model.DisplayAccess.LOCKED -> DisplayAccess.LOCKED
+}
+
+private fun DisplayAccess.toForkAccess(): com.dreamdisplayx.api.playback.model.DisplayAccess = when (this) {
+    DisplayAccess.EVERYONE -> com.dreamdisplayx.api.playback.model.DisplayAccess.EVERYONE
+    DisplayAccess.REGION -> com.dreamdisplayx.api.playback.model.DisplayAccess.REGION
+    DisplayAccess.LOCKED -> com.dreamdisplayx.api.playback.model.DisplayAccess.LOCKED
 }

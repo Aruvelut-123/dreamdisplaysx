@@ -1,8 +1,9 @@
 package com.dreamdisplayx.platform.server.api
 
-import com.dreamdisplayx.api.display.model.property.DisplayFacing
+import com.dreamdisplays.api.display.model.property.DisplayFacing
+import com.dreamdisplays.api.playback.model.DisplayAccess
+import com.dreamdisplays.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
-import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.security.policy.MediaUrlPolicy
 import com.dreamdisplayx.core.addon.ServerAddonDisplay
 import com.dreamdisplayx.core.addon.ServerAddonHost
@@ -108,7 +109,7 @@ class PaperAddonHost : ServerAddonHost {
 
     override fun setAccess(id: UUID, access: DisplayAccess): CommandResult {
         val data = DisplayManager.getDisplayData(id) as? PaperDisplayData ?: return CommandResult.STALE
-        data.access = access
+        data.access = access.toForkAccess()
         runAsync { PaperServer.getInstance().storage.saveDisplay(data) }
         DisplayManager.broadcastUpdate(data)
         return CommandResult.OK
@@ -154,8 +155,8 @@ fun PaperDisplayData.toAddonDisplay(): ServerAddonDisplay {
         name = name,
         url = url,
         lang = lang,
-        mode = mode,
-        access = access,
+        mode = mode.toUpstreamMode(),
+        access = access.toUpstreamAccess(),
     )
 }
 
@@ -178,4 +179,30 @@ private fun DisplayFacing.toBlockFace(): BlockFace = when (this) {
     DisplayFacing.WEST -> BlockFace.WEST
     DisplayFacing.UP -> BlockFace.UP
     DisplayFacing.DOWN -> BlockFace.DOWN
+}
+
+/**
+ * The two enum families name the same thing and must not be mixed.
+ *
+ * `ServerAddonHost` speaks upstream's `com.dreamdisplays.*` enums (so an addon compiled against upstream sees the types
+ * it knows), while a stored row uses this fork's `com.dreamdisplayx.*` ones. Both lists are identical, so the mapping is
+ * a rename per constant; doing it here keeps every translation in the loader that owns the row.
+ */
+private fun com.dreamdisplayx.api.playback.model.PlaybackMode.toUpstreamMode(): PlaybackMode = when (this) {
+    com.dreamdisplayx.api.playback.model.PlaybackMode.LOCAL -> PlaybackMode.LOCAL
+    com.dreamdisplayx.api.playback.model.PlaybackMode.SYNCED -> PlaybackMode.SYNCED
+    com.dreamdisplayx.api.playback.model.PlaybackMode.WATCH_PARTY -> PlaybackMode.WATCH_PARTY
+    com.dreamdisplayx.api.playback.model.PlaybackMode.BROADCAST -> PlaybackMode.BROADCAST
+}
+
+private fun com.dreamdisplayx.api.playback.model.DisplayAccess.toUpstreamAccess(): DisplayAccess = when (this) {
+    com.dreamdisplayx.api.playback.model.DisplayAccess.EVERYONE -> DisplayAccess.EVERYONE
+    com.dreamdisplayx.api.playback.model.DisplayAccess.REGION -> DisplayAccess.REGION
+    com.dreamdisplayx.api.playback.model.DisplayAccess.LOCKED -> DisplayAccess.LOCKED
+}
+
+private fun DisplayAccess.toForkAccess(): com.dreamdisplayx.api.playback.model.DisplayAccess = when (this) {
+    DisplayAccess.EVERYONE -> com.dreamdisplayx.api.playback.model.DisplayAccess.EVERYONE
+    DisplayAccess.REGION -> com.dreamdisplayx.api.playback.model.DisplayAccess.REGION
+    DisplayAccess.LOCKED -> com.dreamdisplayx.api.playback.model.DisplayAccess.LOCKED
 }
