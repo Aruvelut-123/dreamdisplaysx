@@ -48,6 +48,21 @@ internal object DisplayGeometry {
     ): Double = PublicDisplayGeometry.distanceTo(pos.x, pos.y, pos.z, x, y, z, width, height, facing, depth)
 
     /**
+     * Shortest distance from a world point to a ship-anchored screen, delegating to the api so the
+     * shared block-space math stays in one place.
+     *
+     * The screen's box is in structure space, so a raw comparison against a world position reports a
+     * ship that has moved as "very far". The api helper maps the observer back through the inverse
+     * transform first and falls back to the structure-space result when there is no inverse.
+     */
+    fun distanceToOnShip(
+        x: Double, y: Double, z: Double, transform: AffineTransform,
+        minX: Int, minY: Int, minZ: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
+    ): Double = PublicDisplayGeometry.distanceToOnShip(
+        x, y, z, transform, minX, minY, minZ, width, height, facing, depth,
+    )
+
+    /**
      * World-space center and orientation basis for a screen anchored at ([x], [y], [z]) with the given
      * [width] / [height] / [facing]. Approximate (block-center precision, no surface offset): good
      * enough for placing acoustic emitters, not for rendering.
