@@ -649,6 +649,16 @@ all three were verified against the actual jars, not from memory:
 to `SORT_ORDER` and the mapping still groups correctly. The call carries `@Suppress("DEPRECATION")` in
 common code rather than forcing a NeoForge type into a file Fabric and Forge also compile.
 
+**Fabric API renamed its own key-binding module in 26.1.** `fabric-key-binding-api-v1` with
+`net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper.registerKeyBinding(KeyMapping)` became
+`fabric-key-mapping-api-v1` with
+`net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping(KeyMapping)`. The
+`keybinding` package does **not** exist on 26.x — a single shared call compiled on 1.18.2-1.21.11 and failed
+only on 26.1.2/26.2/26.3 (`Unresolved reference 'keybinding'`). Hence two files, one gate each:
+`FabricHotkeyRegistration` (`//? if <26`) and `FabricHotkeyRegistration26` (`//? if >=26`), both exposing the
+same `register()` so the loader entry point stays version-free. `KeyMapping.Category.register` still works
+on 26.x — Fabric mixes in only to re-sort `SORT_ORDER`.
+
 The in-menu keys (`Space`, arrows, `M`, `F`, `P`, digits) intentionally stay out of the catalog: they belong
 to `DisplayMenu.keyPressed` and are contextual, and making them global bindings would collide with jump,
 chat, offhand swap and the hotbar.
