@@ -80,4 +80,14 @@ object ShipAnchorPolicy {
      */
     fun shouldDropAnchor(storedShipId: Long, shipStillExists: Boolean): Boolean =
         storedShipId > 0L && !shipStillExists
+
+    /**
+     * Whether a row's coordinates live in structure space rather than world space.
+     *
+     * Any check that samples the *world* at a stored coordinate must skip these rows: the blocks they
+     * describe are inside a moving structure, so the same numbers point at empty air. That is what
+     * `DisplayManager.validateDisplaysAndCleanup` gates on — without it, the base-material census
+     * reads air at every ship display and deletes the lot on the next player join.
+     */
+    fun isShipAnchored(storedShipId: Long): Boolean = storedShipId > 0L
 }

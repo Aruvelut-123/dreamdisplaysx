@@ -611,6 +611,39 @@ Rules that keep this honest:
 - `ServerVetoes.ask*` short-circuits on an empty registry, logs a throwing listener instead of propagating, and returns `null` for allowed / a possibly-empty string for denied. The first denial wins.
 - `DisplayVetoRegistryTest` covers dispatch, first-denial-wins, empty denials, throwing listeners, unsubscribe and clear. Keep it green: it is the only pure-JVM coverage of this path.
 
+## Optional Valkyrien Skies ship anchoring
+
+Ship support is **reflection only**; the fork must never take a `org.valkyrienskies` dependency, because one
+artifact per Minecraft version times eleven targets is unmaintainable and VS does not support every version.
+
+- API layer (`:api`) stays physics-agnostic: `ShipAnchor`/`AffineTransform`/`ShipPoseMath`/`ShipAnchorPolicy`
+  traffic in bare `Long`/`Double`/`DoubleArray` only. `ShipTransformSource` is the seam — a `fun interface`
+  returning the column-major `DoubleArray` (JOML layout, so no transpose).
+- `platform/server/.../compat/ValkyrienCompat` resolves the mod lazily into a sealed `Resolution`
+  (`Absent` / `Ready`) and every entry point is `runCatching`-wrapped: a broken or absent install must degrade
+  to "no ships here" (`shipId = 0`), never throw. `ClassNotFoundException` is silent; anything else warns once.
+- **Reflected signatures must come from the shipped jar, not memory.** `VSGameUtilsKt.getAllShips(Level)` takes
+  `Level`, *not* `ServerLevel`, and `getMethod` matches declared parameter types exactly — passing `ServerLevel`
+  throws, and the catch-all then marks the whole bridge `Absent` forever with only a `debug` line. Verify with
+  `javap -classpath <vs.jar> org.valkyrienskies.mod.common.VSGameUtilsKt`. `Matrix4dc.get(double[])` is JOML's
+  (from the Minecraft classpath, not VS). Ship lookup by id goes through `getAllShips` + `getId()` comparison
+  rather than `QueryableShipData.getById`, whose generic return differs between VS releases; the registry is a
+  `Collection`, so plain iteration works.
+- `DisplayData.shipId` is a `var` with a no-op default setter on the interface, so `stampShipAnchor` can write it
+  through the platform-neutral type; `PaperDisplayData`/`VanillaDisplayData` override it with stored properties.
+  Both creation paths stamp it — `CreateCommand` (both branches) and the addon `create()` hosts.
+- Coordinates in a ship-anchored row are **structure space**. Anything that samples the world at a stored
+  coordinate must skip those rows: `DisplayManager.validateDisplaysAndCleanup` gates on
+  `ShipAnchorPolicy.isShipAnchored`, otherwise the base-material census reads air at every ship display and
+  deletes the lot on the next player join. `ShipAnchorPolicy.shouldDropAnchor` must stay in agreement with that
+  predicate (`DropTest` pins it).
+- Paper reaches NMS through `nmsLevelOf(world)`, which reflects `getHandle()` (CraftWorld's package carries the
+  Minecraft version, so it cannot be hardcoded) and falls back to `getDeclaredMethod` with access forced open,
+  because some Paper forks narrow that visibility.
+- Verification without Loom: the bridge can be exercised against stub VS classes with a hand-built
+  `K2JVMCompiler` classpath — compile once *without* the stub types (the absent path, which every non-VS server
+  takes) and once *with* them (the resolution path, including a matrix round-trip).
+
 ## Experimental Remote Control
 
 The Paper remote-control stick is experimental and uses a `PersistentDataContainer` entry named `remote_display_id`. A normal stick links to the nearest display under the player's look ray on right-click; the server adds a custom name and enchantment-glint override. Shift+right-click on a linked stick sends the experimental V3 `RemoteControlOpen` packet, and the client opens the linked `DisplayMenu` when that display is loaded. Keep the packet id append-only and validate the linked display server-side.

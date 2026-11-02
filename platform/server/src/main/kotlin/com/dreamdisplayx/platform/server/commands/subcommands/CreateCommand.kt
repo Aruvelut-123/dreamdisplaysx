@@ -6,6 +6,8 @@ import com.dreamdisplayx.api.display.geometry.SurfaceRole
 import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.platform.server.*
 import com.dreamdisplayx.platform.server.api.ServerVetoes
+import com.dreamdisplayx.platform.server.compat.nmsLevelOf
+import com.dreamdisplayx.platform.server.compat.stampShipAnchor
 import com.dreamdisplayx.platform.server.datatypes.selection.PaperSelectionData
 import com.dreamdisplayx.platform.server.datatypes.selection.VanillaSelectionData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -110,6 +112,14 @@ class CreateCommand : SubCommand {
         ) {
             displayData.access = DisplayAccess.REGION
         }
+
+        // Valkyrien Skies: remember which structure this panel rides on so the client can apply the
+        // ship-to-world matrix at render time. `nmsLevelOf` returns null when VS is absent or the
+        // world is not a Craft world, and `stampShipAnchor` keeps the row world-anchored in that case.
+        nmsLevelOf(displayData.pos1.world)?.let { level ->
+            stampShipAnchor(displayData, level, displayData.pos1.blockX, displayData.pos1.blockY, displayData.pos1.blockZ)
+        }
+
         SelectionManager.selectionPoints.remove(player.uniqueId)
 
         // Optional /display create <name> - same shape / uniqueness rules as /display rename.
@@ -259,6 +269,10 @@ object VanillaCreateCommand {
         }
 
         val displayData = sel.generateDisplayData(player.uuid)
+        stampShipAnchor(
+            displayData, ctx.source.level,
+            displayData.pos1.x, displayData.pos1.y, displayData.pos1.z,
+        )
 
         // Optional <name> on creation - same shape / uniqueness rules as /display rename.
         if (requestedName != null) {

@@ -10,6 +10,7 @@ import com.dreamdisplayx.core.addon.ServerAddonHost
 import com.dreamdisplayx.core.addon.ServerAddonHooks
 import com.dreamdisplayx.core.addon.ServerAddonEvents
 import com.dreamdisplayx.platform.server.PaperServer
+import com.dreamdisplayx.platform.server.compat.stampShipAnchor
 import com.dreamdisplayx.platform.server.datatypes.display.PaperDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.meta.Scheduler.runAsync
@@ -69,6 +70,8 @@ class PaperAddonHost : ServerAddonHost {
             rotation = DisplayRotation.NONE,
         )
         ServerVetoes.askCreate(data, null)?.let { return null }
+        // Same anchor the `/display create` path records, so an addon-built panel on a ship rides it too.
+        stampShipAnchor(data, bukkitWorld, x1, y1, z1)
         // DisplayManager.register publishes the `Created` event itself, so this path emits exactly once.
         DisplayManager.register(data)
         return data.toAddonDisplay()

@@ -11,6 +11,7 @@ import com.dreamdisplayx.core.addon.ServerAddonHooks
 import com.dreamdisplayx.core.addon.ServerAddonHost
 import com.dreamdisplayx.platform.server.ModLoaderOnly
 import com.dreamdisplayx.platform.server.VanillaServerState
+import com.dreamdisplayx.platform.server.compat.stampShipAnchor
 import com.dreamdisplayx.platform.server.datatypes.display.VanillaDisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.meta.ServerCoroutines
@@ -56,7 +57,7 @@ class VanillaAddonHost : ServerAddonHost {
         val server = VanillaServerState.server ?: return null
         // Resolving the level first rejects an unknown dimension exactly like the command does, instead of storing a
         // row that no player will ever be shown.
-        RegionUtil.getLevelByKey(server, world) ?: return null
+        val level = RegionUtil.getLevelByKey(server, world) ?: return null
         val region = RegionUtil.calculateRegion(BlockPos(x1, y1, z1), BlockPos(x2, y2, z2))
         val dir = facing.toDirection()
         val (width, height, _) = region.screenExtents(abs(dir.stepX), abs(dir.stepY), abs(dir.stepZ))
@@ -72,6 +73,8 @@ class VanillaAddonHost : ServerAddonHost {
             rotation = DisplayRotation.NONE,
         )
         ServerVetoes.askCreate(data, null)?.let { return null }
+        // Same anchor the `/display create` path records, so an addon-built panel on a ship rides it too.
+        stampShipAnchor(data, level, x1, y1, z1)
         // `DisplayManager.register` does not persist vanilla rows and publishes the `Created` event itself, so the save
         // stays here and the event is emitted exactly once.
         DisplayManager.register(data)

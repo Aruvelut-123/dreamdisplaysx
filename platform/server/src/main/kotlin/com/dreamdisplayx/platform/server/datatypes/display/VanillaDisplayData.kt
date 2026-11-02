@@ -45,7 +45,7 @@ class VanillaDisplayData(
     override val conforming: Boolean = false,
 
     /** Valkyrien Skies ship the block corners belong to, or `0` for a world-anchored display. */
-    override val shipId: Long = 0L,
+    override var shipId: Long = 0L,
 ) : BaseDisplayData(virtual) {
     /** Bounding box of the display area. */
     private val region = RegionUtil.calculateRegion(pos1, pos2)

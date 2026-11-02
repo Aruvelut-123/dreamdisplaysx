@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.server.managers
 
 import com.dreamdisplayx.core.addon.ServerAddonHooks
+import com.dreamdisplayx.api.display.geometry.ShipAnchorPolicy
 import com.dreamdisplayx.core.protocol.common.packets.DreamPacket
 import com.dreamdisplayx.platform.server.PaperServer.Companion.config
 import com.dreamdisplayx.platform.server.PaperServer.Companion.getInstance
@@ -354,6 +355,14 @@ object DisplayManager {
                 return@forEach
             }
 
+            // A ship-mounted display stores STRUCTURE-space coordinates. Looking those up in the world
+            // returns air (the blocks live inside the structure, not at that world position), so the
+            // census below would call every ship display dead and delete it on the next join. The
+            // physics mod is the only thing that can say whether the structure still exists, and it
+            // is not consulted here on purpose: silently deleting a player's display because a ship
+            // was momentarily unloaded is worse than leaving a stale row for an admin to clean up.
+            if (ShipAnchorPolicy.isShipAnchored(display.shipId)) return@forEach
+
             var hasBaseMaterial = false
             val minX = display.box.minX.toInt()
             val minY = display.box.minY.toInt()
@@ -510,6 +519,15 @@ object DisplayManager {
                 VanillaServerState.logger.warn("Skipping validation for display ${display.id}: dimension '${display.worldKey}' is not loaded.")
                 return@forEach
             }
+
+            // A ship-mounted display stores STRUCTURE-space coordinates. Reading them straight out of
+            // the level yields air (the blocks live inside the structure, not at that world position),
+            // so this census would mark every ship display dead and delete it on the next join. The
+            // physics mod alone can say whether the structure survives, and it is deliberately not
+            // consulted here: deleting a player's display because a ship happened to be unloaded is
+            // worse than leaving a stale row behind for an admin.
+            if (ShipAnchorPolicy.isShipAnchored(display.shipId)) return@forEach
+
             var hasBaseMaterial = false
             outerLoop@ for (x in display.minX..display.maxX) {
                 for (y in display.minY..display.maxY) {

@@ -1,5 +1,8 @@
 # 1.10.8.2 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
+## Server
+### Features
+- Valkyrien Skies support, first half: a display created on a ship records the ship it rides, and the base-material census no longer deletes ship displays for reading air at their structure coordinates.
 ## Client
 ### Features
 - Hotkeys now appear in `Options -> Controls`, so players can rebind the display menu, play/pause, the display toggle and fullscreen; all ship unbound.

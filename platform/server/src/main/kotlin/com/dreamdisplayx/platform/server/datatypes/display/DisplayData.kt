@@ -41,8 +41,16 @@ interface DisplayData {
      *
      * The coordinates stay in the ship's structure space, which is what `Level.clip` already reports on a
      * VS server, so a moving ship needs no row rewrite: only rendering applies the ship-to-world matrix.
+     *
+     * Declared as a `var` whose default setter ignores the write, so `CreateCommand` can stamp the
+     * anchor through the plain interface on either platform. Both real implementations override it with
+     * a stored property; a future implementation that anchors everywhere would keep the no-op default.
      */
-    val shipId: Long get() = 0L
+    var shipId: Long
+        get() = 0L
+        set(_) {
+            // World-anchored implementations and synthetic displays have nothing to remember.
+        }
 
     /** Content rotation; only meaningful for floor / ceiling (`UP` / `DOWN`) facings. */
     val rotation: DisplayRotation
