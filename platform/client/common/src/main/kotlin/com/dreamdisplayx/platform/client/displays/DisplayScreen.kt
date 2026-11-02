@@ -106,6 +106,14 @@ class DisplayScreen(
 
     /** True when the picture hugs slabs and stairs instead of one flat quad. */
     var conforming: Boolean = false,
+
+    /**
+     * Valkyrien Skies ship the anchor coordinates belong to, or `0` for a world-anchored display.
+     *
+     * [x] / [y] / [z] stay in the ship's structure space, so a moving ship needs no data update here:
+     * the renderer applies the ship-to-world matrix around the usual block translation.
+     */
+    var shipId: Long = 0L,
 ) {
     /** Per-display client settings (volume, quality, mute, ...) loaded from disk. */
     internal val savedSettings = ClientSettingsStore.getSettings(uuid, defaultVolume(), defaultStretchMode())
@@ -766,6 +774,7 @@ class DisplayScreen(
         height = packet.height
         depth = packet.depth.coerceAtLeast(1)
         conforming = packet.conforming
+        shipId = packet.shipId
 
         val nextMode = if (packet.mode == PlaybackMode.LOCAL.wire && packet.isSync) {
             PlaybackMode.SYNCED

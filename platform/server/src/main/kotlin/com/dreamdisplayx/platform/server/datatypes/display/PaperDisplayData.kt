@@ -44,6 +44,9 @@ class PaperDisplayData(
 
     /** True when the screen wraps slabs and stairs inside the box. */
     override val conforming: Boolean = false,
+
+    /** Valkyrien Skies ship the block corners belong to, or `0` for a world-anchored display. */
+    override val shipId: Long = 0L,
 ) : BaseDisplayData(virtual) {
     /** Bounding box of the display area. */
     private val region = RegionUtil.calculateRegion(pos1, pos2)

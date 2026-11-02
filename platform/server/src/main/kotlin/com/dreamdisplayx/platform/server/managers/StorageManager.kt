@@ -79,6 +79,12 @@ class DisplaysTable(prefix: String = "") : Table("${prefix}displays") {
     /** Integer representing the facing direction and rotation of the display. */
     val facing = integer("facing")
 
+    /**
+     * Valkyrien Skies ship the stored block coordinates belong to. `0` means a world-anchored display,
+     * which is what every row written before this column existed reads as.
+     */
+    val shipId = long("shipId").default(0L)
+
     /** Boolean indicating whether the display is synchronized across clients. */
     val isSync = bool("isSync")
 
@@ -281,6 +287,7 @@ class StorageManager(
             Location(world, x2.toDouble(), y2.toDouble(), z2.toDouble()),
             w, h, facing, rotation,
             conforming = unpackConforming(row[table.facing]),
+            shipId = row[table.shipId],
         ).applyCommon(row)
     }
 
@@ -313,6 +320,7 @@ class StorageManager(
             BlockPos(x1, y1, z1), BlockPos(x2, y2, z2),
             w, h, facing, rotation,
             conforming = unpackConforming(row[table.facing]),
+            shipId = row[table.shipId],
         ).applyCommon(row)
     }
 
@@ -328,6 +336,7 @@ class StorageManager(
                 it[pos2] = p2
                 it[size] = packInts(data.width, data.height)
                 it[facing] = facingOrd
+                it[shipId] = data.shipId
                 it[isSync] = data.isSync
                 it[duration] = data.duration
                 it[lang] = data.lang

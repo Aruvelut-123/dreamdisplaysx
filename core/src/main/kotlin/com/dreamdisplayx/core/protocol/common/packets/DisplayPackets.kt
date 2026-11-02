@@ -45,6 +45,15 @@ data class DisplayInfo(
     @ProtoNumber(24) val depth: Int = 1,
     /** True when the display is drawn as one conforming sheet draped over the terrain instead of per-block quads. */
     @ProtoNumber(25) val conforming: Boolean = false,
+    /**
+     * Platform id of the moving structure this display rides (`0` = anchored in the world).
+     *
+     * The block coordinates above stay in the structure's own space, so this is the only extra datum
+     * the client needs to place the screen: the transform itself is resolved from the live world.
+     * Older peers ignore the field and draw the display at its raw coordinates, which is exactly
+     * where a structure-space display sits when no structure is resolved.
+     */
+    @ProtoNumber(26) val shipId: Long = 0L,
 ) : DreamPacket
 
 /** Removes a display (server broadcast) or requests its deletion (client action). */

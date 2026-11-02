@@ -36,6 +36,14 @@ interface DisplayData {
     /** True when the screen hugs slabs and stairs instead of a single flat quad. Old rows leave this false. */
     val conforming: Boolean get() = false
 
+    /**
+     * Valkyrien Skies ship this display's block coordinates belong to, or `0` when it is anchored to the world.
+     *
+     * The coordinates stay in the ship's structure space, which is what `Level.clip` already reports on a
+     * VS server, so a moving ship needs no row rewrite: only rendering applies the ship-to-world matrix.
+     */
+    val shipId: Long get() = 0L
+
     /** Content rotation; only meaningful for floor / ceiling (`UP` / `DOWN`) facings. */
     val rotation: DisplayRotation
 

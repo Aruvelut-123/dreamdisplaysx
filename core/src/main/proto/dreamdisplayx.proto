@@ -146,6 +146,8 @@ message DisplayInfo {
   optional int32 depth = 24;
   // WARNING: a default value decoded when value is missing
   optional bool conforming = 25;
+  // WARNING: a default value decoded when value is missing
+  optional int64 shipId = 26;
 }
 
 // serial name 'com.dreamdisplayx.core.protocol.common.packets.DisplayDelete'

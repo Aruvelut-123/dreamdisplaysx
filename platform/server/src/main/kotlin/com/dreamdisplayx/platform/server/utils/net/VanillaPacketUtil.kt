@@ -50,6 +50,7 @@ object VanillaPacketUtil {
         scheduledAction = display.scheduledAction?.wire ?: -1, positionNanos = display.seekPositionNanos,
         depth = display.depth,
         conforming = DisplayCapabilityPolicy.conformingFor(display.conforming, supportsConforming),
+        shipId = display.shipId,
     )
 
     /** Unknown or legacy peers receive a flat representation until they advertise field 29. */

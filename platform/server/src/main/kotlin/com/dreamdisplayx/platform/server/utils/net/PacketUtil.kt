@@ -33,6 +33,7 @@ object PacketUtil {
         isRegionMember: ((Player) -> Boolean)? = null,
         depth: Int = 1,
         conforming: Boolean = false,
+        shipId: Long = 0L,
     ) {
         val info = DisplayInfo(
             id = id, ownerId = ownerId, x = position.blockX, y = position.blockY, z = position.blockZ,
@@ -42,7 +43,7 @@ object PacketUtil {
             scheduledStartEpochMillis = scheduledStartEpochMillis, scheduledAction = scheduledAction,
             positionNanos = positionNanos,
             access = access.wire, inRegion = inRegion,
-            depth = depth.coerceAtLeast(1), conforming = conforming,
+            depth = depth.coerceAtLeast(1), conforming = conforming, shipId = shipId,
         )
         val recipients = players.filterNotNull()
         if (access == DisplayAccess.REGION && isRegionMember != null) {

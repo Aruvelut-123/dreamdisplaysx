@@ -68,4 +68,5 @@ internal fun DisplayScreen.toFullDisplayData(): FullDisplayData = FullDisplayDat
     rotation = rotation.quarterTurns,
     qualityCap = qualityCap,
     dimensionKey = dimensionKey,
+    shipId = shipId,
 )

@@ -37,4 +37,12 @@ data class FullDisplayData(
     var rotation: Int = 0,
     var qualityCap: Int = 0,
     var dimensionKey: String = "",
+    /**
+     * Valkyrien Skies ship the block coordinates belong to, or `0` for a display anchored to the world.
+     *
+     * The block position is always expressed in the *structure* space of that ship, so nothing else has
+     * to change when a ship moves: only rendering has to multiply by the ship-to-world matrix. `0` is the
+     * world sentinel, so every row written before this column existed keeps meaning "not on a ship".
+     */
+    var shipId: Long = 0L,
 )

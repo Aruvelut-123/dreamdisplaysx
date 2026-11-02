@@ -78,7 +78,7 @@ object DisplayLifecycleManager {
             packet.width, packet.height, packet.url, packet.lang,
             mode, packet.qualityCap, DisplayRotation.fromQuarterTurns(packet.rotation),
             positionNanos = packet.positionNanos,
-            currentDimensionKey(), packet.depth, packet.conforming,
+            currentDimensionKey(), packet.depth, packet.conforming, packet.shipId,
         )
         DisplayRegistry.screens[packet.id]?.virtual = packet.virtual
     }
@@ -105,6 +105,7 @@ object DisplayLifecycleManager {
             rotation = DisplayRotation.fromQuarterTurns(packet.rotation).quarterTurns,
             qualityCap = packet.qualityCap,
             dimensionKey = dimensionKey,
+            shipId = packet.shipId,
         )
     }
 
@@ -115,12 +116,12 @@ object DisplayLifecycleManager {
         mode: PlaybackMode, qualityCap: Int, rotation: DisplayRotation = DisplayRotation.NONE,
         positionNanos: Long = 0,
         dimensionKey: String = currentDimensionKey(),
-        depth: Int = 1, conforming: Boolean = false,
+        depth: Int = 1, conforming: Boolean = false, shipId: Long = 0L,
     ) {
         val displayScreen = DisplayScreen(
             uuid, ownerUuid, pos.x(), pos.y(), pos.z(), facingUtil.toDisplayFacing(),
             width, height, mode, qualityCap, rotation, dimensionKey,
-            depth.coerceAtLeast(1), conforming,
+            depth.coerceAtLeast(1), conforming, shipId,
         )
 
         // A server-persisted seek position overrides the local cache, so a restart resumes rather than replays.
@@ -172,7 +173,7 @@ object DisplayLifecycleManager {
             data.width, data.height, data.mode ?: PlaybackMode.LOCAL,
             qualityCap = data.qualityCap, rotation = DisplayRotation.fromQuarterTurns(data.rotation),
             dimensionKey = data.dimensionKey.ifEmpty { currentDimensionKey() },
-            depth = data.depth, conforming = data.conforming,
+            depth = data.depth, conforming = data.conforming, shipId = data.shipId,
         )
         displayScreen.savedTimeNanos = data.currentTimeNanos
         displayScreen.volume = data.volume

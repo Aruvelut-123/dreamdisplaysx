@@ -137,4 +137,25 @@ class RoundTripTest {
         assertEquals(PacketDirection.SERVER_TO_CLIENT, PacketRegistry.directionOf(ServerHello()))
         assertEquals(PacketDirection.BIDIRECTIONAL, PacketRegistry.directionOf(DisplaySync()))
     }
+
+    /** A display riding a moving structure keeps its block coordinates and adds only the structure id. */
+    @Test
+    fun displayInfoShipIdRoundTrips() = roundTrip(
+        DisplayInfo(
+            id = id, ownerId = owner,
+            x = -3012, y = -64, z = 29_999_871, width = 4, height = 3,
+            url = "https://example.com/on-a-ship.mp4", facing = 2,
+            shipId = 0x0123_4567_89AB_CDEFL,
+        )
+    )
+
+    /**
+     * Field 26 is optional with a zero default, so a peer that never sends it — every build that predates
+     * Valkyrien Skies support — decodes as a world-anchored display instead of failing the packet.
+     */
+    @Test
+    fun displayInfoWithoutShipIdReadsAsWorldAnchor() {
+        val decoded = ProtoBuf { }.decodeFromByteArray(DisplayInfo.serializer(), ByteArray(0))
+        assertEquals(0L, decoded.shipId)
+    }
 }
