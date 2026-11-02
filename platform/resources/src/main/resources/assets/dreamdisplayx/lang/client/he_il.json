@@ -117,5 +117,11 @@
   "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
   "dreamdisplayx.suggestions.no_links": "אין עדיין קישורים שמורים. הדביקו קישור לסרטון למעלה כדי להפעיל אותו.",
   "dreamdisplayx.debug.commit": "unknown",
-  "dreamdisplays.message.outdated_server": "גרסת Dream DisplaysX בשרת זה ישנה מדי, ולכן לא ניתן להשתמש כאן במסכים. בקש ממנהלי השרת לעדכן אותה"
+  "dreamdisplays.message.outdated_server": "גרסת Dream DisplaysX בשרת זה ישנה מדי, ולכן לא ניתן להשתמש כאן במסכים. בקש ממנהלי השרת לעדכן אותה",
+  "key.categories.dreamdisplayx": "Dream Displays",
+  "key.category.dreamdisplayx.hotkeys": "Dream Displays",
+  "key.dreamdisplayx.open_menu": "פתיחת תפריט התצוגה",
+  "key.dreamdisplayx.toggle_playback": "הפעלה / השהיה של התצוגה",
+  "key.dreamdisplayx.toggle_displays": "הפעלה / השבתה של תצוגות",
+  "key.dreamdisplayx.fullscreen": "תצוגה במסך מלא"
 }

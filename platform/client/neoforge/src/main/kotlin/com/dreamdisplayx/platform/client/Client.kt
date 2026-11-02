@@ -47,6 +47,9 @@ class Client(modEventBus: IEventBus) : DreamMod {
         //? if >=26 {
         modEventBus.addListener(::onRegisterDebugEntries)
         //?}
+        // `RegisterKeyMappingsEvent` is an IModBusEvent, so it must go through modEventBus; on the
+        // game bus it would simply never fire and the hotkeys would stay invisible in Controls.
+        modEventBus.addListener(NeoForgeHotkeyRegistration::onRegister)
 
         // Payload registration lives entirely in NeoForgeServer.registerPayloads (see
         // platform/server/.../Main.kt): that class loads unconditionally on every dist, unlike this

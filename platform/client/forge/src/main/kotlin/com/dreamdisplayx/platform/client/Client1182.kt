@@ -52,6 +52,9 @@ object Client : Mod {
         Initializer.onModInit(this)
 
         MinecraftForge.EVENT_BUS.register(this)
+        // Hotkeys in Options -> Controls. The mod bus carries RegisterKeyMappingsEvent; the game bus
+        // would never deliver it.
+        ForgeHotkeyRegistration.register()
     }
 
     @SubscribeEvent

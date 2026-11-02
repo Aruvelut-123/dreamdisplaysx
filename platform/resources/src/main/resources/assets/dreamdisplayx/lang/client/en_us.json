@@ -231,5 +231,11 @@
   "dreamdisplayx.config.cdn.cosov": "cosov (Tencent Cloud, overseas)",
   "dreamdisplayx.config.cdn.hwov": "hwov (Huawei Cloud, overseas)",
   "dreamdisplayx.config.cdn.hk_bcache": "hk_bcache (Bilibili, overseas)",
-  "dreamdisplays.message.outdated_server": "This server's Dream DisplaysX is too old, so displays can't be used here. Ask the server admins to update it"
+  "dreamdisplays.message.outdated_server": "This server's Dream DisplaysX is too old, so displays can't be used here. Ask the server admins to update it",
+  "key.categories.dreamdisplayx": "Dream Displays",
+  "key.category.dreamdisplayx.hotkeys": "Dream Displays",
+  "key.dreamdisplayx.open_menu": "Open display menu",
+  "key.dreamdisplayx.toggle_playback": "Play / pause display",
+  "key.dreamdisplayx.toggle_displays": "Enable / disable displays",
+  "key.dreamdisplayx.fullscreen": "Display fullscreen"
 }

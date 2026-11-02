@@ -72,6 +72,9 @@ object Client : Mod {
         // get a client-only command (/dlogin, /dlogoff). This module previously registered none,
         // so both commands answered "unknown or incomplete command" on 1.18.2-1.20.1 Forge.
         MinecraftForge.EVENT_BUS.addListener(this::onRegisterClientCommands)
+        // `RegisterKeyMappingsEvent` lives on the mod bus, not the game bus, and is the only way to
+        // get the hotkeys into Options -> Controls on Forge.
+        ForgeHotkeyRegistration.register()
     }
 
     /** On server join event. */

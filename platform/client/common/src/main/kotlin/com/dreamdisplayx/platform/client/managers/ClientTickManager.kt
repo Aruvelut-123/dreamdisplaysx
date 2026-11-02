@@ -62,6 +62,9 @@ object ClientTickManager {
     /** Main per-tick update: level changes, hover, render-distance (un)loading, and the menu shortcut. */
     fun tick(minecraft: Minecraft) {
         tickCount++
+        // Hotkeys rebound in Options -> Controls are polled first: `consumeClick()` reports a press
+        // exactly once, and a display toggle must not be delayed behind display (un)loading work.
+        pollHotkeys(minecraft)
         // ReplayMod owns the camera timeline while a replay is open. Keep Dream DisplaysX media
         // rendering alive, but prevent replay-only state from being persisted upstream.
         DreamServices.registry.getOrNull<ClientApplication>()
@@ -188,6 +191,22 @@ object ClientTickManager {
                 )
             }
             wasPressed = pressed
+        }
+    }
+
+    /**
+     * Runs the `Options -> Controls` hotkeys that fired since the previous tick.
+     *
+     * Polling is gated on [DisplayHotkeyActions.canRunWorldHotkeys] so a press that arrives while a
+     * screen is open stays queued in the `KeyMapping` instead of being consumed by a world action:
+     * opening the inventory must not pause a display behind the GUI.
+     */
+    private fun pollHotkeys(minecraft: Minecraft) {
+        if (!DisplayHotkeyActions.canRunWorldHotkeys(minecraft)) return
+        // The catalog is the source of truth, so a binding that exists but has no loader-registered
+        // mapping simply reports nothing and costs one map lookup.
+        for (binding in DisplayHotkeys.ALL) {
+            if (ModKeyMappings.consume(binding.id)) DisplayHotkeyActions.run(binding.id)
         }
     }
 

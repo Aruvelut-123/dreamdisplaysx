@@ -117,5 +117,11 @@
   "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
   "dreamdisplayx.suggestions.no_links": "Nessun link salvato. Incolla sopra un link a un video per riprodurlo.",
   "dreamdisplayx.debug.commit": "unknown",
-  "dreamdisplays.message.outdated_server": "La versione di Dream DisplaysX di questo server è troppo vecchia, quindi qui non è possibile usare gli schermi. Chiedi agli amministratori di aggiornarla"
+  "dreamdisplays.message.outdated_server": "La versione di Dream DisplaysX di questo server è troppo vecchia, quindi qui non è possibile usare gli schermi. Chiedi agli amministratori di aggiornarla",
+  "key.categories.dreamdisplayx": "Dream Displays",
+  "key.category.dreamdisplayx.hotkeys": "Dream Displays",
+  "key.dreamdisplayx.open_menu": "Apri menu display",
+  "key.dreamdisplayx.toggle_playback": "Riproduci / metti in pausa il display",
+  "key.dreamdisplayx.toggle_displays": "Attiva / disattiva i display",
+  "key.dreamdisplayx.fullscreen": "Display a schermo intero"
 }

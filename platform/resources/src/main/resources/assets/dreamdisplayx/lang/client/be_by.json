@@ -117,5 +117,11 @@
   "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
   "dreamdisplayx.suggestions.no_links": "Захаваных спасылак пакуль няма. Устаўце спасылку на відэа вышэй, каб уключыць яго.",
   "dreamdisplayx.debug.commit": "unknown",
-  "dreamdisplays.message.outdated_server": "Версія Dream DisplaysX на гэтым серверы занадта старая, таму дысплеі тут недаступныя. Папрасіце адміністрацыю сервера абнавіць яе"
+  "dreamdisplays.message.outdated_server": "Версія Dream DisplaysX на гэтым серверы занадта старая, таму дысплеі тут недаступныя. Папрасіце адміністрацыю сервера абнавіць яе",
+  "key.categories.dreamdisplayx": "Dream Displays",
+  "key.category.dreamdisplayx.hotkeys": "Dream Displays",
+  "key.dreamdisplayx.open_menu": "Адкрыць меню дысплея",
+  "key.dreamdisplayx.toggle_playback": "Прайграць / паставіць на паўзу",
+  "key.dreamdisplayx.toggle_displays": "Уключыць / выключыць дысплеі",
+  "key.dreamdisplayx.fullscreen": "Дысплей на ўвесь экран"
 }

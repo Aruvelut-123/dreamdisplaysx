@@ -18,7 +18,14 @@ object ClientInputModule : DreamDisplaysXModule {
         val services = context.services
         services.register<DisplayInteractionService>(MinecraftDisplayInteractionService)
         services.register<KeyBindingRegistry>(
-            DefaultKeyBindingRegistry().apply { register(DisplayMenuInputHandler.OPEN_MENU_BINDING) },
+            DefaultKeyBindingRegistry().apply {
+                register(DisplayMenuInputHandler.OPEN_MENU_BINDING)
+                // Every Controls-rebindable hotkey is also a registry entry, so a consumer that only
+                // knows `KeyBindingRegistry` (e.g. the legacy right-click path) still resolves it.
+                DisplayHotkeys.ALL
+                    .filter { it.id != DisplayMenuInputHandler.OPEN_MENU_BINDING_ID }
+                    .forEach(::register)
+            },
         )
         services.register<InputHandler>(
             CompositeInputHandler().apply { register(DisplayMenuInputHandler()) },

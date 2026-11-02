@@ -279,6 +279,11 @@ class Client : ClientModInitializer, Mod {
         }
 
         ClientLifecycleEvents.CLIENT_STOPPING.register { Initializer.onStop() }
+
+        // Opt-in hotkeys in Options -> Controls. Registered last so a failure here cannot stop the
+        // packet/render wiring above from coming up; Fabric needs the loader hook because
+        // `KeyMapping` alone only lands in the vanilla list if `KeyBindingHelper` adds it.
+        FabricHotkeyRegistration.register()
     }
 
     /**

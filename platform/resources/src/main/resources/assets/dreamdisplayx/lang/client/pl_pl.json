@@ -117,5 +117,11 @@
   "dreamdisplayx.ui.playlist_end_loop": "Loop queue",
   "dreamdisplayx.suggestions.no_links": "Brak zapisanych linków. Wklej powyżej link do filmu, aby go odtworzyć.",
   "dreamdisplayx.debug.commit": "unknown",
-  "dreamdisplays.message.outdated_server": "Wersja Dream DisplaysX na tym serwerze jest zbyt stara, więc nie można tu używać ekranów. Poproś administrację serwera o aktualizację"
+  "dreamdisplays.message.outdated_server": "Wersja Dream DisplaysX na tym serwerze jest zbyt stara, więc nie można tu używać ekranów. Poproś administrację serwera o aktualizację",
+  "key.categories.dreamdisplayx": "Dream Displays",
+  "key.category.dreamdisplayx.hotkeys": "Dream Displays",
+  "key.dreamdisplayx.open_menu": "Otwórz menu ekranu",
+  "key.dreamdisplayx.toggle_playback": "Odtwórz / wstrzymaj ekran",
+  "key.dreamdisplayx.toggle_displays": "Włącz / wyłącz ekrany",
+  "key.dreamdisplayx.fullscreen": "Ekran pełnoekranowy"
 }

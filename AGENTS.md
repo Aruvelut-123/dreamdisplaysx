@@ -623,6 +623,53 @@ Flashback support is experimental and reflection-only. Flashback is a Fabric cli
 1. Danmaku track spacing doesn't scale with font size (hardcoded trackCount=8, 26px) — legacy note from upstream; the current danmaku implementation uses dynamic lane layout.
 2. SettingsSection scissor clipping works but controls are placed every frame
 
+## Hotkeys in `Options -> Controls`
+
+`DisplayHotkeys` is the catalog of bindings a player may rebind; a loader must turn each entry into a real
+`KeyMapping` or it never appears in vanilla's Controls screen. Three version facts are easy to get wrong and
+all three were verified against the actual jars, not from memory:
+
+- **`KeyMapping`'s category argument changed in 1.21.11.** Below it: `(String, int, String)` /
+  `(String, Type, int, String)`, category is a translation-key string. From 1.21.11: the fourth parameter is
+  `KeyMapping.Category`, a record around an `Identifier`. The category *translation key* changes with it —
+  legacy is `key.categories.<ns>`, the record form derives `key.category.<ns>.<path>`. Lang files carry
+  **both** spellings (`key.categories.dreamdisplayx` and `key.category.dreamdisplayx.hotkeys`).
+- **`InputConstants.Type.KEYSYM` was renamed to `KEYBOARD` in 26.3**, and `SCANCODE` was removed. 26.1.2 and
+  26.2 still expose `KEYSYM`/`SCANCODE`/`MOUSE`; 26.3 has only `KEYBOARD`/`MOUSE`. `HotkeyKeyMappings`
+  routes this through one `keyboardType` property gated `//? if >=26.3`.
+- **Forge 1.18.2 has no `RegisterKeyMappingsEvent`.** The class first appears in the 1.19.x branch, and
+  `net.minecraftforge.client.ClientRegistry` (with `registerKeyBinding(KeyMapping)`) was *removed* from the
+  1.19.4/1.20.1 universal jars. So `ForgeHotkeyRegistration` has two branches: `>=1.19` listens on the mod
+  bus, `<1.19` calls `ClientRegistry` directly. The mod bus is
+  `FMLJavaModLoadingContext.get().modEventBus` — **not** `ModLoadingContext.get().activeContainer`, which
+  has no event bus at all (`ModContainer` exposes none) and is a private field.
+
+`Category.register` is `@Deprecated` on NeoForge 1.21.11+ in favour of
+`RegisterKeyMappingsEvent.registerCategory`, but the patch only adds the annotation: the body still appends
+to `SORT_ORDER` and the mapping still groups correctly. The call carries `@Suppress("DEPRECATION")` in
+common code rather than forcing a NeoForge type into a file Fabric and Forge also compile.
+
+The in-menu keys (`Space`, arrows, `M`, `F`, `P`, digits) intentionally stay out of the catalog: they belong
+to `DisplayMenu.keyPressed` and are contextual, and making them global bindings would collide with jump,
+chat, offhand swap and the hotbar.
+
+Chisel note for these files: a `//?} else` branch must open its commented body with `/*` on the next line.
+A `//? if ... {` whose body must be *kept* is emitted verbatim, so wrapping live code in `/* ... */` inside a
+true branch comments it out — hence the separate `//? if <1.19 { /* ... */ //?}` blocks instead of an inline
+`/*` on the same line as the marker.
+
+`ModKeyMappingsTest` and `DisplayHotkeysTest` live in `platform/client/common/src/test` and cover the id
+routing and the catalog invariants. That module is **not** in the `unit-test` CI job (which runs `:api` and
+`:core` only — see the Testing section), so those two tests are currently executed locally only. Do not add
+`:platform:client:common:test` to the job until it has been run green somewhere, or the first red build
+belongs to pre-existing breakage.
+
+Local verification without Loom: `chiselSource` from `gradle/src/main/kotlin/support/chisel/Chisel.kt` is
+pure Kotlin, so the generated per-version output can be reproduced by calling it directly with a hand-built
+Kotlin compiler classpath, then compiled against small stub classes for `KeyMapping`/`InputConstants`. That
+is how the 1.20.1 and 26.3 shapes above were checked while `./gradlew :platform:client:common:help` fails
+offline on the missing Loom plugin.
+
 ## AI Language Policy
 - 所有与本项目相关的 AI 回复和思考必须使用**中文**，以确保更好的理解。
 - AI 助手必须以猫娘风格（本喵 / 主人大人）回应，使用中文。

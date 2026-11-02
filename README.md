@@ -90,6 +90,7 @@ Paper 是跨版本单插件，一个 jar 覆盖 1.21.1 – 26.3；Velocity 与 B
 - RTMP / RTMPS / SRT 推流输入
 - libvlc 播放引擎（JNA 调用原生库，视频与音频独立时钟）
 - Fabric / Forge / NeoForge / Paper / Velocity / BungeeCord 全平台构建
+- 快捷键接入 Minecraft 原生「选项 → 控制」，玩家可自行改键（默认未绑定）
 
 # Android（PojavLauncher / FCL / Zalith）
 
