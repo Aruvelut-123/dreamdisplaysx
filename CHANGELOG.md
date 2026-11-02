@@ -1,3 +1,16 @@
+# 1.10.8.2 Release
+Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
+
+## Server
+### Features
+- The server half of the addon API now works: `DreamDisplaysServer` was publishable but had no implementation, so an addon on a server got nothing.
+
+## Client
+### Features
+- Addons for Dream Displays now host on this fork with **one** annotation family (`@Addon`) and one manager, so an addon built upstream and a fork-only addon share the same dependency graph and teardown order.
+- Added fork-only handlers on an ordinary `@Addon` class: `@OnQualityChanged`, `@OnVolumeChanged`, `@OnBrightnessChanged`, `@OnPlaybackPosition`, `@OnStateChanged`, `@OnFirstFrame` and `@OnEnded`.
+- Added `DreamDisplaysX.service()` / `displayService()` / `display()` / `displays()`, so an addon reaches this fork's services without depending on Minecraft classes.
+
 # 1.10.8.1 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
 ## Server
