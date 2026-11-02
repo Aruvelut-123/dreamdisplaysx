@@ -524,6 +524,9 @@ Every code change MUST be followed by ALL of the below before the task is consid
 ### Testing
 - Unit-test pure logic: policies (`RetryPolicy`), helpers (`MediaUtil`), parsers, state machines. Do not assert on native/libvlc behavior — those paths are covered by manual smoke tests only.
 - When touching a module that has no tests yet, add at least one focused test for the new/changed behavior instead of leaving it uncovered.
+- **CI runs unit tests** since the `unit-test` job landed in `_build.yml`. It currently covers `:api` and `:core` only — the two modules whose tests are pure JVM and were verified green (199 tests). The remaining modules (`:util`, `:media:*`, `:platform:*`, ~83 test files) still have **never-executed** test sources; enable them one module at a time only after `./gradlew :<module>:test` is green locally, otherwise the first red CI belongs to pre-existing breakage rather than to the change under review.
+- That job deliberately has no `needs:` and no version matrix: `:api`/`:core` carry no chisel output, so it runs on a bare JDK 25 in ~1 minute, independent of the 10-version build. Do not fold it into `build`; that would pay the 10x matrix cost for a JVM-only check.
+- `SchemaDriftTest` reads `src/main/proto/dreamdisplayx.proto` **relative to the working directory**, which Gradle sets to the module dir. Running it by hand from the repo root fails with a misleading "schema is out of date"; `cd core && ...` passes. Do not "fix" the schema in response to that failure.
 
 ### Task Tracking (MANDATORY)
 Every task MUST be tracked in the session's `todo` task list at all times:
@@ -552,6 +555,12 @@ Every task MUST be tracked in the session's `todo` task list at all times:
 
 - `_build.yml` — Main build workflow (multi-version)
 - `release.yml` — Release pipeline (dev/preview/release)
+
+### Which workflow triggers on what
+- `ci.yml` runs on push/PR to `main`, but its `paths-ignore` covers `*.md`, `docs/**`, `SESSION_TASKS.md`, `.gitignore`, `.github/**` and `native/libvlc/**`. Two consequences that bite in practice:
+  - A commit that only edits a workflow file, `AGENTS.md` or `CHANGELOG.md` **does not trigger CI at all**. Verify workflow changes with `gh workflow run ci.yml --ref <branch>` (or push a code change alongside) instead of waiting for a run that never appears.
+  - Editing `gradle.properties` (a version bump) *does* trigger the full matrix.
+- `_build.yml` holds all four jobs: `metadata`, `download-natives`, `unit-test`, `build` (10-version matrix). `unit-test` and `build` are siblings on purpose — see the Testing section.
 
 ### Version Format
 - **Version in `gradle.properties`** always has `-dev` suffix (e.g. `1.9.3.1-dev`), matching upstream convention
