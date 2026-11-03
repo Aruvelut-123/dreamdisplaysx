@@ -1,9 +1,9 @@
 package com.dreamdisplayx.platform.server.storage
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.playback.model.PipPinRecord
 import com.dreamdisplayx.util.json.JsonFileStore
 import kotlinx.serialization.builtins.ListSerializer
-import org.slf4j.LoggerFactory
 
 /**
  * JSON persistence for player-to-display Picture-in-Picture pins, so a pinned display's info can be
@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
  * no per-server keying.
  */
 object PipPinStore {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/PipPinStore")
+    private val logger = DreamLog.of("PipPinStore")
     private const val SCHEMA_VERSION = 1
     private const val FILE_NAME = "pip-pins.json"
     private val jsonFiles = JsonFileStore()
@@ -19,11 +19,11 @@ object PipPinStore {
 
     /** Loads every persisted pin, or an empty list if none are saved yet. */
     fun load(): List<PipPinRecord> =
-        jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), listSerializer, SCHEMA_VERSION, logger) ?: emptyList()
+        jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), listSerializer, SCHEMA_VERSION, logger.delegate) ?: emptyList()
 
     /** Overwrites the store with [records]. */
     fun save(records: List<PipPinRecord>) {
-        if (!jsonFiles.ensureDir(logger)) return
-        jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), listSerializer, records, SCHEMA_VERSION, logger)
+        if (!jsonFiles.ensureDir(logger.delegate)) return
+        jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), listSerializer, records, SCHEMA_VERSION, logger.delegate)
     }
 }

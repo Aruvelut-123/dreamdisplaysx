@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.playback
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.core.protocol.common.packets.RemotePlaybackToggle
@@ -9,7 +10,6 @@ import com.dreamdisplayx.platform.server.meta.ServerCoroutines
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
@@ -21,7 +21,7 @@ import kotlin.time.Instant
  */
 object ScheduledPlaybackManager {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ScheduledPlaybackManager")
+    private val logger = DreamLog.of("ScheduledPlaybackManager")
 
     /** Live platform transport, injected at startup. */
     private lateinit var transport: PlaybackTransport

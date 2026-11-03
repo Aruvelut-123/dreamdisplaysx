@@ -1,14 +1,14 @@
 package com.dreamdisplayx.util
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.coroutines.launch
-import org.slf4j.LoggerFactory
 
 /** Checks mod updates against the latest stable GitHub release. **/
 object UpdateCheck {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/UpdateCheck")
+    private val logger = DreamLog.of("UpdateCheck")
 
     /** GitHub releases API. */
     private const val API = "https://api.github.com/repos/Aruvelut-123/dreamdisplaysx/releases/latest"

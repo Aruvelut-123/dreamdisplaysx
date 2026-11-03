@@ -2,12 +2,12 @@
 
 package com.dreamdisplayx.media.player.process
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.media.player.managers.LibVlc
 import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.sun.jna.Native
 import com.sun.jna.Pointer
-import org.slf4j.LoggerFactory
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -34,7 +34,7 @@ import javax.imageio.ImageIO
  * `JNA: callback object has been garbage collected` / `Invalid memory access`.
  */
 object LibVlcFrameExtractor {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcFrameExtractor")
+    private val logger = DreamLog.of("LibVlcFrameExtractor")
 
     private const val SETUP_TIMEOUT_MS = 15_000L
 

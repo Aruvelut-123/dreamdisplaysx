@@ -1,7 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.media.player.process.LibVlcFrameExtractor
-import org.slf4j.LoggerFactory
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -23,7 +23,7 @@ import java.util.concurrent.Executors
  *    shimmer — the search panel must never block or crash on a thumbnail.
  */
 object FirstFrameThumbnails {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/FirstFrameThumbnails")
+    private val logger = DreamLog.of("FirstFrameThumbnails")
 
     private val executor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "DDX-FirstFrame").apply { isDaemon = true }

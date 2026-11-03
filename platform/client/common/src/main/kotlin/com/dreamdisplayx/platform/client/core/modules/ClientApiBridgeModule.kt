@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.core.modules
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplays.api.internal.ApiHolder
 import com.dreamdisplays.core.addon.AddonManager
 import com.dreamdisplays.core.addon.ClientAddonBinder
@@ -16,7 +17,6 @@ import com.dreamdisplayx.api.runtime.registry.service.get
 import com.dreamdisplayx.api.watchparty.service.keys.WatchPartyServices
 import com.dreamdisplayx.core.addon.ForkHandlersBinder
 import com.dreamdisplays.api.addon.AddonSide
-import org.slf4j.LoggerFactory
 
 /**
  * Publishes the upstream-compatible `DreamDisplays` API on the client and hosts the addons registered through it.
@@ -54,7 +54,7 @@ object ClientApiBridgeModule : DreamDisplaysXModule {
     )
 
     /** Logger. */
-    private val logger = LoggerFactory.getLogger(ClientApiBridgeModule::class.java)
+    private val logger = DreamLog.of("ClientApiBridgeModule")
 
     /**
      * The client registry, captured at install.

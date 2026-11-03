@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.client.utils.withChatColor
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
@@ -11,12 +12,11 @@ import com.dreamdisplayx.platform.client.managers.ClientPacketManager
 import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
-import org.slf4j.LoggerFactory
 
 /** Experimental protocol routing seam for the negotiated V2/V3 envelope transports. */
 @DreamDisplaysXUnstableApi
 object ProtocolRouter {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ProtocolRouter")
+    private val logger = DreamLog.of("ProtocolRouter")
 
     @Volatile
     private var v3Active = false

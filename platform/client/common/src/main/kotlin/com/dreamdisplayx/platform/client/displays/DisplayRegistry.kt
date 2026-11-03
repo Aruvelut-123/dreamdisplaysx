@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.displays
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.display.event.DisplayEvent
 import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.service.DisplaySystem
@@ -17,6 +18,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /** Central registry of all live [DisplayScreen]s and the event bus for their lifecycle changes. */
 object DisplayRegistry {
+    private val logger = DreamLog.of("DisplayRegistry")
+
     /** Screens registered by the application. */
     val screens = ConcurrentHashMap<UUID, DisplayScreen>()
 
@@ -133,7 +136,14 @@ object DisplayRegistry {
                 unregisterScreen(screen)
             }
         }
-        if (newBackend) unloadedScreens.clear() else unloadedScreens.keys.removeAll(carried)
+        // The distance cache belongs to the world we just left, whatever [newBackend] says.
+        // `newBackend` compares `Minecraft.connection` identities and is false on the common path
+        // "quit to title (ClientTickManager nulls lastConnection), then open another save": the
+        // previous saves' parked displays then survived the switch, and the restore census only
+        // checks the dimension key (`minecraft:overworld` in every save) plus distance — so a save
+        // that happens to store a display near the same coordinates had that display recreated,
+        // native players and audio included. Keep only the popout-reconfirm carry-overs.
+        unloadedScreens.keys.retainAll(carried)
         awaitingReconfirm.keys.retainAll(carried)
     }
 
@@ -151,6 +161,33 @@ object DisplayRegistry {
             awaitingReconfirm.remove(displayId)
             screens[displayId]?.let { unregisterScreen(it) }
         }
+    }
+
+    /**
+     * Drops every distance-cached display that belongs to a world we are no longer in.
+     *
+     * [unloadedScreens] is a *render-distance* cache, not a cross-world carry-over: entries park a
+     * display because the player walked away from it. A JOIN recycles that map by mistake when the
+     * disconnect teardown has not run yet (DISCONNECT is posted to the client thread, and a quick
+     * "quit to title, open another save" can join before it drains), and the restore census
+     * ([DisplayLifecycleManager.restoreVisibleUnloadedScreens]) then only checks the dimension key —
+     * which is `minecraft:overworld` in *every* save — plus distance. Two worlds that both store
+     * displays near the same coordinates therefore resurrect each other's screens, native players
+     * included, which is what produced "world A's sound plays inside world B".
+     *
+     * The live [screens] map is intentionally untouched: screens that legitimately survived the
+     * switch (a proxy hand-off, a carried popout) are reconciled by [unloadAllForServerSwitch] and
+     * the reconfirm grace window, not here.
+     */
+    fun discardUnloadedScreensForJoin(serverId: String) {
+        if (unloadedScreens.isEmpty()) return
+        val dropped = unloadedScreens.size
+        unloadedScreens.clear()
+        awaitingReconfirm.clear()
+        logger.info(
+            "Discarded {} distance-cached display(s) carried into server '{}' from a previous world.",
+            dropped, serverId,
+        )
     }
 
     /** Saves the display screen data to disk. */

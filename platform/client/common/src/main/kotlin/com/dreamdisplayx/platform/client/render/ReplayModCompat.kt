@@ -1,7 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
-import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.Base64
 
@@ -17,7 +17,7 @@ object ReplayModCompat {
     fun beginRenderFrame() { renderingFrame = true }
     fun endRenderFrame() { renderingFrame = false }
 
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ReplayModCompat")
+    private val logger = DreamLog.of("ReplayModCompat")
     private val replayClassNames = listOf(
         "com.replaymod.replay.ReplayModReplay",
         "com.replaymod.replay.ReplayHandler",

@@ -1,8 +1,8 @@
 package com.dreamdisplayx.media.player.pipeline
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.util.daemon
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -27,7 +27,7 @@ internal class FramePrebuffer(
     private val tolerateLateness: Boolean,
     private val parkFlag: AtomicBoolean? = null,
 ) {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/FramePrebuffer")
+    private val logger = DreamLog.of("FramePrebuffer")
 
     private class Timed(
         @JvmField val buf: ByteBuffer,

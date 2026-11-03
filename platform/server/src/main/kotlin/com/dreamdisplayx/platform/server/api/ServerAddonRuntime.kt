@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.api
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplays.api.addon.AddonSide
 import com.dreamdisplays.api.internal.ServerHolder
 import com.dreamdisplays.core.addon.AddonManager
@@ -9,7 +10,6 @@ import com.dreamdisplayx.core.addon.ServerAddonEvents
 import com.dreamdisplayx.core.addon.ServerAddonHost
 import com.dreamdisplayx.core.addon.ServerAddonHooks
 import com.dreamdisplayx.core.addon.ServerAddonVetoBridge
-import org.slf4j.LoggerFactory
 
 /**
  * Brings the server half of the addon API up and down for one server lifetime.
@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory
  */
 object ServerAddonRuntime {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger(ServerAddonRuntime::class.java)
+    private val logger = DreamLog.of("ServerAddonRuntime")
 
     /** The hosted addons; kept across a reload so the same instances come back up. */
     private val addons: AddonManager by lazy { AddonManager(AddonSide.SERVER, listOf(ServerAddonBinder { ServerAddonEvents.on(it) })) }

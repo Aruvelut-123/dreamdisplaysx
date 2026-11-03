@@ -1,6 +1,6 @@
 package com.dreamdisplayx.media.source.bilibili.danmaku
 
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
 import java.io.StringReader
@@ -14,7 +14,7 @@ import org.xml.sax.InputSource
  * squi2rel/VideoPlayer's `BiliDmSegParser` (independent implementation, same wire format).
  */
 object BiliDmSegParser {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/BiliDmSegParser")
+    private val logger = DreamLog.of("BiliDmSegParser")
 
     /**
      * Parses a protobuf `DmSegMobileReply` (the `seg.so` segment body): a sequence of repeated

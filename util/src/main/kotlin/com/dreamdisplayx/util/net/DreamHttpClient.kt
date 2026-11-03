@@ -1,5 +1,6 @@
 package com.dreamdisplayx.util.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import kotlinx.io.IOException
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -8,7 +9,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URI
@@ -31,7 +31,7 @@ import java.util.zip.InflaterInputStream
  * remains an implementation detail of `util`.
  */
 object DreamHttpClient {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/Http")
+    private val logger = DreamLog.of("Http")
 
     private const val DEFAULT_CONNECT_TIMEOUT_MS = 10_000L
     private const val DEFAULT_READ_TIMEOUT_MS = 30_000L

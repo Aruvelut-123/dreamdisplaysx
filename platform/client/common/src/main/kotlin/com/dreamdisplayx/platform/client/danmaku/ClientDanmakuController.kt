@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.danmaku
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.media.source.bilibili.BiliDanmakuVideo
@@ -7,7 +8,6 @@ import com.dreamdisplayx.media.source.bilibili.danmaku.DanmakuEntry
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.managers.ClientStateManager
 import net.minecraft.client.Minecraft
-import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 import kotlin.math.floor
 import kotlin.math.max
@@ -26,7 +26,7 @@ import kotlin.random.Random
 class ClientDanmakuController(private val screen: DisplayScreen) {
 
     companion object {
-        private val logger = LoggerFactory.getLogger("DreamDisplaysX/DanmakuController")
+        private val logger = DreamLog.of("DanmakuController")
 
         private const val VIRTUAL_HEIGHT = 360f
         private const val SEGMENT_MS = 360_000L

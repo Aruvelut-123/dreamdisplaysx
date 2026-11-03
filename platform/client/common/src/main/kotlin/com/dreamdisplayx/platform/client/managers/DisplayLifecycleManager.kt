@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.dreamdisplayx.api.media.service.keys.MediaServices
@@ -21,7 +22,6 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.core.BlockPos
 import org.joml.Vector3i
-import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
@@ -29,7 +29,7 @@ import java.util.*
  */
 object DisplayLifecycleManager {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DisplayLifecycleManager")
+    private val logger = DreamLog.of("DisplayLifecycleManager")
 
     /** Maximum allowed display dimension, in blocks. */
     private const val MAX_DISPLAY_BLOCKS = 256
@@ -142,6 +142,12 @@ object DisplayLifecycleManager {
         val renderDistance = DisplayScreen.clientRenderDistanceBlocks()
         DisplayRegistry.unloadedScreens.values
             .filter { sameDimension(it.dimensionKey, dimensionKey) && distanceToData(it, playerPos) <= renderDistance }
+            // The dimension key alone cannot prove ownership: `minecraft:overworld` is identical in
+            // every save, and an older snapshot may carry an empty key, which [sameDimension] accepts.
+            // The server-authoritative snapshot for the world we are actually in is the real oracle —
+            // a display missing from it belongs to a world we left and must not be rebuilt here (it
+            // would start decoding, and the new world's displays would have no sound left to share).
+            .filter { DisplayStorage.getDisplayData(it.uuid) != null }
             .toList()
             .forEach { data ->
                 DisplayRegistry.unloadedScreens.remove(data.uuid)

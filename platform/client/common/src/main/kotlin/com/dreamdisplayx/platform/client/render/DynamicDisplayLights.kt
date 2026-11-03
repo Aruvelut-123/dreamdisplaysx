@@ -1,8 +1,8 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.util.log.DreamLog
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
-import org.slf4j.LoggerFactory
 import java.lang.reflect.Proxy
 import java.nio.ByteBuffer
 import java.util.UUID
@@ -17,7 +17,7 @@ import kotlin.math.sqrt
  * for future colour-capable shader integrations while luminance drives the native light level.
  */
 object DynamicDisplayLights {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DynamicDisplayLights")
+    private val logger = DreamLog.of("DynamicDisplayLights")
     private val sources = ConcurrentHashMap<UUID, Any>()
     private val colors = ConcurrentHashMap<UUID, Int>()
     private var manager: Any? = null

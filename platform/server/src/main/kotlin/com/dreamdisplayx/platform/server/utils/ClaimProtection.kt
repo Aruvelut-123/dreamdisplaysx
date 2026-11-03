@@ -1,15 +1,15 @@
 package com.dreamdisplayx.platform.server.utils
 
+import com.dreamdisplayx.util.log.DreamLog
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.entity.Player
-import org.slf4j.LoggerFactory
 
 /** Optional protection integrations. No protection plugin is a hard dependency. */
 @PaperOnly
 object ClaimProtection {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ClaimProtection")
+    private val logger = DreamLog.of("ClaimProtection")
     private val optionalPlugins = setOf("worldguard", "griefprevention", "lands", "residence", "redprotect", "towny")
 
     /** Returns true when the player may build at every location in the proposed display. */

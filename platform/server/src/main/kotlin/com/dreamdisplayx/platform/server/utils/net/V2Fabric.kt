@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.utils.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.api.playback.model.FullscreenAckAction
 import com.dreamdisplayx.api.playback.model.PlaybackAction
@@ -26,7 +27,6 @@ import io.github.arnodoelinger.platformweaver.FabricOnly
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
-import org.slf4j.LoggerFactory
 
 /**
  * Protocol-v2 networking for the `Fabric` flavor: one envelope payload in both directions.
@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory
  */
 @FabricOnly
 object FabricV2Networking {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/FabricV2Networking")
+    private val logger = DreamLog.of("FabricV2Networking")
 
     /** Encodes [packet] once and sends it to every player in [players]. */
     fun send(players: List<ServerPlayer>, packet: DreamPacket) {

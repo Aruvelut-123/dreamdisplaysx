@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.utils.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.platform.server.PaperServer
@@ -7,13 +8,12 @@ import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.bukkit.entity.Player
 import org.bukkit.plugin.messaging.PluginMessageListener
 import org.jspecify.annotations.NullMarked
-import org.slf4j.LoggerFactory
 
 /** Generation-3 batch receiver for Paper servers. */
 @PaperOnly
 @NullMarked
 object PaperV3Networking : PluginMessageListener {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/PaperV3Networking")
+    private val logger = DreamLog.of("PaperV3Networking")
     fun send(players: List<Player?>, packet: com.dreamdisplayx.core.protocol.common.packets.DreamPacket) {
         val bytes = runCatching { PacketRegistry.encodeV3(packet) }
             .onFailure { logger.warn("Failed to encode v3 packet", it) }.getOrNull() ?: return

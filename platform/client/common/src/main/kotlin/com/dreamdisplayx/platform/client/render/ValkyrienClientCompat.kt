@@ -1,11 +1,11 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.display.geometry.AffineTransform
 import com.dreamdisplayx.api.display.geometry.ShipAnchorPolicy
 import com.dreamdisplayx.api.display.geometry.ShipTransformSource
 import net.minecraft.client.multiplayer.ClientLevel
-import org.slf4j.LoggerFactory
 import java.lang.reflect.Method
 
 /**
@@ -50,7 +50,7 @@ import java.lang.reflect.Method
  */
 @DreamDisplaysXUnstableApi
 object ValkyrienClientCompat {
-    private val logger = LoggerFactory.getLogger(javaClass)
+    private val logger = DreamLog.of("ValkyrienClientCompat")
 
     /** `org.valkyrienskies.mod.common.VSGameUtilsKt`, the Kotlin file facade with the static helpers. */
     private const val GAME_UTILS = "org.valkyrienskies.mod.common.VSGameUtilsKt"

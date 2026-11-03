@@ -1,12 +1,12 @@
 package com.dreamdisplayx.platform.client.displays
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.platform.client.render.DisplayTextureResource
 import com.dreamdisplayx.platform.client.render.DisplayYuvRenderTypes
 import com.dreamdisplayx.platform.client.render.GpuTextureHandle
 import com.dreamdisplayx.platform.client.render.ShaderPackCompat
 import net.minecraft.client.renderer.texture.AbstractTexture
-import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
@@ -139,6 +139,6 @@ internal class DisplayFrameUploader(private val uuid: UUID) {
 
     companion object {
         /** Logger for upload failures and quality-handoff diagnostics. */
-        private val logger = LoggerFactory.getLogger("DreamDisplaysX/DisplayFrameUploader")
+        private val logger = DreamLog.of("DisplayFrameUploader")
     }
 }

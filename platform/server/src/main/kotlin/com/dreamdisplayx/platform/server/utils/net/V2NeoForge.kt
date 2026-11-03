@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.utils.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.api.playback.model.FullscreenAckAction
 import com.dreamdisplayx.api.playback.model.PlaybackAction
@@ -25,14 +26,13 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import net.neoforged.neoforge.network.PacketDistributor
 import net.neoforged.neoforge.network.registration.PayloadRegistrar
-import org.slf4j.LoggerFactory
 
 /**
  * Protocol-v2 networking for the `NeoForge` flavor.
  */
 @NeoForgeOnly
 object NeoForgeV2Networking {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/NeoForgeV2Networking")
+    private val logger = DreamLog.of("NeoForgeV2Networking")
 
     /** Encodes [packet] once and sends it to every player in [players]. */
     fun send(players: List<ServerPlayer>, packet: DreamPacket) {

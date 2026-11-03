@@ -1,12 +1,12 @@
 package com.dreamdisplayx.platform.server.meta
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.asJsonArrayOrNull
 import com.dreamdisplayx.util.asJsonObjectOrNull
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import com.dreamdisplayx.util.optString
 import com.dreamdisplayx.util.Version
-import org.slf4j.LoggerFactory
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -30,7 +30,7 @@ object VersionState {
  */
 object Updater {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/Updater")
+    private val logger = DreamLog.of("Updater")
 
     /**
      * Fetches GitHub releases and stores the latest mod and plugin versions in [VersionState].

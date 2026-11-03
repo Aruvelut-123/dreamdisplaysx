@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.platform.service.keys.PlatformServices
 import com.dreamdisplayx.api.runtime.module.DreamDisplaysXModule
@@ -20,7 +21,6 @@ import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.platform.client.storage.CustomVideoStore
 import com.dreamdisplayx.platform.client.storage.WatchedVideoStore
 import kotlinx.coroutines.*
-import org.slf4j.LoggerFactory
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -29,7 +29,7 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 object ClientStartupManager {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ClientStartupManager")
+    private val logger = DreamLog.of("ClientStartupManager")
 
     /** The client configuration, loaded from the mod's config directory. */
     val config: Config = Config(File("./config/${Initializer.MOD_ID}"))

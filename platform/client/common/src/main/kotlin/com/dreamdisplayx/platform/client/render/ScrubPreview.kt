@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.platform.client.utils.identifier
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier
@@ -16,7 +17,6 @@ import kotlinx.coroutines.*
 import kotlinx.io.IOException
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.texture.DynamicTexture
-import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -37,7 +37,7 @@ import kotlin.time.Duration.Companion.seconds
  * an extraction is running, so a fast drag never spawns more than one libvlc player at a time.
  */
 object ScrubPreview {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ScrubPreview")
+    private val logger = DreamLog.of("ScrubPreview")
 
     /** Fixed frame dimensions every extracted frame is encoded to (used by the Vanilla blit rendering). */
     const val FRAME_WIDTH = 256

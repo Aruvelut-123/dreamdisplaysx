@@ -1,12 +1,12 @@
 package com.dreamdisplayx.media.source
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.api.media.stream.model.MediaStreamType
 import com.dreamdisplayx.api.media.stream.model.StreamPreferences
 import com.dreamdisplayx.api.media.stream.model.StreamSet
 import com.dreamdisplayx.api.media.stream.service.StreamSelector
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
-import org.slf4j.LoggerFactory
 
 /**
  * Default [StreamSelector] backed by [MediaStreamSelector]. Picks the closest video stream to
@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory
  */
 class DefaultStreamSelector : StreamSelector {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DefaultStreamSelector")
+    private val logger = DreamLog.of("DefaultStreamSelector")
 
     /** Whether to log debug messages. */
     private val debug: Boolean

@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.service.keys.MediaServices
 import com.dreamdisplayx.api.media.search.model.MediaSearchResult
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
@@ -26,7 +27,6 @@ import com.dreamdisplayx.util.DreamCoroutines
 import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.*
 import net.minecraft.client.Minecraft
-import org.slf4j.LoggerFactory
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -730,7 +730,7 @@ class SuggestionsController {
         private const val KEY_NO_LINKS = "dreamdisplayx.suggestions.no_links"
 
         /** Logger. */
-        private val logger = LoggerFactory.getLogger("DreamDisplaysX/Suggestions")
+        private val logger = DreamLog.of("Suggestions")
 
         /** Twitch login shape: letters, digits, underscore, 3-25 chars (real handles never contain spaces). */
         private val TWITCH_LOGIN_RE = Regex("^[A-Za-z0-9_]{3,25}$")

@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.source.kick
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.api.media.stream.model.MediaStreamType
@@ -9,7 +10,6 @@ import com.dreamdisplayx.util.*
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.serialization.json.JsonObject
-import org.slf4j.LoggerFactory
 
 /** A resolved Kick channel or VOD: playable [streams], [metadata], length, and seekability. */
 data class KickPlayback(
@@ -22,7 +22,7 @@ data class KickPlayback(
 /** Resolves Kick channels and VODs through Kick's public site API — the same JSON the website uses, no API key or auth required. */
 object KickApi {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/KickApi")
+    private val logger = DreamLog.of("KickApi")
 
     /** Cloudflare turns away requests that do not look like a browser, so send browser headers. */
     private val HEADERS = DreamHttpClient.headersOf(

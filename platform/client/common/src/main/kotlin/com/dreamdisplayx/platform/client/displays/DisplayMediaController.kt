@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.displays
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.service.keys.MediaServices
 import com.dreamdisplayx.api.media.audio.service.keys.AudioAcousticsServices
 import com.dreamdisplayx.api.media.source.model.MediaSource
@@ -12,7 +13,6 @@ import com.dreamdisplayx.platform.client.player.platform.DreamPlaybackEnvironmen
 import com.dreamdisplayx.platform.client.storage.WatchedVideoStore
 import kotlinx.atomicfu.atomic
 import net.minecraft.client.Minecraft
-import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
 
 /**
@@ -22,7 +22,7 @@ import java.util.concurrent.Executors
  */
 internal class DisplayMediaController(private val screen: DisplayScreen) {
     private companion object {
-        val LOG = LoggerFactory.getLogger("DreamDisplaysX/DisplayMediaController")
+        val LOG = DreamLog.of("DisplayMediaController")
     }
 
     /** A URL/language pair waiting for the serial swap worker to install it. */

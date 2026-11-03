@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.source.bilibili
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.asJsonObjectOrNull
 import com.dreamdisplayx.util.obj
 import com.dreamdisplayx.util.optInt
@@ -7,7 +8,6 @@ import com.dreamdisplayx.util.optString
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.serialization.json.JsonObject
-import org.slf4j.LoggerFactory
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -23,7 +23,7 @@ import javax.crypto.Cipher
  * playback resolver needs for VIP / higher-quality streams.
  */
 object BilibiliAuth {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliAuth")
+    private val logger = DreamLog.of("BilibiliAuth")
 
     private val HEADERS = DreamHttpClient.headersOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",

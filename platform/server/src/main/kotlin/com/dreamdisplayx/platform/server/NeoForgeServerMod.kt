@@ -26,7 +26,7 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent
 import net.neoforged.neoforge.event.server.ServerStoppingEvent
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent
 import net.neoforged.neoforge.registries.RegisterEvent
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 
 /**
  * `NeoForge`-specific implementation of [PaperServer]. See `FabricServer.kt` for the `Fabric`
@@ -89,7 +89,7 @@ class NeoForgeServer(modEventBus: IEventBus) {
 
     companion object {
         /** Logger. */
-        val logger = LoggerFactory.getLogger("DreamDisplaysX")
+        val logger = DreamLog.of("Server")
 
         /** The mod version string, read from the bundled, Gradle-templated `version.txt` resource. */
         val serverVersion: String? by lazy {

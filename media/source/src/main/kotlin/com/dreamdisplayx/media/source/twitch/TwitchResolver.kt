@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.source.twitch
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.source.model.MediaMetadata
 import com.dreamdisplayx.api.media.source.service.MediaResolverService
@@ -9,14 +10,13 @@ import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.api.media.stream.model.MediaStreamType
 import com.dreamdisplayx.media.source.platform.LiveAwareResolvedMediaCache
 import com.dreamdisplayx.util.net.DreamHttpClient
-import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 /** In-process Twitch stream resolver: one GQL round trip for the playback access token (plus metadata), then a direct
  * usher request for the stream URLs. */
 object TwitchResolver : MediaResolverService {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/TwitchResolver")
+    private val logger = DreamLog.of("TwitchResolver")
 
     override val priority: Int = 10
 

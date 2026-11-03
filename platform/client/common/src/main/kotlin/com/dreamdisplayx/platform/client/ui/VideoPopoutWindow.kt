@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.sink.service.VideoFrameSink
 import com.dreamdisplayx.platform.client.Initializer
 import com.dreamdisplayx.platform.client.popout.PopoutEvent
@@ -29,7 +30,6 @@ import org.lwjgl.system.MemoryUtil
 import org.lwjgl.glfw.GLFW
 //?}
 import org.lwjgl.opengl.*
-import org.slf4j.LoggerFactory
 import java.awt.Color
 import java.awt.Graphics
 import java.awt.GraphicsEnvironment
@@ -318,7 +318,7 @@ class VideoPopoutWindow(
         }
 
         companion object {
-            private val logger = LoggerFactory.getLogger("DreamDisplaysX/VideoPopout")
+            private val logger = DreamLog.of("VideoPopout")
             private val EMPTY_DIRECT = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
 
             private fun contentRect(frameW: Int, frameH: Int, contentAspect: Double): ContentRect {
@@ -574,7 +574,7 @@ class VideoPopoutWindow(
         }
 
         companion object {
-            private val logger = LoggerFactory.getLogger(javaClass)
+            private val logger = com.dreamdisplayx.util.log.DreamLog.of("VideoPopoutFrames")
             private val EMPTY_DIRECT = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
         }
     }
@@ -592,7 +592,7 @@ class VideoPopoutWindow(
         private var frame: JFrame? = null
         private var panel: VideoPanel? = null
 
-        private val logger = LoggerFactory.getLogger("DreamDisplaysX/VideoPopout")
+        private val logger = DreamLog.of("VideoPopout")
 
         override val isOpen: Boolean get() = frame?.isDisplayable == true
         override val width: Int get() = frame?.width ?: 0

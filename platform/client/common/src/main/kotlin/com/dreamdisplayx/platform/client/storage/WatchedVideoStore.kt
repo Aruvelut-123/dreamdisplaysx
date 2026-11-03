@@ -1,16 +1,16 @@
 package com.dreamdisplayx.platform.client.storage
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.json.JsonFileStore
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
-import org.slf4j.LoggerFactory
 
 /**
  * Local client-only record of watched video IDs, powers suggestions panel's recency and uniqueness.
  */
 object WatchedVideoStore {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/WatchedVideoStore")
+    private val logger = DreamLog.of("WatchedVideoStore")
 
     private const val FILE_NAME = "watched-videos.json"
     private const val SCHEMA_VERSION = 1
@@ -27,7 +27,7 @@ object WatchedVideoStore {
 
     /** Loads the watched-ID list from disk into memory, replacing any current state. */
     fun load() {
-        val loaded = jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), idsSerializer, SCHEMA_VERSION, logger)
+        val loaded = jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), idsSerializer, SCHEMA_VERSION, logger.delegate)
             ?: return
         synchronized(lock) {
             watched.clear()
@@ -37,8 +37,8 @@ object WatchedVideoStore {
 
     /** Persists an already-taken [snapshot] of the watched-ID list to disk. */
     private fun save(snapshot: List<String>) {
-        if (!jsonFiles.ensureDir(logger)) return
-        jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), idsSerializer, snapshot, SCHEMA_VERSION, logger)
+        if (!jsonFiles.ensureDir(logger.delegate)) return
+        jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), idsSerializer, snapshot, SCHEMA_VERSION, logger.delegate)
     }
 
     /** Returns true if [videoId] has been marked watched. */

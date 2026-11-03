@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.playback
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.playback.model.FullscreenAckAction
 import com.dreamdisplayx.api.playback.model.FullscreenMode
@@ -13,7 +14,6 @@ import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.datatypes.display.shortLabel
 import com.dreamdisplayx.platform.server.managers.DisplayManager
 import com.dreamdisplayx.platform.server.storage.FullscreenSessionStore
-import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -23,7 +23,7 @@ data class FullscreenRadiusTarget(val world: String, val x: Double, val y: Doubl
 /** Manages server-forced fullscreen broadcast sessions targeting players by name or radius. */
 object FullscreenBroadcastManager {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/FullscreenBroadcastManager")
+    private val logger = DreamLog.of("FullscreenBroadcastManager")
 
     /** Minimum interval between re-evaluating radius membership and refreshing already-shown targets. */
     private const val TICK_MS = 1_000L

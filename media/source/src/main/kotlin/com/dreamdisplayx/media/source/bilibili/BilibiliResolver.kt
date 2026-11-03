@@ -1,11 +1,11 @@
 package com.dreamdisplayx.media.source.bilibili
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.source.service.MediaResolverService
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.source.model.ResolvedMedia
 import com.dreamdisplayx.media.source.platform.LiveAwareResolvedMediaCache
-import org.slf4j.LoggerFactory
 
 /**
  * In-process Bilibili resolver: one site-API call (see [BilibiliApi]), mirroring the other
@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory
  */
 object BilibiliResolver : MediaResolverService {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliResolver")
+    private val logger = DreamLog.of("BilibiliResolver")
 
     /** Alongside the other first-party in-process resolvers. */
     override val priority: Int = 10

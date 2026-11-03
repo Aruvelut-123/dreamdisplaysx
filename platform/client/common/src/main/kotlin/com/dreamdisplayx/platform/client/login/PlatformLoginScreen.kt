@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.login
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.platform.client.ui.GuiGraphicsCompat
 import com.dreamdisplayx.platform.client.ui.drawText
@@ -40,7 +41,7 @@ class PlatformLoginScreen : UiScreenBase(literalText("Bilibili Login")) {
         BilibiliLoginManager.startQrLogin()
         refreshQrMatrix()
         BilibiliLoginManager.onLoginSuccess = {
-            org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LoginScreen").info("onLoginSuccess invoked; closing login screen")
+            DreamLog.of("LoginScreen").info("onLoginSuccess invoked; closing login screen")
             Minecraft.getInstance().execute {
                 MinecraftScreenUtil.setScreen(Minecraft.getInstance(), null)
             }
@@ -53,7 +54,7 @@ class PlatformLoginScreen : UiScreenBase(literalText("Bilibili Login")) {
         super.tick()
         tickCount++
         if (tickCount == 1) {
-            org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LoginScreen").info(
+            DreamLog.of("LoginScreen").info(
                 "PlatformLoginScreen first tick; qrContent=${BilibiliLoginManager.qrContent != null} status=${BilibiliLoginManager.status}"
             )
         }
@@ -65,7 +66,7 @@ class PlatformLoginScreen : UiScreenBase(literalText("Bilibili Login")) {
     }
 
     override fun onClose() {
-        org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LoginScreen").info("PlatformLoginScreen.onClose called")
+        DreamLog.of("LoginScreen").info("PlatformLoginScreen.onClose called")
         super.onClose()
     }
 

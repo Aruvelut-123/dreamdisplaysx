@@ -1,9 +1,9 @@
 package com.dreamdisplayx.media.player.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.audio.service.AudioDspStage
 import com.dreamdisplayx.media.player.util.MediaBufferEffects
 import com.sun.jna.Pointer
-import org.slf4j.LoggerFactory
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.DataLine
@@ -28,7 +28,7 @@ internal class LibVlcAudioOutput(
     private val debugLabel: String,
     private val dspStage: AudioDspStage?,
 ) {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcAudio")
+    private val logger = DreamLog.of("LibVlcAudio")
 
     companion object {
         /** The PCM format negotiated with libvlc and used by every session: 44.1 kHz stereo S16 (native endianness). */

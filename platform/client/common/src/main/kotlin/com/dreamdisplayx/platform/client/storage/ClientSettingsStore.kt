@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.storage
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.VideoQuality
 import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.display.model.settings.ClientDisplaySettings
@@ -7,7 +8,6 @@ import com.dreamdisplayx.api.display.model.settings.ClientSettingsStorage
 import com.dreamdisplayx.util.json.JsonFileStore
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object ClientSettingsStore : ClientSettingsStorage {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger(javaClass)
+    private val logger = DreamLog.of("ClientSettingsStore")
 
     /** File name for the JSON settings file. */
     private const val FILE_NAME = "client-display-settings.json"
@@ -34,7 +34,7 @@ object ClientSettingsStore : ClientSettingsStorage {
     /** Loads all client display settings from disk into the in-memory map, replacing any current state. */
     override fun load() {
         val loaded: Map<String, ClientDisplaySettings> =
-            jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), settingsSerializer, SCHEMA_VERSION, logger) ?: return
+            jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), settingsSerializer, SCHEMA_VERSION, logger.delegate) ?: return
         settings.clear()
         loaded.forEach { (key, value) ->
             runCatching { settings[UUID.fromString(key)] = value }
@@ -44,9 +44,9 @@ object ClientSettingsStore : ClientSettingsStorage {
 
     /** Persists the in-memory settings map to disk. */
     override fun save() {
-        if (!jsonFiles.ensureDir(logger)) return
+        if (!jsonFiles.ensureDir(logger.delegate)) return
         val toSave = settings.entries.associate { (k, v) -> k.toString() to v }
-        jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), settingsSerializer, toSave, SCHEMA_VERSION, logger)
+        jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), settingsSerializer, toSave, SCHEMA_VERSION, logger.delegate)
     }
 
     /** Returns the settings for [displayUuid], creating a default entry if absent. */

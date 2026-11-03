@@ -1,16 +1,16 @@
 package com.dreamdisplayx.platform.client.storage
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.search.model.MediaSearchResult
 import com.dreamdisplayx.api.media.source.url.CustomMediaUrls
 import com.dreamdisplayx.api.media.source.model.CustomVideoRecord
 import com.dreamdisplayx.util.json.JsonFileStore
 import kotlinx.serialization.builtins.ListSerializer
-import org.slf4j.LoggerFactory
 
 /** The player's own list of custom links, most recent first. Pasted links persist across sessions. */
 object CustomVideoStore {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/CustomVideoStore")
+    private val logger = DreamLog.of("CustomVideoStore")
 
     private const val FILE_NAME = "custom-videos.json"
     private const val SCHEMA_VERSION = 1
@@ -24,7 +24,7 @@ object CustomVideoStore {
 
     /** Loads the remembered links from disk into memory, replacing any current state. */
     fun load() {
-        val loaded = jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), entriesSerializer, SCHEMA_VERSION, logger)
+        val loaded = jsonFiles.readVersioned(jsonFiles.file(FILE_NAME), entriesSerializer, SCHEMA_VERSION, logger.delegate)
             ?: return
         entries.clear()
         entries.addAll(loaded.sortedByDescending { it.lastUsedAtMs }.take(MAX_ENTRIES))
@@ -87,7 +87,7 @@ object CustomVideoStore {
 
     /** Persists the in-memory list to disk. */
     private fun save() {
-        if (!jsonFiles.ensureDir(logger)) return
-        jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), entriesSerializer, entries.toList(), SCHEMA_VERSION, logger)
+        if (!jsonFiles.ensureDir(logger.delegate)) return
+        jsonFiles.writeVersioned(jsonFiles.file(FILE_NAME), entriesSerializer, entries.toList(), SCHEMA_VERSION, logger.delegate)
     }
 }

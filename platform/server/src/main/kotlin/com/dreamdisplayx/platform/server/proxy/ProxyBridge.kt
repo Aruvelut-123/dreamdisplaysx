@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.proxy
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.api.playback.model.WatchPartySessionState
 import com.dreamdisplayx.core.protocol.common.packets.DisplayDelete
@@ -40,7 +41,6 @@ import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.plugin.messaging.PluginMessageListener
 import org.jspecify.annotations.NullMarked
-import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -55,7 +55,7 @@ const val PROXY_CHANNEL: String = "dreamdisplayx:proxy"
 @PaperOnly
 @NullMarked
 object ProxyBridge : PluginMessageListener {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ProxyBridge")
+    private val logger = DreamLog.of("ProxyBridge")
     private val plugin: PaperServer by lazy { PaperServer.getInstance() }
     private val helloSent = AtomicBoolean(false)
     private val lastClockProbeMs = AtomicLong(0L)

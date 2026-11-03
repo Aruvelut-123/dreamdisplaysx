@@ -1,7 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.util.log.DreamLog
 import net.minecraft.client.Minecraft
-import org.slf4j.LoggerFactory
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.nio.charset.StandardCharsets
@@ -20,7 +20,7 @@ object ComplementaryShaderPatcher {
     private const val PATCH_VERSION = "1"
     private const val SUPPORTED_VERSION = "r5.8.1"
     private const val MARKER = "dreamdisplayx/patch.properties"
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ComplementaryShaderPatcher")
+    private val logger = DreamLog.of("ComplementaryShaderPatcher")
 
     /** Scans and patches every supported Complementary archive present at client startup. */
     fun patchAtStartup(): List<Path> = runCatching {

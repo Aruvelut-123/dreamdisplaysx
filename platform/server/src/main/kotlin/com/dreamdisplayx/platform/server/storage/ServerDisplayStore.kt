@@ -1,11 +1,11 @@
 package com.dreamdisplayx.platform.server.storage
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.storage.model.FullDisplayData
 import com.dreamdisplayx.core.services.DisplayStorage
 import com.dreamdisplayx.util.json.JsonFileStore
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import org.slf4j.LoggerFactory
 import java.io.File
 import java.security.MessageDigest
 import java.util.*
@@ -18,7 +18,7 @@ import java.util.*
  */
 object ServerDisplayStore {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ServerDisplayStore")
+    private val logger = DreamLog.of("ServerDisplayStore")
     private const val SCHEMA_VERSION = 1
     private val jsonFiles = JsonFileStore()
     private val displayMapSerializer = MapSerializer(String.serializer(), FullDisplayData.serializer())
@@ -26,7 +26,7 @@ object ServerDisplayStore {
     /** Loads the display registry for [serverId] from disk and marks it as the current server. */
     fun load(serverId: String) {
         val loaded: Map<String, FullDisplayData>? =
-            jsonFiles.readVersioned(readableServerFile(serverId), displayMapSerializer, SCHEMA_VERSION, logger)
+            jsonFiles.readVersioned(readableServerFile(serverId), displayMapSerializer, SCHEMA_VERSION, logger.delegate)
         val displays = HashMap<UUID, FullDisplayData>()
         loaded?.forEach { (key, value) ->
             runCatching { displays[UUID.fromString(key)] = value }
@@ -38,10 +38,10 @@ object ServerDisplayStore {
 
     /** Persists the display registry for [serverId] to disk. */
     fun save(serverId: String) {
-        if (!jsonFiles.ensureDir(logger)) return
+        if (!jsonFiles.ensureDir(logger.delegate)) return
         val displays = DisplayStorage.snapshot(serverId)
         val toSave = displays.entries.associate { (k, v) -> k.toString() to v }
-        jsonFiles.writeVersioned(safeServerFile(serverId), displayMapSerializer, toSave, SCHEMA_VERSION, logger)
+        jsonFiles.writeVersioned(safeServerFile(serverId), displayMapSerializer, toSave, SCHEMA_VERSION, logger.delegate)
     }
 
     /** Returns the cached [FullDisplayData] for [displayUuid] on the current server, or null if absent. */

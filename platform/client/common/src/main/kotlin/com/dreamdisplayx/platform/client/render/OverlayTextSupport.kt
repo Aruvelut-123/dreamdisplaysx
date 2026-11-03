@@ -1,6 +1,6 @@
 package com.dreamdisplayx.platform.client.render
 
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -18,7 +18,7 @@ internal object OverlayTextSupport {
     private const val METRICS_CLASS = "java.awt.FontMetrics"
     private const val FAILURE_INTERVAL_NANOS = 60_000_000_000L
 
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/OverlayTextSupport")
+    private val logger = DreamLog.of("OverlayTextSupport")
     private val lastFailureNanos = ConcurrentHashMap<String, AtomicLong>()
 
     /** True when AWT classes can construct a font, image, graphics context, metrics, and glyphs. */

@@ -1,6 +1,6 @@
 package com.dreamdisplayx.platform.client.render
 
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 import java.awt.Font
 import java.awt.Graphics2D
 import java.awt.GraphicsEnvironment
@@ -14,7 +14,7 @@ import kotlin.math.ceil
 
 /** AWT-only font loader. Instantiate this backend only after [OverlayTextSupport.available]. */
 internal object AwtOverlayFontProvider {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/AwtOverlayFontProvider")
+    private val logger = DreamLog.of("AwtOverlayFontProvider")
     private const val CJK_PROBE = '\u4E2D'
 
     /** One code-point-safe font run used by the shared measurement and drawing layout. */

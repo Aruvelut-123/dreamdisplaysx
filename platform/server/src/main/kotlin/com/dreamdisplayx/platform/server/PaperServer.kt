@@ -1,5 +1,7 @@
 package com.dreamdisplayx.platform.server
 
+import com.dreamdisplayx.util.log.DreamLog
+import com.dreamdisplayx.util.log.DreamLog.Channel
 import com.dreamdisplayx.platform.server.credentials.SqlCredentialSyncBackend
 import com.dreamdisplayx.platform.server.credentials.CredentialActions
 import com.dreamdisplayx.platform.server.credentials.CredentialStore
@@ -29,7 +31,6 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import org.bstats.bukkit.Metrics
 import org.bukkit.plugin.java.JavaPlugin
 import org.jspecify.annotations.NullMarked
-import org.slf4j.LoggerFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -153,8 +154,14 @@ class PaperServer : JavaPlugin() {
     }
 
     companion object {
-        /** Logger. */
-        val logger = LoggerFactory.getLogger("DreamDisplaysX/Plugin")
+        /**
+         * Logger for the teardown/boot call sites that write `Companion.logger.warn(...)`.
+         *
+         * Note that `getInstance().logger.warning(...)` (in `DisplayManager`) does NOT reach this
+         * property: `JavaPlugin.getLogger()` is an instance member and shadows it, so those two calls
+         * stay on `java.util.logging`.
+         */
+        val logger: Channel = DreamLog.of("Plugin")
 
         /** Mod config (`Fabric` server included). */
         lateinit var config: Config

@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.player.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.model.StretchMode
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
@@ -16,7 +17,6 @@ import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.sun.jna.Native
 import com.sun.jna.Pointer
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
@@ -75,7 +75,7 @@ internal class LibVlcSessionManager(
     /** Per-display acoustics DSP stage for the desktop Java Sound callback path. */
     audioStage: AudioDspStage? = null,
 ) {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcSession")
+    private val logger = DreamLog.of("LibVlcSession")
 
     /**
      * Android mode: javax.sound does not exist on Android (no java.desktop), so the
@@ -547,23 +547,33 @@ internal class LibVlcSessionManager(
      * Applies the effective volume as a PCM gain on our own audio line. With audio callbacks set,
      * libvlc's software volume (libvlc_audio_set_volume) would be a no-op — the decoded samples are
      * delivered to us raw, so volume is applied here (and by the 3D DSP chain).
+     *
+     * On Android ([systemAudio]) the PCM never reaches [LibVlcAudioOutput], so the level has to go
+     * through libvlc. It is pushed as **two** independent knobs, see [LibVlcMutePolicy]: the mixer
+     * percent carries the level and a separate player-level mute flag carries silence. A `volume = 0`
+     * mute does not survive an `aout` rebuild — the fresh `integer_mixer` comes up at its own default
+     * — which is why the mute button and a 0 % slider both used to do nothing.
      */
     fun setVolume(volume: Double) {
         audioOutput?.setVolume(volume)
-        // libvlc's own output needs the volume as well on Android (system audio), where the PCM never
-        // reaches [LibVlcAudioOutput] and libvlc volume is per-player.
-        val pct = percentFor(volume)
         lastVolume = volume
         if (systemAudio) {
-            val mp = mediaPlayer
-            if (mp != null) {
-                runCatching { LibVlc.lib.libvlc_audio_set_volume(mp, pct) }
-            }
-            val ap = audioPlayer
-            if (ap != null) {
-                runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, pct) }
-            }
+            applyAudioLevel(mediaPlayer)
+            applyAudioLevel(audioPlayer)
         }
+    }
+
+    /**
+     * Pushes [lastVolume] onto one player as mixer percent plus mute flag.
+     *
+     * Both writes always happen together: leaving a stale `mute = 1` behind while raising the percent
+     * keeps the display silent, and leaving `mute = 0` behind while the percent is 0 relies on the
+     * very aout-level volume that a rebuild discards.
+     */
+    private fun applyAudioLevel(player: Pointer?) {
+        if (player == null) return
+        runCatching { LibVlc.lib.libvlc_audio_set_volume(player, LibVlcMutePolicy.mixerPercent(lastVolume)) }
+        runCatching { LibVlc.lib.libvlc_audio_set_mute(player, LibVlcMutePolicy.muteFlag(lastVolume)) }
     }
 
     /**
@@ -574,24 +584,16 @@ internal class LibVlcSessionManager(
      * is re-attached; the fresh `integer_mixer` then starts at its own default, so a value set once
      * at attach time is silently forgotten — the display drifts quieter until the user touches the
      * volume slider. Called on every PLAYING event to guarantee the mixer matches [lastVolume].
+     *
+     * The mute flag is re-asserted unconditionally here rather than only on drift, because that is
+     * the state a rebuild loses in the direction that matters: a muted display that comes back
+     * audible.
      */
     private fun reassertVolume(player: Pointer) {
         if (!systemAudio) return
-        val pct = percentFor(lastVolume)
-        runCatching { LibVlc.lib.libvlc_audio_set_volume(player, pct) }
-        audioPlayer?.let { ap -> runCatching { LibVlc.lib.libvlc_audio_set_volume(ap, pct) } }
+        applyAudioLevel(player)
+        audioPlayer?.let { applyAudioLevel(it) }
     }
-
-    /**
-     * Converts an effective volume into libvlc's 0..200 percent.
-     *
-     * [MediaPlayer] already multiplied user volume by distance attenuation (and the acoustics gain),
-     * so a value above 1.0 is legitimate up to libvlc's 200% ceiling. Clamping to 100 here silently
-     * threw away every boost and made a loud, nearby display sound capped — which reads as "the
-     * volume drops by itself" when a later [setVolume] lands below 1.0.
-     */
-    private fun percentFor(volume: Double): Int =
-        (volume.coerceIn(0.0, 2.0) * 100).toInt()
 
     /**
      * Cheap safety net for the aout-reset problem: read the mixer back at most once per second and
@@ -601,33 +603,50 @@ internal class LibVlcSessionManager(
      * seamless DASH re-seek can rebuild the `aout` without ever emitting PLAYING again — that is the
      * "it gets quiet a while after starting, and only a replay fixes it" report. Polling keeps the
      * cost to a single JNA call per second per playing display.
+     *
+     * The mute flag is verified as well, not just the percent: a rebuild resets both, and an
+     * un-muted-but-silent player is indistinguishable from a muted one until the user unmutes.
      */
     fun verifyVolume() {
         if (!systemAudio) return
         val now = System.currentTimeMillis()
         if (now - lastVolumeCheckMs < VOLUME_CHECK_INTERVAL_MS) return
         lastVolumeCheckMs = now
-        val expected = percentFor(lastVolume)
+        val expected = LibVlcMutePolicy.mixerPercent(lastVolume)
+        val expectedMute = LibVlcMutePolicy.muteFlag(lastVolume)
         // A Bilibili DASH rendition is split: the video player carries `:no-audio` and the dedicated
         // audio player owns the only audible output. Checking only the video player therefore left the
         // audible mixer unverified forever (its `libvlc_audio_get_volume` answers -1 because no audio
         // output is attached), which is how a display could come back from a world reload silent.
-        mediaPlayer?.let { repairMixer(it, expected) }
-        audioPlayer?.let { repairMixer(it, expected) }
+        mediaPlayer?.let { repairMixer(it, expected, expectedMute) }
+        audioPlayer?.let { repairMixer(it, expected, expectedMute) }
     }
 
     /**
-     * Restores [expected] percent on [player] when its mixer reports a real, different level.
+     * Restores [expected] percent and [expectedMute] on [player] when the player reports other values.
      *
-     * libvlc returns -1 while no audio output is attached yet (between fragments, or before the first
-     * frame decodes). That is not drift: writing a value there would race the aout setup, so only a
-     * mixer that reports an actual different level is repaired.
+     * libvlc returns -1 for both getters while no audio output is attached yet (between fragments, or
+     * before the first frame decodes). That is not drift: writing there would race the aout setup, so
+     * only a player that reports actual different values is repaired.
+     *
+     * Mute is compared and restored independently of the percent. Volume is aout-scoped and is lost
+     * on every rebuild; mute is player-scoped but libvlc re-applies it to the new aout only when it is
+     * set explicitly, so a rebuild can still leave a muted display audible.
      */
-    private fun repairMixer(player: Pointer, expected: Int) {
+    private fun repairMixer(player: Pointer, expected: Int, expectedMute: Int) {
         val actual = runCatching { LibVlc.lib.libvlc_audio_get_volume(player) }.getOrDefault(-1)
-        if (actual < 0 || actual == expected) return
-        logger.debug("$debugLabel libvlc mixer drifted: {} -> {} (aout rebuild); restoring.", actual, expected)
-        runCatching { LibVlc.lib.libvlc_audio_set_volume(player, expected) }
+        if (actual >= 0 && actual != expected) {
+            logger.debug("$debugLabel libvlc mixer drifted: {} -> {} (aout rebuild); restoring.", actual, expected)
+            runCatching { LibVlc.lib.libvlc_audio_set_volume(player, expected) }
+        }
+        // `get_mute` is not part of the libvlc 3.0 public ABI on every build, so an unsupported call
+        // answers -1 through the runCatching and simply skips the check instead of thrashing a write
+        // every second.
+        val actualMute = runCatching { LibVlc.lib.libvlc_audio_get_mute(player) }.getOrDefault(-1)
+        if (actualMute >= 0 && actualMute != expectedMute) {
+            logger.debug("$debugLabel libvlc mute drifted: {} -> {} (aout rebuild); restoring.", actualMute, expectedMute)
+            runCatching { LibVlc.lib.libvlc_audio_set_mute(player, expectedMute) }
+        }
     }
 
     /** Opens (or reuses) the shared Java Sound audio line for this display. */
@@ -820,7 +839,7 @@ internal class LibVlcSessionManager(
             // the current pair in place. Reuse them through the exact same attach path below (which
             // already skips stop() on Android) rather than a parallel one, so volume re-assertion,
             // isPlaying and the `started` latch all keep happening.
-            val reusingNativePlayers = systemAudio && androidNativePlayerBudgetExhausted
+            val reusingNativePlayers = systemAudio && (androidNativePlayerBudgetExhausted || AndroidPlayerLedger.exhausted)
             if (reusingNativePlayers && mediaPlayer != null) {
                 logger.warn("$debugLabel reusing the live Android players in place (AudioTrack budget spent).")
             }
@@ -899,12 +918,13 @@ internal class LibVlcSessionManager(
                     if (lifecycleGeneration.get() != lifecycleToken || stopped.get() || released.get()) return@submit
                     LibVlc.lib.libvlc_media_player_play(activeMp)
                 }
-                // libvlc volume is per-player. Re-assert it after every fresh play so both the muxed
-                // video path and a separate Android audio player honor the user's pre-start volume.
+                // libvlc volume is per-player and mute is per-player. Re-assert both after every fresh
+                // play so the muxed video path and a separate Android audio player honor the user's
+                // pre-start level — including a pre-start mute, which a `volume = 0` write would lose
+                // as soon as the aout is rebuilt.
                 if (systemAudio) {
-                    val volumePercent = percentFor(lastVolume)
-                    runCatching { LibVlc.lib.libvlc_audio_set_volume(activeMp, volumePercent) }
-                    ap?.let { runCatching { LibVlc.lib.libvlc_audio_set_volume(it, volumePercent) } }
+                    applyAudioLevel(activeMp)
+                    applyAudioLevel(ap)
                 }
                 if (!lifecycleIsCurrent(lifecycleToken)) return@submit
                 isPlaying = true
@@ -1595,16 +1615,19 @@ internal class LibVlcSessionManager(
         synchronized(lifecycleLock) {
             if (!systemAudio) return
             // Every retirement permanently leaks one OpenSL ES aout (and its AudioTrack) on this
-            // build, so stop retiring once the budget is spent rather than burning the rest of
-            // Android's 32-AudioTrack quota. The caller then reuses the current players in place.
-            if (!AudioTrackBudget.allowsRetire(androidRetireCount, ANDROID_RETIRE_BUDGET)) {
+            // build, so stop retiring once the PROCESS-wide budget is spent rather than burning the
+            // rest of Android's 32-AudioTrack quota. The caller then reuses the current players in
+            // place. The counter must be process-wide (AndroidPlayerLedger): this session manager is
+            // rebuilt for every video change, so a per-session count restarted at zero and let a
+            // long-lived process leak slots until the aout could no longer be created at all.
+            if (AndroidPlayerLedger.exhausted) {
                 if (!androidNativePlayerBudgetExhausted) {
                     androidNativePlayerBudgetExhausted = true
                     logger.warn(
-                        "$debugLabel Android native player budget spent ({} retirements); " +
+                        "$debugLabel Android native player budget spent ({} retirements process-wide); " +
                             "quieting the current players for in-place reuse instead of leaking " +
                             "more AudioTrack slots.",
-                        androidRetireCount,
+                        AndroidPlayerLedger.retireCount,
                     )
                 }
                 // The caller will re-attach media to these very players. set_media on a player whose
@@ -1615,27 +1638,33 @@ internal class LibVlcSessionManager(
                 audioPlayer?.let { runCatching { pauseAndroidPlayerAndAwait(it) } }
                 return
             }
-            androidRetireCount++
-            if (androidRetireCount == 1 || androidRetireCount % 4 == 0) {
-                logger.info(
-                    "$debugLabel Android native player retirements: {}/{} ({} AudioTrack slots " +
-                        "left; each retirement permanently holds one on this build).",
-                    androidRetireCount,
-                    ANDROID_RETIRE_BUDGET,
-                    AudioTrackBudget.remainingSlots(androidRetireCount, ANDROID_RETIRE_BUDGET),
-                )
-            }
+            // Only players that actually exist cost an AudioTrack slot. The very first start()
+            // retires before creating anything; charging it burned budget that was never spent and
+            // is what made the field log jump from 1/14 to 4/14 within a single session.
+            var retiredHere = 0
             mediaPlayer?.let { player ->
                 deactivateVideoCallbacks(player)
                 pauseAndroidPlayerAndAwait(player)
                 retiredAndroidPlayers += player
+                retiredHere++
             }
             audioPlayer?.let { player ->
                 pauseAndroidPlayerAndAwait(player)
                 retiredAndroidPlayers += player
+                retiredHere++
             }
             mediaPlayer = null
             audioPlayer = null
+            if (retiredHere == 0) return
+            val total = AndroidPlayerLedger.record(retiredHere)
+            androidRetireCount = total
+            logger.info(
+                "$debugLabel Android native player retirements: {}/{} ({} AudioTrack slots " +
+                    "left; each retirement permanently holds one on this build).",
+                total,
+                ANDROID_RETIRE_BUDGET,
+                AudioTrackBudget.remainingSlots(total, ANDROID_RETIRE_BUDGET),
+            )
         }
     }
 

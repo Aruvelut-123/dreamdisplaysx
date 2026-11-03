@@ -1,8 +1,8 @@
 package com.dreamdisplayx.media.player.pipeline
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.player.GpuTextureRef
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.LockSupport
@@ -131,7 +131,7 @@ internal object FramePacing {
     private val lastWarnNanos = AtomicLong(0)
 
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/FramePacing")
+    private val logger = DreamLog.of("FramePacing")
 
     /**
      * Paces the reader thread against the audio clock: parks / spins until [videoPts] is due, then re-samples the clock to

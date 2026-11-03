@@ -1,11 +1,11 @@
 package com.dreamdisplayx.media.player.util
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.natives.NativesDownloader
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.NativeLibrary
 import com.sun.jna.Pointer
-import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileOutputStream
 import java.net.JarURLConnection
@@ -26,7 +26,7 @@ import java.util.jar.JarFile
  */
 object LibVlcNativesLoader {
 
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/LibVlcNatives")
+    private val logger = DreamLog.of("LibVlcNatives")
 
     /** Cached libvlc version string, populated after a successful load. */
     @Volatile

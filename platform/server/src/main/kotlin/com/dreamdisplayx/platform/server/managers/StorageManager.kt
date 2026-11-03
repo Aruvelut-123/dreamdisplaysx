@@ -45,7 +45,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
 import org.jspecify.annotations.NullMarked
 import org.slf4j.Logger
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 import java.io.File
 import java.util.*
 import kotlin.time.Instant
@@ -200,7 +200,7 @@ class StorageManager(
     useSSL: Boolean = false,
     jdbcUrl: String = "",
 ) {
-    private val logger: Logger = LoggerFactory.getLogger(javaClass)
+    private val logger: Logger = DreamLog.of("Storage").delegate
     private val table = DisplaysTable(tablePrefix)
     private val playlistTable = PlaylistsTable(tablePrefix)
     private val playlistItemsTable = PlaylistItemsTable(tablePrefix)

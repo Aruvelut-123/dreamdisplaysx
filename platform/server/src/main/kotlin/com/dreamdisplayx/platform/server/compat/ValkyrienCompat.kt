@@ -1,10 +1,10 @@
 package com.dreamdisplayx.platform.server.compat
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.display.geometry.ShipTransformSource
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.Level
-import org.slf4j.LoggerFactory
 import java.lang.reflect.Method
 
 /**
@@ -30,7 +30,7 @@ import java.lang.reflect.Method
  * agree on which structure owns a block.
  */
 object ValkyrienCompat {
-    private val logger = LoggerFactory.getLogger(javaClass)
+    private val logger = DreamLog.of("ValkyrienCompat")
 
     /** `org.valkyrienskies.mod.common.VSGameUtilsKt`, the Kotlin file facade with the static helpers. */
     private const val GAME_UTILS = "org.valkyrienskies.mod.common.VSGameUtilsKt"

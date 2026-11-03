@@ -1,11 +1,11 @@
 package com.dreamdisplayx.platform.server.credentials
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.json.DreamJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
@@ -25,7 +25,7 @@ import javax.crypto.spec.SecretKeySpec
  * for cross-server synchronization.
  */
 object CredentialStore {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/CredentialStore")
+    private val logger = DreamLog.of("CredentialStore")
 
     private const val KEY_SIZE_BITS = 256
     private const val IV_BYTES = 12

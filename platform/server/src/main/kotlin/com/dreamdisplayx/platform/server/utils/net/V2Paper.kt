@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.utils.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.api.playback.model.FullscreenAckAction
 import com.dreamdisplayx.api.playback.model.PlaybackAction
@@ -21,7 +22,6 @@ import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.bukkit.entity.Player
 import org.bukkit.plugin.messaging.PluginMessageListener
 import org.jspecify.annotations.NullMarked
-import org.slf4j.LoggerFactory
 
 /** The single protocol-v2 plugin-message channel. */
 const val V2_CHANNEL: String = "dreamdisplayx:v2"
@@ -35,7 +35,7 @@ const val V3_CHANNEL: String = "dreamdisplayx:v3"
 @PaperOnly
 @NullMarked
 object PaperV2Networking : PluginMessageListener {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/PaperV2Networking")
+    private val logger = DreamLog.of("PaperV2Networking")
     private val plugin: PaperServer by lazy { PaperServer.getInstance() }
 
     /** Encodes [packet] once and sends it to every non-null player in [players]. */

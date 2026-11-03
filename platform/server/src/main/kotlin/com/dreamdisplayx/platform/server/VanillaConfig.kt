@@ -1,7 +1,7 @@
 package com.dreamdisplayx.platform.server
 
+import com.dreamdisplayx.util.log.DreamLog
 import net.minecraft.server.level.ServerPlayer
-import org.slf4j.LoggerFactory
 import org.tomlj.Toml
 import org.tomlj.TomlTable
 import java.io.File
@@ -14,7 +14,7 @@ import java.nio.file.Files
  * Different from the `Paper` implementation ([Config]) mainly in resource lookup and locale API.
  */
 class VanillaConfig(private val configDir: File) {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ServerConfig")
+    private val logger = DreamLog.of("ServerConfig")
 
     private val configFile = File(configDir, "config.toml")
 
@@ -37,7 +37,7 @@ class VanillaConfig(private val configDir: File) {
         createDefaultConfig()
         langStore.extractLangFiles()
         load()
-        langStore.loadMessages(logger)
+        langStore.loadMessages(logger.delegate)
     }
 
     private fun createDefaultConfig() {
@@ -97,7 +97,7 @@ class VanillaConfig(private val configDir: File) {
     fun reload() {
         load()
         langStore.extractLangFiles()
-        langStore.loadMessages(logger)
+        langStore.loadMessages(logger.delegate)
     }
 
     fun getMessageForPlayer(player: ServerPlayer?, key: String): Any? {

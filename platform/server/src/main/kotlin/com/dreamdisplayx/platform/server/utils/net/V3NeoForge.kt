@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.utils.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.protocol.model.PacketDirection
 import com.dreamdisplayx.core.protocol.common.PacketRegistry
 import com.dreamdisplayx.platform.client.Initializer
@@ -8,7 +9,6 @@ import com.dreamdisplayx.platform.server.utils.RegionUtil
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
 import net.minecraft.server.level.ServerPlayer
 import net.neoforged.neoforge.network.registration.PayloadRegistrar
-import org.slf4j.LoggerFactory
 
 /**
  * Generation-3 batch receiver for the `NeoForge` flavor; mirrors [FabricV3Networking]. Without this
@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory
  */
 @NeoForgeOnly
 object NeoForgeV3Networking {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/NeoForgeV3Networking")
+    private val logger = DreamLog.of("NeoForgeV3Networking")
 
     /**
      * Registers the single v3 batch envelope receiver against [registrar]. Must be called exactly

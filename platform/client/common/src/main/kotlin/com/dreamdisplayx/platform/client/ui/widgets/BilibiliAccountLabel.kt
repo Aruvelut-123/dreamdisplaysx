@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.widgets
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.platform.client.utils.literalText
 import com.dreamdisplayx.media.source.bilibili.BilibiliApi
 import com.dreamdisplayx.platform.client.render.Thumbnails
@@ -16,7 +17,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlin.math.roundToInt
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
-import org.slf4j.LoggerFactory
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -44,7 +44,7 @@ data class BilibiliAccountInfo(
  * Renders nothing when not logged in.
  */
 object BilibiliAccountLabel {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliAccount")
+    private val logger = DreamLog.of("BilibiliAccount")
 
     @Volatile
     private var cachedInfo: BilibiliAccountInfo? = null

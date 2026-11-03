@@ -1,12 +1,12 @@
 package com.dreamdisplayx.platform.client.capabilities
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.core.protocol.common.packets.ClientHello
 import com.dreamdisplayx.core.protocol.common.packets.ServerHello
 import com.dreamdisplayx.core.protocol.common.hasFeature
 import com.dreamdisplayx.platform.client.net.ProtocolRouter
 import com.dreamdisplayx.util.GeneralUtil
-import org.slf4j.LoggerFactory
 
 /**
  * Default [CapabilityNegotiationService]. Local capabilities are probed once via the [ClientCapabilityDetector] and cached
@@ -16,7 +16,7 @@ class DefaultCapabilityNegotiationService(
     private val detector: ClientCapabilityDetector,
 ) : CapabilityNegotiationService {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/CapabilityNegotiation")
+    private val logger = DreamLog.of("CapabilityNegotiation")
 
     /** Probed once on first access; capability detection is stable for the process lifetime. */
     override val localCapabilities: ClientHello by lazy {

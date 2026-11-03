@@ -1,11 +1,11 @@
 package com.dreamdisplayx.media.player.pipeline
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.player.FrameUploader
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.media.player.MediaPlayer
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -22,7 +22,7 @@ internal class FrameSurface(
     uploaderFactory: FrameUploaderFactory,
     private val pixelFormat: FramePixelFormat = FramePixelFormat.RGB24,
 ) {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/FrameSurface")
+    private val logger = DreamLog.of("FrameSurface")
 
     /** Platform GPU upload sink for this channel; holds persistent upload state (e.g. a PBO ring). */
     private val uploader: FrameUploader = uploaderFactory.create()

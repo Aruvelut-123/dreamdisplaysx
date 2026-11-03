@@ -1,9 +1,9 @@
 package com.dreamdisplayx.platform.server
 
+import com.dreamdisplayx.util.log.DreamLog
 import io.github.arnodoelinger.platformweaver.PaperOnly
 import org.bukkit.entity.Player
 import org.jspecify.annotations.NullMarked
-import org.slf4j.LoggerFactory
 import org.tomlj.Toml
 import org.tomlj.TomlTable
 import java.io.File
@@ -21,7 +21,7 @@ class Config(private val plugin: PaperServer) {
     private val configFile = File(plugin.dataFolder, "config.toml")
 
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/Config")
+    private val logger = DreamLog.of("Config")
 
     private val langStore = LanguageStore(
         dataDir = plugin.dataFolder,
@@ -55,7 +55,7 @@ class Config(private val plugin: PaperServer) {
         createDefaultConfig()
         langStore.extractLangFiles()
         load()
-        langStore.loadMessages(logger)
+        langStore.loadMessages(logger.delegate)
     }
 
     /** Copies the bundled `config.toml` into the plugin folder on first run. */
@@ -85,7 +85,7 @@ class Config(private val plugin: PaperServer) {
     fun reload() {
         load()
         langStore.extractLangFiles()
-        langStore.loadMessages(logger)
+        langStore.loadMessages(logger.delegate)
     }
 
     /**

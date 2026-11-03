@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.credentials
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.platform.server.storage.StorageBackend
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
@@ -11,7 +12,6 @@ import org.jetbrains.exposed.v1.jdbc.replace
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
-import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
@@ -35,7 +35,7 @@ class SqlCredentialSyncBackend(
     useSSL: Boolean = false,
     jdbcUrl: String = "",
 ) : CredentialSyncBackend {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/CredentialSync")
+    private val logger = DreamLog.of("CredentialSync")
 
     private val table = CredentialTable(tablePrefix)
 

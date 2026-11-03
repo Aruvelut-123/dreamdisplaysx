@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.VideoQuality
 import com.dreamdisplayx.api.playback.model.FullscreenAckAction
 import com.dreamdisplayx.api.playback.model.FullscreenMode
@@ -9,7 +10,6 @@ import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.net.ProtocolRouter
 import net.minecraft.client.Minecraft
-import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
  * as sessions start and stop.
  */
 object FullscreenController {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/FullscreenController")
+    private val logger = DreamLog.of("FullscreenController")
 
     /** How long a state waits for its display to load before being given up on. */
     private const val PENDING_TIMEOUT_MS = 5_000L

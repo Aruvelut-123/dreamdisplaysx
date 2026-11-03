@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.display.model.property.DisplayId
 import com.dreamdisplayx.api.display.service.DisplaySystem
 import com.dreamdisplayx.api.runtime.registry.service.getOrNull
@@ -16,7 +17,6 @@ import com.dreamdisplayx.platform.client.ui.widgets.BilibiliAccountLabel
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 //?} else
 /*import com.dreamdisplayx.platform.client.net.compat.CustomPacketPayload*/
-import org.slf4j.LoggerFactory
 
 /**
  * Single client-side dispatcher for incoming [DreamPacket]s (v2 and legacy-lifted alike) and the
@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory
  */
 object ClientPacketManager {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ClientPacketManager")
+    private val logger = DreamLog.of("ClientPacketManager")
 
     /** The platform [Mod] used to send raw payloads; set via [bind]. */
     private lateinit var mod: Mod

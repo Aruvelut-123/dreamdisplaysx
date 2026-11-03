@@ -1,7 +1,7 @@
 package com.dreamdisplayx.platform.server.credentials
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.core.protocol.common.packets.PlatformCredentials
-import org.slf4j.LoggerFactory
 
 /**
  * Shared login/logout logic for the `/display login` and `/display logout` commands, used by both
@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory
 object CredentialActions {
     private const val REFRESH_DELIMITER = "||"
 
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/CredentialActions")
+    private val logger = DreamLog.of("CredentialActions")
 
     /** Stores a global credential for [platform] and returns the snapshot. */
     fun globalLogin(platform: String, token: String): PlatformCredentials {

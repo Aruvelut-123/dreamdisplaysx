@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.utils.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.playback.model.DisplayAccess
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackMode
@@ -31,7 +32,6 @@ import io.github.arnodoelinger.platformweaver.PaperOnly
 import net.kyori.adventure.text.TextReplacementConfig
 import org.bukkit.entity.Player
 import org.jspecify.annotations.NullMarked
-import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
@@ -43,7 +43,7 @@ import java.util.*
 @NullMarked
 object DisplayActions {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DisplayActions")
+    private val logger = DreamLog.of("DisplayActions")
 
     /**
      * Bounds how often one display's video can be changed — each call persists to disk, broadcasts to

@@ -1,9 +1,9 @@
 package com.dreamdisplayx.media.player.cdn
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.util.net.DreamHttpClient
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
  * Non-Bilibili streams fall back to the simpler TTFB-based latency reorder.
  */
 object CdnSpeedProbe {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/CdnSpeedProbe")
+    private val logger = DreamLog.of("CdnSpeedProbe")
 
     /** Chunk size for on-the-fly bandwidth probes (short budget during playback). */
     private const val PROBE_BANDWIDTH_BYTES = 256 * 1024

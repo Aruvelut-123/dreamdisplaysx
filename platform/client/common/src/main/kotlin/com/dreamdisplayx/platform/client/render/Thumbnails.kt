@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.render
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.platform.client.utils.identifier
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier
@@ -18,7 +19,6 @@ import kotlinx.coroutines.launch
 import kotlinx.io.IOException
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.texture.DynamicTexture
-import org.slf4j.LoggerFactory
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -36,7 +36,7 @@ import kotlin.coroutines.cancellation.CancellationException
 /** Downloads, caches, and registers video thumbnails from YouTube and other sources as Minecraft textures. */
 object Thumbnails {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/Thumbnails")
+    private val logger = DreamLog.of("Thumbnails")
 
     /** The Minecraft texture [Identifier] for each video ID, or null if not yet loaded. */
     private val READY: Cache<String, Identifier> = Caffeine.newBuilder()

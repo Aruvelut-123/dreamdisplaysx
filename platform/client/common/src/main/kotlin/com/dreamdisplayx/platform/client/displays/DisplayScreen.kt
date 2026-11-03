@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.displays
 
+import com.dreamdisplayx.util.log.DreamLog
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.rendertype.RenderType
 //?} else
@@ -58,7 +59,6 @@ import com.dreamdisplayx.util.FacingUtil
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.texture.DynamicTexture
 import net.minecraft.core.BlockPos
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.util.*
 import kotlin.time.Duration.Companion.seconds
@@ -1635,7 +1635,7 @@ class DisplayScreen(
 
     companion object {
         /** Logger for replay-capture and diagnostic messages. */
-        private val logger = LoggerFactory.getLogger(javaClass)
+        private val logger = DreamLog.of("DisplayScreen")
 
         /** Ticks between voxel-acoustics re-probes; the DSP chain smooths across this gap. */
         private const val ENV_PROBE_INTERVAL_TICKS = 2

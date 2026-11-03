@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.api.runtime.registry.service.getOrNull
@@ -10,7 +11,6 @@ import com.dreamdisplayx.platform.client.popout.PopoutEvent
 import com.dreamdisplayx.platform.client.popout.PopoutManager
 import com.dreamdisplayx.platform.client.render.toUploadFormat
 import com.dreamdisplayx.platform.client.ui.*
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 
 /**
@@ -20,7 +20,7 @@ class DisplayPopoutManager(
     private val displayScreen: DisplayScreen,
 ) {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DisplayPopoutManager")
+    private val logger = DreamLog.of("DisplayPopoutManager")
 
     /** The separate `GLFW` popout window, or `null` when none has been created. */
     private var popoutWindow: VideoPopoutWindow? = null

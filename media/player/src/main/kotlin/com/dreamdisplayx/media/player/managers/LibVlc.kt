@@ -1,6 +1,8 @@
 package com.dreamdisplayx.media.player.managers
 
 import com.dreamdisplayx.media.player.util.LibVlcLogRotation
+import com.dreamdisplayx.util.log.DreamLog
+import com.dreamdisplayx.util.natives.AndroidPaths
 import com.sun.jna.Callback
 import com.sun.jna.CallbackThreadInitializer
 import com.sun.jna.Function
@@ -29,7 +31,7 @@ import java.util.concurrent.ConcurrentLinkedDeque
  */
 object LibVlc {
 
-    private val logger = org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
+    private val logger = com.dreamdisplayx.util.log.DreamLog.of("LibVlc")
 
     /**
      * JNA's default callback policy detaches a thread it attached after the first callback. VLC's
@@ -95,7 +97,15 @@ object LibVlc {
 
     /** Where the verbose libvlc log is mirrored. */
     private val verboseLibvlcLogFile: File by lazy {
-        File(System.getProperty("dreamdisplayx.libvlcLogFile", "./dreamdisplayx/logs/libvlc.log"))
+        System.getProperty("dreamdisplayx.libvlcLogFile")?.takeIf { it.isNotBlank() }?.let(::File)
+            ?: run {
+                // Requirement: keep the libvlc log beside Minecraft's own `latest.log`. `DreamLog`
+                // is configured with `<gameDir>/logs` during client init, which is the same folder
+                // the launcher's log viewer reads; `AndroidPaths.logsDirectory()` is the fallback
+                // for the paths that never call [DreamLog.configure] (dedicated servers, probes).
+                val directory = DreamLog.logDirectory() ?: AndroidPaths.logsDirectory()
+                File(directory ?: File("./logs"), "libvlc.log")
+            }
     }
 
     /** Lazily opened writer for the current run; the previous run is compressed before opening it. */
@@ -587,8 +597,7 @@ object LibVlc {
             val dec = PointerByReference()
             val enc = PointerByReference()
             if (lib.libvlc_media_player_get_video_decoder_info(player, dec, enc) != 0) {
-                org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/LibVlc")
-                    .debug("get_video_decoder_info returned non-zero for player; falling back to configured backend.")
+                logger.debug("get_video_decoder_info returned non-zero for player; falling back to configured backend.")
                 return configuredHwBackend()
             }
             val d = dec.value ?: return configuredHwBackend()
@@ -726,6 +735,22 @@ object LibVlc {
         // Audio
         fun libvlc_audio_set_volume(player: Pointer, volume: Int): Int
         fun libvlc_audio_get_volume(player: Pointer): Int
+        /**
+         * Player-level mute, declared so the mapping can be probed at call sites.
+         *
+         * This is NOT the same knob as `libvlc_audio_set_volume(player, 0)`. Volume lives on the
+         * `aout` instance and is therefore destroyed with it: the Android OpenSL ES `aout` is
+         * rebuilt on every DASH fragment seek (19 rebuilds in one field log, 0 `destroying audio
+         * output`), and the freshly built `integer_mixer` comes up at its own default — so a
+         * volume-0 mute silently un-mutes itself. Mute is stored on the media player and is
+         * re-applied by libvlc to whatever `aout` is current, which is why the UI mute button and
+         * a 0 % slider are expressed through it.
+         *
+         * The VLC-Android AAR exports it, but the JNA `Native.load` is lenient about missing
+         * symbols only until the first call, so [LibVlcMute] probes before use.
+         */
+        fun libvlc_audio_set_mute(player: Pointer, mute: Int)
+        fun libvlc_audio_get_mute(player: Pointer): Int
         fun libvlc_audio_get_track_count(player: Pointer): Int
         fun libvlc_audio_get_track(player: Pointer): Int
         fun libvlc_audio_set_track(player: Pointer, track: Int): Int

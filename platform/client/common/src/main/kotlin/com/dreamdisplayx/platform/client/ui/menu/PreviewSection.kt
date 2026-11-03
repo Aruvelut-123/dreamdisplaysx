@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.client.ui.menu
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.platform.client.utils.translatableText
 import com.dreamdisplayx.platform.client.utils.identifier
 //? if >=1.21.11 {
@@ -73,7 +74,7 @@ class PreviewSection(
     private var lastPresenceFrameNanos = 0L
 
     companion object {
-        private val logger = org.slf4j.LoggerFactory.getLogger("DreamDisplaysX/PreviewSection")
+        private val logger = DreamLog.of("PreviewSection")
 
         /** Enables the FPS debug label on the preview video (top-left) via -Ddreamdisplayx.debugFps=true. */
         private val DEBUG_FPS: Boolean =

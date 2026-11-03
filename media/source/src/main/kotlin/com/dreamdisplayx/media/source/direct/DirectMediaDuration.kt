@@ -1,7 +1,7 @@
 package com.dreamdisplayx.media.source.direct
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.net.DreamHttpClient
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -11,7 +11,7 @@ import java.nio.ByteOrder
  */
 internal object DirectMediaDuration {
 
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DirectMediaDuration")
+    private val logger = DreamLog.of("DirectMediaDuration")
 
     /** Cap on top-level boxes walked before giving up, so a malformed file cannot loop us. */
     private const val MAX_BOX_HOPS = 24

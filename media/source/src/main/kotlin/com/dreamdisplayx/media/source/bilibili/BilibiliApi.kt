@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.source.bilibili
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.source.url.BilibiliUrls
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.stream.model.MediaStream
@@ -13,7 +14,6 @@ import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.security.MessageDigest
 import kotlin.math.abs
@@ -71,7 +71,7 @@ data class BiliDanmakuVideo(
  */
 object BilibiliApi {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliApi")
+    private val logger = DreamLog.of("BilibiliApi")
 
     /** Lowercase hex digits, indexed by nibble — avoids `"%02x".format` per byte in [md5]. */
     private val HEX_CHARS = charArrayOf(

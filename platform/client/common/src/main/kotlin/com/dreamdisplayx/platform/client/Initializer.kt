@@ -13,9 +13,12 @@ import com.dreamdisplayx.platform.client.overlay.OverlayManager
 import com.dreamdisplayx.platform.client.render.DisplayYuvRenderTypes
 import com.dreamdisplayx.platform.client.ui.FullscreenOverlayManager
 import com.dreamdisplayx.platform.client.ui.MinecraftOverlayRenderContext
+import com.dreamdisplayx.platform.client.utils.GameDirectory
 import com.dreamdisplayx.platform.client.utils.MinecraftScreenUtil
 import com.dreamdisplayx.util.GeneralUtil
 import com.dreamdisplayx.util.OsInfo
+import com.dreamdisplayx.util.log.DreamLog
+import com.dreamdisplayx.util.natives.AndroidPaths
 import com.dreamdisplayx.util.natives.NativesDownloader
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
@@ -31,7 +34,6 @@ import net.minecraft.client.gui.GuiGraphics
 import com.dreamdisplayx.platform.client.ui.compat.GuiGraphics
 //?}
 */
-import org.slf4j.LoggerFactory
 
 /** Main mod initializer. */
 object Initializer {
@@ -39,7 +41,7 @@ object Initializer {
     const val MOD_ID: String = "dreamdisplayx"
 
     /** Logger for startup and lifecycle messages. */
-    private val logger = LoggerFactory.getLogger(javaClass)
+    private val logger = DreamLog.of("Initializer")
 
     /** Called once during mod startup; initializes config, disk cache, and the focuser thread. */
     fun onModInit(dreamDisplaysMod: Mod) {
@@ -53,6 +55,20 @@ object Initializer {
         if (!OsInfo.isMac && !OsInfo.isAndroid) {
             System.setProperty("java.awt.headless", "false")
         }
+
+        // Resolve the real game directory first: it decides both where mirrored logs go and which
+        // package the natives cache belongs to. `Minecraft.gameDirectory` is authoritative, but
+        // `AndroidPaths` cannot read it (it is a pure-JVM module), so hand it over explicitly.
+        val gameDirectory = GameDirectory.resolve()
+        AndroidPaths.registerGameDirectory(gameDirectory)
+
+        // Route this fork's logging through one entry point and mirror the diagnostic channels into
+        // `<gameDir>/logs`, beside `latest.log`, rotated the way vanilla rotates its own logs. Must
+        // run before the first subsystem logs anything and before LibVlc resolves its log path.
+        val logsDirectory = GameDirectory.logs() ?: AndroidPaths.logsDirectory()
+        DreamLog.configure(logsDirectory)
+        DreamLog.mirrorToFile("LibVlc")
+
         ClientPacketManager.bind(dreamDisplaysMod)
 
         // Fetch the native LibVLC runtime into ./dreamdisplayx/natives/ before
@@ -73,6 +89,13 @@ object Initializer {
      */
     fun onServerJoined(serverId: String) {
         ClientStateManager.connectedServerId = serverId
+        // A JOIN is the only reliable save/world boundary: a dimension change swaps the level object
+        // without emitting it, so anything still parked in unloadedScreens here belongs to the world
+        // we just left. Restoring it would recreate that world's displays (and their native players,
+        // and their AUDIO) inside the new one — reported as "world A's video keeps playing in world B,
+        // then world A is silent when you go back" because both worlds share the "singleplayer" id and
+        // the same overworld dimension key, so the distance census happily resurrected them.
+        DisplayRegistry.discardUnloadedScreensForJoin(serverId)
         DisplayRegistry.loadScreensForServer(serverId)
         DreamServices.registry.getOrNull<ClientApplication>()
             ?.emit(ClientLifecycleEvent.ServerJoined(serverId))

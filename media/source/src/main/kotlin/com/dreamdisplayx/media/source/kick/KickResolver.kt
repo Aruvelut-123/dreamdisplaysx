@@ -1,11 +1,11 @@
 package com.dreamdisplayx.media.source.kick
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.source.service.MediaResolverService
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.source.model.ResolvedMedia
 import com.dreamdisplayx.media.source.platform.LiveAwareResolvedMediaCache
-import org.slf4j.LoggerFactory
 
 /**
  * In-process Kick resolver: one site-API call (see [KickApi]), mirroring the other
@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory
  */
 object KickResolver : MediaResolverService {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/KickResolver")
+    private val logger = DreamLog.of("KickResolver")
 
     /** Alongside the other first-party in-process resolvers. */
     override val priority: Int = 10

@@ -1,9 +1,9 @@
 package com.dreamdisplayx.platform.client.login
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.media.source.bilibili.BilibiliAuth
 import com.dreamdisplayx.media.source.bilibili.BilibiliAuth.PollResult
 import net.minecraft.client.Minecraft
-import org.slf4j.LoggerFactory
 
 /**
  * Drives the client-side Bilibili login flow for the [PlatformLoginScreen]: QR-code login (scan
@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
  * client's resolver.
  */
 object BilibiliLoginManager {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/BilibiliLogin")
+    private val logger = DreamLog.of("BilibiliLogin")
 
     /** The QR image content currently displayed, or null when no QR session is active. */
     @Volatile

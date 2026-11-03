@@ -1,18 +1,18 @@
 package com.dreamdisplayx.media.source.vimeo
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.source.service.MediaResolverService
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.source.model.ResolvedMedia
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
-import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 /** In-process Vimeo resolver: one call to the player config endpoint (see [VimeoApi]). */
 object VimeoResolver : MediaResolverService {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/VimeoResolver")
+    private val logger = DreamLog.of("VimeoResolver")
 
     /** Alongside the other first-party in-process resolvers. */
     override val priority: Int = 10

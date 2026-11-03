@@ -26,7 +26,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.server.MinecraftServer
 import net.minecraft.world.level.storage.LevelResource
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 import java.io.File
 
 /**
@@ -124,7 +124,7 @@ class Server : ModInitializer {
 
     companion object {
         /** Logger. */
-        val logger = LoggerFactory.getLogger("DreamDisplaysX")
+        val logger = DreamLog.of("Server")
 
         /** The mod version string, resolved from the `Fabric` mod container. */
         val serverVersion: String? by lazy {

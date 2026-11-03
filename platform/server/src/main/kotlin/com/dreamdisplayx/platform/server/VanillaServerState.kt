@@ -2,7 +2,7 @@ package com.dreamdisplayx.platform.server
 
 import com.dreamdisplayx.platform.server.managers.StorageManager
 import net.minecraft.server.MinecraftServer
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 
 /**
  * Shared runtime state for the vanilla Minecraft API loaders (`Fabric` and `NeoForge`). Both loaders populate the same
@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
  */
 object VanillaServerState {
     /** Logger shared by both vanilla loaders. */
-    val logger = LoggerFactory.getLogger("DreamDisplaysX")
+    val logger = DreamLog.of("Server")
 
     /** Set once during `onLoad` / `init`, before [server] or [storage] exist. */
     lateinit var config: VanillaConfig

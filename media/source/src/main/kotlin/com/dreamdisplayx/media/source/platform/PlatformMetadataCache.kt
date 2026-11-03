@@ -5,7 +5,7 @@ import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.github.benmanes.caffeine.cache.Expiry
 import kotlinx.coroutines.launch
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 import java.util.concurrent.TimeUnit
 
 /**
@@ -18,7 +18,7 @@ class PlatformMetadataCache(
     private val staticTtlMinutes: Long,
     private val fetch: (key: String) -> PlatformVideoMetadata?,
 ) {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/${name}MetadataCache")
+    private val logger = DreamLog.of("${name}MetadataCache")
 
     private val cache: Cache<String, PlatformVideoMetadata> = Caffeine.newBuilder()
         .maximumSize(500)

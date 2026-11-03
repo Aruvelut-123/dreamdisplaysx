@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.source.twitch
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.util.*
 import com.dreamdisplayx.util.json.DreamJson
@@ -7,7 +8,6 @@ import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
-import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 
 /** A single piece of Twitch metadata resolved for a channel, VOD, or clip. */
@@ -64,7 +64,7 @@ data class TwitchClipPlayback(
  */
 object TwitchApi {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/TwitchApi")
+    private val logger = DreamLog.of("TwitchApi")
 
     /** GQL URL. */
     private const val GQL_URL = "https://gql.twitch.tv/gql"

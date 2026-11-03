@@ -79,4 +79,48 @@ class AudioTrackBudgetTest {
     fun `a zero budget never allows retiring`() {
         assertFalse(AudioTrackBudget.allowsRetire(0, 0))
     }
+
+    @Test
+    fun `the process ledger ignores retirements that spent nothing`() {
+        AndroidPlayerLedger.resetForTest()
+
+        assertFalse(AndroidPlayerLedger.exhausted, "a fresh process has the whole budget")
+
+        // The field bug this pins: `start()` retires before it has created anything, so a session
+        // with no live player used to burn budget it never spent (`1/14 -> 4/14` jumps).
+        assertEquals(0, AndroidPlayerLedger.record(0))
+        assertEquals(0, AndroidPlayerLedger.record(-1))
+        assertEquals(0, AndroidPlayerLedger.retireCount)
+    }
+
+    @Test
+    fun `the process ledger accumulates across sessions`() {
+        AndroidPlayerLedger.resetForTest()
+        val budget = AudioTrackBudget.retireBudget
+
+        // Two "sessions" retiring one player each: the total must add up, because the AudioTrack
+        // slots belong to the process, not to the LibVlcSessionManager instance that took them.
+        AndroidPlayerLedger.record(1)
+        val after = AndroidPlayerLedger.record(1)
+
+        assertEquals(2, after)
+        assertEquals(2, AndroidPlayerLedger.retireCount)
+        assertFalse(AndroidPlayerLedger.exhausted, "two retirements are far inside a $budget budget")
+    }
+
+    @Test
+    fun `the process ledger reports exhaustion exactly at the budget`() {
+        AndroidPlayerLedger.resetForTest()
+        val budget = AudioTrackBudget.retireBudget
+
+        AndroidPlayerLedger.record(budget - 1)
+        assertFalse(AndroidPlayerLedger.exhausted, "one retirement must still fit")
+
+        AndroidPlayerLedger.record(1)
+        assertTrue(
+            AndroidPlayerLedger.exhausted,
+            "spending the budget must stop further retirements, or the process hits Android's cap",
+        )
+        AndroidPlayerLedger.resetForTest()
+    }
 }

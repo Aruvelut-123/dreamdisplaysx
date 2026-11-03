@@ -1,12 +1,12 @@
 package com.dreamdisplayx.util.natives
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.OsInfo
 import com.dreamdisplayx.util.net.DreamHttpClient
 import com.dreamdisplayx.util.net.DreamHttpClient.RequestOptions
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
-import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -30,7 +30,7 @@ import java.nio.file.Files
  */
 object NativesDownloader {
 
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/NativesDownloader")
+    private val logger = DreamLog.of("NativesDownloader")
 
     private const val BASE_DIR = "./dreamdisplayx/natives"
 

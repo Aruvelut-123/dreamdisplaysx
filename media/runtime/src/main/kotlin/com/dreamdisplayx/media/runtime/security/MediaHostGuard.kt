@@ -1,11 +1,11 @@
 package com.dreamdisplayx.media.runtime.security
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.net.DreamHttpClient
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.github.benmanes.caffeine.cache.Expiry
 import kotlinx.io.IOException
-import org.slf4j.LoggerFactory
 import java.net.InetAddress
 import java.net.URI
 import java.util.concurrent.TimeUnit
@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
  */
 object MediaHostGuard {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/MediaHostGuard")
+    private val logger = DreamLog.of("MediaHostGuard")
 
     /** Escape hatch for operators who intentionally host media on a private network. */
     private val allowPrivate: Boolean =

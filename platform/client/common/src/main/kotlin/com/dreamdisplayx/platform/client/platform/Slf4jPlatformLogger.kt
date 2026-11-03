@@ -1,12 +1,12 @@
 package com.dreamdisplayx.platform.client.platform
 
 import com.dreamdisplayx.api.platform.capability.PlatformLogger
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 
 /** [PlatformLogger] over slf4j; [child] loggers nest names as `parent/child`. */
 class Slf4jPlatformLogger(private val name: String) : PlatformLogger {
     /** The underlying slf4j logger named [name]. */
-    private val delegate = LoggerFactory.getLogger(name)
+    private val delegate = DreamLog.of(name).delegate
 
     /** Logs [message] at `INFO`. */
     override fun info(message: String) = delegate.info(message)

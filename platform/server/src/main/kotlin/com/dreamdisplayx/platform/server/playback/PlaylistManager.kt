@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.playback
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.playback.model.DisplayPlaylist
 import com.dreamdisplayx.api.playback.model.PlaylistCommandAction
 import com.dreamdisplayx.api.playback.model.PlaylistEndBehavior
@@ -10,7 +11,6 @@ import com.dreamdisplayx.core.protocol.common.packets.PlaylistItem
 import com.dreamdisplayx.core.protocol.common.packets.PlaylistState
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.managers.DisplayManager
-import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object PlaylistManager {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/PlaylistManager")
+    private val logger = DreamLog.of("PlaylistManager")
 
     /** Zero UUID used by protobuf defaults for absent optional item identities. */
     private val ZERO_UUID = UUID(0L, 0L)

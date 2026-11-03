@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.source.vimeo
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.api.media.stream.model.MediaStream
 import com.dreamdisplayx.api.media.stream.model.MediaStreamType
@@ -8,7 +9,6 @@ import com.dreamdisplayx.util.*
 import com.dreamdisplayx.util.json.DreamJson
 import com.dreamdisplayx.util.net.DreamHttpClient
 import kotlinx.serialization.json.JsonObject
-import org.slf4j.LoggerFactory
 
 /** A resolved Vimeo video: its playable [streams], [metadata], length, and seekability. */
 data class VimeoPlayback(
@@ -24,7 +24,7 @@ data class VimeoPlayback(
  */
 object VimeoApi {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/VimeoApi")
+    private val logger = DreamLog.of("VimeoApi")
 
     /** Vimeo's config endpoint gates some videos on a browser-like request, so mimic one. */
     private val HEADERS = DreamHttpClient.headersOf(

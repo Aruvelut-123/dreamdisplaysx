@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.playback
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.playback.model.PipPinRecord
 import com.dreamdisplayx.platform.server.managers.ActionThrottle
 import com.dreamdisplayx.platform.server.managers.DisplayManager
@@ -9,7 +10,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * reaching them out of range.
  */
 object PipPinManager {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/PipPinManager")
+    private val logger = DreamLog.of("PipPinManager")
 
     private lateinit var transport: PlaybackTransport
 

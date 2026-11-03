@@ -1,9 +1,9 @@
 package com.dreamdisplayx.platform.server.api
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.display.event.DisplayVeto
 import com.dreamdisplayx.api.display.event.DisplayVetoRegistry
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
-import org.slf4j.LoggerFactory
 import java.util.UUID
 
 /**
@@ -16,7 +16,7 @@ import java.util.UUID
  */
 object ServerVetoes {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/ServerVetoes")
+    private val logger = DreamLog.of("ServerVetoes")
 
     /** The registry plugins subscribe to. */
     val registry = DisplayVetoRegistry()

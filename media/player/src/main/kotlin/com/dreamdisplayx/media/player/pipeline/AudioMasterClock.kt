@@ -1,6 +1,6 @@
 package com.dreamdisplayx.media.player.pipeline
 
-import org.slf4j.LoggerFactory
+import com.dreamdisplayx.util.log.DreamLog
 
 /**
  * Turns [AudioSink]'s per-session line clock into the single master clock every video pipe paces
@@ -19,7 +19,7 @@ internal class AudioMasterClock(
      */
     private val requestAudioResync: (gapNanos: Long) -> Unit = {},
 ) {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/AudioMasterClock")
+    private val logger = DreamLog.of("AudioMasterClock")
 
     private companion object {
         /** No epoch seen yet ([AudioSink] epochs start at 1). */

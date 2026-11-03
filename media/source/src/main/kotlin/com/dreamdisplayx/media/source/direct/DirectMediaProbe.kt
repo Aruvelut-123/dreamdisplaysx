@@ -1,7 +1,7 @@
 package com.dreamdisplayx.media.source.direct
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.net.DreamHttpClient
-import org.slf4j.LoggerFactory
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.*
@@ -11,7 +11,7 @@ import java.util.*
  */
 internal object DirectMediaProbe {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DirectMediaProbe")
+    private val logger = DreamLog.of("DirectMediaProbe")
 
     private const val CONNECT_TIMEOUT_MS = 8_000L
     private const val READ_TIMEOUT_MS = 8_000L

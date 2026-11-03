@@ -1,12 +1,12 @@
 package com.dreamdisplayx.platform.server.utils.net
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.platform.client.net.ProxyPayload
 import com.dreamdisplayx.platform.server.proxy.VanillaProxyBridge
 import com.dreamdisplayx.platform.server.utils.RegionUtil
 import io.github.arnodoelinger.platformweaver.NeoForgeOnly
 import net.minecraft.server.level.ServerPlayer
 import net.neoforged.neoforge.network.registration.PayloadRegistrar
-import org.slf4j.LoggerFactory
 
 /**
  * `dreamdisplayx:proxy` networking for the `NeoForge` flavor. Mirrors [NeoForgeV2Networking]'s
@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
 @NeoForgeOnly
 object NeoForgeProxyNetworking {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/NeoForgeProxyNetworking")
+    private val logger = DreamLog.of("NeoForgeProxyNetworking")
 
     /**
      * Registers the single proxy envelope receiver against [registrar]. Must be called exactly once

@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.source.direct
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.source.model.CustomMediaKind
 import com.dreamdisplayx.api.media.source.model.MediaMetadata
@@ -15,7 +16,6 @@ import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.dreamdisplayx.util.net.DreamHttpClient
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
-import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 /**
@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
  */
 object DirectStreamResolver : MediaResolverService {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/DirectStreamResolver")
+    private val logger = DreamLog.of("DirectStreamResolver")
 
     /** Above the extractor resolvers: when a URL really is media, no extractor should see it. */
     override val priority: Int = 20

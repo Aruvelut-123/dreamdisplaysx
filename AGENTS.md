@@ -465,6 +465,57 @@ Three reports shared one theme: state that only ever existed on the video player
   (`Dream DisplaysX v… (<hash>) starting...`) and `md5sum` the attachments. A `libvlc.log`
   byte-identical to an earlier round is a re-upload of the old scene, not evidence about a new build.
 
+### 2026-11-01 — Mute and volume must be two separate libvlc knobs
+- Issue #4's tester reported that after the level drift was fixed, the mute button and a 0 % slider "do
+  nothing", and that the sound level wanders as the phone switches earpiece/speaker. The attached
+  `libvlc.log` pins the cause: 19 `creating audio output` / 19 `using opensles_android` / **0**
+  `destroying audio output`, and `integer_mixer` instantiated only on the 6 `reusing audio output`
+  paths.
+- `libvlc_audio_set_volume` is a property of the **audio-output instance**, so every write onto a
+  freshly built aout lands in a mixer that does not exist yet and the aout default wins. Silence
+  therefore cannot be expressed as `volume = 0` — it evaporates on the next rebuild.
+- `libvlc_audio_set_mute` is stored on the media **player** and re-applied by libvlc to whatever aout
+  is current, so it survives a rebuild. `LibVlcMutePolicy` (pure JVM, unit-tested by
+  `LibVlcMutePolicyTest`) maps a level to the pair (`mixerPercent`, `muteFlag`). Silence maps to
+  `mixerPercent == 200` **on purpose**: writing 0 as well would leave `get_volume() == 0` behind, and
+  `verifyVolume`'s once-per-second poll would read that as drift, restore it and keep the display
+  silent after an unmute.
+- `LibVlcSessionManager` writes both knobs together through `applyAudioLevel(player)`, unconditionally
+  re-asserts both in `reassertVolume` (every PLAYING event), and verifies both independently in
+  `repairMixer(player, expected, expectedMute)`. `verifyVolume` feeds both the video player and the
+  dedicated Android audio player, because a Bilibili DASH rendition splits them and the video player's
+  `get_volume` answers -1 with no audio output attached.
+- `libvlc_audio_get_mute` is not exported by every libvlc 3.0 build. The read is wrapped in
+  `runCatching`, and a -1 result skips the check rather than writing every second; do not "fix" it into
+  an unconditional write. If a shim is ever needed, probe once and cache the answer instead of probing
+  per tick.
+
+### 2026-11-01 — `DreamLog.Channel` swallows `warning`/`severe`/`fine`
+- `DreamLog.Channel` implements only the four slf4j levels (`debug`/`info`/`warn`/`error`) with the
+  overloads the mod actually calls, so any `logger.warning(...)` / `logger.severe(...)` call routed
+  through a `Channel`-typed variable fails to compile. A `java.util.logging`-shaped call site must keep
+  an slf4j `Logger`-typed or `java.util.logging.Logger`-typed variable.
+- `PaperServer.Companion.logger` is a `Channel`. It looks like it would break `getInstance().logger.warning(...)`
+  in `DisplayManager`, but it does not: `JavaPlugin.getLogger()` is an **instance** member and shadows
+  the companion property, so those calls stay on `java.util.logging`. Verify this by the receiver
+  expression, not by the property's declared type.
+- `platform/proxy` keeps its own `java.util.logging` logger and calls `warning`/`fine` on it; it does not
+  depend on `:util`, so it must not be migrated.
+
+### 2026-11-01 — Scripted edits: three guard checks before committing
+A batch `sed` that rewrote `LoggerFactory.getLogger(...)` into `DreamLog.of(...)` left 6 stray `)`
+(paren) and mis-indented lines across `platform/*`. All of them were inside `Channel`-unaware files
+whose compile path is not reachable offline, so they would only have surfaced in CI. Run these three
+checks over `git status --porcelain`'s `.kt` files before committing a sweep:
+1. **Balanced delimiters** — a state-machine strip of comments/strings, then `(`/`)` and `{`/`}` depth.
+2. **`Channel` API** — every variable assigned from `DreamLog.of(...)` may only call
+   `debug`/`info`/`warn`/`error`/`isDebugEnabled`/`isInfoEnabled`/`delegate`/`channel`. Match the bare
+   identifier (`(?<![\w.])logger\.`), otherwise `plugin.logger.warning(...)` is a false positive, and
+   skip comment lines.
+3. **Chisel import placement** — no `com.dreamdisplayx.*` import may sit inside an unclosed `//?` block.
+   Note that `//?} else` (no brace) does not change nesting while `//?} else {` does; treating them the
+   same makes the scanner report every version-specific vanilla import.
+
 ### 2026-11-01 — Pose-aware scissor clipping and reachable permission nodes
 - Every `GuiGraphics` scissor call in the client UI MUST go through
   `enableScissorPoseAware` (gated `//? if >=1.21.11 { g.enableScissor(...) //?} else

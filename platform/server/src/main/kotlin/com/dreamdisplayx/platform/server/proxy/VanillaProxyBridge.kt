@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.proxy
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.playback.model.FullscreenMode
 import com.dreamdisplayx.api.playback.model.WatchPartySessionState
 import com.dreamdisplayx.core.protocol.common.packets.DisplayDelete
@@ -40,7 +41,6 @@ import com.dreamdisplayx.platform.server.utils.VanillaPermissions
 import com.dreamdisplayx.platform.server.utils.net.VanillaNetworking
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
-import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -51,7 +51,7 @@ import java.util.concurrent.atomic.AtomicLong
  * implementation for both loaders.
  */
 object VanillaProxyBridge {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/VanillaProxyBridge")
+    private val logger = DreamLog.of("VanillaProxyBridge")
     private val helloSent = AtomicBoolean(false)
     private val lastClockProbeMs = AtomicLong(0L)
 

@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.player
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.model.DreamMediaException
 import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.model.StretchMode
@@ -29,7 +30,6 @@ import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.MediaUtil
 import com.dreamdisplayx.media.player.util.daemon
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
-import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
@@ -66,7 +66,7 @@ class MediaPlayer(
         }
 
         /** Logger. */
-        private val logger = LoggerFactory.getLogger("DreamDisplaysX/MediaPlayer")
+        private val logger = DreamLog.of("MediaPlayer")
 
         /** Debug. */
         val DEBUG: Boolean = System.getProperty("dreamdisplayx.debug")?.toBoolean() == true

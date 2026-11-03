@@ -1,12 +1,12 @@
 package com.dreamdisplayx.media.source.twitch
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.source.model.MediaSource
 import com.dreamdisplayx.util.DreamCoroutines
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.github.benmanes.caffeine.cache.Expiry
 import kotlinx.coroutines.launch
-import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
 /**
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
  * continuously; VOD / clip lookups are static with a longer TTL.
  */
 object TwitchMetadataCache {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/TwitchMetadataCache")
+    private val logger = DreamLog.of("TwitchMetadataCache")
 
     private const val LIVE_TTL_SECONDS = 60L
     private const val VOD_TTL_MINUTES = 30L

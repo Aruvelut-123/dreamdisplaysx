@@ -1,7 +1,7 @@
 package com.dreamdisplayx.media.player.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import kotlinx.coroutines.*
-import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -17,7 +17,7 @@ internal class StreamWatchdog(
     private val checkIntervalMs: Long = 1_000L,
     private val onStall: () -> Unit,
 ) {
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/StreamWatchdog")
+    private val logger = DreamLog.of("StreamWatchdog")
 
     @Volatile
     private var job: Job? = null

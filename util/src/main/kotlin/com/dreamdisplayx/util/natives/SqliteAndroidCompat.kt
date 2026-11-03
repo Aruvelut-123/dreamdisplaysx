@@ -1,7 +1,7 @@
 package com.dreamdisplayx.util.natives
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.util.OsInfo
-import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
@@ -23,7 +23,7 @@ import java.io.File
  */
 object SqliteAndroidCompat {
 
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/SqliteAndroidCompat")
+    private val logger = DreamLog.of("SqliteAndroidCompat")
 
     /** Bundled resource key → the file name we write on disk. */
     private const val RESOURCE_ROOT = "/dreamdisplayx/natives/sqlitejdbc"

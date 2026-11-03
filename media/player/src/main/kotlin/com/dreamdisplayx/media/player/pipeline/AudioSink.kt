@@ -1,5 +1,6 @@
 package com.dreamdisplayx.media.player.pipeline
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.media.audio.service.AudioDspStage
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.pipeline.AudioSink.Companion.PCM_RING_MAX_BYTES
@@ -7,7 +8,6 @@ import com.dreamdisplayx.media.player.util.MediaBufferEffects
 import com.dreamdisplayx.media.player.util.MediaUtil
 import com.dreamdisplayx.media.player.util.daemon
 import kotlinx.io.IOException
-import org.slf4j.LoggerFactory
 import java.io.InputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -20,7 +20,7 @@ import javax.sound.sampled.*
  */
 internal class AudioSink(private val debugLabel: String) {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/AudioSink")
+    private val logger = DreamLog.of("AudioSink")
 
     companion object {
         /** The PCM sample rate used by every session: 44.1 kHz, stereo, signed 16-bit little-endian. */

@@ -1,7 +1,7 @@
 package com.dreamdisplayx.media.player.managers
 
+import com.dreamdisplayx.util.log.DreamLog
 import kotlinx.coroutines.*
-import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -18,7 +18,7 @@ internal class StatsReporter(
     private val isLive: () -> Boolean,
 ) {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/StatsReporter")
+    private val logger = DreamLog.of("StatsReporter")
 
     /** Raw counter values sampled at one reporting interval. */
     data class Snapshot(val samplesIn: Long, val framesToGpu: Long, val framesDropped: Long)

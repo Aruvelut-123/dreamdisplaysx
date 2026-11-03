@@ -1,5 +1,6 @@
 package com.dreamdisplayx.platform.server.playback
 
+import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.playback.model.PlaybackAction
 import com.dreamdisplayx.api.playback.model.PlaybackMode
 import com.dreamdisplayx.api.playback.policy.PlaybackPermissions
@@ -10,7 +11,6 @@ import com.dreamdisplayx.core.protocol.common.toSync
 import com.dreamdisplayx.platform.server.datatypes.display.DisplayData
 import com.dreamdisplayx.platform.server.managers.ActionThrottle
 import com.dreamdisplayx.platform.server.managers.DisplayManager
-import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object TimelineManager {
     /** Logger. */
-    private val logger = LoggerFactory.getLogger("DreamDisplaysX/TimelineManager")
+    private val logger = DreamLog.of("TimelineManager")
 
     /** Minimum interval between rebroadcasts of the same timeline to nearby players. */
     private const val PERIODIC_BROADCAST_MS = 2_000L
