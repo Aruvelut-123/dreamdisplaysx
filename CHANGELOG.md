@@ -11,6 +11,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 ### Fixes
 - The mute button and a 0 % volume slider now silence a display: silence is written as libvlc's player-level mute flag instead of `volume = 0`, which does not survive the Android `aout` rebuild that every DASH seek triggers.
 - A display no longer drifts quiet after a while on Android: the mixer level and the mute flag are re-asserted on every PLAYING event and polled once per second, so an `aout` rebuild cannot leave the sound at the platform default.
+- Fixed Android video going permanently silent a few minutes in: a DASH fragment boundary was mistaken for the end of the stream, and each false end burned two AudioTrack slots until the process hit the platform cap. Only a position within the end window retires the players now; anything else resumes the existing ones in place.
 # 1.10.8.1 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
 ## Server

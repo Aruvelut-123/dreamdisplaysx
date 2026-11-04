@@ -1125,6 +1125,41 @@ internal class LibVlcSessionManager(
             if (state == LibVlc.LIBVLC_STATE_ENDED) {
                 try {
                     if (systemAudio) {
+                        // A Bilibili DASH rendition is a playlist of `moof` fragments, and libvlc
+                        // reports ENDED at some fragment boundaries while the playhead is nowhere
+                        // near the media end. Retiring the native players there burns two AudioTrack
+                        // slots permanently (a retired player can never be released on this build),
+                        // which is what emptied the budget within ~80 seconds of one video in the
+                        // 1.10.8.2 field log: retirements climbed 2/14 -> 10/14 at a metronomic
+                        // ~22 s rate while the video was still playing.
+                        //
+                        // So classify first: only a genuine end of stream may take the restart path.
+                        // Everything else resumes the SAME players, which costs at most a position
+                        // reset instead of a permanent slot.
+                        val endedPositionMs = runCatching { LibVlc.lib.libvlc_media_player_get_time(mp) }.getOrDefault(-1L)
+                        val endedDurationMs = runCatching { LibVlc.lib.libvlc_media_player_get_length(mp) }.getOrDefault(0L)
+                        val disposition = AndroidEndedPolicy.classify(endedPositionMs, endedDurationMs)
+                        if (AndroidEndedPolicy.shouldResumeInPlace(disposition)) {
+                            // Never stop()/set_media() these players: VLC-Android may tear down
+                            // native workers from either call and hit its TLS destructor. play() on a
+                            // player whose demuxer stopped at a fragment boundary is safe and keeps
+                            // the existing aout (and its AudioTrack) alive.
+                            logger.info(
+                                "$debugLabel ENDED at fragment boundary (position={}ms of {}ms, {}); " +
+                                    "resuming the live players instead of retiring them.",
+                                endedPositionMs,
+                                endedDurationMs,
+                                disposition,
+                            )
+                            resumeAndroidPlayersInPlace(mp, offsetNanos / 1_000_000L)
+                            return@submit
+                        }
+                        logger.info(
+                            "$debugLabel ENDED at the end of the media (position={}ms of {}ms); " +
+                                "restarting with fresh players.",
+                            endedPositionMs,
+                            endedDurationMs,
+                        )
                         // Android: never stop() or set_media() on an ended player. Both operations can
                         // tear down VLC-Android workers and hit its unsafe TLS destructor. Validate
                         // the selected URLs before retiring the old players, then bind fresh players.
@@ -1601,6 +1636,29 @@ internal class LibVlcSessionManager(
             runCatching { LibVlc.lib.libvlc_media_player_set_pause(p, 1) }
         } else {
             runCatching { LibVlc.lib.libvlc_media_player_stop(p) }
+        }
+    }
+
+    /**
+     * Resumes players whose demuxer reported `ENDED` at a fragment boundary.
+     *
+     * Deliberately does NOT call `libvlc_media_player_stop`, `set_media` or `release`: on this
+     * VLC-Android build any of the three may tear down native workers and reach the JNI TLS
+     * destructor that crashes the process (see the Android teardown notes in AGENTS.md). Waking the
+     * existing input with `play()` is enough — the media is unchanged, only the demuxer ran out of
+     * buffered fragments — and it keeps the current `aout`, and with it the AudioTrack slot, alive.
+     *
+     * `set_time` is applied *before* `play()` on the video player so a stale ended position does not
+     * make it re-report ENDED immediately. The audio player gets the same treatment only if it
+     * exists, because a DASH audio slave can be shorter than the video and would otherwise answer a
+     * later seek from the wrong place.
+     */
+    private fun resumeAndroidPlayersInPlace(videoPlayer: Pointer, targetMs: Long) {
+        runCatching { LibVlc.lib.libvlc_media_player_set_time(videoPlayer, targetMs) }
+        runCatching { LibVlc.lib.libvlc_media_player_play(videoPlayer) }
+        audioPlayer?.let { ap ->
+            runCatching { LibVlc.lib.libvlc_media_player_set_time(ap, targetMs) }
+            runCatching { LibVlc.lib.libvlc_media_player_play(ap) }
         }
     }
 

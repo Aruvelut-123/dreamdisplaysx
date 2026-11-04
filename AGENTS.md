@@ -419,6 +419,35 @@ Three reports shared one theme: state that only ever existed on the video player
 - Do not "fix" this by calling `libvlc_media_player_release` on retirement. That is the documented crash.
   The only safe levers are *retire less often* and *reuse in place*.
 
+### 2026-11-04 — A DASH fragment boundary is not the end of the stream
+- Follow-up to the budget above, found in a 1.10.8.2 field log: one display, `startStreams() cold start`
+  printed **once** (it is unconditional INFO at `MediaPlayer.kt:965`), zero `fell back to a full stream
+  restart`, zero `dead session`, one display id — yet `Android native player retirements` climbed from `2/14`
+  to `10/14` at a steady ~22 s per pair. `retireAndroidPlayers()` has exactly two callers: `start()`
+  (reachable only through `startStreams`) and the `ENDED` branch of `beginSeek`. Since `start()` ran once,
+  **the `ENDED` branch was firing on DASH fragment boundaries.**
+- Symptom the user reports is "sound works for a few minutes, then gone for good, replay fixes it": every
+  false end burns two AudioTrack slots (video + audio player) and never releases them, so the cap arrives
+  faster. Each retirement also shows up as a main-thread `Can't keep up!` of ~1.5 s, because
+  `pauseAndroidPlayerAndAwait` waits 750 ms per player.
+- Fix: `AndroidEndedPolicy` (pure object, `media/player/.../managers/`) classifies the position before any
+  teardown. `REAL_END` (position within `max(1% of duration, 1500 ms)` of the end) retires as before;
+  `FRAGMENT_BOUNDARY` and `UNKNOWN_DURATION` go through `resumeAndroidPlayersInPlace()`, which only calls
+  `set_time` + `play` on the existing players. **Never `stop`/`set_media`/`release` there** — that is the
+  Android TLS destructor crash, not a teardown option.
+- Bias the classifier towards resuming: a wrong "resume" costs one position reset, a wrong "real end" costs
+  two permanently leaked AudioTrack slots. Hence `duration <= 0` (live) and `position < 0` (demuxer flush)
+  are both `UNKNOWN_DURATION`, i.e. resume.
+- `libvlc.log`'s `end of stream` (26 lines in the same log) is an **HTTP/2 stream close**, not a playback end:
+  its context carries `out RST_STREAM (0x03)` and `content-range: "bytes .../199382"`, one per DASH fragment.
+  Never read it as EOS. The only usable signal is `libvlc_media_player_get_state() == ENDED` together with a
+  position that is actually near the duration.
+- Diagnosing a "silent after N minutes" report: grep `Android native player retirements` — if the counter
+  grows while `startStreams() cold start` appears only once, it is this bug, not the budget itself.
+- `AndroidEndedDispositionTest` (18 cases) pins the slack window, both degenerate reads, the
+  `shouldResumeInPlace` contract and the budget interaction (a 4-minute video at a 22 s fragment cadence must
+  retire **zero** times, while a real end still retires its two slots).
+
 ### 2026-11-01 — Client commands must exist on every loader; Bilibili failures must name a cause
 - `/dlogin` and `/dlogoff` are registered per loader. Fabric uses `ClientCommandRegistrationCallback`,
   NeoForge and Forge use `RegisterClientCommandsEvent`. Forge's `Client.kt` had registered **no**
