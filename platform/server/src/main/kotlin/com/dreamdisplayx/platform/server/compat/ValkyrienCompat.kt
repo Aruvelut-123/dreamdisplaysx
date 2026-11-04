@@ -1,6 +1,7 @@
 package com.dreamdisplayx.platform.server.compat
 
 import com.dreamdisplayx.util.log.DreamLog
+import com.dreamdisplayx.api.display.geometry.ShipAnchorPolicy
 import com.dreamdisplayx.api.display.geometry.ShipTransformSource
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
@@ -136,6 +137,32 @@ object ValkyrienCompat {
         return out
     }
 
+    /**
+     * Resolves a `VSGameUtilsKt` helper declared against a `Level`-family parameter.
+     *
+     * `Class.getMethod` matches **declared** parameter types exactly and does not accept a subtype,
+     * so asking for `ServerLevel` where VS declares `Level` throws `NoSuchMethodException`. That used
+     * to be cached as "the mod is absent", silently disabling every ship feature on a server that had
+     * VS installed. Every spelling `ShipAnchorPolicy` lists is tried in order, and the plain `Level`
+     * fallback is what makes the common case resolve.
+     */
+    private fun resolveLevelFacade(utils: Class<*>, name: String, vararg trailing: Class<*>): Method {
+        val candidates = ShipAnchorPolicy.levelFacadeCandidates().map { candidate ->
+            when (candidate) {
+                "ServerLevel" -> ServerLevel::class.java
+                "ClientLevel" -> ServerLevel::class.java // no client level on a server; symmetric slot
+                else -> Level::class.java
+            }
+        }.distinct()
+        for (level in candidates) {
+            runCatching { utils.getMethod(name, level, *trailing) }.getOrNull()?.let { return it }
+        }
+        throw NoSuchMethodException(
+            "$name: tried ${candidates.joinToString { it.simpleName }}" +
+                (if (trailing.isEmpty()) "" else " + ${trailing.joinToString { it.simpleName }}"),
+        )
+    }
+
     /** Resolves and caches the bridge, or records that the mod is absent. */
     private fun resolve(): Resolution.Ready? {
         when (val cached = state) {
@@ -151,8 +178,7 @@ object ValkyrienCompat {
             }
             val resolved = try {
                 val utils = Class.forName(GAME_UTILS)
-                val serverLevel = ServerLevel::class.java
-                val byBlockPos = utils.getMethod("getShipManagingPos", serverLevel, BlockPos::class.java)
+                val byBlockPos = resolveLevelFacade(utils, "getShipManagingPos", BlockPos::class.java)
                 val ship = Class.forName("org.valkyrienskies.core.api.ships.Ship")
                 val matrixClass = Class.forName("org.joml.Matrix4dc")
                 Resolution.Ready(
@@ -162,8 +188,8 @@ object ValkyrienCompat {
                     readMatrix = matrixClass.getMethod("get", DoubleArray::class.java),
                     // getAllShips takes a Level, NOT a ServerLevel — getMethod needs the exact
                     // declared parameter type, so passing ServerLevel would fail resolution and
-                    // silently disable the whole bridge.
-                    allShips = utils.getMethod("getAllShips", Level::class.java),
+                    // silently disable the whole bridge. resolveLevelFacade tries both spellings.
+                    allShips = resolveLevelFacade(utils, "getAllShips"),
                 )
             } catch (_: ClassNotFoundException) {
                 // The mod is simply not installed; this is the normal case on most servers.

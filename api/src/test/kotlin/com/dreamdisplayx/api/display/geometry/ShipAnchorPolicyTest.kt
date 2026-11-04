@@ -16,6 +16,25 @@ class ShipAnchorPolicyTest {
     private fun identityMatrix() = AffineTransform.IDENTITY.m.copyOf()
 
     @Test
+    fun levelFacadeCandidatesKeepThePlainLevelFallbackLast() {
+        val candidates = ShipAnchorPolicy.levelFacadeCandidates()
+        // The plain `Level` spelling is the one VS actually declares, so it must be reachable; the
+        // subtype spellings ahead of it are future-proofing only. Losing it is what silently turned
+        // the whole ship bridge inert (`getMethod` matches declared parameter types exactly).
+        assertEquals("Level", candidates.last(), "the Level fallback must be tried last, but present")
+        assertTrue(candidates.contains("ServerLevel"), "the server bridge needs the ServerLevel spelling")
+        assertTrue(candidates.contains("ClientLevel"), "the client bridge needs the ClientLevel spelling")
+        assertEquals(candidates.size, candidates.distinct().size, "candidates must not repeat")
+    }
+
+    @Test
+    fun levelFacadeCandidatesAreNeverEmpty() {
+        // An empty list would make both bridges throw NoSuchMethodException unconditionally, which is
+        // indistinguishable from "the mod is absent" — the exact failure mode this policy prevents.
+        assertFalse(ShipAnchorPolicy.levelFacadeCandidates().isEmpty())
+    }
+
+    @Test
     fun worldAnchoredDisplayNeverQueriesTheSource() {
         var asked = 0
         val source = ShipTransformSource { asked++; identityMatrix() }

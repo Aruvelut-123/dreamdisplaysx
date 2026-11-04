@@ -90,4 +90,25 @@ object ShipAnchorPolicy {
      * reads air at every ship display and deletes the lot on the next player join.
      */
     fun isShipAnchored(storedShipId: Long): Boolean = storedShipId > 0L
+
+    /**
+     * The parameter types to try, in order, when resolving a Valkyrien Skies level facade method.
+     *
+     * `Class.getMethod` matches **declared** parameter types exactly; it does not accept a subtype.
+     * VS declares its level-taking helpers against the plain `Level` interface (`getAllShips(Level)`,
+     * `getShipObjectWorld(Level)`), so a lookup keyed on the client's `ClientLevel` or the server's
+     * `ServerLevel` throws `NoSuchMethodException` — and because both bridges cache a failed
+     * resolution as "the mod is absent", that one mismatch silently disabled the whole feature. The
+     * ship displays then kept their structure-space coordinates while the hull sailed away, which is
+     * the "picture stays behind" report.
+     *
+     * The subtype is tried first purely as future-proofing: a VS release that narrowed a signature
+     * would then still resolve, and either order leaves the plain `Level` spelling as the fallback
+     * that makes the common case work.
+     *
+     * Returns *candidate names*, not classes, so this stays in the dependency-free `api` module and
+     * can be unit-tested; both bridges map the names onto `ClientLevel`/`ServerLevel`/`Level`
+     * themselves.
+     */
+    fun levelFacadeCandidates(): List<String> = listOf("ClientLevel", "ServerLevel", "Level")
 }

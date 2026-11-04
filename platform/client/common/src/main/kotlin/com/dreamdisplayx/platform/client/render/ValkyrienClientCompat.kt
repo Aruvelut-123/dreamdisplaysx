@@ -6,6 +6,7 @@ import com.dreamdisplayx.api.display.geometry.AffineTransform
 import com.dreamdisplayx.api.display.geometry.ShipAnchorPolicy
 import com.dreamdisplayx.api.display.geometry.ShipTransformSource
 import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.world.level.Level
 import java.lang.reflect.Method
 
 /**
@@ -153,6 +154,33 @@ object ValkyrienClientCompat {
     }
 
     /**
+     * Resolves `VSGameUtilsKt.getShipObjectWorld(<level>)`, tolerating either declared parameter type.
+     *
+     * `getMethod` matches **declared** parameter types exactly — it does not accept a subtype. VS
+     * spells this the same way it spells `getAllShips`, i.e. it takes a plain `Level`, so asking for
+     * `ClientLevel` throws `NoSuchMethodException` on every VS release and silently disabled this
+     * whole bridge (the display then stayed at its structure coordinates while the hull sailed
+     * away). The server bridge already documents the identical trap for `getAllShips`. Both
+     * spellings are tried here so neither a future VS rename nor a variant signature can re-break it
+     * the same silent way.
+     */
+    private fun resolveShipWorld(utils: Class<*>): Method {
+        val candidates = ShipAnchorPolicy.levelFacadeCandidates().map { name ->
+            when (name) {
+                "ClientLevel" -> ClientLevel::class.java
+                "ServerLevel" -> ClientLevel::class.java // unreachable on a client; kept for symmetry
+                else -> Level::class.java
+            }
+        }.distinct()
+        for (param in candidates) {
+            runCatching { utils.getMethod("getShipObjectWorld", param) }.getOrNull()?.let { return it }
+        }
+        throw NoSuchMethodException(
+            "VSGameUtilsKt.getShipObjectWorld: tried ${candidates.joinToString { it.simpleName }}",
+        )
+    }
+
+    /**
      * The current transform for [shipId], or [AffineTransform.IDENTITY] when it cannot be resolved.
      *
      * Reads the cached resolution once per call and never throws: a broken or half-loaded install
@@ -199,13 +227,18 @@ object ValkyrienClientCompat {
                 val clientShip = Class.forName("org.valkyrienskies.core.api.ships.ClientShip")
                 val matrixClass = Class.forName("org.joml.Matrix4dc")
                 Resolution.Ready(
-                    shipWorld = utils.getMethod("getShipObjectWorld", ClientLevel::class.java),
+                    shipWorld = resolveShipWorld(utils),
                     // getId() is declared on Ship and inherited by ClientShip; getRenderTransform()
                     // is the interpolated transform and lives on ClientShip itself.
                     shipId = ship.getMethod("getId"),
                     renderTransform = clientShip.getMethod("getRenderTransform"),
                     readMatrix = matrixClass.getMethod("get", DoubleArray::class.java),
-                )
+                ).also {
+                    // INFO on success, not silence. A shipped log otherwise cannot distinguish "the
+                    // mod is absent" from "the bridge resolved and drew in structure space anyway",
+                    // and the 1.10.8.2 ship report had exactly that blind spot.
+                    logger.info("Valkyrien Skies client bridge resolved; ship displays follow their hull.")
+                }
             } catch (_: ClassNotFoundException) {
                 // The mod is simply not installed; this is the normal case.
                 Resolution.Absent

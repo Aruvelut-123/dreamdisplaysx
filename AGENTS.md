@@ -448,6 +448,33 @@ Three reports shared one theme: state that only ever existed on the video player
   `shouldResumeInPlace` contract and the budget interaction (a 4-minute video at a 22 s fragment cadence must
   retire **zero** times, while a real end still retires its two slots).
 
+### 2026-11-04 — A ship display that stays behind: `getMethod` does not accept a subtype
+- Report: on a Valkyrien Skies ship the hull (and the block frame) moved with the ship but the
+  **video stayed at the display's original world position**. The hull moving is VS's own chunk
+  transform, so it proves nothing about the mod's render path — our quads are separate and must place
+  themselves at `shipToWorld * pos`.
+- Cause: `ValkyrienClientCompat.resolve()` resolved the VS level facade as
+  `utils.getMethod("getShipObjectWorld", ClientLevel::class.java)`. `Class.getMethod` matches
+  **declared** parameter types exactly and does not accept a subtype, and VS declares those helpers
+  against the plain `Level` interface. The lookup threw `NoSuchMethodException`, the `catch
+  (t: Throwable)` branch cached `Resolution.Absent`, and every later call short-circuited at
+  `if (state === Absent) return null`. `transformFor()` therefore always returned
+  `AffineTransform.IDENTITY`, `ScreenRenderer.shipTransformOf` reported `null`, and the fallback
+  `stack.translate(pos - camera)` drew the picture in structure space — exactly "the picture did not
+  follow".
+- The server bridge had documented this same trap for `getAllShips` ("passing ServerLevel would fail
+  resolution and silently disable the whole bridge") but still keyed `getShipManagingPos` on
+  `ServerLevel`, and the client bridge inherited neither the fix nor the comment. Both now go through
+  `ShipAnchorPolicy.levelFacadeCandidates()` (`ClientLevel`/`ServerLevel`/`Level`, distinct, never
+  empty, plain `Level` last) and try each spelling in order.
+- The failure was invisible in a shipped log because only a **failed** resolution logged, and at
+  WARN. `resolve()` now logs INFO on success too ("Valkyrien Skies client bridge resolved"), so
+  "mod absent", "mod present but inert" and "resolved and drawing correctly" are finally
+  distinguishable in `latest.log`. Do not remove that line.
+- `ShipAnchorPolicyTest` pins the candidate list invariants (the `Level` fallback must be present and
+  last; no duplicates; never empty). The reflection calls themselves still need a real VS jar and stay
+  manually verified.
+
 ### 2026-11-01 — Client commands must exist on every loader; Bilibili failures must name a cause
 - `/dlogin` and `/dlogoff` are registered per loader. Fabric uses `ClientCommandRegistrationCallback`,
   NeoForge and Forge use `RegisterClientCommandsEvent`. Forge's `Client.kt` had registered **no**
