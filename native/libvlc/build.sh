@@ -26,13 +26,13 @@
 #
 # Environment:
 #   OUT_DIR      output directory (default $PWD/out)
-#   LIBVLC_ALL_VER  org.videolan.android:libvlc-all version (default 3.7.5)
+#   LIBVLC_ALL_VER  org.videolan.android:libvlc-all version (default 3.7.7)
 set -euo pipefail
 
 OS_NAME="${1:-}"
 OS_ARCH="${2:-}"
 VLC_VER="${3:-3.0.22}"
-LIBVLC_ALL_VER="${LIBVLC_ALL_VER:-3.7.5}"
+LIBVLC_ALL_VER="${LIBVLC_ALL_VER:-3.7.7}"
 # Unique SONAME for the bundled libc++ so the Android linker can never
 # deduplicate it against a same-named libc++_shared.so that a Pojav-style
 # launcher (Zalith/FCL) already loaded from its own runtime dir. libvlc.so's

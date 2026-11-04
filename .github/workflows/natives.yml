@@ -58,7 +58,11 @@ jobs:
         uses: actions/cache@v4.2.3
         with:
           path: native/libvlc/.build-cache
-          key: libvlc-${{ matrix.libvlc.platform }}-3.0.22
+          # Covers both version knobs: VLC_VER (desktop archives) and
+          # LIBVLC_ALL_VER (the Android Maven AAR). Bumping either must
+          # invalidate the entry. Note: build.sh currently writes nothing
+          # into .build-cache, so this step is a no-op today.
+          key: libvlc-${{ matrix.libvlc.platform }}-vlc3.0.22-android3.7.7
           restore-keys: |
             libvlc-${{ matrix.libvlc.platform }}-
             libvlc-

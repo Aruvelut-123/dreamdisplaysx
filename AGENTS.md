@@ -363,7 +363,7 @@ Three reports shared one theme: state that only ever existed on the video player
   Android (UnsatisfiedLinkError per F3 refresh); it reports the configured MediaCodec chain.
   Finally, do not stack multiple native players on one display: `DisplayMediaController.load()`
   waits for the old player's `MediaPlayer.awaitStopped()` before constructing a replacement.
-- Android natives source: the official `org.videolan.android:libvlc-all` Maven AAR (3.7.5)
+- Android natives source: the official `org.videolan.android:libvlc-all` Maven AAR (3.7.7)
   instead of the VLC-Android APK — the library-form runtime squi2rel/VideoPlayer also uses
   (`libvlc.so` + `libvlcjni.so` + full `libc++_shared.so`; no `libmla.so`). `native/libvlc/build.sh`
   renames libc++ to a unique SONAME (`libc++_dreamdisplayx.so`) and rewrites `libvlc.so`'s
@@ -418,6 +418,34 @@ Three reports shared one theme: state that only ever existed on the video player
   allocates AudioTracks in the same process.
 - Do not "fix" this by calling `libvlc_media_player_release` on retirement. That is the documented crash.
   The only safe levers are *retire less often* and *reuse in place*.
+
+### 2026-11-04 — libvlc versions: Android 3.7.7, desktop stays on Flathub for Linux
+- Android bumped `org.videolan.android:libvlc-all` **3.7.5 → 3.7.7**. Verified before the bump by
+  unpacking both AARs (`jni/arm64-v8a/libvlc.so`, `jni/x86_64/libvlc.so`): all 45 `libvlc_*`
+  functions the mod calls are still exported, the exported `libvlc_*` count is unchanged (338), the
+  9 `DT_NEEDED` entries are identical, `JNI_OnLoad` is present in both (960 bytes), and
+  `libc++_shared.so` is byte-identical (`md5 7cedaf42…`) — so `build.sh`'s `patchelf`
+  `--replace-needed libc++_shared.so libc++_dreamdisplayx.so` still matches. `libvlcjni.so` is also
+  byte-identical (97,736 bytes). Do not "upgrade" the Android artifact further without redoing this
+  check: `libvlc_media_player_get_video_decoder_info` and `libvlc_media_decoder_info_release` are
+  still not exported by the AAR (they never were — see the Android section above).
+- **Do NOT replace the Linux branch of `native/libvlc/build.sh` with Debian `.deb` packages.**
+  `VLC_VER` never controlled Linux anyway — that branch installs Flathub
+  `org.videolan.VLC//stable` and copies the runtime out of it, while the version knob only drives
+  the Windows zip and the macOS dmg. That is deliberate: the Flathub build ships its own glibc in
+  `org.freedesktop.Platform`, so one artifact runs everywhere.
+- Measured, in case this is ever revisited: Debian trixie `3.0.24` needs **GLIBC_2.38**
+  (`libvlccore.so.9.0.1` plus 74 of its 348 plugins, including `libadaptive_plugin` — the HLS/DASH
+  path Bilibili depends on), so it would break any user on Ubuntu 22.04 or Debian 12. Debian
+  bookworm only has `3.0.23` and does fit GLIBC_2.34, but that is a *downgrade* from what Flathub
+  already delivers. Ubuntu's own apt is worse still: noble `3.0.20`, plucky/questing `3.0.21`.
+  Flathub stable is on `3.0.24` (`org.videolan.VLC.yaml`, source `vlc-3.0.24.tar.xz`).
+- The `Cache libvlc build` step in `natives.yml` is a **no-op today**: nothing in `build.sh` or
+  `collect.sh` ever writes to `native/libvlc/.build-cache`. Its key now names both version knobs
+  (`vlc3.0.22-android3.7.7`) so a future bump invalidates it correctly if the cache is ever wired
+  up. Note that `get.videolan.org` returned **403** for `win64/vlc-3.0.24-win64.zip` and
+  `macosx/vlc-3.0.24-arm64.dmg` while `win32`/`winarm64`/`intel64` answered 200, so a desktop
+  `VLC_VER` bump to `3.0.24` is not proven safe to ship either.
 
 ### 2026-11-04 — A DASH fragment boundary is not the end of the stream
 - Follow-up to the budget above, found in a 1.10.8.2 field log: one display, `startStreams() cold start`
