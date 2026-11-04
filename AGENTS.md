@@ -471,6 +471,18 @@ Three reports shared one theme: state that only ever existed on the video player
   `.so` files, so the `.txt` stamp survives that pass.
 - A failed `writeStamp()` only logs at warn: a missing stamp costs one extra download next launch and
   never correctness. Do not turn it into an error.
+- **Why the tag is a reliable cache key — the whole chain matters.** `natives.yml` generates a tag
+  `natives-<sha7>-<unix_ts>`, creates the release and writes it to `.github/natives-tag.txt`.
+  `_build.yml`'s `download-natives` reads that file (falling back to `gh release list` sorted by the
+  timestamp segment) and exposes it as `natives_release`; the `Inject natives release tag into
+  manifest` step then rewrites `media/player/.../natives-manifest.json`'s `release_base` to
+  `https://github.com/<repo>/releases/download/<tag>` **before** `Build loaders with Gradle`. So the
+  tag ships inside every jar, and a new natives release changes it. That is what makes
+  `tagOf()` a real version, not a constant. `release_base` is deliberately never
+  `releases/latest`, because a mod release would steal that endpoint.
+- Because the tag also carries a Unix timestamp, two different natives builds can never collide even
+  if they come from the same commit, so the stamp cannot accidentally consider a rebuilt runtime as
+  already cached.
 
 ### 2026-11-04 — A DASH fragment boundary is not the end of the stream
 - Follow-up to the budget above, found in a 1.10.8.2 field log: one display, `startStreams() cold start`
