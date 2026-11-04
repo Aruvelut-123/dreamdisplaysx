@@ -138,9 +138,10 @@ object NativesDownloader {
                 // even when hasLibVlc() below reports the cache as valid.
                 cleanAndroidStaleNatives(libvlcDir)
             }
-            if (!hasLibVlc(libvlcDir)) {
+            if (!hasLibVlc(libvlcDir) || !isCacheCurrent(libvlcDir, manifest)) {
                 logger.info("LibVLC natives not cached at {}; downloading {}", libvlcDir, libvlcAsset)
                 downloadAndExtractTarGz(manifest.release_base, libvlcAsset, libvlcDir)
+                writeStamp(libvlcDir, manifest)
             } else {
                 logger.info("LibVLC natives already cached at {}", libvlcDir)
             }
@@ -313,6 +314,61 @@ object NativesDownloader {
                 logger.warn("Removing stale Android native companion {}", file.name)
                 file.delete()
             }
+        }
+    }
+
+    // ── Cache versioning ───────────────────────────────────────────────────
+
+    /**
+     * Whether the runtime already on disk came from the release this jar was built against.
+     *
+     * Without this, [hasLibVlc] alone pins a user to whatever binaries they first downloaded: a
+     * mod update that ships a newer natives release would keep loading the old libvlc for every
+     * existing install while clean installs got the fix. The stamp file records the release tag
+     * so the two can be compared.
+     *
+     * A cache written before stamping existed has no stamp and therefore never matches — the
+     * first launch after upgrading re-downloads once, which is the intended cost of clearing a
+     * silently stale cache.
+     */
+    private fun isCacheCurrent(dir: File, manifest: Manifest): Boolean {
+        val expected = NativesCacheStamp.tagOf(manifest.release_base)
+        val stampFile = File(dir, NativesCacheStamp.FILE_NAME)
+        if (!stampFile.isFile) {
+            if (NativesCacheStamp.legacyCacheIsFresh(expected)) return true
+            logger.info(
+                "LibVLC cache at {} predates cache stamping; re-downloading once to pick up {}",
+                dir,
+                expected,
+            )
+            return false
+        }
+        val stamped = try {
+            stampFile.readText().trim().ifEmpty { null }
+        } catch (e: Exception) {
+            logger.warn("Could not read {}; treating the cache as stale", stampFile, e)
+            null
+        }
+        val fresh = NativesCacheStamp.isFresh(stamped, expected)
+        if (!fresh) {
+            logger.info(
+                "LibVLC cache at {} is stale (stamped {}, manifest {}); re-downloading",
+                dir,
+                stamped,
+                expected,
+            )
+        }
+        return fresh
+    }
+
+    /** Records which natives release the extracted runtime came from. Best-effort. */
+    private fun writeStamp(dir: File, manifest: Manifest) {
+        val tag = NativesCacheStamp.tagOf(manifest.release_base) ?: return
+        try {
+            File(dir, NativesCacheStamp.FILE_NAME).writeText(tag + "\n")
+        } catch (e: Exception) {
+            // A missing stamp only costs one extra download next launch, never correctness.
+            logger.warn("Could not write the natives cache stamp in {}", dir, e)
         }
     }
 

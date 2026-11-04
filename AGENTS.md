@@ -447,6 +447,31 @@ Three reports shared one theme: state that only ever existed on the video player
   `macosx/vlc-3.0.24-arm64.dmg` while `win32`/`winarm64`/`intel64` answered 200, so a desktop
   `VLC_VER` bump to `3.0.24` is not proven safe to ship either.
 
+### 2026-11-04 — The native runtime cache is stamped with its release tag
+- `NativesDownloader` used to answer "is the runtime cached?" with `hasLibVlc()` alone, which only
+  probes for `libvlc.so`/`libvlc.dll`/`libvlc.dylib` (plus, on Android, the renamed
+  `libc++_dreamdisplayx.so`). A file that existed was reused **forever**, so shipping a newer natives
+  release fixed clean installs while every existing install silently kept the old libvlc — the classic
+  "it works on a fresh instance but not on mine" report.
+- The gate is now `!hasLibVlc(dir) || !isCacheCurrent(dir, manifest)`, and a successful
+  `downloadAndExtractTarGz` is followed by `writeStamp()`. The stamp lives at
+  `<natives>/libvlc/natives-stamp.txt` and holds the release tag taken from the manifest's
+  `release_base` URL (its last path segment, e.g. `natives-7f303c9-1787719531`).
+- `NativesCacheStamp` is a pure, IO-free object so the decision is unit-testable
+  (`NativesCacheStampTest`, 11 cases). The downloader owns all reading/writing.
+- Deliberate bias: an **unreadable or absent** stamp never matches, so a cache written before stamping
+  existed re-downloads exactly once. Paying one download is cheaper than a user reporting a bug that
+  was already fixed upstream.
+- Deliberate exception: when `tagOf()` cannot derive a tag (blank URL, trailing slash, a bare
+  `.../releases`/`download`/`latest` page, a scheme-only string) the old behaviour is kept and the
+  on-disk cache is trusted. Re-downloading on every launch behind an unusual manifest URL would be
+  worse than a possibly-stale runtime.
+- `flattenPlatformDir()` wipes the destination before overlaying, so the stamp must be written
+  **after** extraction — writing it before would delete it. `cleanAndroidStaleNatives()` only removes
+  `.so` files, so the `.txt` stamp survives that pass.
+- A failed `writeStamp()` only logs at warn: a missing stamp costs one extra download next launch and
+  never correctness. Do not turn it into an error.
+
 ### 2026-11-04 — A DASH fragment boundary is not the end of the stream
 - Follow-up to the budget above, found in a 1.10.8.2 field log: one display, `startStreams() cold start`
   printed **once** (it is unconditional INFO at `MediaPlayer.kt:965`), zero `fell back to a full stream

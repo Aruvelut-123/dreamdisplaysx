@@ -13,6 +13,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - A display no longer drifts quiet after a while on Android: the mixer level and the mute flag are re-asserted on every PLAYING event and polled once per second, so an `aout` rebuild cannot leave the sound at the platform default.
 - Fixed Android video going permanently silent a few minutes in: a DASH fragment boundary was mistaken for the end of the stream, and each false end burned two AudioTrack slots until the process hit the platform cap. Only a position within the end window retires the players now; anything else resumes the existing ones in place.
 - Fixed a display on a Valkyrien Skies ship leaving its picture behind while the hull sailed away: the client bridge resolved VS's level helper against `ClientLevel`, but `Class.getMethod` matches declared parameter types exactly and VS declares plain `Level`, so the lookup failed and was cached as "the mod is absent".
+- Fixed upgraded installs keeping an old libvlc: the downloaded native runtime is now stamped with its release tag, so a mod update that ships newer natives re-downloads once instead of reusing the binaries already on disk.
 # 1.10.8.1 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
 ## Server
