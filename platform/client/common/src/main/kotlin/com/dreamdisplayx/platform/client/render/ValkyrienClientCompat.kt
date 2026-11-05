@@ -79,11 +79,23 @@ object ValkyrienClientCompat {
             val renderTransform: Method,
             /** `Matrix4dc.get(double[])`. */
             val readMatrix: Method,
+            /** `VSGameUtilsKt.getLoadedShipManagingPos(ClientLevel, double, double, double)`. */
+            val loadedShipAt: Method?,
         ) : Resolution()
     }
 
-    /** Cache key for a member resolved on a runtime class rather than on a named interface. */
-    private data class MemberKey(val owner: Class<*>, val name: String)
+    /**
+     * Cache key for a member resolved on a runtime class rather than on a named interface.
+     *
+     * [parameters] disambiguates overloads that share a name and an arity — `AABBic.containsPoint` has
+     * three three-parameter spellings, and caching them together would hand the wrong `Method` back.
+     */
+    private data class MemberKey(
+        val owner: Class<*>,
+        val name: String,
+        val arity: Int = 0,
+        val parameters: String = "",
+    )
 
     /**
      * Members already resolved per runtime class.
@@ -136,6 +148,131 @@ object ValkyrienClientCompat {
             // policy layer keeps the display at its structure coordinates until it comes back.
             null
         }
+    }
+
+    /**
+     * Returns the id of the structure that owns the block at ([x], [y], [z]), or `0` when none does.
+     *
+     * This is the discovery half of the ship anchor. The server only samples the ship once, inside
+     * `/display create`; a display built on loose blocks and *then* assembled into a ship therefore
+     * arrives with `shipId = 0` and would stay world-anchored for the rest of the session — the
+     * picture keeps its stored coordinates while the hull sails away. The client therefore probes for
+     * itself and hands the scheduling to `ShipAnchorDetectPolicy`.
+     *
+     * Two lookups run because the two coordinate spaces differ and only a real VS install proves
+     * which one a given display was stamped in:
+     *
+     * 1. `getLoadedShipManagingPos(level, x, y, z)` treats the argument as a **world** position and
+     *    resolves it through the shipyard's chunk claims (`>>4`, verified in the bytecode). This hits
+     *    while the display's blocks have not moved since they were assembled.
+     * 2. A scan over `getAllShips()` comparing `getShipAABB()` (the **structure-space** voxel bounds)
+     *    against the same numbers. This hits after the hull has moved, because the stored coordinates
+     *    are structure space by design — see `ShipAnchor`'s contract.
+     *
+     * Both are cheap and both fail closed, so running them in order is cheaper than choosing wrong.
+     * Never throws: an absent or incompatible install must degrade to "no structure here".
+     */
+    fun shipIdAt(level: ClientLevel?, x: Int, y: Int, z: Int): Long {
+        if (level == null) return 0L
+        val ready = resolve() ?: return 0L
+        return runCatching {
+            worldSpaceLookup(ready, level, x, y, z)?.takeIf { it > 0L }
+                ?: structureSpaceLookup(ready, level, x, y, z)
+        }.getOrElse {
+            // A structure that vanishes mid-probe is ordinary and must not spam the log.
+            0L
+        }
+    }
+
+    /**
+     * World-position lookup through `getLoadedShipManagingPos`.
+     *
+     * The block corner is offset by 0.5 so the sample lands inside the block rather than on an edge,
+     * where a comparison against a chunk claim could fall the wrong way.
+     */
+    private fun worldSpaceLookup(ready: Resolution.Ready, level: ClientLevel, x: Int, y: Int, z: Int): Long? {
+        val lookup = ready.loadedShipAt ?: return null
+        val ship = lookup.invoke(
+            null, level, x.toDouble() + 0.5, y.toDouble() + 0.5, z.toDouble() + 0.5,
+        ) ?: return null
+        return (ready.shipId.invoke(ship) as? Long)?.coerceAtLeast(0L)
+    }
+
+    /**
+     * Structure-space lookup: iterate the loaded ships and test each one's voxel bounds.
+     *
+     * `getShipAABB()` is the **structure-space** bound (`getWorldAABB()` is the other one), which is
+     * exactly the space the display's stored coordinates live in. Only `containsPoint` is used, so a
+     * VS release that reshapes the AABB type still resolves as long as the three-`int` test survives;
+     * everything is resolved on the runtime class and cached.
+     */
+    private fun structureSpaceLookup(ready: Resolution.Ready, level: ClientLevel, x: Int, y: Int, z: Int): Long {
+        val world = ready.shipWorld.invoke(null, level) ?: return 0L
+        val ships = invokeMember(world, "getAllShips") as? Iterable<*> ?: return 0L
+        val int = Int::class.javaPrimitiveType ?: return 0L
+        for (ship in ships) {
+            if (ship == null) continue
+            val bounds = invokeMember(ship, "getShipAABB") ?: continue
+            // Match on the declared parameter types, not on the arity: AABBic declares
+            // containsPoint(int, int, int), (float, float, float) and (Vector3ic), and picking the
+            // first three-argument overload by reflection order could hand ints to a float signature.
+            val inside = runCatching {
+                invokeMemberWith(bounds, "containsPoint", arrayOf(int, int, int), arrayOf<Any?>(x, y, z)) as? Boolean
+            }.getOrNull() ?: false
+            if (!inside) continue
+            val id = (ready.shipId.invoke(ship) as? Long)?.coerceAtLeast(0L) ?: 0L
+            if (id > 0L) return id
+        }
+        return 0L
+    }
+
+    /**
+     * Resolves `VSGameUtilsKt.getLoadedShipManagingPos(<level>, double, double, double)`.
+     *
+     * Returns `null` instead of throwing: the *transform* path is the one that must not break, and a
+     * VS release that renames this helper should degrade to "world lookup unavailable" rather than
+     * disable ship rendering entirely — the structure-space scan still covers it.
+     *
+     * The `ClientLevel` spelling comes first because that overload returns `ClientShip`, but the plain
+     * `Level` one is tried too: `getMethod` matches declared parameter types exactly, and VS declares
+     * most helpers against `Level`.
+     */
+    private fun resolveLoadedShipAt(utils: Class<*>): Method? {
+        val double = Double::class.javaPrimitiveType
+        val candidates = listOf(ClientLevel::class.java, Level::class.java)
+        for (param in candidates) {
+            runCatching {
+                utils.getMethod("getLoadedShipManagingPos", param, double, double, double)
+            }.getOrNull()?.let { return it }
+        }
+        return null
+    }
+
+    /**
+     * Invokes a method that takes arguments, matched on its **declared parameter types**.
+     *
+     * Arity alone is not enough: `AABBic` declares `containsPoint(int,int,int)`,
+     * `containsPoint(float,float,float)` and `containsPoint(Vector3ic)`, so a three-argument scan could
+     * resolve a `float` overload and then throw `IllegalArgumentException` on the `Integer` boxed
+     * arguments. Matching the exact parameter list also keeps this safe across VS releases that add
+     * another overload. Cached per class, name and parameter list.
+     */
+    private fun invokeMemberWith(
+        receiver: Any,
+        name: String,
+        parameterTypes: Array<Class<*>>,
+        args: Array<Any?>,
+    ): Any? {
+        val key = MemberKey(receiver.javaClass, name, parameterTypes.size, parameterTypes.joinToString(",") { it.name })
+        val method = memberCache[key] ?: runCatching {
+            // `getMethod` only returns *public* members of a *public* declaring class. VS implements
+            // these interfaces in package-private classes often enough that the declared-method
+            // fallback is required, not defensive padding (same trap as `invokeMember`).
+            val declared = runCatching { receiver.javaClass.getMethod(name, *parameterTypes) }.getOrNull()
+                ?: receiver.javaClass.getDeclaredMethod(name, *parameterTypes)
+            declared.also { it.isAccessible = true }
+        }.getOrNull()?.also { memberCache[key] = it } ?: return null
+        return method.invoke(receiver, *args)
     }
 
     /**
@@ -233,6 +370,9 @@ object ValkyrienClientCompat {
                     shipId = ship.getMethod("getId"),
                     renderTransform = clientShip.getMethod("getRenderTransform"),
                     readMatrix = matrixClass.getMethod("get", DoubleArray::class.java),
+                    // Optional: the transform path must keep working on a VS release that renames
+                    // this helper, so a miss here disables discovery only, not ship rendering.
+                    loadedShipAt = resolveLoadedShipAt(utils),
                 ).also {
                     // INFO on success, not silence. A shipped log otherwise cannot distinguish "the
                     // mod is absent" from "the bridge resolved and drew in structure space anyway",

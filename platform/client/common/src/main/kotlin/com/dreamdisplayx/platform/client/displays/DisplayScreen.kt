@@ -10,6 +10,7 @@ import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
 import com.dreamdisplayx.api.display.geometry.AffineTransform
+import com.dreamdisplayx.api.display.geometry.ShipAnchorDetectPolicy
 import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
@@ -116,6 +117,54 @@ class DisplayScreen(
      */
     var shipId: Long = 0L,
 ) {
+    /**
+     * Structure id the client discovered for itself, or `0` while nothing has been found.
+     *
+     * Only consulted when [shipId] is `0`: the server's answer always wins, because it is the only
+     * one that can be authoritative about a hull the client has never streamed in. See
+     * [ShipAnchorDetectPolicy] for why discovery is needed at all.
+     */
+    private var detectedShipId: Long = 0L
+
+    /** Game time of the last discovery probe, or [ShipAnchorDetectPolicy.NEVER_PROBED]. */
+    private var lastProbeTick: Long = ShipAnchorDetectPolicy.NEVER_PROBED
+
+    /**
+     * The structure id to render with: the server's, falling back to the client's own discovery.
+     *
+     * Probing happens here rather than in [tick] so every reader (renderer, distance census, acoustics)
+     * sees the same value even on the very first frame a display is drawn. The policy throttles it, so
+     * the reflection behind it runs a handful of times per second at most, and only for displays the
+     * server left world-anchored.
+     */
+    val anchoredShipId: Long
+        get() {
+            val now = probeClock()
+            if (ShipAnchorDetectPolicy.shouldProbe(shipId, detectedShipId, lastProbeTick, now)) {
+                lastProbeTick = now
+                detectedShipId = ValkyrienClientCompat.shipIdAt(levelOrNull(), x, y, z)
+            }
+            return ShipAnchorDetectPolicy.effectiveShipId(shipId, detectedShipId)
+        }
+
+    /**
+     * Monotonic-ish tick source for the discovery throttle.
+     *
+     * `Level.gameTime` is the natural choice but is not guaranteed to be readable while the client is
+     * still joining or has already left the world, and the getter above runs from the render path.
+     * Falling back to a wall-clock-derived tick keeps the throttle working instead of collapsing to
+     * "never probe again", which would silently pin the display in world space.
+     */
+    private fun probeClock(): Long {
+        val gameTime = runCatching { Minecraft.getInstance().level?.gameTime }.getOrNull()
+        if (gameTime != null && gameTime > 0L) return gameTime
+        return System.nanoTime() / 50_000_000L
+    }
+
+    /** The client level, or `null` while the client is still starting up or leaving a world. */
+    private fun levelOrNull(): net.minecraft.client.multiplayer.ClientLevel? =
+        runCatching { Minecraft.getInstance().level }.getOrNull()
+
     /** Per-display client settings (volume, quality, mute, ...) loaded from disk. */
     internal val savedSettings = ClientSettingsStore.getSettings(uuid, defaultVolume(), defaultStretchMode())
 
@@ -769,6 +818,11 @@ class DisplayScreen(
         y = packet.y
         z = packet.z
         blockPos = null
+        // The display moved or was re-stamped, so a previously discovered structure id belongs to
+        // whatever used to be at these coordinates. Keeping it would draw the picture against the
+        // wrong hull; forgetting it costs one probe on the next frame.
+        detectedShipId = 0L
+        lastProbeTick = ShipAnchorDetectPolicy.NEVER_PROBED
         facing = FacingUtil.fromPacket(packet.facing.toByte()).toDisplayFacing()
         rotation = DisplayRotation.fromQuarterTurns(packet.rotation)
         width = packet.width
@@ -920,11 +974,20 @@ class DisplayScreen(
         )
 
     /** The live structure transform, or identity for a world-anchored screen. */
-    private fun shipTransformOrIdentity(): AffineTransform =
-        if (shipId <= 0L) AffineTransform.IDENTITY else ValkyrienClientCompat.transformFor(shipId)
+    private fun shipTransformOrIdentity(): AffineTransform {
+        // `anchoredShipId` is the server's anchor when it has one, otherwise the client's own discovery;
+        // a display created before its blocks were assembled into a hull has shipId 0 forever, and
+        // reading the raw field here is what left the picture behind when the ship sailed off.
+        val id = anchoredShipId
+        return if (id <= 0L) AffineTransform.IDENTITY else ValkyrienClientCompat.transformFor(id)
+    }
 
     /** Whether this screen rides a structure whose transform is currently resolvable. */
-    val isOnLoadedShip: Boolean get() = shipId > 0L && !ValkyrienClientCompat.transformFor(shipId).isIdentity
+    val isOnLoadedShip: Boolean
+        get() {
+            val id = anchoredShipId
+            return id > 0L && !ValkyrienClientCompat.transformFor(id).isIdentity
+        }
 
     /**
      * Builds the world-space planar sound source fed to the acoustics engine (see [tick]).
@@ -937,9 +1000,10 @@ class DisplayScreen(
      */
     private fun toSourcePlane(): SourcePlane {
         val pose = DisplayGeometry.worldPose(x, y, z, width, height, facing)
-        if (shipId <= 0L) return pose.toSourcePlane(width, height)
+        val id = anchoredShipId
+        if (id <= 0L) return pose.toSourcePlane(width, height)
 
-        val transform = ValkyrienClientCompat.transformFor(shipId)
+        val transform = ValkyrienClientCompat.transformFor(id)
         if (transform.isIdentity) return pose.toSourcePlane(width, height)
 
         val centre = transform.transformPoint(pose.centerX, pose.centerY, pose.centerZ)

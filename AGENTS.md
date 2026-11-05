@@ -859,6 +859,52 @@ right in front of the picture:
 operation order, the camera subtraction in world space and the `false` fallback. The renderer's GL output cannot
 be unit-tested, but the geometry that feeds it can, and that is where the P4 logic lives.
 
+### The anchor is stamped once — the client must discover it afterwards
+
+`stampShipAnchor` runs **only** from `/display create`. A display built on loose blocks and assembled into a
+ship afterwards therefore keeps `shipId = 0` for the rest of the save, `ShipAnchorPolicy.transformFor`
+short-circuits on a world anchor, and the picture stays at the build site while the hull sails off — including
+with no video playing, because the quad is placed from the stored coordinates alone. This was the 1.10.8.2
+"the screen did not come with the ship" report, and it had nothing to do with the reflection bug above: the
+`Valkyrien Skies client bridge resolved` line was absent from the log precisely because the renderer never
+asked the mod anything.
+
+Fix: `ShipAnchorDetectPolicy` (`:api`, pure numbers, unit-tested by `ShipAnchorDetectPolicyTest`) schedules a
+probe, and `DisplayScreen.anchoredShipId` runs it and folds the result in. Rules that must not be broken:
+
+- **A server anchor is never second-guessed.** `shouldProbe` returns `false` the moment `shipId > 0`, so a
+  client guess can never overwrite the authoritative value. For the same reason `toFullDisplayData()` uploads
+  the raw `shipId`, not `anchoredShipId` — two players near one display would otherwise race their own
+  guesses into the database.
+- **Discovery happens on the render path, throttled.** `anchoredShipId` is a getter that every reader
+  (renderer, distance census, acoustics) calls; probing in `tick()` instead would leave the first frame
+  wrong. `MISS_RETRY_TICKS = 10` / `HIT_RECHECK_TICKS = 100` keep the reflection off the per-frame budget and
+  are exactly two numbers a test pins.
+- **`updateData` clears the discovery state.** A moved or re-stamped display would otherwise keep drawing
+  against whatever hull used to be at its old coordinates.
+- **`DisplayLifecycleManager.distanceToScreen` deliberately does *not* probe.** The two censuses that call it
+  decide whether a screen is created at all, so they must stay a pure comparison; the screen probes itself
+  once it exists. Do not "fix" that asymmetry by calling the bridge there.
+
+`ValkyrienClientCompat.shipIdAt` runs two lookups because the coordinate spaces differ:
+
+1. `getLoadedShipManagingPos(level, x, y, z)` — a **world**-position lookup; the bytecode does `>>4` and
+   resolves the shipyard's chunk claim. Hits while the blocks have not moved since assembly.
+2. A scan over `getAllShips()`, testing `getShipAABB().containsPoint(x, y, z)`. `getShipAABB()` is the
+   **structure-space** voxel bound (`getWorldAABB()` is the other one), which is the space the display's
+   stored coordinates live in by design — this is the one that still hits after the hull has moved.
+
+Both fail closed to `0L`. Matching `containsPoint` must go through declared parameter types, not arity:
+`AABBic` declares `(int,int,int)`, `(float,float,float)` and `(Vector3ic)`, and an arity-only scan can resolve
+the `float` overload and then throw on boxed `Integer` arguments. `getMethod` also only returns public members
+of public classes, so `invokeMemberWith` falls back to `getDeclaredMethod` + `setAccessible(true)` — VS
+implements these interfaces in package-private classes, the same trap `invokeMember` documents.
+
+Verified contract of the stored coordinates (this matters if the detection is ever rewritten): VS's
+`RaycastUtilsKt.clipIncludeShips` defaults `returnMissed = false` (`iconst_0` in the bytecode), so the
+`BlockHitResult.location` it returns keeps **structure-space** values. That is what DDX stores, and it is why a
+pure world-position probe would silently miss after a hull has moved.
+
 ## Experimental Remote Control
 
 The Paper remote-control stick is experimental and uses a `PersistentDataContainer` entry named `remote_display_id`. A normal stick links to the nearest display under the player's look ray on right-click; the server adds a custom name and enchantment-glint override. Shift+right-click on a linked stick sends the experimental V3 `RemoteControlOpen` packet, and the client opens the linked `DisplayMenu` when that display is loaded. Keep the packet id append-only and validate the linked display server-side.

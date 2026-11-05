@@ -218,6 +218,9 @@ object DisplayLifecycleManager {
         depth: Int = 1, shipId: Long = 0L,
     ): Double {
         val safeDepth = depth.coerceAtLeast(1)
+        // Discovery does not run here: these censuses decide whether a screen is created at all, so
+        // they must stay a pure comparison. Once the screen exists, `DisplayScreen.anchoredShipId`
+        // probes for itself and every later census reuses that answer.
         if (shipId <= 0L) {
             return DisplayGeometry.distanceTo(playerPos, x, y, z, width, height, facing, safeDepth)
         }

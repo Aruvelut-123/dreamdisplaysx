@@ -68,5 +68,8 @@ internal fun DisplayScreen.toFullDisplayData(): FullDisplayData = FullDisplayDat
     rotation = rotation.quarterTurns,
     qualityCap = qualityCap,
     dimensionKey = dimensionKey,
+    // Deliberately the *server's* anchor, not `anchoredShipId`: this snapshot is uploaded back to the
+    // server, and a client-side discovery must never overwrite the authoritative row. Two players
+    // near the same display would otherwise race their own guesses into the database.
     shipId = shipId,
 )

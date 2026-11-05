@@ -140,8 +140,11 @@ object ScreenRenderer : ClientRenderService {
      * skip the extra pose work entirely instead of multiplying by an identity.
      */
     private fun shipTransformOf(screen: DisplayScreen): AffineTransform? {
-        if (!ShipAnchorPolicy.isShipAnchored(screen.shipId)) return null
-        val transform = ValkyrienClientCompat.transformFor(screen.shipId)
+        // `anchoredShipId` folds in the client's own discovery, so a display the server stamped with
+        // `0` (created before its blocks were assembled into a hull) still rides the structure.
+        val id = screen.anchoredShipId
+        if (!ShipAnchorPolicy.isShipAnchored(id)) return null
+        val transform = ValkyrienClientCompat.transformFor(id)
         return if (transform.isIdentity) null else transform
     }
 
