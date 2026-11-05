@@ -44,24 +44,27 @@ class ShipAnchorDetectPolicyTest {
     }
 
     @Test
-    fun aHitIsRecheckedOnTheSlowCadenceOnly() {
+    fun aHitStopsProbingForGood() {
         val tick = 1000L
         val detected = 42L
-        // The short miss interval must not apply here, or a boarding display would re-scan ten times a
-        // second for the rest of the session.
+        // A hit is permanent, not a slow-cadence recheck. The correction captured at discovery keeps
+        // `shipToWorld_now * worldToShip_then` right for every later matrix, while the world-space
+        // lookups that produced the hit stop applying once VS moves the blocks into the shipyard —
+        // so every recheck would log a spurious miss on a display that is being rendered correctly.
+        assertFalse(ShipAnchorDetectPolicy.shouldProbe(0L, detected, tick, tick))
         assertFalse(
             ShipAnchorDetectPolicy.shouldProbe(0L, detected, tick, tick + ShipAnchorDetectPolicy.MISS_RETRY_TICKS),
         )
-        assertTrue(
-            ShipAnchorDetectPolicy.shouldProbe(0L, detected, tick, tick + ShipAnchorDetectPolicy.HIT_RECHECK_TICKS),
+        assertFalse(
+            ShipAnchorDetectPolicy.shouldProbe(0L, detected, tick, tick + 1_000_000L),
         )
     }
 
     @Test
-    fun theSlowCadenceIsLongerThanTheFastOne() {
-        // Guards against a future edit that swaps the two constants, which would re-scan every loaded
-        // hull ten times a second while a display sits on a moving ship.
-        assertTrue(ShipAnchorDetectPolicy.HIT_RECHECK_TICKS > ShipAnchorDetectPolicy.MISS_RETRY_TICKS)
+    fun theMissRetryIsSlowEnoughNotToStutterTheFrameItRunsOn() {
+        // Guards the render budget: one probe walks every loaded hull, so retrying it every tick
+        // would stutter the frame that runs it.
+        assertTrue(ShipAnchorDetectPolicy.MISS_RETRY_TICKS >= 5L)
     }
 
     @Test

@@ -878,8 +878,10 @@ probe, and `DisplayScreen.anchoredShipId` runs it and folds the result in. Rules
   guesses into the database.
 - **Discovery happens on the render path, throttled.** `anchoredShipId` is a getter that every reader
   (renderer, distance census, acoustics) calls; probing in `tick()` instead would leave the first frame
-  wrong. `MISS_RETRY_TICKS = 10` / `HIT_RECHECK_TICKS = 100` keep the reflection off the per-frame budget and
-  are exactly two numbers a test pins.
+  wrong. `MISS_RETRY_TICKS = 10` keeps the reflection off the per-frame budget, and a **hit stops
+  probing for good** — the correction captured at discovery keeps `shipToWorld_now * worldToShip_then`
+  right for every later matrix, while the world-space lookups that produced the hit stop applying once
+  VS moves the blocks into the shipyard, so a recheck could only log a spurious miss.
 - **`updateData` clears the discovery state.** A moved or re-stamped display would otherwise keep drawing
   against whatever hull used to be at its old coordinates.
 - **`DisplayLifecycleManager.distanceToScreen` deliberately does *not* probe.** The two censuses that call it
