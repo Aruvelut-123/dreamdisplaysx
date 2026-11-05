@@ -25,19 +25,19 @@ object ShipAnchorDetectPolicy {
     /** After a probe that found nothing, wait at least this many ticks before trying again. */
     const val MISS_RETRY_TICKS = 10L
 
-    /**
-     * After a probe that found a structure, re-check only this often.
-     *
-     * Boarding and leaving a ship are rare, but a single hit must not be trusted for the whole
-     * session: a display dismantled off its hull would otherwise keep applying a stale matrix.
-     */
-    const val HIT_RECHECK_TICKS = 100L
-
     /** Sentinel for "this display has never been probed". */
     const val NEVER_PROBED = -1L
 
     /**
      * Whether a probe should run on the current tick.
+     *
+     * A probe **stops for good** once it has found a hull. That is not laziness: the anchor and the
+     * correction it captured describe a fixed relationship, and `world = shipToWorld_now * worldToShip_then * pos`
+     * keeps holding for every later `shipToWorld_now`. Re-probing would also be actively misleading,
+     * because the lookups that produced the hit no longer apply once VS has moved the blocks into the
+     * shipyard — every recheck would report a miss on a display that is being rendered correctly. A hull
+     * that genuinely disappears is not this policy's problem: the matrix source returns `null` and
+     * [ShipAnchorPolicy.transformFor] falls back to the stored coordinates.
      *
      * @param storedShipId the anchor the server sent; once non-zero there is nothing left to discover
      * @param detectedShipId the id a previous probe found, `0` while nothing has been found yet
@@ -52,13 +52,10 @@ object ShipAnchorDetectPolicy {
     ): Boolean {
         // The server already answered. Probing would only be able to disagree with it.
         if (ShipAnchorPolicy.isShipAnchored(storedShipId)) return false
+        // Already discovered. See the note above: this is permanent, not a recheck.
+        if (ShipAnchorPolicy.isShipAnchored(detectedShipId)) return false
         if (lastProbeTick == NEVER_PROBED) return true
-        val interval = if (ShipAnchorPolicy.isShipAnchored(detectedShipId)) {
-            HIT_RECHECK_TICKS
-        } else {
-            MISS_RETRY_TICKS
-        }
-        return nowTick - lastProbeTick >= interval
+        return nowTick - lastProbeTick >= MISS_RETRY_TICKS
     }
 
     /**

@@ -126,6 +126,19 @@ class DisplayScreen(
      */
     private var detectedShipId: Long = 0L
 
+    /**
+     * `worldToShip` captured when [detectedShipId] was discovered, or `null`.
+     *
+     * Non-null only for the case the server could not stamp: a display built on loose blocks that
+     * were assembled into a hull afterwards, whose stored coordinates are still **world** space. The
+     * renderer then draws `shipToWorld_now * this * pos` instead of `shipToWorld_now * pos`, which
+     * would otherwise apply the structure's transform twice.
+     */
+    private var detectedCorrection: DoubleArray? = null
+
+    /** True once the discovery outcome has been logged, so the probe stays quiet afterwards. */
+    private var discoveryLogged = false
+
     /** Game time of the last discovery probe, or [ShipAnchorDetectPolicy.NEVER_PROBED]. */
     private var lastProbeTick: Long = ShipAnchorDetectPolicy.NEVER_PROBED
 
@@ -140,9 +153,34 @@ class DisplayScreen(
     val anchoredShipId: Long
         get() {
             val now = probeClock()
+            // Once a hull is found there is nothing left to discover: the row is pinned for the rest of
+            // the session. Re-probing would also be actively harmful, because the world-space paths that
+            // produced the hit no longer apply (the blocks now live in the shipyard, and the stored
+            // position is world space while the bounds are structure space), so every recheck would log
+            // a spurious miss. A hull that genuinely disappears is handled where it belongs: the matrix
+            // source returns `null` and `ShipAnchorPolicy` falls back to the stored coordinates.
+            if (detectedShipId > 0L) {
+                return ShipAnchorDetectPolicy.effectiveShipId(shipId, detectedShipId)
+            }
             if (ShipAnchorDetectPolicy.shouldProbe(shipId, detectedShipId, lastProbeTick, now)) {
                 lastProbeTick = now
-                detectedShipId = ValkyrienClientCompat.shipIdAt(levelOrNull(), x, y, z)
+                val found = ValkyrienClientCompat.discoverAt(levelOrNull(), x, y, z)
+                // Log the first outcome, then only transitions. A probe runs a few times a second for
+                // as long as a display stays world-anchored, so logging each one would bury the file;
+                // logging the first result *including a miss* keeps exactly the evidence needed to
+                // tell "never found a hull" from "found it, but placed it wrongly" — the 1.10.8.2
+                // report could not answer that because the probe was silent.
+                if (!discoveryLogged || found.shipId != detectedShipId) {
+                    discoveryLogged = true
+                    logger.info(
+                        "Ship anchor discovery: display {} at ({}, {}, {}) -> ship {} (correction: {})",
+                        uuid, x, y, z, found.shipId, found.hasCorrection,
+                    )
+                }
+                if (found.shipId > 0L) {
+                    detectedShipId = found.shipId
+                    detectedCorrection = found.worldToShip
+                }
             }
             return ShipAnchorDetectPolicy.effectiveShipId(shipId, detectedShipId)
         }
@@ -822,6 +860,8 @@ class DisplayScreen(
         // whatever used to be at these coordinates. Keeping it would draw the picture against the
         // wrong hull; forgetting it costs one probe on the next frame.
         detectedShipId = 0L
+        detectedCorrection = null
+        discoveryLogged = false
         lastProbeTick = ShipAnchorDetectPolicy.NEVER_PROBED
         facing = FacingUtil.fromPacket(packet.facing.toByte()).toDisplayFacing()
         rotation = DisplayRotation.fromQuarterTurns(packet.rotation)
@@ -974,20 +1014,36 @@ class DisplayScreen(
         )
 
     /** The live structure transform, or identity for a world-anchored screen. */
-    private fun shipTransformOrIdentity(): AffineTransform {
-        // `anchoredShipId` is the server's anchor when it has one, otherwise the client's own discovery;
-        // a display created before its blocks were assembled into a hull has shipId 0 forever, and
-        // reading the raw field here is what left the picture behind when the ship sailed off.
-        val id = anchoredShipId
-        return if (id <= 0L) AffineTransform.IDENTITY else ValkyrienClientCompat.transformFor(id)
-    }
+    private fun shipTransformOrIdentity(): AffineTransform = anchoredTransform
+
+    /**
+     * The structure transform to draw this display with, or [AffineTransform.IDENTITY].
+     *
+     * Normally that is just the live ship-to-world matrix. It is composed with the discovery-time
+     * correction when the stored coordinates are world space — the case where the display was built
+     * on loose blocks and assembled into a hull afterwards, which the server could not stamp. Then the
+     * correct mapping is `shipToWorld_now * worldToShip_then`, which applies the structure once and
+     * starts as the identity, so the picture stays exactly where the player left it and only starts
+     * following the hull once the hull moves.
+     *
+     * Every reader goes through this one property (renderer, depth/visibility checks, acoustics) so
+     * the correction cannot be applied on one path and forgotten on another.
+     */
+    val anchoredTransform: AffineTransform
+        get() {
+            val id = anchoredShipId
+            if (id <= 0L) return AffineTransform.IDENTITY
+            val live = ValkyrienClientCompat.transformFor(id)
+            val correction = detectedCorrection ?: return live
+            if (live.isIdentity) return live
+            // `times` is `this * other`, i.e. the correction is applied first, then the live matrix —
+            // the same order the renderer's `T * R * S * local` chain assumes.
+            return live.times(AffineTransform(correction.copyOf()))
+        }
 
     /** Whether this screen rides a structure whose transform is currently resolvable. */
     val isOnLoadedShip: Boolean
-        get() {
-            val id = anchoredShipId
-            return id > 0L && !ValkyrienClientCompat.transformFor(id).isIdentity
-        }
+        get() = anchoredShipId > 0L && !anchoredTransform.isIdentity
 
     /**
      * Builds the world-space planar sound source fed to the acoustics engine (see [tick]).
@@ -1000,10 +1056,7 @@ class DisplayScreen(
      */
     private fun toSourcePlane(): SourcePlane {
         val pose = DisplayGeometry.worldPose(x, y, z, width, height, facing)
-        val id = anchoredShipId
-        if (id <= 0L) return pose.toSourcePlane(width, height)
-
-        val transform = ValkyrienClientCompat.transformFor(id)
+        val transform = anchoredTransform
         if (transform.isIdentity) return pose.toSourcePlane(width, height)
 
         val centre = transform.transformPoint(pose.centerX, pose.centerY, pose.centerZ)

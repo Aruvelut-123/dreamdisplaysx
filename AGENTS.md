@@ -886,19 +886,52 @@ probe, and `DisplayScreen.anchoredShipId` runs it and folds the result in. Rules
   decide whether a screen is created at all, so they must stay a pure comparison; the screen probes itself
   once it exists. Do not "fix" that asymmetry by calling the bridge there.
 
-`ValkyrienClientCompat.shipIdAt` runs two lookups because the coordinate spaces differ:
+`ValkyrienClientCompat.discoverAt` runs three lookups, and **the coordinate space they report decides whether a
+correction is returned**:
 
 1. `getLoadedShipManagingPos(level, x, y, z)` — a **world**-position lookup; the bytecode does `>>4` and
-   resolves the shipyard's chunk claim. Hits while the blocks have not moved since assembly.
-2. A scan over `getAllShips()`, testing `getShipAABB().containsPoint(x, y, z)`. `getShipAABB()` is the
-   **structure-space** voxel bound (`getWorldAABB()` is the other one), which is the space the display's
-   stored coordinates live in by design — this is the one that still hits after the hull has moved.
+   resolves the shipyard's chunk claim. A hit proves the stored numbers are world space, so it returns a
+   correction.
+2. A scan over `getAllShips()`, testing `getWorldAABB().containsPoint(x + 0.5, y + 0.5, z + 0.5)`. The world
+   bound still contains an un-stamped row's coordinates, because assembling a ship does not move the blocks
+   that were already placed. Also returns a correction.
+3. A scan testing `getShipAABB().containsPoint(x, y, z)`. `getShipAABB()` is the **structure-space** voxel
+   bound, the space a *stamped* row lives in. Returns no correction — such a row must not be re-projected.
 
-Both fail closed to `0L`. Matching `containsPoint` must go through declared parameter types, not arity:
-`AABBic` declares `(int,int,int)`, `(float,float,float)` and `(Vector3ic)`, and an arity-only scan can resolve
-the `float` overload and then throw on boxed `Integer` arguments. `getMethod` also only returns public members
-of public classes, so `invokeMemberWith` falls back to `getDeclaredMethod` + `setAccessible(true)` — VS
-implements these interfaces in package-private classes, the same trap `invokeMember` documents.
+The first two run before the third, deliberately: discovery only runs while `shipId == 0`, and that state has
+one dominant cause — the server sampled the block before a structure existed, i.e. the build-then-assemble
+case, whose coordinates are world space.
+
+### The correction matrix, and why the order cannot be swapped
+
+A build-then-assemble row stores a **world** position, but the renderer multiplies stored coordinates by the
+live ship-to-world matrix. Applying that unchanged transforms the structure twice and flings the picture into
+the void. The fix is `worldToShip` **captured at the moment of discovery**:
+
+```
+world_now = shipToWorld_now * worldToShip_then * storedPos
+```
+
+Two properties this buys, both pinned by `ShipAnchorCorrectionTest`:
+
+- At discovery `shipToWorld_now == shipToWorld_then`, so the product is the identity and **the picture does
+  not jump** when it is first pinned to the hull. It only starts following once the hull moves.
+- The composition order is `live.times(correction)`, i.e. correction first. Swapping it rotates the display
+  around the camera instead of around the hull origin.
+
+Rules that must not be broken:
+
+- **A miss never clears a previous hit.** After the first successful probe the blocks are inside the shipyard,
+  so both world-space paths are *expected* to miss on every later recheck. Overwriting `detectedShipId` on a
+  miss would un-pin the display one recheck later — the original bug, reintroduced.
+- **`detectedCorrection` is kept once set.** A later structure-space hit reports `null`; adopting it would drop
+  the conversion and re-apply the structure.
+- **All readers go through `DisplayScreen.anchoredTransform`, not `ValkyrienClientCompat.transformFor`.**
+  Renderer, distance census and acoustics must agree about where the picture is; the correction living in one
+  path only is exactly how this class of bug keeps coming back.
+- **Probing is silent by default, and that is a bug magnet.** The 1.10.8.2 first attempt shipped a silent probe
+  and the resulting log could not distinguish "never found a hull" from "found it, placed it wrongly". The
+  current probe logs the first outcome — *including a miss* — and every change of `shipId`, then stays quiet.
 
 Verified contract of the stored coordinates (this matters if the detection is ever rewritten): VS's
 `RaycastUtilsKt.clipIncludeShips` defaults `returnMissed = false` (`iconst_0` in the bytecode), so the

@@ -12,7 +12,7 @@ import net.minecraft.client.renderer.rendertype.RenderType
 /*import net.minecraft.client.renderer.RenderType*/
 import com.dreamdisplayx.api.display.geometry.AffineTransform
 import com.dreamdisplayx.api.display.geometry.ConformQuad
-import com.dreamdisplayx.api.display.geometry.ShipAnchorPolicy
+
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.dreamdisplayx.api.display.model.property.DisplayId
@@ -140,11 +140,10 @@ object ScreenRenderer : ClientRenderService {
      * skip the extra pose work entirely instead of multiplying by an identity.
      */
     private fun shipTransformOf(screen: DisplayScreen): AffineTransform? {
-        // `anchoredShipId` folds in the client's own discovery, so a display the server stamped with
-        // `0` (created before its blocks were assembled into a hull) still rides the structure.
-        val id = screen.anchoredShipId
-        if (!ShipAnchorPolicy.isShipAnchored(id)) return null
-        val transform = ValkyrienClientCompat.transformFor(id)
+        // `anchoredTransform` folds in the client's own discovery *and* the discovery-time correction
+        // for a row whose stored coordinates are still world space, so the renderer and the other
+        // readers can never disagree about where the picture belongs.
+        val transform = screen.anchoredTransform
         return if (transform.isIdentity) null else transform
     }
 

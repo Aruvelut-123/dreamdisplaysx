@@ -172,15 +172,65 @@ object ValkyrienClientCompat {
      * Both are cheap and both fail closed, so running them in order is cheaper than choosing wrong.
      * Never throws: an absent or incompatible install must degrade to "no structure here".
      */
-    fun shipIdAt(level: ClientLevel?, x: Int, y: Int, z: Int): Long {
-        if (level == null) return 0L
-        val ready = resolve() ?: return 0L
+    /**
+     * What a discovery probe found.
+     *
+     * [worldToShip] is `null` when the display's stored coordinates are already structure space. It
+     * is the structure's **world-to-ship** matrix when they are *world* space, see [discoverAt].
+     */
+    data class Discovery(val shipId: Long, val worldToShip: DoubleArray?) {
+        /** True when the stored coordinates need converting before they can be rendered. */
+        val hasCorrection: Boolean get() = worldToShip != null
+
+        // Deliberately not derived from the array: `DoubleArray` compares by reference, so a synthesized
+        // `equals` would report two identical corrections as different. Callers compare `shipId`, which
+        // is what actually decides the render path.
+        override fun toString(): String = "Discovery(shipId=$shipId, correction=$hasCorrection)"
+
+        companion object {
+            /** Nothing found: the display stays at its stored coordinates. */
+            val NONE: Discovery = Discovery(0L, null)
+        }
+    }
+
+    fun shipIdAt(level: ClientLevel?, x: Int, y: Int, z: Int): Long = discoverAt(level, x, y, z).shipId
+
+    /**
+     * Finds the structure that owns the block at ([x], [y], [z]) and reports how to render it.
+     *
+     * The stored coordinates of a ship display come in **two different spaces**, and which one a row
+     * uses depends on when it was created:
+     *
+     * - created on an *existing* hull, VS reports the click in **structure space** and the server
+     *   stamps the id, so `shipToWorld * pos` is right;
+     * - created on loose blocks that were assembled afterwards, the server saw no structure (it
+     *   samples exactly once, in `stampShipAnchor`), the row kept the **world** position the player
+     *   clicked, and `shipToWorld * pos` would therefore apply the structure twice and fling the
+     *   picture into the void.
+     *
+     * The second case is why a correction is returned: `worldToShip` captured at discovery converts
+     * the stored world position into structure space once, and the renderer composes it with the live
+     * matrix, `shipToWorld_now * worldToShip_then * worldPos`. At the moment of discovery that product
+     * is the identity, so the picture does not jump when it is first pinned to the hull.
+     *
+     * The world-space paths are tried **first**, deliberately. This probe only runs while `shipId == 0`,
+     * and that state has essentially one cause: the server sampled the block before any structure was
+     * there, i.e. the display was built on loose blocks that were assembled into a hull later — the
+     * second case above, which needs the correction. The structure-space scan is kept as the fallback
+     * for the rarer third case where the server could not see a hull the client can (an unloaded chunk
+     * at creation time); those rows are already structure space and must not be re-projected.
+     */
+    fun discoverAt(level: ClientLevel?, x: Int, y: Int, z: Int): Discovery {
+        if (level == null) return Discovery.NONE
+        val ready = resolve() ?: return Discovery.NONE
         return runCatching {
-            worldSpaceLookup(ready, level, x, y, z)?.takeIf { it > 0L }
-                ?: structureSpaceLookup(ready, level, x, y, z)
+            worldSpaceLookup(ready, level, x, y, z)
+                ?: worldAabbLookup(ready, level, x, y, z)
+                ?: structureSpaceLookup(ready, level, x, y, z).takeIf { it > 0L }?.let { Discovery(it, null) }
+                ?: Discovery.NONE
         }.getOrElse {
             // A structure that vanishes mid-probe is ordinary and must not spam the log.
-            0L
+            Discovery.NONE
         }
     }
 
@@ -190,12 +240,18 @@ object ValkyrienClientCompat {
      * The block corner is offset by 0.5 so the sample lands inside the block rather than on an edge,
      * where a comparison against a chunk claim could fall the wrong way.
      */
-    private fun worldSpaceLookup(ready: Resolution.Ready, level: ClientLevel, x: Int, y: Int, z: Int): Long? {
+    private fun worldSpaceLookup(ready: Resolution.Ready, level: ClientLevel, x: Int, y: Int, z: Int): Discovery? {
         val lookup = ready.loadedShipAt ?: return null
         val ship = lookup.invoke(
             null, level, x.toDouble() + 0.5, y.toDouble() + 0.5, z.toDouble() + 0.5,
         ) ?: return null
-        return (ready.shipId.invoke(ship) as? Long)?.coerceAtLeast(0L)
+        val id = (ready.shipId.invoke(ship) as? Long)?.coerceAtLeast(0L) ?: return null
+        if (id <= 0L) return null
+        // A hit here is itself the proof that the stored coordinates are **world** space: this helper
+        // resolves its argument through the shipyard's chunk claims, which are world-space, so a
+        // structure-space row (small numbers relative to the hull) would not land on the hull. Such a
+        // row therefore needs the correction, exactly like the one found through `getWorldAABB()`.
+        return Discovery(id, worldToShipOf(ready, ship))
     }
 
     /**
@@ -225,6 +281,50 @@ object ValkyrienClientCompat {
         }
         return 0L
     }
+
+    /**
+     * World-bounds lookup: the last resort for a row whose coordinates are still in **world** space.
+     *
+     * A display built on loose blocks and assembled into a hull afterwards was never stamped, so it
+     * kept the world position the player clicked — and that position lies outside `getShipAABB()`
+     * (structure space) once VS has moved the blocks into the shipyard. `getWorldAABB()` is the bound
+     * that still contains it, because assembling a ship does not move it: the hull appears around the
+     * blocks the player already placed.
+     *
+     * On a hit the structure's `worldToShip` is captured and handed back, so the caller can convert
+     * the stored position exactly once. Capturing it here, at discovery, is what makes the conversion
+     * stable: the snapshot is taken while the hull is where the coordinates point, so
+     * `shipToWorld_now * worldToShip_then` starts as the identity and only diverges as the ship moves.
+     */
+    private fun worldAabbLookup(ready: Resolution.Ready, level: ClientLevel, x: Int, y: Int, z: Int): Discovery? {
+        val world = ready.shipWorld.invoke(null, level) ?: return null
+        val ships = invokeMember(world, "getAllShips") as? Iterable<*> ?: return null
+        val double = Double::class.javaPrimitiveType ?: return null
+        // The centre of the block, matching how the server samples it: a corner can sit exactly on the
+        // bound and fall the wrong way under `<=`/`>=` comparisons.
+        val px = x.toDouble() + 0.5
+        val py = y.toDouble() + 0.5
+        val pz = z.toDouble() + 0.5
+        for (ship in ships) {
+            if (ship == null) continue
+            val bounds = invokeMember(ship, "getWorldAABB") ?: continue
+            val inside = runCatching {
+                invokeMemberWith(bounds, "containsPoint", arrayOf(double, double, double), arrayOf<Any?>(px, py, pz)) as? Boolean
+            }.getOrNull() ?: false
+            if (!inside) continue
+            val id = (ready.shipId.invoke(ship) as? Long)?.coerceAtLeast(0L) ?: 0L
+            if (id <= 0L) continue
+            return Discovery(id, worldToShipOf(ready, ship))
+        }
+        return null
+    }
+
+    /** Reads the ship's `worldToShip` matrix as 16 column-major doubles, or `null` when unavailable. */
+    private fun worldToShipOf(ready: Resolution.Ready, ship: Any): DoubleArray? = runCatching {
+        val transform = ready.renderTransform.invoke(ship) ?: return null
+        val matrix = invokeMember(transform, "getWorldToShip") ?: return null
+        readMatrix(ready, matrix)
+    }.getOrNull()
 
     /**
      * Resolves `VSGameUtilsKt.getLoadedShipManagingPos(<level>, double, double, double)`.
