@@ -139,6 +139,24 @@ class DisplayScreen(
     /** True once the discovery outcome has been logged, so the probe stays quiet afterwards. */
     private var discoveryLogged = false
 
+    /** True once the "skipped for having no texture" line has been logged, so the render loop stays quiet. */
+    private var textureSkipLogged = false
+
+    /**
+     * Reports whether the caller should log that this display was skipped for having no texture yet, and
+     * marks it logged so a per-frame loop cannot flood the file.
+     *
+     * `ScreenRenderer` skips a display whose texture has never been filled, which is correct but was
+     * silent: a display the client had just discovered and placed correctly, but which had not uploaded
+     * a frame yet, produced exactly the same (empty) screen as one that was drawn and invisible. That
+     * made the 1.10.8.2 "the video is not rendered" report impossible to diagnose from a log.
+     */
+    internal fun logTextureSkipOnce(): Boolean {
+        if (textureSkipLogged) return false
+        textureSkipLogged = true
+        return true
+    }
+
     /** Game time of the last discovery probe, or [ShipAnchorDetectPolicy.NEVER_PROBED]. */
     private var lastProbeTick: Long = ShipAnchorDetectPolicy.NEVER_PROBED
 
@@ -852,17 +870,26 @@ class DisplayScreen(
     /** Updates position, dimensions, and video URL from an incoming [DisplayInfo] packet. */
     fun updateData(packet: DisplayInfo) {
         virtual = packet.virtual
+        // The server re-sends DisplayInfo for every in-range display once a second (the timeline
+        // broadcast tick). Forgetting the client's own discovery on every one of those packets throws
+        // away a hull the player is already riding: the probe rediscovers it, the next packet clears it
+        // again, and the log fills with `-> ship 0` once a second while the picture flickers between
+        // the hull and the old world position. That was exactly the 1.10.8.2 report. A discovery only
+        // becomes stale when the anchor really moves, so compare first and reset only then.
+        val anchorChanged = ShipAnchorDetectPolicy.anchorMoved(x, y, z, shipId, packet.x, packet.y, packet.z, packet.shipId)
         x = packet.x
         y = packet.y
         z = packet.z
         blockPos = null
-        // The display moved or was re-stamped, so a previously discovered structure id belongs to
-        // whatever used to be at these coordinates. Keeping it would draw the picture against the
-        // wrong hull; forgetting it costs one probe on the next frame.
-        detectedShipId = 0L
-        detectedCorrection = null
-        discoveryLogged = false
-        lastProbeTick = ShipAnchorDetectPolicy.NEVER_PROBED
+        if (anchorChanged) {
+            // The display moved or was re-stamped, so a previously discovered structure id belongs to
+            // whatever used to be at these coordinates. Keeping it would draw the picture against the
+            // wrong hull; forgetting it costs one probe on the next frame.
+            detectedShipId = 0L
+            detectedCorrection = null
+            discoveryLogged = false
+            lastProbeTick = ShipAnchorDetectPolicy.NEVER_PROBED
+        }
         facing = FacingUtil.fromPacket(packet.facing.toByte()).toDisplayFacing()
         rotation = DisplayRotation.fromQuarterTurns(packet.rotation)
         width = packet.width

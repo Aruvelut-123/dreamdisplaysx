@@ -99,4 +99,60 @@ class ShipAnchorDetectPolicyTest {
         val worldOnly = ShipAnchorDetectPolicy.effectiveShipId(0L, 0L)
         assertFalse(ShipAnchorPolicy.isShipAnchored(worldOnly))
     }
+
+    @Test
+    fun aRepeatedBroadcastIsNotTreatedAsAMove() {
+        // The server rebroadcasts every in-range display once a second. Resetting the discovered hull on
+        // those packets made the client forget a ship it had just found, so it rediscovered it, lost it
+        // again on the next tick, and the picture flickered between the hull and its old world position.
+        // Identical coordinates and an unchanged server id must therefore read as "nothing moved".
+        assertFalse(
+            ShipAnchorDetectPolicy.anchorMoved(
+                oldX = 0, oldY = -63, oldZ = 12, oldShipId = 0L,
+                newX = 0, newY = -63, newZ = 12, newShipId = 0L,
+            ),
+        )
+    }
+
+    @Test
+    fun aRealMoveStillInvalidatesTheDiscovery() {
+        // The other half of the contract: keeping a stale hull after the anchor genuinely moved would
+        // draw the picture against whatever used to be at those coordinates.
+        assertTrue(
+            ShipAnchorDetectPolicy.anchorMoved(
+                oldX = 0, oldY = -63, oldZ = 12, oldShipId = 0L,
+                newX = 1, newY = -63, newZ = 12, newShipId = 0L,
+            ),
+        )
+        assertTrue(
+            ShipAnchorDetectPolicy.anchorMoved(
+                oldX = 0, oldY = -63, oldZ = 12, oldShipId = 0L,
+                newX = 0, newY = -62, newZ = 12, newShipId = 0L,
+            ),
+        )
+        assertTrue(
+            ShipAnchorDetectPolicy.anchorMoved(
+                oldX = 0, oldY = -63, oldZ = 12, oldShipId = 0L,
+                newX = 0, newY = -63, newZ = 13, newShipId = 0L,
+            ),
+        )
+    }
+
+    @Test
+    fun aServerRestampAlsoInvalidatesTheDiscovery() {
+        // A row the server stamped later (or re-stamped to 0) describes a different anchor even when the
+        // coordinates are untouched, because the authoritative id wins over the client's guess.
+        assertTrue(
+            ShipAnchorDetectPolicy.anchorMoved(
+                oldX = 0, oldY = -63, oldZ = 12, oldShipId = 0L,
+                newX = 0, newY = -63, newZ = 12, newShipId = 27L,
+            ),
+        )
+        assertTrue(
+            ShipAnchorDetectPolicy.anchorMoved(
+                oldX = 0, oldY = -63, oldZ = 12, oldShipId = 27L,
+                newX = 0, newY = -63, newZ = 12, newShipId = 0L,
+            ),
+        )
+    }
 }

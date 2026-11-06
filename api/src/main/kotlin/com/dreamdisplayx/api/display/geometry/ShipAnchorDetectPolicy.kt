@@ -70,4 +70,20 @@ object ShipAnchorDetectPolicy {
         } else {
             detectedShipId.coerceAtLeast(0L)
         }
+
+    /**
+     * Whether an incoming `DisplayInfo` describes a *different* anchor than the one already applied.
+     *
+     * The server rebroadcasts every in-range display once a second (the timeline tick), so the vast
+     * majority of updates carry identical coordinates and the same server id. Treating those as a move
+     * is what threw away a freshly discovered hull on every tick: the client would rediscover the ship,
+     * the next packet would clear it again, and the picture flickered between the hull and the old world
+     * position — the exact "followed for a moment then stopped" report. Only a genuine move or re-stamp
+     * (a changed position, or a changed server-side id) makes a cached discovery stale, so that is the
+     * only case that should reset it.
+     */
+    fun anchorMoved(
+        oldX: Int, oldY: Int, oldZ: Int, oldShipId: Long,
+        newX: Int, newY: Int, newZ: Int, newShipId: Long,
+    ): Boolean = oldX != newX || oldY != newY || oldZ != newZ || oldShipId != newShipId
 }

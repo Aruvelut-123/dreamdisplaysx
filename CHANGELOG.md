@@ -8,6 +8,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - Hotkeys now appear in `Options -> Controls`, so players can rebind the display menu, play/pause, the display toggle and fullscreen; all ship unbound.
 - Valkyrien Skies support, second half: a display on a ship is drawn, sounds and stays loaded at the ship's position instead of its structure coordinates, and follows the hull as it moves.
 - A display created on loose blocks and only later assembled into a ship now finds that hull by itself, so the picture follows it instead of staying at the build site. Such a display stores a *world* position (the server sampled it before any hull existed), so the discovered `worldToShip` is captured once and composed with the live matrix — without it the structure would be applied twice and the picture would fly off.
+- Fixed a display on a ship flickering between the hull and its old build position: the server rebroadcasts every in-range display once a second, and the client dropped its own discovered hull on each of those packets, so it rediscovered the ship every second and lost it again on the next tick. The reset now only happens when the anchor actually moves.
 - Mod logs are mirrored to `DreamDisplaysX/<channel>.log`, rotated and pruned, alongside the vanilla log.
 ### Fixes
 - The mute button and a 0 % volume slider now silence a display: silence is written as libvlc's player-level mute flag instead of `volume = 0`, which does not survive the Android `aout` rebuild that every DASH seek triggers.

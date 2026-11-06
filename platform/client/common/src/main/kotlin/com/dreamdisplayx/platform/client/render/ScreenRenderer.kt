@@ -36,6 +36,8 @@ import kotlin.math.sin
 
 /** Renders screens in the world. Better not to touch this shit. */
 object ScreenRenderer : ClientRenderService {
+    /** Logger. */
+    private val logger = com.dreamdisplayx.util.log.DreamLog.of("ScreenRenderer")
     private typealias QuadAppender = (PoseStack.Pose, VertexConsumer) -> Unit
     private typealias QuadRenderer = (RenderType, QuadAppender) -> Unit
 
@@ -88,7 +90,23 @@ object ScreenRenderer : ClientRenderService {
         try {
             for (displayScreen in DisplayRegistry.getScreens()) {
                 displayScreen.syncReplayFrame()
-                if (displayScreen.isDormant || !displayScreen.hasTexture) continue
+                if (displayScreen.isDormant) continue
+                if (!displayScreen.hasTexture) {
+                    // Silent skip is why the 1.10.8.2 "the video is not rendered" report could not be
+                    // diagnosed: a display that is discovered and placed but has never had a frame
+                    // uploaded looks exactly like one that is drawn and simply invisible. Log every
+                    // screen once so the next log tells "no texture yet" apart from "drawn but not
+                    // visible", without flooding a per-frame loop.
+                    if (displayScreen.logTextureSkipOnce()) {
+                        val p = displayScreen.pos
+                        logger.info(
+                            "Skip display {} at ({}, {}, {}): no texture yet (videoStarted={}, ship={})",
+                            displayScreen.uuid, p.x, p.y, p.z,
+                            displayScreen.isVideoStarted, displayScreen.anchoredShipId,
+                        )
+                    }
+                    continue
+                }
 
                 stack.pushPose()
 

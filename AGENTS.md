@@ -882,8 +882,16 @@ probe, and `DisplayScreen.anchoredShipId` runs it and folds the result in. Rules
   probing for good** — the correction captured at discovery keeps `shipToWorld_now * worldToShip_then`
   right for every later matrix, while the world-space lookups that produced the hit stop applying once
   VS moves the blocks into the shipyard, so a recheck could only log a spurious miss.
-- **`updateData` clears the discovery state.** A moved or re-stamped display would otherwise keep drawing
-  against whatever hull used to be at its old coordinates.
+- **`updateData` clears the discovery state only when the anchor really moved.** The server rebroadcasts
+  every in-range display once a second (`SchedulerRegistrar.DISPLAY_UPDATE_INTERVAL_TICKS` /
+  `VanillaBootstrap`'s 1 s loop), so `updateData` runs about once a second per display for the whole
+  session. Clearing `detectedShipId` unconditionally — which is what 1.10.8.2 did — threw away the hull
+  the player was riding on every tick: the probe rediscovered it, the next packet dropped it again, and
+  the picture flickered between the hull and the stale world position. The log showed the fingerprint
+  `-> ship 27 (correction: true)` immediately followed by a stream of `-> ship 0`, once per second, for
+  minutes. `ShipAnchorDetectPolicy.anchorMoved` gates the reset on a changed position or a changed
+  server id, and three cases in `ShipAnchorDetectPolicyTest` pin it. Do not "simplify" that comparison
+  back into an unconditional reset.
 - **`DisplayLifecycleManager.distanceToScreen` deliberately does *not* probe.** The two censuses that call it
   decide whether a screen is created at all, so they must stay a pure comparison; the screen probes itself
   once it exists. Do not "fix" that asymmetry by calling the bridge there.
