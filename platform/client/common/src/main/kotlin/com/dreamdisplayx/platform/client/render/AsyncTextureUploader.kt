@@ -9,6 +9,7 @@ import com.mojang.blaze3d.platform.GlStateManager
 import com.dreamdisplayx.api.media.sink.model.DecodedVideoFrame
 import com.dreamdisplayx.api.render.texture.model.TextureHandle
 import com.dreamdisplayx.api.render.texture.service.TextureUploaderService
+import com.dreamdisplayx.media.player.managers.LibVlcDiagnostics
 import com.dreamdisplayx.platform.client.render.AsyncTextureUploader.Companion.PBO_COUNT
 import org.lwjgl.opengl.*
 import org.lwjgl.system.MemoryUtil
@@ -130,11 +131,24 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
     fun upload(textureId: Int, src: ByteBuffer, w: Int, h: Int, format: UploadPixelFormat = UploadPixelFormat.RGB24) {
         val size = w * h * format.bytesPerPixel
         if (size <= 0 || src.remaining() < size) return
-
+        if (LibVlcDiagnostics.noPboUpload) {
+            // Bisection path: no PBO staging at all, one plain client-memory texture write. A
+            // virtualised GLES bridge that accepts PBO calls without an async copy shows up here
+            // as "the frame rate recovers".
+            bindTexture(textureId)
+            pixelStore(GL11.GL_UNPACK_ALIGNMENT, format.unpackAlignment)
+            pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0)
+            pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0)
+            pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0)
+            src.rewind()
+            GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, w, h, format.glFormat, GL11.GL_UNSIGNED_BYTE, src)
+            pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4)
+            bindTexture(0)
+            return
+        }
         // Pick the next slot and advance the ring
         val slot = slots[ringIndex]
         ringIndex = (ringIndex + 1) % PBO_COUNT
-
         // Make sure the GPU is done reading this slot's PBO before we overwrite it
         waitSlotFence(slot)
 
@@ -156,9 +170,9 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0)
 
         texSubImage2DFromPbo(w, h, format.glFormat, 0L)
-
         // Guard this slot until the GPU has consumed the copy we just issued
-        slot.fence = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
+        slot.fence = if (LibVlcDiagnostics.noFenceSync) 0L
+        else GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
 
         // Restore default alignment (4 bytes) and unbind the buffer.
         pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4)
@@ -177,12 +191,31 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         val vSize = vW * vH
         val total = ySize + uSize + vSize
         if (total <= 0 || src.remaining() < total) return
-
+        if (LibVlcDiagnostics.noPboUpload) {
+            // Bisection path: same three plane writes, no PBO staging (see upload()).
+            pixelStore(GL11.GL_UNPACK_ALIGNMENT, 1)
+            pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0)
+            pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0)
+            pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0)
+            val base = src.position()
+            val glFormat = UploadPixelFormat.R8.glFormat
+            src.limit(base + ySize).position(base)
+            bindTexture(yId)
+            GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, yW, yH, glFormat, GL11.GL_UNSIGNED_BYTE, src)
+            src.limit(base + ySize + uSize).position(base + ySize)
+            bindTexture(uId)
+            GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, uW, uH, glFormat, GL11.GL_UNSIGNED_BYTE, src)
+            src.limit(base + total).position(base + ySize + uSize)
+            bindTexture(vId)
+            GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, vW, vH, glFormat, GL11.GL_UNSIGNED_BYTE, src)
+            src.limit(src.capacity()).position(base)
+            pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4)
+            bindTexture(0)
+            return
+        }
         val slot = slots[ringIndex]
         ringIndex = (ringIndex + 1) % PBO_COUNT
-
         waitSlotFence(slot)
-
         bindBuffer(id = slot.pbo)
         ensureCapacity(slot, total)
 
@@ -207,7 +240,8 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         texSubImage2DFromPbo(vW, vH, glFormat, (ySize + uSize).toLong())
 
         // Guard this slot until the GPU has consumed all three plane copies
-        slot.fence = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
+        slot.fence = if (LibVlcDiagnostics.noFenceSync) 0L
+        else GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
 
         pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4)
         bindBuffer(id = 0)
@@ -238,6 +272,7 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
      * a zero-cost check in the steady state; the wait only kicks in when the GPU genuinely lags.
      */
     private fun waitSlotFence(slot: Slot) {
+        if (LibVlcDiagnostics.noFenceSync) return
         val fence = slot.fence
         if (fence == 0L) return
         // Cheap non-blocking poll first; only flush + wait if the GPU is actually behind

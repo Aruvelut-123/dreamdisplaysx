@@ -6,6 +6,7 @@ import com.dreamdisplayx.api.media.player.FrameUploader
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
 import com.dreamdisplayx.media.player.MediaPlayer
+import com.dreamdisplayx.media.player.managers.LibVlcDiagnostics
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -26,6 +27,8 @@ internal class FrameSurface(
 
     /** Platform GPU upload sink for this channel; holds persistent upload state (e.g. a PBO ring). */
     private val uploader: FrameUploader = uploaderFactory.create()
+    /** Last wall-clock ms a slow-upload line was emitted, for the [LibVlcDiagnostics.slowFrameLog] throttle. */
+    private val slowFrameLogLastMs = AtomicLong(0L)
 
     companion object {
         private const val MAX_REUSABLE_FRAME_BUFFERS = 4
@@ -104,7 +107,7 @@ internal class FrameSurface(
             return false
         }
         buf.rewind()
-        val start = System.nanoTime()
+        val start = if (LibVlcDiagnostics.slowFrameLog) System.nanoTime() else 0L
         try {
             val uploaded = uploader.uploadInterleaved(target, buf, pixelFormat)
             if (uploaded) {
@@ -115,6 +118,17 @@ internal class FrameSurface(
             return uploaded
         } finally {
             recycleFrameBuffer(buf)
+            if (start != 0L) {
+                val elapsedMs = (System.nanoTime() - start) / 1_000_000L
+                if (elapsedMs >= 10L) {
+                    // Throttle: one line per second per FrameSurface instance.
+                    val now = System.currentTimeMillis()
+                    val last = slowFrameLogLastMs.get()
+                    if (now - last >= 1000L && slowFrameLogLastMs.compareAndSet(last, now)) {
+                        logger.warn("{} slow upload {}x{} took {} ms", debugLabel, actualW, actualH, elapsedMs)
+                    }
+                }
+            }
         }
     }
 
@@ -133,7 +147,7 @@ internal class FrameSurface(
             return false
         }
         buf.rewind()
-        val start = System.nanoTime()
+        val start = if (LibVlcDiagnostics.slowFrameLog) System.nanoTime() else 0L
         try {
             val uploaded = uploader.uploadPlanar(y, u, v, buf)
             if (uploaded) {
@@ -144,6 +158,16 @@ internal class FrameSurface(
             return uploaded
         } finally {
             recycleFrameBuffer(buf)
+            if (start != 0L) {
+                val elapsedMs = (System.nanoTime() - start) / 1_000_000L
+                if (elapsedMs >= 10L) {
+                    val now = System.currentTimeMillis()
+                    val last = slowFrameLogLastMs.get()
+                    if (now - last >= 1000L && slowFrameLogLastMs.compareAndSet(last, now)) {
+                        logger.warn("{} slow planar upload {}x{} took {} ms", debugLabel, actualW, actualH, elapsedMs)
+                    }
+                }
+            }
         }
     }
 

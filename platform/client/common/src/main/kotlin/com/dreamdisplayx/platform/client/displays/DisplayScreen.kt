@@ -10,6 +10,7 @@ import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
 import com.dreamdisplayx.api.display.geometry.AffineTransform
+import com.dreamdisplayx.api.display.geometry.BoxRayHit
 import com.dreamdisplayx.api.display.geometry.ShipAnchorDetectPolicy
 import com.dreamdisplayx.api.capability.ServerFeature
 import com.dreamdisplayx.api.display.model.property.DisplayRotation
@@ -1042,6 +1043,24 @@ class DisplayScreen(
 
     /** The live structure transform, or identity for a world-anchored screen. */
     private fun shipTransformOrIdentity(): AffineTransform = anchoredTransform
+
+    /**
+     * Where a look ray from ([originX], [originY], [originZ]) along ([dirX], [dirY], [dirZ]) enters
+     * this screen's box, in world space, or `null` when it misses.
+     *
+     * Runs through [DisplayGeometry.rayHitOnShip] with [shipTransformOrIdentity], so a hull-anchored
+     * screen is tested in structure space through the same matrix the renderer draws with — a
+     * world-space `Level.clip` cannot find blocks that were moved into the shipyard. For a
+     * world-anchored screen the transform is identity, so the slab test is an exact block-box test.
+     */
+    fun rayHit(
+        originX: Double, originY: Double, originZ: Double,
+        dirX: Double, dirY: Double, dirZ: Double,
+        maxDistance: Double,
+    ): BoxRayHit? = DisplayGeometry.rayHitOnShip(
+        originX, originY, originZ, dirX, dirY, dirZ,
+        shipTransformOrIdentity(), x, y, z, width, height, facing, depth, maxDistance,
+    )
 
     /**
      * The structure transform to draw this display with, or [AffineTransform.IDENTITY].

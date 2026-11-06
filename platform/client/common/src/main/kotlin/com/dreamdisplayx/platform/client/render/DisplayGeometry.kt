@@ -2,6 +2,7 @@ package com.dreamdisplayx.platform.client.render
 
 import com.dreamdisplayx.api.display.geometry.AffineDecomposition
 import com.dreamdisplayx.api.display.geometry.AffineTransform
+import com.dreamdisplayx.api.display.geometry.BoxRayHit
 import com.dreamdisplayx.api.display.geometry.DisplayGeometry as PublicDisplayGeometry
 import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import com.mojang.blaze3d.vertex.PoseStack
@@ -60,6 +61,24 @@ internal object DisplayGeometry {
         minX: Int, minY: Int, minZ: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
     ): Double = PublicDisplayGeometry.distanceToOnShip(
         x, y, z, transform, minX, minY, minZ, width, height, facing, depth,
+    )
+
+    /**
+     * Where a look ray enters a ship-anchored screen's box, in world space, or `null` on a miss.
+     *
+     * Delegates to the api so the slab test lives next to the rest of the block-space math and stays
+     * unit-testable off-device. The service cannot use a world-space block clip for this: on an
+     * assembled hull the blocks live in the shipyard, so `Level.clip` misses the display entirely.
+     */
+    fun rayHitOnShip(
+        originX: Double, originY: Double, originZ: Double,
+        dirX: Double, dirY: Double, dirZ: Double,
+        transform: AffineTransform,
+        minX: Int, minY: Int, minZ: Int, width: Int, height: Int, facing: DisplayFacing, depth: Int = 1,
+        maxDistance: Double = Double.MAX_VALUE,
+    ): BoxRayHit? = PublicDisplayGeometry.rayHitOnShip(
+        originX, originY, originZ, dirX, dirY, dirZ,
+        transform, minX, minY, minZ, width, height, facing, depth, maxDistance,
     )
 
     /**

@@ -447,7 +447,7 @@ Three reports shared one theme: state that only ever existed on the video player
   `macosx/vlc-3.0.24-arm64.dmg` while `win32`/`winarm64`/`intel64` answered 200, so a desktop
   `VLC_VER` bump to `3.0.24` is not proven safe to ship either.
 
-### 2026-11-04 — The native runtime cache is stamped with its release tag
+- ### 2026-11-04 — The native runtime cache is stamped with its release tag
 - `NativesDownloader` used to answer "is the runtime cached?" with `hasLibVlc()` alone, which only
   probes for `libvlc.so`/`libvlc.dll`/`libvlc.dylib` (plus, on Android, the renamed
   `libc++_dreamdisplayx.so`). A file that existed was reused **forever**, so shipping a newer natives
@@ -539,6 +539,29 @@ Three reports shared one theme: state that only ever existed on the video player
 - `ShipAnchorPolicyTest` pins the candidate list invariants (the `Level` fallback must be present and
   last; no duplicates; never empty). The reflection calls themselves still need a real VS jar and stay
   manually verified.
+
+### Client-side display interaction: raycasting ship-anchored displays
+
+A display on a Valkyrien Skies hull stores its anchor coordinates in **structure space**, so once the
+blocks are assembled into a shipyard they no longer exist at the stored world coordinates. `Level.clip`
+therefore misses every hull-mounted display, and a sneak-right-click on the picture did nothing at all.
+
+`MinecraftDisplayInteractionService.raycast()` runs two independent lookups and the nearer hit wins:
+
+- **World-anchored** — `RayCastingUtil.rCBlock()` (`Level.clip`) plus the block box test. This keeps
+  wall occlusion: a display behind a wall is not clickable through it.
+- **Ship-anchored** — `DisplayScreen.rayHit()` delegates to `DisplayGeometry.rayHitOnShip`, which maps
+  the look ray through the inverse transform into structure space, runs a slab test against the
+  structure-space box, and maps the hit point and normal back into world space. Screens not riding a
+  resolvable hull (`!screen.isOnLoadedShip`) are skipped by this path.
+
+`DisplayGeometry.rayHitOnShip` lives in `:api` and is pure JVM (`AffineTransform` + slab math only).
+Fail-safe behaviour: a collapsed/non-invertible transform returns `null`, a ray starting inside the box
+returns `null` (no entry face), and `maxDistance` is enforced. `BoxRayHit` carries the world-space hit
+point and outward normal, so callers can snap to a block face with `dominantDirection()`.
+
+Tests: `ShipRayHitTest` covers straight-on entry distance, misses, transform-follows-display, rotated
+hull normals flipping with the matrix, `maxDistance`, collapsed transforms, and `dominantDirection`.
 
 ### 2026-11-01 — Client commands must exist on every loader; Bilibili failures must name a cause
 - `/dlogin` and `/dlogoff` are registered per loader. Fabric uses `ClientCommandRegistrationCallback`,
