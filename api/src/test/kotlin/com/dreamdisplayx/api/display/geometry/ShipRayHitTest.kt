@@ -1,5 +1,6 @@
 package com.dreamdisplayx.api.display.geometry
 
+import com.dreamdisplayx.api.display.model.property.DisplayFacing
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,7 +81,7 @@ class ShipRayHitTest {
         // A half turn about Y sends the north-facing surface to face south in the world, so the player
         // now has to stand on the -Z side and the face normal flips with it. Interaction and rendering
         // share this matrix, which is why the two can never disagree about which way the picture looks.
-        val spun = AffineTransform.ofYawAndTranslation(180.0, 0.0, 0.0)
+        val spun = AffineTransform.ofYawAndTranslation(180.0, 0.0, 0.0, 0.0)
         val hit = assertNotNull(northScreenHit(-2.0, 65.0, -6.0, 0.0, 0.0, 1.0, transform = spun))
         assertClose(5.0, hit.distance)
         assertClose(-2.0, hit.x)
