@@ -208,5 +208,9 @@
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
     "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "loginTokenEmpty":  "\u00267D |\u0026f Токен уліковых даных не павінен быць пустым.",
+    "loginUnsupportedPlatform":  "\u00267D |\u0026f Непадтрымліваемая платформа: %s. Падтрымліваецца: bilibili",
+    "loginSuccess":  "\u00267D |\u0026f Вы ўвайшлі глабальна на %s. Уліковыя даныя адпраўлены ўсім гульцам.",
+    "logoutSuccess":  "\u00267D |\u0026f Вы выйшлі глабальна з %s.",
     "outdatedClient":  "\u00267D |\u0026f Ваша версія Dream DisplaysX занадта старая для гэтага сервера. Абнавіце мод, каб карыстацца дысплеямі!"
 }

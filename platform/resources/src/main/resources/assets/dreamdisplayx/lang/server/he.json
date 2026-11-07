@@ -208,5 +208,9 @@
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
     "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
-    "outdatedClient":  "\u00267D |\u0026f גרסת Dream DisplaysX שלך ישנה מדי עבור שרת זה. עדכן את המוד כדי להשתמש במסכים!"
+"outdatedClient":  "\u00267D |\u0026f גרסת Dream DisplaysX שלך ישנה מדי עבור שרת זה. עדן את המוד כדי להשתמש במסכים!",
+    "loginTokenEmpty":  "\u00267D |\u0026f אסור שהאסימון יהיה ריק.",
+    "loginUnsupportedPlatform":  "\u00267D |\u0026f פלטפורמה לא נתמכת: %s. נתמך: bilibili",
+    "loginSuccess":  "\u00267D |\u0026f התחברת באופן גלובלי ב-%s. האישור שודר לכל השחקנים.",
+    "logoutSuccess":  "\u00267D |\u0026f התנתקת באופן גלובלי מ-%s."
 }

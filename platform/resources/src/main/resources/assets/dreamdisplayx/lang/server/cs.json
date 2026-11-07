@@ -208,5 +208,9 @@
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
     "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
-    "outdatedClient":  "\u00267D |\u0026f Tvoje verze Dream DisplaysX je pro tento server příliš stará. Aktualizuj mod, abys mohl používat displeje!"
+    "outdatedClient":  "\u00267D |\u0026f Tvoje verze Dream DisplaysX je pro tento server příliš stará. Aktualizuj mod, abys mohl používat displeje!",
+    "loginTokenEmpty":  "\u00267D |\u0026f Přihlašovací token nesmí být prázdný.",
+    "loginUnsupportedPlatform":  "\u00267D |\u0026f Nepodporovaná platforma: %s. Podporováno: bilibili",
+    "loginSuccess":  "\u00267D |\u0026f Přihlášeno globálně na %s. Přihlašovací údaje byly odeslány všem hráčům.",
+    "logoutSuccess":  "\u00267D |\u0026f Odhlášeno z %s globálně."
 }

@@ -208,5 +208,9 @@
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
     "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
+    "loginTokenEmpty":  "\u00267D |\u0026f Das Anmelde-Token darf nicht leer sein.",
+    "loginUnsupportedPlatform":  "\u00267D |\u0026f Nicht unterstützte Plattform: %s. Unterstützt: bilibili",
+    "loginSuccess":  "\u00267D |\u0026f Du bist auf %s global eingeloggt. Die Anmeldeinformationen wurden an alle Spieler gesendet.",
+    "logoutSuccess":  "\u00267D |\u0026f Du bist global von %s ausgeloggt.",
     "outdatedClient":  "\u00267D |\u0026f Deine Dream DisplaysX-Version ist zu alt für diesen Server. Bitte aktualisiere die Mod, um Displays zu nutzen!"
 }

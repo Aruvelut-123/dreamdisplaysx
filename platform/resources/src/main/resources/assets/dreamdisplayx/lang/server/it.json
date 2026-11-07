@@ -208,5 +208,9 @@
     "renamedDisplay":  "\u00267D |\u0026f Display {0} renamed to \u0027{1}\u0027",
     "displayListNoName":  "(none)",
     "displayHelpRename":  "– /display rename \u003cid\u003e \u003cname\u003e: rename a display by its id (owner or OP)",
-    "outdatedClient":  "\u00267D |\u0026f La tua versione di Dream DisplaysX è troppo vecchia per questo server. Aggiorna la mod per usare gli schermi!"
+    "outdatedClient":  "\u00267D |\u0026f La tua versione di Dream DisplaysX è troppo vecchia per questo server. Aggiorna la mod per usare gli schermi!",
+    "loginTokenEmpty":  "\u00267D |\u0026f Il token di credenziale non deve essere vuoto.",
+    "loginUnsupportedPlatform":  "\u00267D |\u0026f Piattaforma non supportata: %s. Supportato: bilibili",
+    "loginSuccess":  "\u00267D |\u0026f Effettuato il login globale su %s. Credenziale inviata a tutti i giocatori.",
+    "logoutSuccess":  "\u00267D |\u0026f Effettuato il logout globale da %s."
 }

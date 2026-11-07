@@ -747,6 +747,17 @@ outright. Both are pure JVM logic, so both are unit-tested; neither can be cover
 - The `media:player` module's tests (including `FrameSurfaceDisplayQueueTest`) are **not** in the CI `unit-test`
   job, which runs `:api`/`:core` only. `TextureUploadPolicyTest` does run there.
 
+## Language files
+
+Two independent trees, both must stay key-for-key complete: `platform/resources/src/main/resources/assets/dreamdisplayx/lang/client/*.json` (12 files, 239 keys) and `.../lang/server/*.json` (12 files, 127 keys).
+
+- **`en_us`/`en` is the source of truth.** Every other file must contain exactly the same key set; a language with fewer keys silently falls back to the raw key or to English depending on the loader, and on older Minecraft versions a missing key can render as the literal translation key. A key added to English and not to the others is invisible in an English dev client and only shows up as "some strings are still English" or "some strings show as `dreamdisplayx.foo.bar`" in a translated client — which is exactly how the danmaku, sort, display-mode and config entries went missing from 10 languages.
+- **Both language sides have separate file naming**: client uses `<locale>.json` (`en_us`, `zh_cn`, `de_de`, ...), server uses `<lang>.json` (`en`, `zh`, `de`, ...). Do not copy one naming scheme over the other.
+- **Server files are *not* flat strings.** Most values are MiniMessage/legacy-coloured strings, but `modRequired` (and any similar) is a JSON **component object**. Treat every value as `Any` when scripting; a validator that calls `.count('%s')` on the value crashes on those entries.
+- **Never rewrite these files with `json.dump`.** The existing files carry `\u0026`-escaped colour codes and a two-space-after-colon layout that a round-trip through a JSON serializer does not reproduce, so a "merge script" silently reformats all 400+ lines of every file it touches and buries the four real additions in noise (`git diff --stat` showed `424 +++---` per file). Add keys with a targeted text edit, or re-serialize only when you genuinely intend to reformat the file.
+- A new user-facing string needs **both** files updated in the same commit: `en_us`/`en` plus the 11 translations. If a translation is not available, copy the English text rather than leaving the key out — a missing key is worse than an untranslated one.
+- `%s` / `{0}` / `{1}` placeholders are positional. A translation that drops, adds or reorders one throws at render time; verify the counts match English for every key.
+
 ## Workflow Rules
 
 ### Post-Change Checklist (MANDATORY)
