@@ -5,6 +5,7 @@ import com.dreamdisplayx.api.media.model.FramePixelFormat
 import com.dreamdisplayx.api.media.player.FrameUploader
 import com.dreamdisplayx.api.media.player.FrameUploaderFactory
 import com.dreamdisplayx.api.media.player.GpuTextureRef
+import com.dreamdisplayx.api.render.texture.policy.TextureUploadPolicy
 import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.managers.LibVlcDiagnostics
 import java.nio.ByteBuffer
@@ -39,6 +40,17 @@ internal class FrameSurface(
 
         /** How many published-but-not-yet-drawn frames may be held before the oldest is recycled. */
         const val MAX_DISPLAY_QUEUE = 4
+
+        /**
+         * How long a queued frame may stay "in the future" before it is released anyway.
+         *
+         * Two seconds is far beyond any legitimate pacing wait — the queue only ever holds the four
+         * most recent frames, i.e. well under a second of video — so reaching it means the display
+         * clock and the frame timestamps disagree rather than that the frame is merely early. The
+         * alternative to releasing is the permanent freeze described on
+         * `TextureUploadPolicy.shouldReleaseAheadOfClock`.
+         */
+        private const val MAX_HEAD_WAIT_NS = 2_000_000_000L
     }
 
     /** Pool retention cap; raised by the prebuffer so its in-flight buffers are reused, not churned. */
@@ -50,7 +62,13 @@ internal class FrameSurface(
         maxReusableBuffers = n.coerceAtLeast(MAX_REUSABLE_FRAME_BUFFERS)
     }
 
-    private class Queued(@JvmField val buf: ByteBuffer, @JvmField val pts: Long)
+    private class Queued(@JvmField val buf: ByteBuffer, @JvmField val pts: Long) {
+        /**
+         * [System.nanoTime] when this frame was queued. Used to bound how long a frame may refuse to
+         * become due; see [takeDueFrame] and `TextureUploadPolicy.shouldReleaseAheadOfClock`.
+         */
+        @JvmField val queuedAtNanos: Long = System.nanoTime()
+    }
 
     private val displayQueue = ArrayDeque<Queued>()
 
@@ -253,7 +271,23 @@ internal class FrameSurface(
         synchronized(displayQueue) {
             while (true) {
                 val head = displayQueue.firstOrNull() ?: break
-                if (head.pts != SHOW_NOW && head.pts > horizon) break
+                // A frame whose timestamp the media clock never reaches would otherwise stay queued
+                // forever: the queue then fills to its cap and discards every newly arriving frame,
+                // and the display freezes on its last uploaded picture while the audio thread keeps
+                // draining the aout. That is the reported "inventory open, picture stops, sound keeps
+                // playing" symptom (the GUI has nothing to do with it — a DASH fragment seek can
+                // make libvlc report a position far ahead of the frames it is delivering).
+                // Releasing a frame that waited too long costs one out-of-pace frame; holding it
+                // costs the whole picture, so the wait is bounded.
+                val waited = if (head.queuedAtNanos == 0L) 0L else System.nanoTime() - head.queuedAtNanos
+                val due = TextureUploadPolicy.shouldReleaseAheadOfClock(
+                    pts = head.pts,
+                    horizon = horizon,
+                    waitedNanos = waited,
+                    showNowMarker = SHOW_NOW,
+                    maxHeadWaitNanos = MAX_HEAD_WAIT_NS,
+                )
+                if (!due) break
                 displayQueue.removeFirst()
                 chosen?.let {
                     readyDrops.incrementAndGet()

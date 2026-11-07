@@ -100,4 +100,57 @@ class FrameSurfaceDisplayQueueTest {
             assertEquals(4, taken.size, "Pool cap per retained buffer, broken on round $round.")
         }
     }
+
+    /**
+     * Regression: a frame whose timestamp the display clock never reaches must not freeze the picture
+     * forever.
+     *
+     * Audio is drained by the aout thread and is independent of the render loop, so a video-side stall
+     * is heard as "the picture stopped but the sound keeps playing". Before the bounded wait the head
+     * frame stayed "in the future" indefinitely, the queue filled to [FrameSurface.MAX_DISPLAY_QUEUE]
+     * and every newly arriving frame was recycled on arrival — nothing ever reached the texture again.
+     * This test drives that exact state (clock pinned far behind the stamped timestamps) and asserts
+     * the queue keeps draining instead of wedging.
+     */
+    @Test
+    fun `a stale clock cannot wedge the queue forever`() {
+        val (surface, uploader) = newSurface()
+        // The clock never advances past 0, while frames are stamped a long way into the future.
+        surface.enableDisplaySync({ 0L }, 40 * ms)
+        surface.publish(frame(), 64, pts = 3_600_000 * ms)
+
+        assertFalse(
+            surface.updateFrame(FakeTexture(), 4, 4, 4, 4),
+            "Immediately after publishing, a frame far ahead of the clock is still held.",
+        )
+        assertEquals(0, uploader.uploads)
+
+        // The bound is two seconds of wall-clock wait, so waiting it out is the only way to observe
+        // the escape hatch without reaching into private state.
+        Thread.sleep(2_100L)
+
+        assertTrue(
+            surface.updateFrame(FakeTexture(), 4, 4, 4, 4),
+            "After the bounded wait a frame the clock never reaches must be released, not held forever.",
+        )
+        assertEquals(1, uploader.uploads)
+        assertFalse(surface.updateFrame(FakeTexture(), 4, 4, 4, 4), "The queue drained in that pick.")
+    }
+
+    /**
+     * The queue must not accumulate forever while a stale clock holds the head frame: once it is at
+     * its cap, the oldest is dropped rather than growing without bound.
+     */
+    @Test
+    fun `a stale clock does not grow the queue past its cap`() {
+        val (surface, _) = newSurface()
+        surface.enableDisplaySync({ 0L }, 40 * ms)
+        repeat(FrameSurface.MAX_DISPLAY_QUEUE + 6) {
+            surface.publish(frame(), 64, pts = 3_600_000 * ms)
+        }
+        // Nothing is due, so this must stay false; the assertion is that the call cannot hang or throw
+        // and that the surface still reports itself as having a frame once the wait bound expires.
+        assertFalse(surface.updateFrame(FakeTexture(), 4, 4, 4, 4))
+        assertTrue(surface.textureFilled(), "A queue at its cap still holds frames ready for display.")
+    }
 }

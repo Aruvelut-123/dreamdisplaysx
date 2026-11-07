@@ -705,6 +705,48 @@ checks over `git status --porcelain`'s `.kt` files before committing a sweep:
   leaves the video playable. Refusing a playable video is worse than missing a panorama, so do not
   promote the shape test on its own. `BilibiliPanoramaTest` pins "VRChat"/"360p" as non-markers.
 
+## Upload path and frame-queue liveness
+
+Two independent client-side rules keep a display from either starving the game's frame rate or freezing
+outright. Both are pure JVM logic, so both are unit-tested; neither can be covered by a GPU test.
+
+- **The `PBO` ring is opt-out per backend, not per version.** `AsyncTextureUploader` stages frames through a
+  three-slot `PBO` ring guarded by `GL32.glFenceSync` / `glClientWaitSync`, with a
+  `FENCE_TIMEOUT_NS = 100_000_000L` bound per slot. On a virtualised GLES bridge (MobileGlues) those two calls are
+  emulated and can burn the full timeout on every slot, so three serialised waits per frame land at roughly one
+  upload per 300 ms — the whole game drops to a few FPS the moment a video starts. The 1.21.11+ upload branch had
+  always been protected by `RenderBackendCompat.canUseDirectOpenGl()` through `TextureUploadUtil`; the 1.20.1
+  branch called `AsyncTextureUploader.upload` directly and therefore never checked. The gate now lives **inside**
+  `AsyncTextureUploader`, so every entry point (interleaved, planar, preview, popout, fullscreen, PiP) shares it:
+  `pboAllowed` is a `lazy` `runCatching { RenderBackendCompat.canUseDirectOpenGl() }.getOrDefault(false)` —
+  **fail closed**, because a backend that cannot be fingerprinted is exactly the one whose fence emulation cannot
+  be trusted, and one synchronising client-memory copy per frame is cheaper than three 100 ms waits — while
+  `bypassPbo` also honours the `-Ddreamdisplayx.noPboUpload` bisect switch. `waitSlotFence` returns early when
+  either says no. `logPathOnce()` prints the chosen path (with both switches and the probe result) once per
+  process at info level; without that line a shipped log cannot distinguish the two paths at all, which is what
+  made this bug take a full round of guessing.
+- **A queued frame may not stay "in the future" forever.** `FrameSurface` holds a frame until the display clock
+  (`libvlc_media_player_get_time`, wired by `enableDisplaySync`) reaches its presentation timestamp, plus a
+  tolerance of `(frameNs / 2).coerceIn(0, 20 ms)`. That is correct pacing, but there is no guarantee the clock and
+  the delivered timestamps agree: a DASH fragment seek, a stalled clock or a rebased position leaves every queued
+  frame ahead of the horizon, `takeDueFrame()` breaks on the head, and `enqueue`'s `MAX_DISPLAY_QUEUE = 4` cap then
+  recycles each newly arriving frame on arrival. The picture freezes on its last upload. Audio does not, because it
+  is drained by the aout thread — hence the reported "inventory open, picture stops, sound keeps playing", where
+  the GUI is a red herring (vanilla still renders the world behind it). `Queued.queuedAtNanos` records the
+  enqueue time and `TextureUploadPolicy.shouldReleaseAheadOfClock()` releases a frame that has waited
+  `MAX_HEAD_WAIT_NS = 2 s` regardless of the clock. Two seconds is far beyond any legitimate hold — the queue only
+  ever carries four frames, well under a second — so reaching it proves a clock/timestamp disagreement. Releasing
+  gives at most one out-of-pace frame; holding costs the entire picture. Do not "tidy" this into an unconditional
+  release on the first mismatch: normal playback legitimately queues frames ahead of the clock, and dropping them
+  early would show every frame out of order.
+- `TextureUploadPolicy` lives in `api/.../render/texture/policy/` (`@DreamDisplaysXUnstableApi`) and takes plain
+  `Long`s on purpose, so `TextureUploadPolicyTest` covers the boundaries (at/below/above the horizon, the
+  `SHOW_NOW` sentinel, one millisecond short of the wait bound, `Long.MAX_VALUE` horizon).
+  `FrameSurfaceDisplayQueueTest` adds the integration side with a fake uploader; the stale-clock case waits out
+  the real 2.1 s bound, so that test is slow by design and must not be shortened into a fake clock.
+- The `media:player` module's tests (including `FrameSurfaceDisplayQueueTest`) are **not** in the CI `unit-test`
+  job, which runs `:api`/`:core` only. `TextureUploadPolicyTest` does run there.
+
 ## Workflow Rules
 
 ### Post-Change Checklist (MANDATORY)

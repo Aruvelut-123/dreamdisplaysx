@@ -11,6 +11,7 @@ import com.dreamdisplayx.api.render.texture.model.TextureHandle
 import com.dreamdisplayx.api.render.texture.service.TextureUploaderService
 import com.dreamdisplayx.media.player.managers.LibVlcDiagnostics
 import com.dreamdisplayx.platform.client.render.AsyncTextureUploader.Companion.PBO_COUNT
+import com.dreamdisplayx.util.log.DreamLog
 import org.lwjgl.opengl.*
 import org.lwjgl.system.MemoryUtil
 import java.nio.ByteBuffer
@@ -35,6 +36,9 @@ import java.nio.ByteBuffer
  * which the fences also make safe.
  */
 class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderService {
+    /** Logger for the one-time upload-path line. */
+    private val logger = DreamLog.of("AsyncTextureUploader")
+
     /** One ring entry: a PBO with its allocated size, guarding fence and optional persistent mapping. */
     private class Slot {
         /** GL buffer id (0 until created). */
@@ -52,6 +56,28 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
 
     /** [PBO_COUNT] ring slots rotated through on each upload. */
     private val slots: Array<Slot> = Array(PBO_COUNT) { Slot().apply { pbo = GL15.glGenBuffers() } }
+
+    /**
+     * Logs the chosen upload path exactly once per process.
+     *
+     * The two paths behave very differently on a virtualised GLES bridge, and which one a shipped
+     * build took is otherwise invisible in a user's log — "the frame rate is low" and "the picture
+     * freezes" then cannot be attributed to a code path at all. One line per session is enough to
+     * tell them apart.
+     */
+    private var pathLogged = false
+
+    private fun logPathOnce() {
+        if (pathLogged) return
+        pathLogged = true
+        logger.info(
+            "Video upload path: {} (directOpenGl={}, noPboUpload={}, noFenceSync={}).",
+            if (bypassPbo) "plain glTexSubImage2D" else "PBO ring",
+            pboAllowed,
+            LibVlcDiagnostics.noPboUpload,
+            LibVlcDiagnostics.noFenceSync,
+        )
+    }
 
     /** Index of the slot to write into; advanced on each upload. */
     private var ringIndex: Int = 0
@@ -131,10 +157,12 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
     fun upload(textureId: Int, src: ByteBuffer, w: Int, h: Int, format: UploadPixelFormat = UploadPixelFormat.RGB24) {
         val size = w * h * format.bytesPerPixel
         if (size <= 0 || src.remaining() < size) return
-        if (LibVlcDiagnostics.noPboUpload) {
-            // Bisection path: no PBO staging at all, one plain client-memory texture write. A
-            // virtualised GLES bridge that accepts PBO calls without an async copy shows up here
-            // as "the frame rate recovers".
+        logPathOnce()
+        if (bypassPbo) {
+            // No PBO staging at all: one plain client-memory texture write. Taken both for the
+            // `-Ddreamdisplayx.noPboUpload` bisect switch and automatically on a backend whose PBO /
+            // fence emulation cannot be trusted (see [pboAllowed]) — there the ring's fence waits
+            // serialise into a few frames per second and can leave the texture looking stale.
             bindTexture(textureId)
             pixelStore(GL11.GL_UNPACK_ALIGNMENT, format.unpackAlignment)
             pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0)
@@ -191,8 +219,9 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         val vSize = vW * vH
         val total = ySize + uSize + vSize
         if (total <= 0 || src.remaining() < total) return
-        if (LibVlcDiagnostics.noPboUpload) {
-            // Bisection path: same three plane writes, no PBO staging (see upload()).
+        logPathOnce()
+        if (bypassPbo) {
+            // Same plain client-memory path as upload(), for the three I420 planes.
             pixelStore(GL11.GL_UNPACK_ALIGNMENT, 1)
             pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0)
             pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0)
@@ -272,7 +301,7 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
      * a zero-cost check in the steady state; the wait only kicks in when the GPU genuinely lags.
      */
     private fun waitSlotFence(slot: Slot) {
-        if (LibVlcDiagnostics.noFenceSync) return
+        if (LibVlcDiagnostics.noFenceSync || !pboAllowed) return
         val fence = slot.fence
         if (fence == 0L) return
         // Cheap non-blocking poll first; only flush + wait if the GPU is actually behind
@@ -406,5 +435,33 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
 
         /** Upper bound on a fence wait when the GPU is genuinely behind (100 ms). */
         private const val FENCE_TIMEOUT_NS = 100_000_000L
+
+        /**
+         * Whether this backend may stage frames through the `PBO` ring at all.
+         *
+         * A virtualised GLES bridge (MobileGlues) advertises the desktop extensions, so every probe
+         * here succeeds and the `PBO` path is taken — but its `glFenceSync` / `glClientWaitSync` are
+         * emulated and can burn the full [FENCE_TIMEOUT_NS] on every slot. With [PBO_COUNT] slots the
+         * waits then serialise into roughly one upload per 300 ms, which the player sees as "the whole
+         * game drops to a few FPS the moment a video starts". The same bridge can also accept the
+         * `PBO` -> texture copy without producing a visible texture.
+         *
+         * Probed once: the underlying checks read the environment and the system properties, which
+         * must not happen per uploaded frame.
+         */
+        private val pboAllowed: Boolean by lazy {
+            // Fail closed: if the backend cannot even be fingerprinted, the plain client-memory write
+            // is the only path that is guaranteed to be correct. It costs one synchronising copy per
+            // frame, which is a far better trade than a ring whose fence waits may cost 300 ms a frame.
+            runCatching { RenderBackendCompat.canUseDirectOpenGl() }.getOrDefault(false)
+        }
+
+        /**
+         * True when frames must be written straight from client memory instead of via a `PBO`.
+         *
+         * The `-Ddreamdisplayx.noPboUpload` switch stays usable on top of the probe so a backend whose
+         * fingerprint does not name itself can still be bisected by hand.
+         */
+        private val bypassPbo: Boolean get() = LibVlcDiagnostics.noPboUpload || !pboAllowed
     }
 }
