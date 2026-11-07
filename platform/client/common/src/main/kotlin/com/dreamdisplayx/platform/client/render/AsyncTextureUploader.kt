@@ -71,9 +71,11 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         if (pathLogged) return
         pathLogged = true
         logger.info(
-            "Video upload path: {} (directOpenGl={}, noPboUpload={}, noFenceSync={}).",
+            "Video upload path: {} (directOpenGl={}, virtualizedGlesBridge={}, fingerprint='{}', noPboUpload={}, noFenceSync={}).",
             if (bypassPbo) "plain glTexSubImage2D" else "PBO ring",
             pboAllowed,
+            virtualizedBridge,
+            bridgeFingerprint,
             LibVlcDiagnostics.noPboUpload,
             LibVlcDiagnostics.noFenceSync,
         )
@@ -439,12 +441,13 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
         /**
          * Whether this backend may stage frames through the `PBO` ring at all.
          *
-         * A virtualised GLES bridge (MobileGlues) advertises the desktop extensions, so every probe
-         * here succeeds and the `PBO` path is taken — but its `glFenceSync` / `glClientWaitSync` are
-         * emulated and can burn the full [FENCE_TIMEOUT_NS] on every slot. With [PBO_COUNT] slots the
-         * waits then serialise into roughly one upload per 300 ms, which the player sees as "the whole
-         * game drops to a few FPS the moment a video starts". The same bridge can also accept the
-         * `PBO` -> texture copy without producing a visible texture.
+         * A virtualised GLES bridge (`MobileGlues`, and its successor `MobileGL`) advertises the
+         * desktop extensions, so every probe here succeeds and the `PBO` path is taken — but its
+         * `glFenceSync` / `glClientWaitSync` are emulated and can burn the full [FENCE_TIMEOUT_NS] on
+         * every slot. With [PBO_COUNT] slots the waits then serialise into roughly one upload per
+         * 300 ms, which the player sees as "the whole game drops to a few FPS the moment a video
+         * starts". The same bridge can also accept the `PBO` -> texture copy without producing a
+         * visible texture.
          *
          * Probed once: the underlying checks read the environment and the system properties, which
          * must not happen per uploaded frame.
@@ -454,6 +457,35 @@ class AsyncTextureUploader(private val stateCache: Boolean) : TextureUploaderSer
             // is the only path that is guaranteed to be correct. It costs one synchronising copy per
             // frame, which is a far better trade than a ring whose fence waits may cost 300 ms a frame.
             runCatching { RenderBackendCompat.canUseDirectOpenGl() }.getOrDefault(false)
+        }
+
+        /**
+         * Whether the backend was recognised as an OpenGL-on-GLES translation layer.
+         *
+         * Kept beside [pboAllowed] so the log line can separate "the probe said no bridge" from "the
+         * bridge was detected and the plain write was chosen" — the two look identical otherwise, and
+         * telling them apart is exactly what the next report will need.
+         */
+        private val virtualizedBridge: Boolean by lazy {
+            runCatching { RenderBackendCompat.isVirtualizedGlesBridge() }.getOrDefault(false)
+        }
+
+        /**
+         * The strings the bridge probe matched against, truncated for one log line.
+         *
+         * The probe is string-based, so a rename is its failure mode: the previous report arrived from
+         * `MobileGL` while the probe only knew `MobileGlues`. Printing what it actually saw makes a
+         * third rename diagnosable from a single user log instead of another round of guessing.
+         */
+        private val bridgeFingerprint: String by lazy {
+            runCatching {
+                RenderBackendCompat.fingerprintValues()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .joinToString(" | ")
+                    .take(300)
+            }.getOrDefault("")
         }
 
         /**

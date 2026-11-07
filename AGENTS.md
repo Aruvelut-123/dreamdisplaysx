@@ -746,6 +746,40 @@ outright. Both are pure JVM logic, so both are unit-tested; neither can be cover
   the real 2.1 s bound, so that test is slow by design and must not be shortened into a fake clock.
 - The `media:player` module's tests (including `FrameSurfaceDisplayQueueTest`) are **not** in the CI `unit-test`
   job, which runs `:api`/`:core` only. `TextureUploadPolicyTest` does run there.
+- **Match the bridge by prefix, never by its full name.** `RenderBackendCompat.isVirtualizedGlesBridge()` matches
+  `mobilegl`, not `mobileglues`. The 1.10.8.2 round of this exact bug came from `MobileGlues`; a later 1.20.1
+  Fabric log came from `MobileGL` — `Espryt (MobileGL Core) (Adreno (TM) 642L, OpenGL ES 3.2)` /
+  `4.6.0 MobileGL 26.09-dev, Direct (OpenGL ES) Backend` — and the longer needle silently classified the renamed
+  bridge as a real driver, so `pboAllowed` went back to `true` and the fence waits returned. The same prefix now
+  gates `AndroidRendererCompat`'s reduced `--avcodec-threads`, so a rename there also silently widens the decoder
+  pool on the one backend whose GL translation buffers share the decoder's memory. `logPathOnce()` therefore also
+  prints the raw renderer strings it matched against: a string probe's failure mode is precisely a rename, and
+  without those values the next report cannot be attributed. The negative cases are pinned too
+  (`Adreno ... OpenGL ES 3.2`, `zink`) so the prefix match cannot decay into a wildcard.
+
+## Ship transform sampling
+
+- **`DisplayScreen.anchoredTransform` is the single seam, and it is called several times per frame.** The renderer
+  asks once per screen per frame, and the same tick also pays for the distance census (`getDistanceToScreen` can
+  run twice: `primeNewPlayerVolume` and `updateDistanceQuality`), the acoustic plane (`toSourcePlane`), the
+  crosshair ray test (`isOnLoadedShip`) and `DisplayLifecycleManager`'s 10-tick restore census. Each of those used
+  to run the full `ValkyrienClientCompat.transformFor` path: iterate every loaded structure comparing ids, cross
+  the reflection boundary three times, allocate a `DoubleArray(16)` and a copy. `ValkyrienClientCompat.transformFor`
+  now goes through `ShipTransformCache`, so all readers inside one frame share a single physics read.
+- **The sample window is one frame (8 ms), not "a couple of milliseconds".** `ShipTransformCache.DEFAULT_SAMPLE_NANOS`
+  was briefly 2 ms, which misses on every caller and looks like a cache while behaving like none. It must also not
+  be longer than a frame: VS's render transform is the pose *interpolated* between physics ticks, so reusing it
+  across frames would make the picture lag the hull it is bolted to. A miss simply re-reads the source, so the cache
+  can never be more wrong than "it was not cached".
+- **Structure ids are per-world.** `DisplayRegistry.unloadAll()` calls `ValkyrienClientCompat.invalidateTransforms()`;
+  a sample surviving a world change could place a display against a hull that does not exist in the new one.
+  `unloadAllForServerSwitch` only retains carried popouts and does not need it, but any new teardown path that
+  clears the level must invalidate too.
+- `ShipTransformCache` is pure JVM (`api/.../display/geometry/`), takes an injectable `clock` and keeps the
+  `ShipTransformSource` interface, so `ShipTransformCacheTest` pins the three rules that game-only bugs hide behind:
+  one read per frame for many readers, expiry exactly at the window, and a sample window that is a frame not two.
+  Callers must treat the returned `AffineTransform` as immutable — they only read it, compare `isIdentity` and
+  `times` it — and `matrixFor` hands out a copy so a caller cannot corrupt the sample.
 
 ## Language files
 

@@ -4,6 +4,7 @@ import com.dreamdisplayx.util.log.DreamLog
 import com.dreamdisplayx.api.DreamDisplaysXUnstableApi
 import com.dreamdisplayx.api.display.geometry.AffineTransform
 import com.dreamdisplayx.api.display.geometry.ShipAnchorPolicy
+import com.dreamdisplayx.api.display.geometry.ShipTransformCache
 import com.dreamdisplayx.api.display.geometry.ShipTransformSource
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.level.Level
@@ -418,13 +419,50 @@ object ValkyrienClientCompat {
     }
 
     /**
+     * Samples of resolved matrices, so the several readers inside one frame share one physics read.
+     *
+     * [shipToWorldMatrix] is not cheap: it iterates every loaded structure comparing ids and crosses
+     * the reflection boundary three times per hit. A hull-mounted display asks for its transform from
+     * four unrelated places — the renderer once per screen per frame, the distance census, the acoustic
+     * plane and the crosshair ray test — and each of those used to pay the whole iteration again. On a
+     * moving ship that is the difference between a picture that tracks the hull smoothly and one that
+     * judders, because the lookups land on the render thread in a burst.
+     */
+    private val transformCache: ShipTransformCache by lazy { ShipTransformCache(source()) }
+
+    /**
      * The current transform for [shipId], or [AffineTransform.IDENTITY] when it cannot be resolved.
      *
-     * Reads the cached resolution once per call and never throws: a broken or half-loaded install
-     * must leave displays where the last good frame put them, not blank the world.
+     * Served from [transformCache] for the duration of one frame, then re-read: a structure transform
+     * is the *interpolated* pose, so serving it across frames would make the picture lag the hull it
+     * is bolted to. Never throws — a broken or half-loaded install must leave displays where the last
+     * good frame put them, not blank the world.
      */
-    fun transformFor(shipId: Long): AffineTransform =
-        ShipAnchorPolicy.transformFor(shipId, source())
+    fun transformFor(shipId: Long): AffineTransform = transformCache.transformFor(shipId)
+
+    /**
+     * The structure-to-world matrix for [shipId], sampled once per frame, or `null` when absent.
+     *
+     * Unlike [transformFor] this keeps the raw JOML-layout doubles, for callers that need the matrix
+     * itself rather than the composed affine transform.
+     */
+    fun sampledMatrix(shipId: Long): DoubleArray? = transformCache.matrixFor(shipId)
+
+    /**
+     * Forgets every sampled transform.
+     *
+     * Called when the client leaves or switches a level: structure ids are per-world, so a sample
+     * surviving a world change could place a display against a hull that no longer exists there.
+     */
+    fun invalidateTransforms() {
+        transformCache.invalidate()
+    }
+
+    /** Number of physics reads since the last [invalidateTransforms]; diagnostics only. */
+    val transformResolutions: Long get() = transformCache.resolutions
+
+    /** Number of reads served from a sample taken earlier in the same frame; diagnostics only. */
+    val transformCacheHits: Long get() = transformCache.hits
 
     /** Wraps this bridge as the api-level source, binding the client level lazily per lookup. */
     fun source(): ShipTransformSource = ShipTransformSource { shipId ->

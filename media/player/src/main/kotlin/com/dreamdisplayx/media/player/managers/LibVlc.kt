@@ -339,7 +339,10 @@ object LibVlc {
                 val decoderThreads = com.dreamdisplayx.media.player.util.AndroidRendererCompat.avcodecThreads()
                 opts.add("--avcodec-threads=$decoderThreads")
                 if (com.dreamdisplayx.media.player.util.AndroidRendererCompat.isMobileGlues()) {
-                    logger.info("MobileGlues detected; using software avcodec with {} decoder thread(s).", decoderThreads)
+                    logger.info(
+                        "OpenGL-on-GLES translation layer detected; using software avcodec with {} decoder thread(s).",
+                        decoderThreads,
+                    )
                 }
                 // No proxy option is passed: this libvlc-all AAR compiled `--http-proxy` out
                 // entirely (it warns "option --http-proxy no longer exists"), and VLC-Android's
