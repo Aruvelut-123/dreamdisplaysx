@@ -87,6 +87,7 @@ On the **client**, drop the jar into your mods folder. On the **server**, instal
 - **Per-display playlists** — database-backed queue (SQLite/MySQL) with approval, skip and end-of-queue policies
 - **Permissions and claim protection** — LuckPerms, WorldGuard, and optional claim plugins
 - **Video-derived dynamic lighting** (LambDynamicLights) and a Complementary shader patcher
+- **Moving structures** — displays ride along with a Valkyrien Skies ship or a Sable sub-level
 - **Experimental ReplayMod / Flashback compatibility**
 
 # What's new in this fork
@@ -96,6 +97,27 @@ On the **client**, drop the jar into your mods folder. On the **server**, instal
 - **RTMP / RTMPS / SRT ingest** — feed an OBS-style stream into a display
 - **libvlc playback engine** — JNA binding with decoupled video and audio clocks
 - **Every platform** — Fabric, Forge, NeoForge, Paper, Velocity and BungeeCord builds
+
+# Moving structures (Valkyrien Skies / Sable)
+
+Displays can be anchored to a structure that moves and ride along with it, translation and rotation
+included — no need to recreate them.
+
+| Physics mod | Minecraft versions | Status |
+|---|---|---|
+| [Valkyrien Skies](https://modrinth.com/mod/valkyrien-skies) | 1.18.2 – 1.20.1 | Supported |
+| [Sable](https://modrinth.com/mod/sable) | 1.21.1 | **Experimental** |
+
+Things worth knowing:
+
+- Install the same physics mod on **both the client and the server**. With only one side installed a display
+  simply behaves as an ordinary fixed display.
+- Both mods are reached by reflection, so there is no hard dependency and a missing mod is skipped silently.
+- Create the display while it is still a normal block build with `/display create`, then assemble the structure.
+- Sable describes itself as an "extremely intrusive mod" and has no official Valkyrien Skies compatibility;
+  running both at once is not supported.
+- If a display does not follow its structure, search `latest.log` for `Moving-structure support` or
+  `Structure anchor discovery`.
 
 # Android (PojavLauncher / FCL / Zalith)
 

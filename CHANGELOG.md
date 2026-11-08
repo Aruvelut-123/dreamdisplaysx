@@ -3,6 +3,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 ## Server
 ### Features
 - Valkyrien Skies support, first half: a display created on a ship records the ship it rides, and the base-material census no longer deletes ship displays for reading air at their structure coordinates.
+- Sable support (1.21.1, experimental): a display on a sub-level records that sub-level, so the base-material census keeps it.
 ## Client
 ### Features
 - Hotkeys now appear in `Options -> Controls`, so players can rebind the display menu, play/pause, the display toggle and fullscreen; all ship unbound.
@@ -22,6 +23,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - All client and server language files now match the English key set (239 client keys, 127 server keys). The danmaku overlay, sort, display-mode and config-page strings were missing from 10 client languages, and the global Bilibili login/logout strings were missing from 10 server languages.
 - Fixed the frame rate collapsing again on the renamed `MobileGL` GLES bridge: the probe only knew the older `MobileGlues` spelling, so the `PBO` ring with its emulated fence waits came back. It now matches the `mobilegl` prefix, and the upload-path line logs the renderer strings it saw.
 - Fixed a hull-mounted display juddering against a moving ship: one frame asked for the structure transform from the renderer, the distance census, the acoustic plane and the crosshair test, each paying the full reflective lookup. Those readers now share one read per frame.
+- Sable support (1.21.1, experimental): a display on a sub-level is drawn, sounded and kept loaded at the sub-level's position and follows it as it moves.
 
 # 1.10.8.1 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).

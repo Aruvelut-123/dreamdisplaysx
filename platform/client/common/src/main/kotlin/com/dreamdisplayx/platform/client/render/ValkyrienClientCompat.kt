@@ -469,6 +469,35 @@ object ValkyrienClientCompat {
         shipToWorldMatrix(clientLevel(), shipId)
     }
 
+    /**
+     * The ids of every ship currently loaded on this client, or an empty set when VS is absent.
+     *
+     * Used by [StructureClientCompat.loadedStructureIds] to answer "does the structure this row is
+     * anchored to still exist". A ship that leaves the client's loaded chunks answers nothing at all
+     * — [shipToWorldMatrix] returns `null` for it — so the two must stay separate questions: a miss
+     * here means the hull is gone, a miss there only means it is not being drawn right now.
+     *
+     * Never throws. A half-torn-down ship world during a world switch is ordinary, not an error, and
+     * an exception escaping into the cleanup census would report every anchored display as orphaned.
+     */
+    fun loadedShipIds(level: ClientLevel?): Set<Long> {
+        if (level == null) return emptySet()
+        val ready = resolve() ?: return emptySet()
+        return runCatching {
+            val world = ready.shipWorld.invoke(null, level) ?: return emptySet()
+            // `getAllShips()` lives on a package-private implementation class, so it goes through
+            // `invokeMember` exactly like the transform path does.
+            val ships = invokeMember(world, "getAllShips") as? Iterable<*> ?: return emptySet()
+            val out = HashSet<Long>()
+            for (ship in ships) {
+                if (ship == null) continue
+                val id = (ready.shipId.invoke(ship) as? Long)?.coerceAtLeast(0L) ?: continue
+                if (id > 0L) out.add(id)
+            }
+            out as Set<Long>
+        }.getOrElse { emptySet() }
+    }
+
     /** Reads the current client level, tolerating a client that is still starting up. */
     private fun clientLevel(): ClientLevel? =
         runCatching { net.minecraft.client.Minecraft.getInstance().level }.getOrNull()

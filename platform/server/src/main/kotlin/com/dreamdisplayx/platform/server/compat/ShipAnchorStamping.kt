@@ -5,20 +5,41 @@ import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
 
 /**
- * Records which Valkyrien Skies ship owns the block at ([x], [y], [z]) in [level].
+ * Records which moving structure owns the block at ([x], [y], [z]) in [level].
+ *
+ * Two physics mods are supported and both feed the same `shipId` column, so the two lookups run in a
+ * fixed order and the first hit wins:
+ *
+ * 1. **Valkyrien Skies.** `getShipManagingPos` is the same helper VS routes `Level.clip` through, so
+ *    the click position and this lookup name the same structure.
+ * 2. **Sable.** Only consulted when VS found nothing, so a VS-only server pays nothing for it — and a
+ *    server with both installed still stamps whichever mod actually answered, which is the only
+ *    combination that can be correct.
+ *
+ * The two id spaces are disjoint by construction ([com.dreamdisplayx.api.display.geometry.SubLevelId]
+ * sets bit 62), so a stored value is unambiguous about which mod produced it.
  *
  * Only the anchor corner is sampled. A display selection is one flat panel (or a single staircase
- * column), and VS already funnels `Level.clip` through `getShipManagingPos`, so the block the player
- * clicked and this lookup name the same structure. A selection straddling a ship edge is rejected
- * earlier by the surface census, which sees air on the far side.
+ * column), and both mods funnel `Level.clip` through their own structure lookup, so the block the
+ * player clicked and this lookup name the same structure. A selection straddling a structure edge is
+ * rejected earlier by the surface census, which sees air on the far side.
  *
- * Leaves [DisplayData.shipId] untouched unless a ship is actually found: a lookup that misses (mod
- * absent, chunk unloaded, plain world) must keep the row world-anchored rather than clear a stored
- * anchor during an ordinary `/display create` on an empty deck.
+ * Leaves [DisplayData.shipId] untouched unless a structure is actually found: a lookup that misses
+ * (mod absent, chunk unloaded, plain world) must keep the row world-anchored rather than clear a
+ * stored anchor during an ordinary `/display create` on an empty deck.
  */
 fun stampShipAnchor(data: DisplayData, level: ServerLevel, x: Int, y: Int, z: Int) {
-    val shipId = ValkyrienCompat.shipIdAt(level, BlockPos(x, y, z))
-    if (shipId > 0L) data.shipId = shipId
+    val pos = BlockPos(x, y, z)
+    val shipId = ValkyrienCompat.shipIdAt(level, pos)
+    if (shipId > 0L) {
+        data.shipId = shipId
+        return
+    }
+    // Sable answers `SubLevelId.NONE` both for "no sub-level here" and for "a sub-level owns this
+    // block but the row's coordinates are world space", which it deliberately does not stamp: see
+    // `SableServerCompat.subLevelIdAt`. Either way there is nothing to record.
+    val subLevelId = SableServerCompat.subLevelIdAt(level, pos)
+    if (subLevelId > 0L) data.shipId = subLevelId
 }
 
 /**

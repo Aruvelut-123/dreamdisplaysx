@@ -92,6 +92,33 @@ object ShipAnchorPolicy {
     fun isShipAnchored(storedShipId: Long): Boolean = storedShipId > 0L
 
     /**
+     * Composes a live structure transform with a discovery-time correction.
+     *
+     * A display whose stored coordinates are **world** space — built on loose blocks that were
+     * assembled into a structure afterwards, which the server could not stamp — has to be drawn as
+     * `structureToWorld_now * correction * storedPos`. [live] is `structureToWorld_now` and
+     * [correction] is the structure's world-to-structure matrix captured at discovery, so the
+     * composition is `live * correction` and the correction is applied **first**.
+     *
+     * Getting the order backwards rotates the display around the camera instead of around the
+     * structure's origin, which looks like the picture swinging wildly as the hull turns — so the
+     * order is pinned by a test rather than left to the call site.
+     *
+     * `null` (a row that is already structure space) returns [live] unchanged, i.e. an identity
+     * correction. An identity [live] is returned as-is too: composing with a correction while the
+     * structure is not resolvable would move a display that must stay where it is. A non-finite or
+     * wrong-sized [correction] is ignored for the same reason — a physics blow-up must not blank or
+     * teleport the picture.
+     */
+    fun composeCorrection(live: AffineTransform, correction: DoubleArray?): AffineTransform {
+        if (live.isIdentity) return live
+        if (correction == null || correction.size != MATRIX_SIZE) return live
+        val composed = AffineTransform(correction.copyOf())
+        if (!composed.isFinite) return live
+        return live.times(composed)
+    }
+
+    /**
      * The parameter types to try, in order, when resolving a Valkyrien Skies level facade method.
      *
      * `Class.getMethod` matches **declared** parameter types exactly; it does not accept a subtype.

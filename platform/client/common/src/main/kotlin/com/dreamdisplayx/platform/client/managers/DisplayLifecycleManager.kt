@@ -15,7 +15,7 @@ import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
 import com.dreamdisplayx.platform.client.managers.DisplayLifecycleManager.MAX_DISPLAY_BLOCKS
 import com.dreamdisplayx.platform.client.render.DisplayGeometry
-import com.dreamdisplayx.platform.client.render.ValkyrienClientCompat
+import com.dreamdisplayx.platform.client.render.StructureClientCompat
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.util.FacingUtil
 import net.minecraft.client.Minecraft
@@ -226,7 +226,7 @@ object DisplayLifecycleManager {
         }
         return DisplayGeometry.distanceToOnShip(
             playerPos.x.toDouble(), playerPos.y.toDouble(), playerPos.z.toDouble(),
-            ValkyrienClientCompat.transformFor(shipId),
+            StructureClientCompat.transformFor(shipId),
             x, y, z, width, height, facing, safeDepth,
         )
     }
