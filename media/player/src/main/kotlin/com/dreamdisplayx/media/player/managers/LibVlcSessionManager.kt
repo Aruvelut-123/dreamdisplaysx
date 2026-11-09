@@ -75,6 +75,19 @@ internal class LibVlcSessionManager(
 
     /** Per-display acoustics DSP stage for the desktop Java Sound callback path. */
     audioStage: AudioDspStage? = null,
+
+    /**
+     * 是否只出声音：不安装 vmem 视频回调，让本会话只负责音频。
+     *
+     * 用于 FFmpeg 接管视频的编排（见 `FfmpegVideoOwnership`）：视频帧由
+     * `FfmpegSession` 经同一条 `FrameSurface` 上传，本会话只保留音频与主时钟。
+     *
+     * 默认 true，原有单后端行为完全不变。设为 false 后：
+     *  - 不注册 `libvlc_video_set_callbacks` / `set_format_callbacks`（没有 vmem 消费者）；
+     *  - 视频媒体带上 `:no-video`，免得 libvlc 建一个没人读的 vout；
+     *  - `textureFilled` 恒为 false，`updateFrame` 恒为 false —— 本会话不产帧。
+     */
+    private val videoSinkEnabled: Boolean = true,
 ) : PlaybackSession {
 
     /** Backend identity, for logs and for host code that must not type-check on the class. */
@@ -690,10 +703,13 @@ internal class LibVlcSessionManager(
     }
 
     // ── Frame pipe proxy ────────────────────────────────────────────────────
-
-    override fun textureFilled(): Boolean = surface.textureFilled()
-
+    // Audio-only mode (videoSinkEnabled = false): this session produces no frames at all, so the
+    // three read paths below must answer "nothing here" rather than inspect a surface no decoder
+    // will ever fill. Without this the renderer would keep asking a permanently empty surface and
+    // could upload a stale frame over the one FFmpeg just delivered.
+    override fun textureFilled(): Boolean = videoSinkEnabled && surface.textureFilled()
     override fun updateFrame(texture: GpuTextureRef, w: Int, h: Int): Boolean {
+        if (!videoSinkEnabled) return false
         if (w != expectedW || h != expectedH) {
             // Render thread drives the authoritative texture size. Adopt it (the old JavaCPP
             // pipeline did the same via getTextureSize()) and drop the stale-size ready frame;
@@ -707,8 +723,8 @@ internal class LibVlcSessionManager(
         }
         return surface.updateFrame(texture, w, h, expectedW, expectedH)
     }
-
     override fun updateFramePlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, w: Int, h: Int): Boolean {
+        if (!videoSinkEnabled) return false
         if (w != expectedW || h != expectedH) {
             if (w > 0 && h > 0) {
                 expectedW = w
@@ -789,6 +805,11 @@ internal class LibVlcSessionManager(
         // frame back to system memory before handing it to the vmem lock callback, so vmem and hw
         // coexist and 4K H.264/HEVC decodes on the GPU instead of starving the CPU.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
+        // 视频由另一条会话提供时，让 libvlc 不要建 vout：没人消费 vmem 回调，
+        // 白白解码一遍并占用一个视频输出线程。
+        if (!videoSinkEnabled) {
+            mediaOptions.add(":no-video")
+        }
         // Media-level hw decode is an avcodec-module concept (desktop backends only); Android
         // selects its decoder at instance level and defaults to explicit software avcodec when
         // the launcher cannot provide a real MediaCodec bridge.
@@ -961,12 +982,17 @@ internal class LibVlcSessionManager(
 
         // Wait for the first frame so the caller can rely on frames being delivered (with timeout).
         // The control-executor submit is asynchronous, so unconditionally await the latch.
-        try {
-            if (!firstFrameLatch.await(10, TimeUnit.SECONDS)) {
-                logger.error("$debugLabel libvlc first frame timeout")
+        // Only when this session actually produces frames: with the video sink disabled (FFmpeg owns
+        // video) nothing will ever count this latch down, so waiting would burn the full 10 s timeout
+        // on every start and still return started.get() — a pointless stall.
+        if (videoSinkEnabled) {
+            try {
+                if (!firstFrameLatch.await(10, TimeUnit.SECONDS)) {
+                    logger.error("$debugLabel libvlc first frame timeout")
+                }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
             }
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
         }
         return started.get()
     }
@@ -992,7 +1018,7 @@ internal class LibVlcSessionManager(
             // Each native player gets an independent callback set and direct-buffer pool. Skippable
             // via the diagnostic switch for bisection; callback sets are retained for delayed callbacks
             // from retired Android players.
-            if (!LibVlcDiagnostics.noVideoCallback) {
+            if (!LibVlcDiagnostics.noVideoCallback && videoSinkEnabled) {
                 val callbacks = VideoCallbackSet()
                 videoCallbackSets += callbacks
                 videoCallbacksByPlayer[Pointer.nativeValue(mp)] = callbacks

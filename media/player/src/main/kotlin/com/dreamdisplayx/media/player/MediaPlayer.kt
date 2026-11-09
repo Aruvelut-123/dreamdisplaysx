@@ -15,7 +15,10 @@ import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplayx.media.player.events.PlayerEvents
 import com.dreamdisplayx.media.player.ffmpeg.FfmpegCodecScheduler
+import com.dreamdisplayx.media.player.ffmpeg.FfmpegSession
 import com.dreamdisplayx.media.player.managers.LibVlcSessionManager
+import com.dreamdisplayx.media.player.session.CompositeSession
+import com.dreamdisplayx.media.player.session.FfmpegVideoOwnership
 import com.dreamdisplayx.media.player.session.PlaybackSession
 import com.dreamdisplayx.media.player.managers.StatsReporter
 import com.dreamdisplayx.media.player.managers.WarmTrack
@@ -31,6 +34,7 @@ import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.MediaUtil
 import com.dreamdisplayx.media.player.util.daemon
+import com.dreamdisplayx.util.OsInfo
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import java.nio.ByteBuffer
 import java.util.concurrent.*
@@ -262,21 +266,91 @@ class MediaPlayer(
     /** Session backend for this player. Typed as the contract, not the libvlc implementation, so a
      *  second backend (the FFmpeg demux/decode pipeline) can be dropped in without touching the
      *  ~37 call sites below. */
-    private val sessionManager: PlaybackSession = LibVlcSessionManager(
-        debugLabel = debugLabel,
-        clock = clock,
-        events = events,
-        terminated = terminated,
-        getTextureSize = { host.textureWidth to host.textureHeight },
-        getStretchMode = { stretchMode },
-        onStreamEnd = ::handleStreamEnd,
-        onQualitySwitchAborted = { appliedAnyway -> handleQualitySwitchAborted(appliedAnyway) },
-        renderExecutor = env.renderExecutor,
-        uploaderFactory = env.uploaderFactory,
-        gpuYuvActive = env.config.gpuYuvActive,
-        useHwAccel = env.config.useHwAccel,
-        audioStage = audioStage,
-    )
+    private val sessionManager: PlaybackSession = createSession()
+
+    /**
+     * 按配置拼出本次播放的后端编排。
+     *
+     * 多数情况下这里只返回一个 libvlc 会话，行为和迁移前完全一致。只有 Android、开启了 FFmpeg
+     * 视频管线、且允许硬解时，才会返回 `CompositeSession`：视频交给 FFmpeg，音频与主时钟仍由
+     * libvlc 承担（判据与理由见 [FfmpegVideoOwnership]）。
+     *
+     * 两条后端的分工在这里就固定下来，而不是在运行期反复询问：后端一旦以"只出声音"启动，
+     * 中途再切成"也出画面"需要重建 vmem 回调，那是重新打开一次媒体才能做到的事。
+     */
+    private fun createSession(): PlaybackSession {
+        val libVlc = {
+            LibVlcSessionManager(
+                debugLabel = debugLabel,
+                clock = clock,
+                events = events,
+                terminated = terminated,
+                getTextureSize = { host.textureWidth to host.textureHeight },
+                getStretchMode = { stretchMode },
+                onStreamEnd = ::handleStreamEnd,
+                onQualitySwitchAborted = { appliedAnyway -> handleQualitySwitchAborted(appliedAnyway) },
+                renderExecutor = env.renderExecutor,
+                uploaderFactory = env.uploaderFactory,
+                gpuYuvActive = env.config.gpuYuvActive,
+                useHwAccel = env.config.useHwAccel,
+                audioStage = audioStage,
+            )
+        }
+
+        val plan = FfmpegVideoOwnership.plan(
+            ffmpegRequested = env.config.androidMediaCodecEnabled,
+            isAndroid = OsInfo.isAndroid,
+            hwAccelEnabled = env.config.useHwAccel,
+        )
+        if (!plan.videoIsFfmpeg) {
+            if (plan.isSplit) logger.warn("$debugLabel unsupported split plan: $plan")
+            return libVlc()
+        }
+
+        logger.info("$debugLabel video will be decoded by FFmpeg; audio and clock stay on libvlc")
+        return CompositeSession(
+            video = FfmpegSession(
+                debugLabel = debugLabel,
+                clock = clock,
+                renderExecutor = env.renderExecutor,
+                uploaderFactory = env.uploaderFactory,
+                useHwAccel = env.config.useHwAccel,
+                onStreamEnd = ::handleStreamEnd,
+            ),
+            // 只出声音：不装 vmem 回调，也不等首帧（那两件事都由视频后端负责）。
+            audio = LibVlcSessionManager(
+                debugLabel = "$debugLabel/audio",
+                clock = clock,
+                events = events,
+                terminated = terminated,
+                getTextureSize = { host.textureWidth to host.textureHeight },
+                getStretchMode = { stretchMode },
+                onStreamEnd = { stderr, normalEos -> handleAudioOnlyStreamEnd(stderr, normalEos) },
+                onQualitySwitchAborted = { appliedAnyway -> handleQualitySwitchAborted(appliedAnyway) },
+                renderExecutor = env.renderExecutor,
+                uploaderFactory = env.uploaderFactory,
+                gpuYuvActive = env.config.gpuYuvActive,
+                useHwAccel = env.config.useHwAccel,
+                audioStage = audioStage,
+                videoSinkEnabled = false,
+            ),
+        )
+    }
+
+    /**
+     * 拆分播放时，音频会话自己的结束事件。
+     *
+     * 它**不能**直接走 [handleStreamEnd]：音频轨道往往比视频短（Bilibili 的 DASH 音轨就是
+     * 典型），音频先到头是常态而不是播放结束。转成正常结束会让视频刚播几秒就"播完了"。
+     * 真正的结束由视频后端判定。
+     */
+    private fun handleAudioOnlyStreamEnd(stderr: String, normalEos: Boolean) {
+        if (!normalEos) {
+            logger.warn("$debugLabel audio backend reported an error: $stderr")
+        } else if (MediaPlayer.DEBUG) {
+            logger.debug("$debugLabel audio rendition reached its end (video continues)")
+        }
+    }
 
     private val controlExecutor = Executors.newSingleThreadExecutor { daemon(it, "MediaPlayer-ctrl") }
     private val initCallbacks = CopyOnWriteArrayList<() -> Unit>()
