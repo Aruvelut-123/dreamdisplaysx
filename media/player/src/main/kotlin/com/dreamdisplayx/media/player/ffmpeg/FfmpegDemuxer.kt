@@ -264,6 +264,54 @@ internal class FfmpegDemuxer(
         return pts * tbNum * 1_000_000L / tbDen
     }
 
+    /**
+     * 把读取位置移动到 [timeMicros]。
+     *
+     * 用 `av_seek_frame` 定位到目标时刻之前的最近关键帧（[avformat.AVSEEK_FLAG_BACKWARD]），
+     * 因此调用方应预期实际起点略早于请求位置，需要靠 PTS 判断「到哪儿才该开始显示」。
+     *
+     * 必须在 [open] 之后、解码开始之前调用。**调用方负责 flush 解码器**：seek 之后
+     * 解码器里残留的是旧位置的帧，不 flush 会先吐出几帧上一个位置的画面。
+     *
+     * @param timeMicros 目标时刻（微秒），按内容时间轴
+     * @return true 表示已定位
+     */
+    fun seekTo(timeMicros: Long): Boolean {
+        val ctx = fmtCtx
+        if (!opened.get() || ctx == null) {
+            lastError = "seek before open"
+            return false
+        }
+        if (timeMicros < 0L) return true // 0 之前无意义，当作从头开始
+        if (tbNum <= 0 || tbDen <= 0) {
+            lastError = "seek: invalid time base $tbNum/$tbDen"
+            return false
+        }
+        if (videoStreamIndex < 0) {
+            lastError = "seek: no video stream"
+            return false
+        }
+        return try {
+            // av_seek_frame 的时间戳单位是「该流的时间基」，不是微秒。
+            val target = timeMicros * tbDen / (tbNum * 1_000_000L)
+            val rc = avformat.av_seek_frame(
+                ctx, videoStreamIndex, target, avformat.AVSEEK_FLAG_BACKWARD,
+            )
+            if (rc < 0) {
+                lastError = "av_seek_frame failed: ${ffErr(rc)}"
+                logger.warn("seekTo($timeMicros) failed: $lastError")
+                return false
+            }
+            // 丢掉 seek 之后流内部的遗留状态（未读完的包等）。
+            packet?.let { avcodec.av_packet_unref(it) }
+            true
+        } catch (t: Throwable) {
+            lastError = "seekTo threw ${t::class.simpleName}: ${t.message}"
+            logger.error("seekTo($timeMicros) failed: ${t.message}")
+            false
+        }
+    }
+
     /** 视频流的 AVCC extradata（H.264 的 SPS/PPS、H.265 的 VPS/SPS/PPS），MediaCodec 需要。 */
     fun videoExtradata(): ByteArray? {
         val ctx = fmtCtx ?: return null
