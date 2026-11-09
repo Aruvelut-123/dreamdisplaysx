@@ -35,6 +35,15 @@ object NativesDownloader {
     private const val BASE_DIR = "./dreamdisplayx/natives"
 
     /**
+     * System property carrying the extracted FFmpeg runtime directory.
+     *
+     * Deliberately a property rather than a direct call into the media module:
+     * `:util` must not depend on JavaCPP (the media module owns that dependency),
+     * so the consumer reads this property and registers the libraries itself.
+     */
+    const val FFMPEG_DIR_PROPERTY = "dreamdisplayx.ffmpeg.dir"
+
+    /**
      * Cache root for the native runtime. On Android the game working directory is usually on
      * noexec emulated storage, so the cache is redirected into app-internal storage where
      * dlopen works (see [AndroidPaths]).
@@ -49,6 +58,7 @@ object NativesDownloader {
         val version: Int,
         val release_base: String,
         val libvlc: Map<String, String>,
+        val ffmpeg: Map<String, String>,
     )
 
     // ── Public API ─────────────────────────────────────────────────────────
@@ -154,6 +164,28 @@ object NativesDownloader {
         } else {
             logger.warn("No LibVLC asset for platform {}", platformKey)
         }
+
+        // FFmpeg
+        //
+        // The files are extracted into `ffmpeg/` and the directory is published
+        // through a system property; the media module (the only one that depends
+        // on JavaCPP) reads it and registers the libraries with
+        // `Loader.foundLibraries`. See FfmpegNatives for why the usual
+        // java.library.path / cachedir routes do not work.
+        val ffmpegAsset = manifest.ffmpeg[platformKey]
+        if (ffmpegAsset != null) {
+            val ffmpegDir = File(nativesDir, "ffmpeg")
+            if (!hasFfmpeg(ffmpegDir) || !isCacheCurrent(ffmpegDir, manifest)) {
+                logger.info("FFmpeg natives not cached at {}; downloading {}", ffmpegDir, ffmpegAsset)
+                downloadAndExtractTarGz(manifest.release_base, ffmpegAsset, ffmpegDir)
+                writeStamp(ffmpegDir, manifest)
+            } else {
+                logger.info("FFmpeg natives already cached at {}", ffmpegDir)
+            }
+            System.setProperty(FFMPEG_DIR_PROPERTY, ffmpegDir.absolutePath)
+        } else {
+            logger.info("No FFmpeg asset for platform {}; keeping the libvlc video path", platformKey)
+        }
     }
 
     // ── Manifest loading ───────────────────────────────────────────────────
@@ -184,7 +216,10 @@ object NativesDownloader {
         val version = parseJsonInt(json, "version")
         val releaseBase = parseJsonString(json, "release_base")
         val libvlc = parseJsonMap(json, "libvlc")
-        return Manifest(version, releaseBase, libvlc)
+        // "ffmpeg" is optional so an older manifest still parses; an empty map
+        // simply means this release carries no FFmpeg runtime.
+        val ffmpeg = runCatching { parseJsonMap(json, "ffmpeg") }.getOrDefault(emptyMap())
+        return Manifest(version, releaseBase, libvlc, ffmpeg)
     }
 
     // ── Tar.gz extraction ──────────────────────────────────────────────────
@@ -390,6 +425,23 @@ object NativesDownloader {
             return File(dir, "libc++_dreamdisplayx.so").isFile
         }
         return true
+    }
+
+    /**
+     * Whether [dir] holds a usable FFmpeg runtime.
+     *
+     * The probe is the JNI shim rather than the codec library itself: JavaCPP only
+     * ever loads `libavcodec` *through* `libjniavcodec`, so a runtime missing the
+     * shims cannot be used no matter how complete the codec side looks.
+     */
+    private fun hasFfmpeg(dir: File): Boolean {
+        if (!dir.isDirectory) return false
+        val probeName = when {
+            OsInfo.isWindows -> "jniavcodec.dll"
+            OsInfo.isMac -> "libjniavcodec.dylib"
+            else -> "libjniavcodec.so"
+        }
+        return File(dir, probeName).isFile
     }
 
     // ── Minimal JSON helpers ───────────────────────────────────────────────

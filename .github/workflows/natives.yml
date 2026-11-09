@@ -1,9 +1,19 @@
 # Build Natives — standalone workflow
 #
-# Collects the official LibVLC runtime (libvlc.dll / .so / .dylib + plugins)
-# and publishes the binaries as a GitHub Release. Only the main project build
-# workflow downloads them from that release, so the MSYS2 toolchains on Windows
-# are not needed on every CI run.
+# Collects the prebuilt native runtimes the mod downloads at first launch and
+# publishes them as a GitHub Release:
+#
+#   libvlc — the official VideoLAN runtime (libvlc.dll / .so / .dylib + plugins).
+#            Still required for audio output and the playback clock while the
+#            FFmpeg video pipeline owns decoding.
+#   ffmpeg — the official bytedeco FFmpeg runtime (libavcodec / libavformat /
+#            libavutil / swscale / swresample + the JavaCPP JNI shims).
+#
+# Neither is compiled here. Both are repackaged from upstream binaries; see
+# native/ffmpeg/collect.sh for why FFmpeg is a download rather than a build.
+#
+# Only the main project build workflow downloads them from that release, so the
+# MSYS2 toolchains on Windows are not needed on every CI run.
 #
 # sqlite-jdbc ships as a plain dependency now: on NeoForge it rides along as a
 # jar-in-jar, on Fabric/Paper the stock native binaries inside the fat loader
@@ -105,10 +115,63 @@ jobs:
           compression-level: 0
           retention-days: 1
 
+  ffmpeg:
+    name: ffmpeg ${{ matrix.ffmpeg.platform }}
+    # Every target is a plain Maven download plus repacking, so one Linux
+    # runner can serve all of them; no per-platform toolchain is involved.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ffmpeg:
+          - { platform: linux-x86_64,  key: linux-x64 }
+          - { platform: linux-arm64,   key: linux-aarch64 }
+          - { platform: macosx-x86_64, key: macos-x64 }
+          - { platform: macosx-arm64,  key: macos-aarch64 }
+          - { platform: windows-x86_64,key: windows-x64 }
+          # Windows x86 (32-bit) and aarch64 have no bytedeco FFmpeg
+          # classifier, so those two platforms keep the libvlc video path.
+          - { platform: android-arm64, key: android-aarch64 }
+          - { platform: android-x86_64,key: android-x64 }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 1
+
+      - name: Collect FFmpeg runtime
+        shell: bash
+        env:
+          # Single source of truth for the runtime version. Bumping it must also
+          # bump the "ffmpeg" version in gradle/libs.versions.toml, or the Java
+          # bindings and the native libraries drift apart.
+          FFPKG_VER: 8.1.2-1.5.14
+        run: |
+          set -euo pipefail
+          export OUT_DIR="$PWD/native-artifact/ffmpeg/${{ matrix.ffmpeg.key }}"
+          bash native/ffmpeg/collect.sh ${{ matrix.ffmpeg.platform }}
+
+      - name: Package FFmpeg runtime
+        shell: bash
+        run: |
+          tar czf "ffmpeg-${{ matrix.ffmpeg.key }}.tar.gz" \
+            -C native-artifact/ffmpeg/${{ matrix.ffmpeg.key }} .
+
+      - name: Upload packaged FFmpeg runtime
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ffmpeg-${{ matrix.ffmpeg.key }}
+          path: ffmpeg-${{ matrix.ffmpeg.key }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [ libvlc ]
+    needs: [ libvlc, ffmpeg ]
     timeout-minutes: 5
     outputs:
       tag: ${{ steps.gen_tag.outputs.tag }}
@@ -129,7 +192,7 @@ jobs:
       - name: Download all native archives
         uses: actions/download-artifact@v8.0.1
         with:
-          pattern: 'libvlc-*'
+          pattern: '{libvlc,ffmpeg}-*'
           path: native-archives
           merge-multiple: true
 
@@ -142,8 +205,9 @@ jobs:
           tag_name: ${{ steps.gen_tag.outputs.tag }}
           name: Natives ${{ steps.gen_tag.outputs.tag }}
           body: >
-            Pre-built native libraries for all 9 target platforms (7 desktop +
-            Android arm64/x86_64): the official LibVLC runtime.
+            Pre-built native libraries: the official LibVLC runtime (9 target
+            platforms: 7 desktop + Android arm64/x86_64) and the official
+            bytedeco FFmpeg runtime (5 desktop + Android arm64/x86_64).
           files: native-archives/*.tar.gz
           fail_on_unmatched_files: true
           draft: false

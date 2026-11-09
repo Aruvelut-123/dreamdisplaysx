@@ -38,17 +38,26 @@ internal object FfmpegMediaCodecBridge {
         }
         // 使用 JavaCPP 的 Loader 自动提取 so，避免手动路径
         return try {
-            // 载入 avcodec so（会自动从 maven artifact / jar 解压对应平台的 .so）
-            Loader.load(org.bytedeco.ffmpeg.global.avcodec::class.java)
-            // 探测可用的 decoder 名称
-            val h264 = avcodec.avcodec_find_decoder_by_name("h264_mediacodec") != null
-            val hevc = avcodec.avcodec_find_decoder_by_name("hevc_mediacodec") != null
-            logger.info("MediaCodec decoder probe: h264=$h264 hevc=$hevc")
-            available = h264 || hevc
-            if (!available) {
-                logger.warn("FFmpeg build does not contain h264_mediacodec/hevc_mediacodec, bridge disabled")
+            // 先把下载器落盘的运行时注册给 JavaCPP。JavaCPP 只从 classpath 资源
+            // 或 java.library.path 找库，而两者都无法在运行时提供下载目录；详见
+            // FfmpegNatives 里那几条实测结论。
+            if (!FfmpegNatives.install()) {
+                logger.info("No downloaded FFmpeg runtime; skipping the MediaCodec probe")
+                available = false
+                false
+            } else {
+                // 载入 avcodec so（会自动从 maven artifact / jar 解压对应平台的 .so）
+                Loader.load(org.bytedeco.ffmpeg.global.avcodec::class.java)
+                // 探测可用的 decoder 名称
+                val h264 = avcodec.avcodec_find_decoder_by_name("h264_mediacodec") != null
+                val hevc = avcodec.avcodec_find_decoder_by_name("hevc_mediacodec") != null
+                logger.info("MediaCodec decoder probe: h264=$h264 hevc=$hevc")
+                available = h264 || hevc
+                if (!available) {
+                    logger.warn("FFmpeg build does not contain h264_mediacodec/hevc_mediacodec, bridge disabled")
+                }
+                available
             }
-            available
         } catch (e: Throwable) {
             logger.warn("MediaCodec probe failed (native lib not found?): ${e.message}")
             available = false
