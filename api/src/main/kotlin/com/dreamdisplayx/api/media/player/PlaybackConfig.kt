@@ -32,6 +32,18 @@ interface PlaybackConfig {
     val hwAccelCandidates: List<String> get() = emptyList()
 
     /**
+     * Whether the FFmpeg MediaCodec hardware-decode pipeline may be used on Android.
+     *
+     * This is a separate switch from [useHwAccel]: [useHwAccel] toggles libvlc's own hardware
+     * decoding, whereas this one opts into the standalone FFmpeg demux+decode pipeline that
+     * talks to Android's `AMediaCodec` through FFmpeg's `mediacodec` backend.
+     *
+     * Defaults to false so that hosts which do not implement it keep the existing behaviour, and
+     * it is ignored entirely on non-Android platforms.
+     */
+    val androidMediaCodecEnabled: Boolean get() = false
+
+    /**
      * Preferred Bilibili CDN mirror host, or null / empty to auto-select by bandwidth probe.
      *
      * When set to a known mirror hostname (e.g. `"upos-sz-mirrorcos.bilivideo.com"`), every

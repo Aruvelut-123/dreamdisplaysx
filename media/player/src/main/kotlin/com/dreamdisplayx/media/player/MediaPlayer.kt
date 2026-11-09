@@ -1015,7 +1015,7 @@ class MediaPlayer(
         activeVideoUrl = probedStreamSet.currentVideo.url
 
         // 探测 FFmpeg MediaCodec 是否可用（Android 端由 config 控制，桌面端永远 false，保证不加载任何 Android 类）
-        FfmpegCodecScheduler.probeAndSet(env.config.enableAndroidMediaCodec)
+        FfmpegCodecScheduler.probeAndSet(env.config.androidMediaCodecEnabled)
         try {
             val started = sessionManager.start(
                 probedStreamSet,
