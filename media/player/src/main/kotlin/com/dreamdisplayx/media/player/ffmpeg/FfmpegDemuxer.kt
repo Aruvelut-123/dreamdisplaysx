@@ -60,6 +60,25 @@ internal class FfmpegDemuxer(
     /** 视频流下标（`av_find_best_stream` 的结果）。 */
     private var videoStreamIndex: Int = -1
 
+    /** 音频流下标；-1 表示该源没有音频（或调用方没要音频）。 */
+    @Volatile
+    var audioStreamIndex: Int = -1
+        private set
+
+    /** 音频编码 ID；仅在 [audioStreamIndex] >= 0 时有效。 */
+    @Volatile
+    var audioCodecId: Int = avcodec.AV_CODEC_ID_NONE
+        private set
+
+    /** 音频流的 codecpar，供 [FfmpegAudioDecoder] 打开解码器。 */
+    @Volatile
+    var audioCodecParameters: AVCodecParameters? = null
+        private set
+
+    /** 音频流时间基分子/分母，用于把音频 PTS 换算成微秒。 */
+    private var audioTbNum: Int = 1
+    private var audioTbDen: Int = 1
+
     /** 复用的读包缓冲。 */
     private var packet: AVPacket? = null
 
@@ -173,6 +192,10 @@ internal class FfmpegDemuxer(
             tbDen = stream.time_base().den()
             durationMicros = if (ctx.duration() != avutil.AV_NOPTS_VALUE) ctx.duration() else 0L
 
+            // 音频流：找不到不是错误。Bilibili DASH 会把视频和音频拆成两条流，
+            // 纯视频源也合法；调用方按 audioStreamIndex < 0 跳过音频即可。
+            locateAudioStream(ctx)
+
             packet = avcodec.av_packet_alloc()
                 ?: run {
                     lastError = "av_packet_alloc returned null"
@@ -231,6 +254,51 @@ internal class FfmpegDemuxer(
         } catch (t: Throwable) {
             lastError = "readVideoPacket threw ${t::class.simpleName}: ${t.message}"
             logger.error("readVideoPacket failed: ${t.message}")
+            Result.ERROR
+        }
+    }
+
+    /**
+     * 读下一个包，视频和音频都会交给调用方。
+     *
+     * 这是音频接入后的读取入口：[Result.PACKET_READY] 表示当前包属于视频流，
+     * [Result.AUDIO_PACKET_READY] 表示属于音频流，两者都用同一个 [packet] 缓冲，
+     * 因此**必须在下一次读取前处理完**。字幕/数据流仍然被内部丢弃。
+     *
+     * 只调用 [readVideoPacket] 的旧路径行为不变（音频包依旧被跳过）。
+     */
+    fun readPacket(): Result {
+        val ctx = fmtCtx
+        val p = packet
+        if (!opened.get() || ctx == null || p == null) return Result.NOT_OPEN
+        return try {
+            // 循环而不是递归：连续遇到字幕/数据包时递归会堆栈增长，而直播源里
+            // 这类包可能很密集。
+            while (true) {
+                avcodec.av_packet_unref(p)
+                val rrc = avformat.av_read_frame(ctx, p)
+                if (rrc < 0) {
+                    return when {
+                        rrc == AVERROR_EOF_VALUE -> Result.EOF
+                        else -> {
+                            lastError = "av_read_frame failed: ${ffErr(rrc)}"
+                            Result.ERROR
+                        }
+                    }
+                }
+                val idx = p.stream_index()
+                val aIdx = audioStreamIndex
+                when (PacketRoutePolicy.classify(idx, videoStreamIndex, aIdx)) {
+                    PacketRoutePolicy.Route.VIDEO -> return Result.PACKET_READY
+                    PacketRoutePolicy.Route.AUDIO -> return Result.AUDIO_PACKET_READY
+                    PacketRoutePolicy.Route.SKIP -> continue
+                }
+            }
+            @Suppress("UNREACHABLE_CODE")
+            Result.ERROR
+        } catch (t: Throwable) {
+            lastError = "readPacket threw ${t::class.simpleName}: ${t.message}"
+            logger.error("readPacket failed: ${t.message}")
             Result.ERROR
         }
     }
@@ -338,12 +406,57 @@ internal class FfmpegDemuxer(
         packet = null
         fmtCtx = null
         videoStreamIndex = -1
+        audioStreamIndex = -1
+        audioCodecId = avcodec.AV_CODEC_ID_NONE
+        audioCodecParameters = null
     }
 
-    /** 单次 [readVideoPacket] 的结果。 */
+    /**
+     * 定位音频流并记住其 codecpar / 时间基。
+     *
+     * 找不到不算失败：DASH 音视频分离的源由调用方分别打开，纯视频源也合法。
+     * 每次 `open()` 都必须先清空上一次的结果，否则换源后会拿旧 codecpar 去开解码器。
+     */
+    private fun locateAudioStream(ctx: AVFormatContext) {
+        audioStreamIndex = -1
+        audioCodecId = avcodec.AV_CODEC_ID_NONE
+        audioCodecParameters = null
+        audioTbNum = 1
+        audioTbDen = 1
+        val idx = avformat.av_find_best_stream(
+            ctx, avutil.AVMEDIA_TYPE_AUDIO, -1, -1, null as org.bytedeco.ffmpeg.avcodec.AVCodec?, 0,
+        )
+        if (idx < 0) return
+        val stream: AVStream = ctx.streams(idx) ?: return
+        val par: AVCodecParameters = stream.codecpar() ?: return
+        audioStreamIndex = idx
+        audioCodecId = par.codec_id()
+        audioCodecParameters = par
+        audioTbNum = stream.time_base().num()
+        audioTbDen = stream.time_base().den()
+        logger.info(
+            "demuxer audio stream: index={} codec={} {}Hz/{}ch tb={}/{}",
+            idx, codecName(audioCodecId), par.sample_rate(), par.ch_layout().nb_channels(),
+            audioTbNum, audioTbDen,
+        )
+    }
+
+    /** 音频流的 PTS 换算成微秒；未知返回 [AV_NOPTS_VALUE]。 */
+    fun packetAudioPtsMicros(): Long {
+        val p = packet ?: return AV_NOPTS_VALUE
+        val pts = p.pts()
+        if (pts == AV_NOPTS_VALUE_LONG) return AV_NOPTS_VALUE
+        if (audioTbDen <= 0) return AV_NOPTS_VALUE
+        return pts * audioTbNum * 1_000_000L / audioTbDen
+    }
+
+    /** 单次 [readVideoPacket] / [readPacket] 的结果。 */
     enum class Result {
         /** 一个视频包已就绪（用 [packetView] / [packetSize] / [packetPtsMicros] 取值）。 */
         PACKET_READY,
+
+        /** 一个音频包已就绪（音频消费方用 [packetAudioPtsMicros] 取时间）。 */
+        AUDIO_PACKET_READY,
 
         /** 流结束。 */
         EOF,

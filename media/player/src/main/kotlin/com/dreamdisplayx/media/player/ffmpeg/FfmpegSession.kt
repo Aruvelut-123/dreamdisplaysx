@@ -436,6 +436,14 @@ internal class FfmpegSession(
                     finishWithError("demuxer closed unexpectedly")
                     return
                 }
+                // readVideoPacket() cannot produce this: it exists for readPacket(),
+                // which returns audio packets to the audio decode path. Reaching it
+                // here means the wrong reader was called, so fail loudly instead of
+                // spinning on a packet nobody consumes.
+                FfmpegDemuxer.Result.AUDIO_PACKET_READY -> {
+                    finishWithError("audio packet delivered to the video decode loop")
+                    return
+                }
             }
         }
     }
