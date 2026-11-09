@@ -4,7 +4,7 @@
  * ## 为什么这样写
  *
  * 本类只做一件事：把 H.264/H.265 码流喂给 FFmpeg 的 `h264_mediacodec` / `hevc_mediacodec`
- * 解码器，拿回 NV12/YUV420P 帧，转成统一的 I420（YUV420P）紧凑缓冲交给现有渲染管线。
+ * 解码器，取回 NV12/YUV420P 帧，再用 `sws_scale` 转成**打包 BGRA**交给现有渲染管线。
  *
  * 关键设计约束（与任务书一致）：
  *
@@ -36,7 +36,11 @@ import org.bytedeco.ffmpeg.avutil.AVDictionary
 import org.bytedeco.ffmpeg.avutil.AVFrame
 import org.bytedeco.ffmpeg.global.avcodec
 import org.bytedeco.ffmpeg.global.avutil
+import org.bytedeco.ffmpeg.global.swscale
+import org.bytedeco.ffmpeg.swscale.SwsContext
 import org.bytedeco.javacpp.BytePointer
+import org.bytedeco.javacpp.IntPointer
+import org.bytedeco.javacpp.PointerPointer
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -77,7 +81,7 @@ internal class AndroidMediaCodecHwSolver(
 
 
     /**
-     * 输出用的连续 I420 缓冲：`Y(w*h) + U(uvW*uvH) + V(uvW*uvH)`。
+     * 输出用的连续 BGRA 缓冲（`w*h*4`）。
      * 直接分配（direct），供 GL 上传路径零拷贝取用。
      */
     private var outBuffer: ByteBuffer? = null
@@ -86,6 +90,18 @@ internal class AndroidMediaCodecHwSolver(
     @Volatile
     var lastError: String = ""
         private set
+
+    /**
+     * I420 → BGRA 的转换上下文（`SwsContext`）。
+     *
+     * 解码器产出的是平面 I420，但渲染管线只接受打包 BGRA：GPU-YUV 平面路径
+     * （`DisplayYuvRenderTypes.active`）在 Sodium 环境下会黑屏，作者已将其永久关闭，
+     * 因此这里必须自己完成色彩空间转换，接入既有的 `BGRA32` 上传路径。
+     * 分辨率变化时重建。
+     */
+    private var sws: SwsContext? = null
+    private var swsW = 0
+    private var swsH = 0
 
     /** 是否已成功打开。 */
     val isOpen: Boolean get() = opened.get()
@@ -166,7 +182,7 @@ internal class AndroidMediaCodecHwSolver(
                 close()
                 return false
             }
-            outBuffer = ByteBuffer.allocateDirect(yuv420Size(width, height))
+            outBuffer = ByteBuffer.allocateDirect(width * height * 4)
             opened.set(true)
             logger.info(
                 "MediaCodec solver opened: decoder=$decoderName {}x{} ndk_codec=1 outBuf={}B",
@@ -225,10 +241,9 @@ internal class AndroidMediaCodecHwSolver(
             val rrc = avcodec.avcodec_receive_frame(c, f)
             when {
                 rrc == 0 -> {
-                    // 硬解器输出的是 AV_PIX_FMT_MEDIACODEC 帧：data(0) 是 GPU surface 句柄，
-                    // 不能当像素读。必须先拷回系统内存再归一化成 I420。
-                    if (copyFrameToI420(f)) {
-                        // 硬解器输出的 frame 由 FFmpeg 持有，取完必须 unref 才能复用。
+                    // 硬解帧是 AV_PIX_FMT_MEDIACODEC：data(0) 是 GPU surface 句柄，不是像素，
+                    // 必须先拷回系统内存再转色彩空间。
+                    if (convertFrameToBgra(f)) {
                         avutil.av_frame_unref(f)
                         Result.FRAME_READY
                     } else {
@@ -251,27 +266,40 @@ internal class AndroidMediaCodecHwSolver(
     }
 
     /**
-     * 取当前 I420 输出缓冲（调用前须已收到 [Result.FRAME_READY]）。
+     * 取当前 BGRA 输出缓冲（调用前须已收到 [Result.FRAME_READY]）。
      *
      * 返回的是**内部复用缓冲**，下一次 [decode] 会覆盖它；需要跨帧保留请自行拷贝。
      * buffer 的 position=0、limit=帧实际字节数，可直接交给 GL 上传。
      */
-    fun outputI420(): ByteBuffer? {
+    fun outputBgra(): ByteBuffer? {
         val out = outBuffer ?: return null
         out.position(0)
-        out.limit(yuv420Size(frameWidth, frameHeight))
+        out.limit(frameWidth * frameHeight * 4)
+        return out
+    }
+
+    /** 把调用方传入的 [data] 的前 [size] 字节取出为可交给 BytePointer.put 的数组。 */
+    private fun copySource(data: ByteBuffer, size: Int): ByteArray {
+        val out = ByteArray(size)
+        val view = data.duplicate()
+        view.position(0)
+        view.limit(size.coerceAtMost(view.capacity()))
+        view.get(out, 0, view.remaining())
         return out
     }
 
     /**
-     * 把解码出的 [AVFrame] 归一化成紧凑 I420 布局。
+     * 把解码出的 [AVFrame] 转成打包 BGRA 输出。
      *
-     * MediaCodec 常见输出是 NV12（Y 平面 + 交错 UV 平面），也可能是真正的 YUV420P。
-     * 两种情况都归一化成 I420，让上层渲染管线只需要一套格式处理。
+     * 先按上一节把硬解帧（AV_PIX_FMT_MEDIACODEC）拷回系统内存得到 NV12/YUV420P，
+     * 再经 `sws_scale` 一步完成色彩空间转换（YUV→RGB）与平面打包，
+     * 直接对齐渲染管线的 `FramePixelFormat.BGRA32` 上传路径。
+     *
+     * 之所以不走 GPU-YUV 三平面路径：`DisplayYuvRenderTypes.active` 在 Sodium 环境下
+     * 会渲染黑屏，已被作者永久关闭，打包 BGRA 是当前唯一可靠的通路。
      */
-    private fun copyFrameToI420(f: AVFrame): Boolean {
-        // 硬解帧（AV_PIX_FMT_MEDIACODEC）必须经 hwframe transfer 拷回系统内存，
-        // 拿到真正的 NV12/YUV420P 像素后再走下面的平面拆分。
+    private fun convertFrameToBgra(f: AVFrame): Boolean {
+        // 硬解帧必须经 hwframe transfer 拷回系统内存，拿到真正的像素后再转色彩空间。
         val src: AVFrame
         if (f.format() == avutil.AV_PIX_FMT_MEDIACODEC) {
             val sw = swFrame ?: run {
@@ -298,7 +326,7 @@ internal class AndroidMediaCodecHwSolver(
         frameWidth = w
         frameHeight = h
 
-        val needed = yuv420Size(w, h)
+        val needed = w * h * 4
         var out = outBuffer
         if (out == null || out.capacity() < needed) {
             out = ByteBuffer.allocateDirect(needed)
@@ -307,105 +335,61 @@ internal class AndroidMediaCodecHwSolver(
         out.clear()
         out.limit(needed)
 
-        val fmt = src.format()
-        val ySize = w * h
-        val uvW = (w + 1) / 2
-        val uvH = (h + 1) / 2
-        val uvSize = uvW * uvH
-
-        // Y 平面：逐行拷贝以尊重 linesize（硬解器通常按 16/32 对齐，行尾含 padding）。
-        val yPtr: BytePointer = src.data(0)
-        if (yPtr.isNull) {
-            lastError = "decoded frame has null luma plane"
-            return false
-        }
-        copyPlaneAt(out, 0, yPtr, src.linesize(0), w, h)
-
-        when (fmt) {
-            avutil.AV_PIX_FMT_NV12 -> {
-                // NV12：UV 交错单平面。按行拆成 U、V 两个独立平面。
-                val uvPtr: BytePointer = src.data(1)
-                if (uvPtr.isNull) {
-                    lastError = "decoded NV12 frame has null chroma plane"
-                    return false
-                }
-                val uvStride = src.linesize(1)
-                val uBase = ySize
-                val vBase = ySize + uvSize
-                val row = ByteArray(uvW * 2)
-                for (r in 0 until uvH) {
-                    // 复制成新 Pointer 再定位，避免改动共享的 data(1) 指针状态。
-                    val srcRow = BytePointer(uvPtr).position(r.toLong() * uvStride)
-                    srcRow.get(row, 0, uvW * 2)
-                    for (col in 0 until uvW) {
-                        out.put(uBase + r * uvW + col, row[col * 2])
-                        out.put(vBase + r * uvW + col, row[col * 2 + 1])
-                    }
-                }
-            }
-            avutil.AV_PIX_FMT_YUV420P -> {
-                val uPtr: BytePointer = src.data(1)
-                val vPtr: BytePointer = src.data(2)
-                if (uPtr.isNull || vPtr.isNull) {
-                    lastError = "decoded YUV420P frame has null chroma plane"
-                    return false
-                }
-                copyPlaneAt(out, ySize, uPtr, src.linesize(1), uvW, uvH)
-                copyPlaneAt(out, ySize + uvSize, vPtr, src.linesize(2), uvW, uvH)
-            }
-            else -> {
-                // 意外格式（例如只拿到 opaque surface 而 transfer 不可用）。
-                lastError = "unsupported output pixel format id=$fmt (expected nv12/yuv420p)"
-                logger.warn(lastError)
+        // 分辨率变化时重建 sws 上下文（硬解器可能在首帧后报告真实尺寸）。
+        var scaler = sws
+        if (scaler == null || swsW != w || swsH != h) {
+            scaler?.let { swscale.sws_freeContext(it) }
+            scaler = swscale.sws_getContext(
+                w, h, src.format(),
+                w, h, avutil.AV_PIX_FMT_BGRA,
+                swscale.SWS_BILINEAR, null, null, null as DoubleArray?,
+            )
+            if (scaler == null) {
+                lastError = "sws_getContext failed for ${w}x$h fmt=${src.format()}"
                 return false
             }
+            sws = scaler
+            swsW = w
+            swsH = h
+        }
+
+        // sws_scale 需要源/目的平面指针数组与行距数组。AVFrame 的 data/linesize 自带源侧信息，
+        // 目的侧是单个紧密打包的 BGRA 平面。
+        val srcData = PointerPointer<BytePointer>(4)
+        val srcStride = IntPointer(4)
+        for (i in 0 until 4) {
+            srcData.put(i.toLong(), src.data(i))
+            srcStride.put(i.toLong(), src.linesize(i))
+        }
+        val dstData = PointerPointer<BytePointer>(4)
+        val dstStride = IntPointer(4)
+        val dstPtr = BytePointer(out)
+        dstData.put(0L, dstPtr)
+        dstStride.put(0L, w * 4)
+
+        val scaled = swscale.sws_scale(scaler, srcData, srcStride, 0, h, dstData, dstStride)
+        if (scaled <= 0) {
+            lastError = "sws_scale returned $scaled"
+            return false
         }
         out.position(0)
         out.limit(needed)
         return true
     }
 
-    /**
-     * 从 [src] 按 [stride] 逐行拷 [copyWidth] 字节 × [rows] 行，写到 [dst] 的绝对偏移 [dstOffset]。
-     * 用绝对写避免依赖 dst.position 漂移，且能正确处理大于宽度的 stride（行尾 padding）。
-     */
-    private fun copyPlaneAt(
-        dst: ByteBuffer,
-        dstOffset: Int,
-        src: BytePointer,
-        stride: Int,
-        copyWidth: Int,
-        rows: Int,
-    ) {
-        val effectiveStride = if (stride > 0) stride else copyWidth
-        val row = ByteArray(copyWidth)
-        for (r in 0 until rows) {
-            val rowPtr = BytePointer(src).position(r.toLong() * effectiveStride)
-            rowPtr.get(row, 0, copyWidth)
-            dst.position(dstOffset + r * copyWidth)
-            dst.put(row, 0, copyWidth)
-        }
-    }
-
-    /** 把调用方传入的 [data] 的前 [size] 字节取出为可交给 BytePointer.put 的数组。 */
-    private fun copySource(data: ByteBuffer, size: Int): ByteArray {
-        val out = ByteArray(size)
-        val view = data.duplicate()
-        view.position(0)
-        view.limit(size.coerceAtMost(view.capacity()))
-        view.get(out, 0, view.remaining())
-        return out
-    }
-
     /** 释放所有 native 资源。可重复调用。 */
     override fun close() {
         if (!opened.getAndSet(false) && ctx == null) return
         runCatching {
+            sws?.let { swscale.sws_freeContext(it) }
             swFrame?.let { avutil.av_frame_free(it) }
             frame?.let { avutil.av_frame_free(it) }
             packet?.let { avcodec.av_packet_free(it) }
             ctx?.let { avcodec.avcodec_free_context(it) }
         }.onFailure { logger.warn("close() partially failed: ${it.message}") }
+        sws = null
+        swsW = 0
+        swsH = 0
         swFrame = null
         frame = null
         packet = null
@@ -415,7 +399,7 @@ internal class AndroidMediaCodecHwSolver(
 
     /** 单次 [decode] 的结果。 */
     enum class Result {
-        /** 一帧已解码完成，可从 [outputI420] 取数据。 */
+        /** 一帧已解码完成，可从 [outputBgra] 取数据。 */
         FRAME_READY,
 
         /** 需要继续送包；本次没有产出帧（硬解流水线的常规状态）。 */
@@ -441,8 +425,13 @@ internal class AndroidMediaCodecHwSolver(
         /** FFmpeg 的 AV_NOPTS_VALUE。 */
         const val AV_NOPTS_VALUE: Long = Long.MIN_VALUE
 
-        /** I420 帧字节数。 */
-        fun yuv420Size(w: Int, h: Int): Int = w * h + 2 * (((w + 1) / 2) * ((h + 1) / 2))
+        /**
+         * 打包 BGRA 帧字节数。
+         *
+         * 渲染管线走 `FramePixelFormat.BGRA32`，一行 `w` 个像素、每像素 4 字节，
+         * 且已由 `sws_scale` 打包成紧密排列，所以直接是 `w*h*4`。
+         */
+        fun bgraSize(w: Int, h: Int): Int = w * h * 4
 
         /** 把 FFmpeg 的负错误码渲染成可读字符串。 */
         private fun ffErr(rc: Int): String {
