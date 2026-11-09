@@ -705,6 +705,31 @@ checks over `git status --porcelain`'s `.kt` files before committing a sweep:
   leaves the video playable. Refusing a playable video is worse than missing a panorama, so do not
   promote the shape test on its own. `BilibiliPanoramaTest` pins "VRChat"/"360p" as non-markers.
 
+## Playback backends: the `PlaybackSession` contract
+
+`MediaPlayer` does not own libvlc; it owns a **session backend**. The contract is
+`com.dreamdisplayx.media.player.session.PlaybackSession` (start / seek / quality handoff / park /
+frame delivery / audio control / teardown) and `LibVlcSessionManager` is merely the first
+implementation (`backendName = "libvlc"`). The plan for this branch is to replace that implementation
+with an FFmpeg demux + decode pipeline, which is why the contract exists at all.
+
+Rules:
+
+- **Never type-check a session at a call site.** Use `backendName` or a capability member. `MediaPlayer`
+  used to hold a concrete `LibVlcSessionManager`, so "the session" and "libvlc" were the same object;
+  that coincidence is exactly what this interface removes.
+- **A backend only has to serve video.** Audio stays on libvlc (`:no-video` on a dedicated player), which
+  already carries the Android `AudioTrack` budget, warm-track pool and park bookkeeping. Do not clone that
+  next to a second video backend; implement the audio members as no-ops instead.
+- **Defaults go on the interface, not the override.** Kotlin rejects default parameter values on an
+  overriding function (`suspend()` used to declare them in the class and that fails once it implements).
+- **A member that "hides" rather than overrides fails the build** with *"hides member of supertype and
+  needs an 'override' modifier"*. When adding a member to `PlaybackSession`, every implementing method
+  needs `override` — including ones with multi-line signatures, which are easy to miss in a
+  search-and-replace that only matches single lines.
+- **`backendName` and the frame sinks are the only mutable/shared surface**; the three sinks are `var`
+  set by `MediaPlayer` from any thread, everything else is a method call.
+
 ## Optional FFmpeg MediaCodec pipeline (Android, opt-in)
 
 A second, standalone decode path sits beside libvlc: `FfmpegDemuxer` reads packets, `AndroidMediaCodecHwSolver`
