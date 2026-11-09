@@ -755,6 +755,25 @@ Rules that cost real debugging time and must not be undone:
   interface; reading `env.config.enableAndroidMediaCodec` there is an unresolved reference and fails the whole
   `:media:player` compile. New media-level switches go through `PlaybackConfig` with a default so that other hosts
   (and any addon backend) keep compiling.
+- **The decoder name is chosen, not hard-coded.** `FfmpegHwBackendPolicy` owns the candidate chain
+  (`<codec>_mediacodec → <codec>` on Android, software only on desktop), the step-down, and the
+  `-Ddreamdisplayx.hwDecode` override, mirroring libvlc's `hwBackendChain`/`advanceHwBackendAfterHwFailure`.
+  It is deliberately pure JVM (no `android.*`, no bytedeco, no JNA) so all 14 cases in `FfmpegHwBackendPolicyTest`
+  run without a device; keep it that way, or the chain becomes unverifiable again.
+- **Pixel format must follow the `hardware` flag.** Setting `AV_PIX_FMT_MEDIACODEC` (and `ndk_codec=1`) on a
+  *software* decoder makes `avcodec_open2` fail, so a fallback rung opened that way can never succeed and
+  "degrade to software" stays an empty promise. Software rungs set no `pix_fmt` and pass no `ndk_codec`.
+  Likewise the `FfmpegMediaCodecBridge.isAvailable()` gate is hardware-only: bridge absence is the usual reason
+  to be falling back, so it must not block the software rung.
+- **An empty `-Ddreamdisplayx.hwDecode` means "force software", not "unset".** libvlc spells this `"none"`; here the
+  value is a *decoder name*, so it is translated to the codec's software decoder. Passing `""` straight to
+  `avcodec_find_decoder_by_name` returns null and turns "force software" into "force failure".
+- **A forced backend never advances.** `step == -1` (set when an override is active) makes `advance` return null and
+  `openWithFallback` refuse, because silently swapping in a backend the user did not ask for hides the failure they
+  were trying to observe.
+- **`selectBackend`/`reportFailure` currently have no runtime caller.** `FfmpegSession` does not exist yet, so the
+  selector is test-only; do not describe the pipeline as working until it is wired. `openWithFallback` must `close()`
+  before reopening, since a half-open mediacodec context carries its old config into the second `avcodec_open2`.
 - Verify with `./gradlew :media:player:compileKotlin --configure-on-demand` and a **JDK 21** `JAVA_HOME`; the
   stonecutter 0.9.7 plugin refuses a Java 17 JVM, and a plain `--offline` run cannot resolve fabric-loom.
 
