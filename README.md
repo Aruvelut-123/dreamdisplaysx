@@ -96,8 +96,35 @@ Paper 是跨版本单插件，一个 jar 覆盖 1.21.1 – 26.3；Velocity 与 B
 
 - 支持 ARM64 和 x86_64 启动器，音频走 OpenSL ES
 - 默认 libvlc 软件 `avcodec` 解码；可用 `-Ddreamdisplayx.hwDecode=<module>` 启用启动器的 MediaCodec 桥接
+- 可选 FFmpeg MediaCodec 硬解管线（H.264 / H.265），见下方说明
 - MobileGlues 会自动限制解码线程数并绕开可能黑帧的直接 PBO 上传
 - 字幕与弹幕在提供 Cacio/AWT 的启动器上加载系统 CJK 字体，缺少 AWT 时安全降级
+
+## FFmpeg MediaCodec 硬解（实验性，默认关闭）
+
+除了 libvlc，本分支内置了一条**独立的 FFmpeg 解码管线**，直接用 `h264_mediacodec` /
+`hevc_mediacodec` 走 Android NDK 的 `AMediaCodec` 硬解。它由配置项
+`enable-android-mediacodec` 控制，**默认 `false`**，因此未开启时行为与原来完全一致。
+
+开启方式：在客户端配置文件 `config/dreamdisplayx-client.toml` 中设置
+
+```toml
+enable-android-mediacodec = true
+```
+
+实现要点：
+
+- **解封装**：`FfmpegDemuxer` 用 `avformat_open_input` + `av_read_frame` 读包，自动丢弃音频/字幕包；
+  `Referer` / `User-Agent` 通过 `av_dict_set` 传入，Bilibili 等 CDN 的防盗链因此可用。
+- **硬解**：`AndroidMediaCodecHwSolver` 以 `ndk_codec=1` 走原生 C API，**不引用任何 `android.*` 类**，
+  因此在 Pojav / Zalith 这类「桌面 OpenJDK、没有 android.jar」的隔离 JVM 上也能加载。
+- **帧输出**：硬解帧是 `AV_PIX_FMT_MEDIACODEC`（GPU surface 句柄，不是像素），先经
+  `av_hwframe_transfer_data` 拷回系统内存，再用 `sws_scale` 转成**打包 BGRA**，
+  走既有的 `FramePixelFormat.BGRA32` 上传路径。
+  不走 GPU-YUV 三平面路径，因为该路径（`DisplayYuvRenderTypes.active`）在 Sodium 环境下会黑屏，
+  已被永久关闭。
+- **失败回退**：任何一步失败都写入诊断信息并退回 libvlc，不会抛异常打断播放线程。
+- 桌面端永远不会进入这条路径：`FfmpegMediaCodecBridge.isAvailable()` 对非 Android 直接返回 `false`。
 
 # 从源码构建
 
