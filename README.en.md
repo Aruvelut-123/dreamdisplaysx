@@ -134,7 +134,8 @@ engine in use:
 |---|---|---|
 | Session contract `PlaybackSession` | ✅ Done | The 37 call sites previously hard-wired in `MediaPlayer` are now an interface; `LibVlcSessionManager` is the first implementation (`backendName = "libvlc"`) |
 | Demuxer `FfmpegDemuxer` | ✅ Done | `avformat_open_input` + `av_read_frame`, drops non-video packets automatically |
-| Decoder `AndroidMediaCodecHwSolver` | ✅ Done | FFmpeg `h264_mediacodec` / `hevc_mediacodec`, emits packed BGRA |
+| Decoder `AndroidMediaCodecHwSolver` | ✅ Done | FFmpeg `h264_mediacodec` / `hevc_mediacodec`, emits packed BGRA; pixel format now follows `hardware` so it can drop to software |
+| HW backend choice `FfmpegHwBackendPolicy` | ⚠️ In place, not wired | Candidate chain + step-down + `-Ddreamdisplayx.hwDecode` override, mirroring libvlc; pure JVM, 14 unit tests. **No runtime call site yet** — waits on `FfmpegSession` |
 | `FfmpegSession` implementation | 🚧 Not started | Wires the three above into a demux → decode → publish session; not connected yet |
 | Desktop FFmpeg decode | 🚧 Not started | Only Android uses the MediaCodec backend so far |
 | Moving audio off libvlc | 🚧 Not started | Audio still runs on libvlc's `:no-video` player |

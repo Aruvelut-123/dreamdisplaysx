@@ -123,7 +123,8 @@ Android 渲染后端。libvlc 是一个「解封装 + 解码 + 渲染 + 音频�
 |---|---|---|
 | 会话契约 `PlaybackSession` | ✅ 已完成 | 把原先硬编码在 `MediaPlayer` 里的 37 个调用点抽成接口，`LibVlcSessionManager` 是第一个实现（`backendName = "libvlc"`） |
 | 解封装 `FfmpegDemuxer` | ✅ 已完成 | `avformat_open_input` + `av_read_frame`，自动丢弃音视频以外的包 |
-| 解码 `AndroidMediaCodecHwSolver` | ✅ 已完成 | FFmpeg `h264_mediacodec` / `hevc_mediacodec`，输出打包 BGRA |
+| 解码 `AndroidMediaCodecHwSolver` | ✅ 已完成 | FFmpeg `h264_mediacodec` / `hevc_mediacodec`，输出打包 BGRA；可按 `hardware` 分派像素格式并降级到软解 |
+| 硬解后端选择 `FfmpegHwBackendPolicy` | ⚠️ 已就位，未接线 | 候选链 + 逐级降级 + `-Ddreamdisplayx.hwDecode` 覆盖，与 libvlc 同形；纯 JVM，14 个单测覆盖。**目前没有任何运行时调用点**，等 `FfmpegSession` 接线 |
 | `FfmpegSession` 实现 | 🚧 未开始 | 把上面三者串成「解封装 → 解码 → 发布帧」的会话，尚未接线 |
 | 桌面端 FFmpeg 解码 | 🚧 未开始 | 目前只有 Android 走 MediaCodec 后端 |
 | 音频迁出 libvlc | 🚧 未开始 | 音频暂时继续由 libvlc 的 `:no-video` 播放器承担 |

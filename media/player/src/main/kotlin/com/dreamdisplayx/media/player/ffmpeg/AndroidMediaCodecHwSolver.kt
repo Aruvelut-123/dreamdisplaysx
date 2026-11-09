@@ -1,19 +1,20 @@
 /**
- * Android MediaCodec 硬解解码器（FFmpeg mediacodec 后端，NDK 路径优先）。
+ * FFmpeg 视频解码器会话：硬件优先，可降级到同一编码的软件解码器。
  *
  * ## 为什么这样写
  *
- * 本类只做一件事：把 H.264/H.265 码流喂给 FFmpeg 的 `h264_mediacodec` / `hevc_mediacodec`
- * 解码器，取回 NV12/YUV420P 帧，再用 `sws_scale` 转成**打包 BGRA**交给现有渲染管线。
+ * 本类做一件事：把码流喂给 FFmpeg 解码器，取回帧，再用 `sws_scale` 转成**打包 BGRA**
+ * 交给现有渲染管线。解码器由 [FfmpegHwBackendPolicy] 选：通常是
+ * `h264_mediacodec` / `hevc_mediacodec`，失败后经 [openWithFallback] 降到软解。
  *
- * 关键设计约束（与任务书一致）：
+ * 关键设计约束：
  *
  * 1. **不引用任何 `android.*` 类**。JavaCPP 的 `org.bytedeco.ffmpeg.*` 是纯 JNI 绑定，NDK
  *    后端（libmediandk.so → `AMediaCodec_*`）在 native 层完成与系统 MediaCodec 服务的交互。
  *    因此本类在 Pojav / Zalith 等「桌面 OpenJDK、没有 android.jar」的游戏 JVM 上也能加载。
- * 2. **桌面端永不进入**。入口由 [FfmpegMediaCodecBridge.isAvailable] 把关：非 Android 直接 false。
- * 3. **失败必须可回退**。任何一步失败都返回 false / 错误枚举并写入 [lastError]，由上层
+ * 2. **失败必须可回退**。任何一步失败都返回 false / 错误枚举并写入 [lastError]，由上层
  *    （[FfmpegCodecScheduler]）决定是否退回 libvlc；绝不抛异常穿透到播放线程。
+ * 3. **像素格式跟随 [hardware]**，否则软解降级档永远打不开（见 [open] 的说明）。
  *
  * ## 已验证的 FFmpeg 构建能力
  *
@@ -50,15 +51,32 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 生命周期：`open()` → 反复 `decode()` → `close()`。非线程安全，调用方需保证串行
  * （播放器里由固定的解码线程持有）。
  *
+ * 解码器名由 [FfmpegHwBackendPolicy] 决定而不是写死：硬解失败时同一个实例可以
+ * 用 [openWithFallback] 换到链上的下一档（最终是同一编码的软件解码器），
+ * 不必重建播放器。
+ *
  * @param width  码流原始宽度（必须与 SPS 一致，否则 MediaCodec 配置会失败）
  * @param height 码流原始高度
- * @param decoderName FFmpeg 解码器名，H.264 用 `h264_mediacodec`，H.265 用 `hevc_mediacodec`
+ * @param decoderName FFmpeg 解码器名；由策略给出（`h264_mediacodec` / `h264` / …）
+ * @param hardware true 表示该解码器走 GPU。**必须与 [decoderName] 一致**：
+ *   硬件解码器要求 `AV_PIX_FMT_MEDIACODEC`，软件解码器要求默认像素格式；
+ *   给软解设 mediacodec 像素格式会让 `avcodec_open2` 直接失败，
+ *   那样「降级到软解」这条退路就成了空话。
  */
 internal class AndroidMediaCodecHwSolver(
     private val width: Int,
     private val height: Int,
-    private val decoderName: String = DEFAULT_DECODER,
+    decoderName: String = FfmpegCodec.H264.mediacodecDecoder ?: FfmpegCodec.H264.softwareDecoder,
+    hardware: Boolean = true,
 ) : AutoCloseable {
+
+    /** 当前使用的解码器名；[openWithFallback] 降级时会替换。 */
+    var decoderName: String = decoderName
+        private set
+
+    /** 当前这一档是否走硬件；与 [decoderName] 同步变化。 */
+    var hardware: Boolean = hardware
+        private set
 
     private val logger = DreamLog.of("AndroidMediaCodecHwSolver")
 
@@ -116,11 +134,16 @@ internal class AndroidMediaCodecHwSolver(
         private set
 
     /**
-     * 打开解码器并按 MediaCodec 要求配置。
+     * 打开解码器。
      *
      * MediaCodec 硬解与软解不同：它**必须**在 `avcodec_open2` 之前知道分辨率，
      * 且通常只通过 `extradata`（H.264 的 avcC / H.265 的 hvcC）拿参数集。
      * 裸 Annex-B 流若不含内联 SPS/PPS，需调用方传入 [extradata]。
+     *
+     * 像素格式按 [hardware] 分派，这是「降级到软解」能真正生效的前提：
+     *  - 硬件：`AV_PIX_FMT_MEDIACODEC`，`ndk_codec=1` 走原生 `AMediaCodec`；
+     *  - 软件：**不设** `pix_fmt`，让解码器自己选（通常是 YUV420P），
+     *    也不传 `ndk_codec` —— 软件解码器不认识这个选项。
      *
      * @param extradata 可选的 AVCC extradata。传 null 表示码流自带参数集。
      */
@@ -131,7 +154,8 @@ internal class AndroidMediaCodecHwSolver(
             return false
         }
         // 硬解在隔离 JVM 上的可用性完全由桥接器判定，这里再兜一层防止误用。
-        if (!FfmpegMediaCodecBridge.isAvailable()) {
+        // 软解降级档不受这个门槛限制：桥接器不可用恰恰是降级的常见原因。
+        if (hardware && !FfmpegMediaCodecBridge.isAvailable()) {
             lastError = "MediaCodec bridge unavailable (not Android, or FFmpeg build lacks mediacodec)"
             return false
         }
@@ -148,7 +172,9 @@ internal class AndroidMediaCodecHwSolver(
                 }
             c.width(width)
             c.height(height)
-            c.pix_fmt(avutil.AV_PIX_FMT_MEDIACODEC)
+            if (hardware) {
+                c.pix_fmt(avutil.AV_PIX_FMT_MEDIACODEC)
+            }
 
             if (extradata != null && extradata.isNotEmpty()) {
                 val ptr = BytePointer(extradata.size.toLong())
@@ -157,11 +183,13 @@ internal class AndroidMediaCodecHwSolver(
                 c.extradata_size(extradata.size)
             }
 
-            // ndk_codec=1：走原生 AMediaCodec C API，而不是 JNI 反射 android.media.MediaCodec。
-            // 这是隔离 JVM（无 android.jar）下唯一可行的路径。
             val opts = AVDictionary()
-            avutil.av_dict_set(opts, "ndk_codec", "1", 0)
-            // 低延迟：直播/短片段优先出帧，牺牲一点吞吐。
+            if (hardware) {
+                // ndk_codec=1：走原生 AMediaCodec C API，而不是 JNI 反射 android.media.MediaCodec。
+                // 这是隔离 JVM（无 android.jar）下唯一可行的路径。
+                avutil.av_dict_set(opts, "ndk_codec", "1", 0)
+            }
+            // 低延迟：直播/短片段优先出帧，牺牲一点吞吐。软硬解都适用。
             avutil.av_dict_set(opts, "low_delay", "1", 0)
 
             val rc = avcodec.avcodec_open2(c, codec, opts)
@@ -185,8 +213,8 @@ internal class AndroidMediaCodecHwSolver(
             outBuffer = ByteBuffer.allocateDirect(width * height * 4)
             opened.set(true)
             logger.info(
-                "MediaCodec solver opened: decoder=$decoderName {}x{} ndk_codec=1 outBuf={}B",
-                width, height, outBuffer?.capacity(),
+                "FFmpeg decoder opened: decoder={} {}x{} hardware={} outBuf={}B",
+                decoderName, width, height, hardware, outBuffer?.capacity(),
             )
             true
         } catch (t: Throwable) {
@@ -195,6 +223,42 @@ internal class AndroidMediaCodecHwSolver(
             close()
             false
         }
+    }
+
+    /**
+     * 降级到链上的下一个可用后端（硬件 → 同一编码的软件解码器）。
+     *
+     * 这是「选择器」能真正救场的那一步：`avcodec_open2` 对 mediacodec 失败时，
+     * 调用方拿去问 [FfmpegCodecScheduler.reportFailure] 拿到下一档，再回到这里重开。
+     *
+     * @param codec 本次解码的编码，用来查软件解码器名
+     * @param step 当前所在链上的档位。**-1 表示被 `-Ddreamdisplayx.hwDecode` 强制指定**，
+     *   这种选择不允许降级——用户明确要求了某个后端，失败就该报错，而不是偷偷换掉。
+     * @return true 表示已成功用新后端打开；false 表示无可降级或新后端也打不开
+     *   （此时 [lastError] 记录原因，调用方应当整条管线回退 libvlc）
+     */
+    fun openWithFallback(codec: FfmpegCodec, step: Int): Boolean {
+        if (step == -1) {
+            lastError = "backend was forced by -Ddreamdisplayx.hwDecode; refusing to downgrade"
+            return false
+        }
+        if (!hardware) {
+            // 已经在软件那一档了，没有更后面的档。
+            lastError = "already on software decode; no further fallback"
+            return false
+        }
+        val target = codec.softwareDecoder
+        if (target.isBlank()) {
+            lastError = "codec $codec has no software decoder to fall back to"
+            return false
+        }
+        // 先彻底释放硬件解码器再换。硬解上下文持有 GPU surface，
+        // 复用一个半开的状态去 open2 第二次会拿到上次的残留配置。
+        close()
+        logger.warn("Falling back from hardware to software decoder '$target' for {}", codec)
+        decoderName = target
+        hardware = false
+        return open()
     }
 
     /**
@@ -377,7 +441,9 @@ internal class AndroidMediaCodecHwSolver(
         return true
     }
 
-    /** 释放所有 native 资源。可重复调用。 */
+    /**
+     * 释放所有 native 资源。可重复调用。
+     */
     override fun close() {
         if (!opened.getAndSet(false) && ctx == null) return
         runCatching {
@@ -402,7 +468,7 @@ internal class AndroidMediaCodecHwSolver(
         /** 一帧已解码完成，可从 [outputBgra] 取数据。 */
         FRAME_READY,
 
-        /** 需要继续送包；本次没有产出帧（硬解流水线的常规状态）。 */
+        /** 需要继续送包；本次没有产出帧（解码流水线的常规状态）。 */
         NEED_MORE_INPUT,
 
         /** 解码器报告流结束。 */
@@ -416,12 +482,6 @@ internal class AndroidMediaCodecHwSolver(
     }
 
     companion object {
-        /** H.264 硬解解码器名（已在本项目使用的 FFmpeg 构建中核实存在）。 */
-        const val DEFAULT_DECODER = "h264_mediacodec"
-
-        /** H.265 硬解解码器名。 */
-        const val HEVC_DECODER = "hevc_mediacodec"
-
         /** FFmpeg 的 AV_NOPTS_VALUE。 */
         const val AV_NOPTS_VALUE: Long = Long.MIN_VALUE
 
