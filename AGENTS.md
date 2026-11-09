@@ -1058,6 +1058,82 @@ Verified contract of the stored coordinates (this matters if the detection is ev
 `BlockHitResult.location` it returns keeps **structure-space** values. That is what DDX stores, and it is why a
 pure world-position probe would silently miss after a hull has moved.
 
+## Optional Sable sub-level anchoring
+
+Sable (`dev.ryanhcode.sable`) is the second supported physics mod, and it exists only for **1.21.1**. It is
+reflection-only for the same reason as VS: one artifact per version times eleven targets is unmaintainable,
+and Sable's own build declares `minecraft [1.21.1,)` against NeoForge `21.1.80+`.
+
+Everything structure-shaped now lives behind two seams, and both must be edited together or a display silently
+stops following its structure:
+
+- **`api/.../display/geometry/StructureTransforms`** — owns a `ShipTransformSource` per backend and dispatches on
+  the id family. `SubLevelId` encodes Sable ids as `SABLE_FLAG or hash` with `SABLE_FLAG = 1L shl 62`, so a Sable
+  id can never collide with a VS ship id and every id stays positive. `ShipAnchorPolicy.isShipAnchored` (`> 0L`)
+  and `shouldDropAnchor` therefore need no Sable branch — do not add one "for clarity", the positive-range
+  invariant is what keeps the two families interchangeable across the whole server side.
+- **`platform/client/.../render/StructureClientCompat`** — the only client-side entry point. Renderer, distance
+  census, acoustics, ray-cast and the discovery probe all call it; a direct `ValkyrienClientCompat.` call from any
+  of them is a bug because a Sable display would then be asked for a VS ship matrix.
+
+The two bridges are **not** interchangeable in their member names: `ValkyrienClientCompat.Discovery` is
+`(shipId, worldToShip)`, `SableClientCompat.Discovery` is `(subLevelId, worldToStructure)`, and the facade's own
+`Discovery` is `(structureId, worldToStructure, owner)`. Copying code between them compiles nowhere, which is
+preferable to the alternative, but the compiler error names the *field*, not the bridge, so check the receiver.
+
+Sable-specific facts that were verified against the shipped jar, not from memory:
+
+- `SableCompanion.getAllSubLevels(Level)` takes plain `Level`. `getContaining(Level, int, int)` takes **chunk**
+  coordinates (it does `>>4` internally), so both bridges enumerate sub-levels and test the boxes themselves.
+- **The two bounding boxes are in opposite spaces.** `LevelPlot.getBoundingBox()` is **structure** space (the VS
+  `getShipAABB()` analogue); `SubLevel.boundingBox()` / `getBoundingBox()` is **world** space (the VS
+  `getWorldAABB()` analogue). Reading them the wrong way round makes every sub-level display believe it needs a
+  world-to-structure correction and throws the picture into the void. `SubLevelLookupPolicy` is where this lives.
+- `LevelPlot.getBoundingBox()` returns `BoundingBox3i.EMPTY` for a plot that has not been filled yet, so
+  `SubLevelLookupPolicy.boundsOf` rejects empty and non-finite boxes instead of treating them as "contains
+  everything".
+- `SubLevelPose.matrixOf(position, orientation, scale, rotationPoint)` composes
+  `T(position) · R · S · T(-rotationPoint)`: `rotationPoint` is a **structure-space** pivot that is subtracted
+  first, so the pivot maps onto `position`. It is not a world-space fixed point.
+- `renderPose()` already interpolates by `getGameTimeDeltaPartialTick(true)` and caches per partial tick, so no
+  `partialTick` parameter needs to be threaded through `anchoredTransform`.
+
+### Server side: stamp only a structure-space hit
+
+`SableServerCompat.subLevelIdAt` must never stamp a **world**-space hit, even though the client bridge happily
+returns a correction for one. A stamped row is rendered as `subLevelToWorld · storedPos`, so stamping a world
+position applies the structure's displacement twice (once by the mod, once by the renderer) and the picture flies
+away. `SubLevelLookupPolicy.stampIdFor` is the single rule: `STRUCTURE → id`, `WORLD`/`UNKNOWN → SubLevelId.NONE`.
+The world-space case is left for the client's discovery probe, which captures `worldToStructure` at the moment of
+the hit and composes it as `live · correction` — correction **first**, or the picture rotates around the camera
+instead of the structure origin. That order is pinned by `ShipAnchorPolicyTest`, not by the call site.
+
+World hits short-circuit: once `storedSpaceOf` says `WORLD`, the row demonstrably belongs to that structure and
+only its coordinate space is wrong, so continuing to the next candidate would stamp an unrelated structure.
+
+`ShipAnchorStamping` tries VS first and Sable second, first hit wins, and leaves `data.shipId` untouched when
+neither resolves. Both bridges are reflection-only and fail closed, so a server without either mod stores `0` and
+behaves exactly as before the feature existed.
+
+### Verification without Loom
+
+Local Gradle is unavailable offline (`net.fabricmc.fabric-loom:1.17.13` is not cached, and a networked run fails
+too), so these changes were verified with three hand-built script sets instead. Re-run all three after touching
+anything in this area — there is no CI-visible seam for either bridge:
+
+- `/tmp/sabletest/run.sh` — compiles the nine `api` geometry files plus the four new test classes against a
+  `kotlin.test` stub (`package testkit`, because the compiler rejects a user-defined `package kotlin.test`).
+  The repo files still say `import kotlin.test.*`, so the script `sed`s the imports to `testkit.*` on a copy.
+- `/tmp/sabletest/plat/build.sh` — compiles `ValkyrienClientCompat`, `SableClientCompat` and
+  `StructureClientCompat` plus four Minecraft/logging stubs (43 classes).
+- `/tmp/sabletest/srv/build.sh` — compiles `SableServerCompat`, `ShipAnchorStamping` and `ValkyrienCompat` plus
+  five server stubs (36 classes).
+
+The compiler invocation that finally works needs `kotlin-compiler-embeddable`, `kotlin-stdlib`,
+`kotlinx-coroutines-core-jvm` **and** `annotations-26.0.2` on the *launcher* classpath; the missing
+coroutines jar fails as `NoClassDefFoundError: CoroutineScope`, and the missing annotations jar fails as a
+generated `copy()` that cannot resolve `NotNull`, which reads like a bug in your own data class.
+
 ## Experimental Remote Control
 
 The Paper remote-control stick is experimental and uses a `PersistentDataContainer` entry named `remote_display_id`. A normal stick links to the nearest display under the player's look ray on right-click; the server adds a custom name and enchantment-glint override. Shift+right-click on a linked stick sends the experimental V3 `RemoteControlOpen` packet, and the client opens the linked `DisplayMenu` when that display is loaded. Keep the packet id append-only and validate the linked display server-side.

@@ -17,6 +17,7 @@ import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.core.modules.*
 import com.dreamdisplayx.platform.client.displays.DisplayRegistry
 import com.dreamdisplayx.platform.client.displays.DisplayScreen
+import com.dreamdisplayx.platform.client.render.StructureClientCompat
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import com.dreamdisplayx.platform.client.storage.CustomVideoStore
 import com.dreamdisplayx.platform.client.storage.WatchedVideoStore
@@ -72,6 +73,11 @@ object ClientStartupManager {
         application.start()
 
         Focuser().start()
+        // One line per process: a display that does not move must be explainable from a shipped log
+        // alone, and "no physics mod" versus "physics mod, but the bridge never resolved" look
+        // identical from the outside otherwise.
+        runCatching { StructureClientCompat.logResolutionOnce() }
+            .onFailure { e -> logger.warn("Moving-structure probe failed.", e) }
         scope.launch {
             while (isActive) {
                 runCatching { DisplayRegistry.getScreens().forEach(DisplayScreen::reloadQuality) }

@@ -11,7 +11,7 @@ import com.dreamdisplayx.api.storage.model.FullDisplayData
 import com.dreamdisplayx.core.services.DisplayStorage
 import com.dreamdisplayx.platform.client.core.DreamServices
 import com.dreamdisplayx.platform.client.render.ConformingWorldMesh
-import com.dreamdisplayx.platform.client.render.ValkyrienClientCompat
+import com.dreamdisplayx.platform.client.render.StructureClientCompat
 import com.dreamdisplayx.platform.client.storage.ClientSettingsStore
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -102,8 +102,9 @@ object DisplayRegistry {
         awaitingReconfirm.clear()
         displaySystem?.clearDisplays()
         // Structure ids are per-world: a transform sampled in the world we just left could place a
-        // display against a hull that does not exist in the next one.
-        ValkyrienClientCompat.invalidateTransforms()
+        // display against a hull that does not exist in the next one. The facade owns the single
+        // cache both bridges share, so one call is enough whichever mod is installed.
+        StructureClientCompat.invalidateTransforms()
     }
 
     /**

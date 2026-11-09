@@ -82,6 +82,7 @@ Paper 是跨版本单插件，一个 jar 覆盖 1.21.1 – 26.3；Velocity 与 B
 - 数据库播放列表：SQLite / MySQL 持久化队列，支持批准、跳过和队列结束策略
 - 权限与领地保护：LuckPerms、WorldGuard 以及可选领地插件
 - 视频动态光照（需 LambDynamicLights）、Complementary 着色器修补
+- 移动结构支持：显示器可以固定在 Valkyrien Skies 船舶或 Sable 子维度上随结构一起移动
 - 实验性 ReplayMod / Flashback 兼容
 
 # 本分支新增
@@ -91,6 +92,23 @@ Paper 是跨版本单插件，一个 jar 覆盖 1.21.1 – 26.3；Velocity 与 B
 - libvlc 播放引擎（JNA 调用原生库，视频与音频独立时钟）
 - Fabric / Forge / NeoForge / Paper / Velocity / BungeeCord 全平台构建
 - 快捷键接入 Minecraft 原生「选项 → 控制」，玩家可自行改键（默认未绑定）
+
+# 移动结构（Valkyrien Skies / Sable）
+
+显示器可以固定在会移动的结构上，随船舶或子维度一起平移、旋转，不需要重新创建。
+
+| 物理模组 | 支持的 Minecraft 版本 | 说明 |
+|---|---|---|
+| [Valkyrien Skies](https://modrinth.com/mod/valkyrien-skies) | 1.18.2 – 1.20.1 | 成熟支持 |
+| [Sable](https://modrinth.com/mod/sable) | 1.21.1 | **实验性** |
+
+使用要点：
+
+- **客户端和服务端都要安装**同一个物理模组；只装一边时显示器会退化成普通的固定显示器
+- 模组通过反射接入，不产生硬依赖，未安装时自动跳过
+- 先在方块状态下用 `/display create` 创建显示器，再组装成结构
+- Sable 自述为「extremely intrusive mod」，与 Valkyrien Skies 没有官方兼容支持，不建议同时安装
+- 显示器已组装进结构之后如果不能跟随移动，请在 `latest.log` 中搜索 `Moving-structure support` 或 `Structure anchor discovery` 两行日志
 
 # Android（PojavLauncher / FCL / Zalith）
 

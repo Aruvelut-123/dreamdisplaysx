@@ -111,10 +111,12 @@ class DisplayScreen(
     var conforming: Boolean = false,
 
     /**
-     * Valkyrien Skies ship the anchor coordinates belong to, or `0` for a world-anchored display.
+     * Structure id the anchor coordinates belong to, or `0` for a world-anchored display.
      *
-     * [x] / [y] / [z] stay in the ship's structure space, so a moving ship needs no data update here:
-     * the renderer applies the ship-to-world matrix around the usual block translation.
+     * The id is opaque here: a Valkyrien Skies ship and a Sable sub-level share the field, and the
+     * encoding in [SubLevelId] keeps the two families from colliding. [x] / [y] / [z] stay in the
+     * structure's own space, so a moving structure needs no data update here: the renderer applies
+     * the structure-to-world matrix around the usual block translation.
      */
     var shipId: Long = 0L,
 ) {
@@ -122,18 +124,18 @@ class DisplayScreen(
      * Structure id the client discovered for itself, or `0` while nothing has been found.
      *
      * Only consulted when [shipId] is `0`: the server's answer always wins, because it is the only
-     * one that can be authoritative about a hull the client has never streamed in. See
+     * one that can be authoritative about a structure the client has never streamed in. See
      * [ShipAnchorDetectPolicy] for why discovery is needed at all.
      */
     private var detectedShipId: Long = 0L
 
     /**
-     * `worldToShip` captured when [detectedShipId] was discovered, or `null`.
+     * `worldToStructure` captured when [detectedShipId] was discovered, or `null`.
      *
      * Non-null only for the case the server could not stamp: a display built on loose blocks that
-     * were assembled into a hull afterwards, whose stored coordinates are still **world** space. The
-     * renderer then draws `shipToWorld_now * this * pos` instead of `shipToWorld_now * pos`, which
-     * would otherwise apply the structure's transform twice.
+     * were assembled into a structure afterwards, whose stored coordinates are still **world** space.
+     * The renderer then draws `structureToWorld_now * this * pos` instead of `structureToWorld_now *
+     * pos`, which would otherwise apply the structure's transform twice.
      */
     private var detectedCorrection: DoubleArray? = null
 
@@ -183,22 +185,25 @@ class DisplayScreen(
             }
             if (ShipAnchorDetectPolicy.shouldProbe(shipId, detectedShipId, lastProbeTick, now)) {
                 lastProbeTick = now
-                val found = ValkyrienClientCompat.discoverAt(levelOrNull(), x, y, z)
+                // Dispatching through the facade, not through one bridge: the display may ride a
+                // Valkyrien Skies ship or a Sable sub-level, and the stored id already says which.
+                val found = StructureClientCompat.discoverAt(levelOrNull(), x, y, z)
                 // Log the first outcome, then only transitions. A probe runs a few times a second for
                 // as long as a display stays world-anchored, so logging each one would bury the file;
                 // logging the first result *including a miss* keeps exactly the evidence needed to
                 // tell "never found a hull" from "found it, but placed it wrongly" — the 1.10.8.2
-                // report could not answer that because the probe was silent.
-                if (!discoveryLogged || found.shipId != detectedShipId) {
+                // report could not answer that because the probe was silent. The owner is part of the
+                // line so a log can distinguish the two physics mods without a separate probe.
+                if (!discoveryLogged || found.structureId != detectedShipId) {
                     discoveryLogged = true
                     logger.info(
-                        "Ship anchor discovery: display {} at ({}, {}, {}) -> ship {} (correction: {})",
-                        uuid, x, y, z, found.shipId, found.hasCorrection,
+                        "Structure anchor discovery: display {} at ({}, {}, {}) -> {} {} (correction: {})",
+                        uuid, x, y, z, found.owner, found.structureId, found.hasCorrection,
                     )
                 }
-                if (found.shipId > 0L) {
-                    detectedShipId = found.shipId
-                    detectedCorrection = found.worldToShip
+                if (found.structureId > 0L) {
+                    detectedShipId = found.structureId
+                    detectedCorrection = found.worldToStructure
                 }
             }
             return ShipAnchorDetectPolicy.effectiveShipId(shipId, detectedShipId)
@@ -1079,12 +1084,10 @@ class DisplayScreen(
         get() {
             val id = anchoredShipId
             if (id <= 0L) return AffineTransform.IDENTITY
-            val live = ValkyrienClientCompat.transformFor(id)
-            val correction = detectedCorrection ?: return live
-            if (live.isIdentity) return live
-            // `times` is `this * other`, i.e. the correction is applied first, then the live matrix —
-            // the same order the renderer's `T * R * S * local` chain assumes.
-            return live.times(AffineTransform(correction.copyOf()))
+            // The facade routes the id to whichever physics mod stamped it, so nothing here has to
+            // know whether this display rides a Valkyrien Skies ship or a Sable sub-level.
+            val live = StructureClientCompat.transformFor(id)
+            return StructureClientCompat.correctedTransform(live, detectedCorrection)
         }
 
     /** Whether this screen rides a structure whose transform is currently resolvable. */

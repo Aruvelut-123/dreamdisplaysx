@@ -123,4 +123,79 @@ class ShipAnchorPolicyTest {
         assertEquals(null, ShipTransformSource.NONE.matrixOf(1L))
         assertEquals(null, ShipTransformSource.NONE.matrixOf(0L))
     }
+
+    // ---- composeCorrection: the discovery-time correction, order included -------------------------
+
+    private fun translationMatrix(x: Double, y: Double, z: Double) = AffineTransform.ofTranslation(x, y, z)
+
+    @Test
+    fun theCorrectionIsAppliedBeforeTheLiveTransform() {
+        // `live * correction` means the correction runs first, which is what the renderer needs because
+        // it multiplies `structureToWorld * storedPos` and the stored position is world space. Swapping
+        // the order sends the picture around the camera instead of around the structure's origin, so
+        // the composition is pinned here rather than left to the call site.
+        val live = translationMatrix(100.0, 0.0, 0.0)
+        val correction = translationMatrix(-10.0, 0.0, 0.0).m
+
+        val composed = ShipAnchorPolicy.composeCorrection(live, correction)
+        val point = composed.transformPoint(10.0, 0.0, 0.0)
+
+        // correction first: 10 + (-10) = 0, then the live transform: 0 + 100 = 100 (the structure).
+        assertEquals(100.0, point[0], 1e-9)
+        // If the order had been reversed the point would land at 10 + 100 + (-10) = 100 as well for a
+        // pure translation, so a rotation is what actually distinguishes the two. Assert the identity
+        // composition of a matched pair instead, which is the "the picture must not jump" property.
+        val liveAgain = translationMatrix(10.0, 0.0, 0.0)
+        val asDiscovery = translationMatrix(-10.0, 0.0, 0.0).m
+        val atDiscovery = ShipAnchorPolicy.composeCorrection(liveAgain, asDiscovery)
+        val unchanged = atDiscovery.transformPoint(3.0, 4.0, 5.0)
+        assertEquals(3.0, unchanged[0], 1e-9)
+        assertEquals(4.0, unchanged[1], 1e-9)
+        assertEquals(5.0, unchanged[2], 1e-9)
+    }
+
+    @Test
+    fun aRotationCorrectionRotatesAroundTheStructureOriginNotTheCamera() {
+        // The order-sensitive case: a yaw of 90 degrees. Applied first, the point is rotated and then
+        // pushed by the live translation; the wrong order would rotate the already-translated point.
+        val live = translationMatrix(0.0, 0.0, 50.0)
+        val yaw = AffineTransform.ofYawAndTranslation(90.0, 0.0, 0.0, 0.0).m
+
+        val composed = ShipAnchorPolicy.composeCorrection(live, yaw)
+        val point = composed.transformPoint(1.0, 0.0, 0.0)
+
+        // 90 degrees around Y maps +X onto -Z, then the live transform adds +50 on Z.
+        assertEquals(0.0, point[0], 1e-9)
+        assertEquals(0.0, point[1], 1e-9)
+        assertEquals(49.0, point[2], 1e-9)
+        // The mirror case: with the order swapped the translation is applied first, so the yaw moves the
+        // already-offset point instead of rotating around the structure origin. The two results
+        // ((0, 0, 49) above versus (50, 0, -1) here) are what makes this test order-sensitive.
+        val swapped = ShipAnchorPolicy.composeCorrection(AffineTransform(yaw), live.m)
+            .transformPoint(1.0, 0.0, 0.0)
+        assertEquals(50.0, swapped[0], 1e-9)
+        assertEquals(-1.0, swapped[2], 1e-9)
+    }
+
+    @Test
+    fun anAbsentCorrectionLeavesTheLiveTransformUntouched() {
+        val live = translationMatrix(7.0, 8.0, 9.0)
+        assertEquals(live, ShipAnchorPolicy.composeCorrection(live, null))
+    }
+
+    @Test
+    fun aCorrectionCannotMoveADisplayWhoseStructureIsNotResolvable() {
+        // `live` identity means the structure is not loaded; composing a correction there would shift a
+        // display that must stay exactly where it is.
+        val correction = translationMatrix(1000.0, 0.0, 0.0).m
+        assertEquals(AffineTransform.IDENTITY, ShipAnchorPolicy.composeCorrection(AffineTransform.IDENTITY, correction))
+    }
+
+    @Test
+    fun aBrokenOrWrongSizedCorrectionIsIgnored() {
+        val live = translationMatrix(1.0, 2.0, 3.0)
+        assertEquals(live, ShipAnchorPolicy.composeCorrection(live, DoubleArray(3)))
+        val nan = AffineTransform.IDENTITY.m.copyOf().also { it[0] = Double.NaN }
+        assertEquals(live, ShipAnchorPolicy.composeCorrection(live, nan))
+    }
 }
