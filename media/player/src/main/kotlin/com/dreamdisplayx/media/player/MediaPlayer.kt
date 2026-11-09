@@ -16,6 +16,7 @@ import com.dreamdisplayx.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplayx.media.player.events.PlayerEvents
 import com.dreamdisplayx.media.player.ffmpeg.FfmpegCodecScheduler
 import com.dreamdisplayx.media.player.managers.LibVlcSessionManager
+import com.dreamdisplayx.media.player.session.PlaybackSession
 import com.dreamdisplayx.media.player.managers.StatsReporter
 import com.dreamdisplayx.media.player.managers.WarmTrack
 import com.dreamdisplayx.media.player.pipeline.PlaybackClock
@@ -258,8 +259,10 @@ class MediaPlayer(
     /** Set when a resolve was asked for while one was already running; runs exactly once afterward. */
     private val initQueued = AtomicBoolean(false)
 
-    /** Session manager. */
-    private val sessionManager = LibVlcSessionManager(
+    /** Session backend for this player. Typed as the contract, not the libvlc implementation, so a
+     *  second backend (the FFmpeg demux/decode pipeline) can be dropped in without touching the
+     *  ~37 call sites below. */
+    private val sessionManager: PlaybackSession = LibVlcSessionManager(
         debugLabel = debugLabel,
         clock = clock,
         events = events,
