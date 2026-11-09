@@ -771,11 +771,49 @@ Rules that cost real debugging time and must not be undone:
 - **A forced backend never advances.** `step == -1` (set when an override is active) makes `advance` return null and
   `openWithFallback` refuse, because silently swapping in a backend the user did not ask for hides the failure they
   were trying to observe.
-- **`selectBackend`/`reportFailure` currently have no runtime caller.** `FfmpegSession` does not exist yet, so the
-  selector is test-only; do not describe the pipeline as working until it is wired. `openWithFallback` must `close()`
-  before reopening, since a half-open mediacodec context carries its old config into the second `avcodec_open2`.
+- **`selectBackend`/`reportFailure` now have a runtime caller.** `FfmpegSession` drives the decode loop and
+  `AndroidMediaCodecHwSolver.Result.ERROR` lands in `FfmpegSession.tryDecodeFallback`, which calls
+  `FfmpegCodecScheduler.reportFailure` and reopens a replacement solver. Do not weaken the forced-backend guard:
+  when `step == -1` the fallback must refuse rather than silently substitute a backend the user did not ask for.
+  `openWithFallback` must `close()` before reopening, since a half-open mediacodec context carries its old config
+  into the second `avcodec_open2`.
 - Verify with `./gradlew :media:player:compileKotlin --configure-on-demand` and a **JDK 21** `JAVA_HOME`; the
   stonecutter 0.9.7 plugin refuses a Java 17 JVM, and a plain `--offline` run cannot resolve fabric-loom.
+
+### Backend ownership: FFmpeg owns video, libvlc keeps audio and the clock
+
+A display no longer means "one backend". `FfmpegVideoOwnership.plan(ffmpegRequested, isAndroid, hwAccelEnabled)`
+answers three separate questions — who produces video frames, who plays audio, who supplies the playback
+position — and only splits them when **all three** of FFmpeg-requested, Android and hardware-decode-allowed hold.
+Any other combination returns one libvlc backend, never "FFmpeg video + FFmpeg audio": the FFmpeg side has no
+audio implementation, so that combination would be a silent picture.
+
+- **Never re-join the three into one switch.** The moment video and clock come from different objects you get
+  "video is on screen, so ask libvlc how many FPS it decoded" style mismatches. `Play` exposes `videoIsFfmpeg` /
+  `audioIsFfmpeg` / `isSplit` so call sites query a named capability instead of `is`-checking a backend.
+- **`CompositeSession` dispatches, it does not decide.** Video members (frame delivery, FPS, the three raw frame
+  sinks, incoming-frame/prefetch, quality switch, replay video) go to the video backend; audio members (volume,
+  warm tracks, PCM capture, `restartAudio`) go to the audio backend. `isPlaying`, `currentPacingNanos` and
+  `parkedPositionNanos` **must** come from the audio backend: the clock and the "is it playing" answer have to
+  share one owner or the progress bar drifts between two independent timelines. Lifecycle calls notify both —
+  each side holds native resources, and starting only one yields "picture without sound" or the reverse.
+- **`start` reports only the video result.** A failed audio start logs and continues: the picture already
+  delivered its first frame, and rolling it back would flash the loading state over a merely muted display.
+- **`LibVlcSessionManager(videoSinkEnabled = false)` is the audio-only form** (default `true`, so the single
+  backend path is byte-for-byte unchanged). It installs no vmem callbacks, adds `:no-video` to the media, skips
+  the first-frame latch wait — nothing will ever count that latch down, so waiting would burn the full 10 s on
+  every start — and reports no frames from `textureFilled`/`updateFrame`/`updateFramePlanar`. That last part is
+  what stops the renderer from uploading a permanently empty surface over the frame FFmpeg just delivered.
+- **Audio end-of-stream is not playback end.** `MediaPlayer.handleAudioOnlyStreamEnd` exists because a Bilibili
+  DASH audio rendition is routinely shorter than its video; routing it to `handleStreamEnd` would end the display
+  a few seconds in. Only the video backend decides that playback finished.
+- Current simplifications, all documented at the member: a quality switch restarts both backends (hard switch,
+  no parallel pre-warm), `suspend`/`resume` reopen instead of retaining natives, and the FFmpeg pacing clock is
+  wall-clock (`FfmpegSession.currentPacingNanos`) precisely because audio — and its master clock — lives on the
+  other backend.
+- `FfmpegVideoOwnershipTest` pins the decision matrix (split plan, the clock staying on libvlc, desktop fallback,
+  software-only Android never splitting, the opt-in being off, and the unsplit plan). The composite dispatch
+  itself is compile-verified only: it forwards to native backends with no JVM-only seam.
 
 ## Upload path and frame-queue liveness
 
