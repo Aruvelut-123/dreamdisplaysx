@@ -815,6 +815,66 @@ audio implementation, so that combination would be a silent picture.
   software-only Android never splitting, the opt-in being off, and the unsplit plan). The composite dispatch
   itself is compile-verified only: it forwards to native backends with no JVM-only seam.
 
+### FFmpeg native runtime: downloaded, then registered with `Loader.foundLibraries`
+
+The FFmpeg shared objects are **not** inside the mod jar. `native/ffmpeg/collect.sh` downloads the matching
+`org.bytedeco:ffmpeg` classifier jar on CI, drops the `ffmpeg`/`ffprobe` executables and repacks the shared
+objects; `NativesDownloader` then fetches that archive on first launch into `<natives>/<os>/<arch>/ffmpeg/` and
+publishes the directory through the `dreamdisplayx.ffmpeg.dir` system property. `FfmpegNatives.install()` (media
+module) registers it and `FfmpegMediaCodecBridge.probe()` calls it before the first `Loader.load`.
+
+**Every other route was measured and does not work.** Do not "simplify" this back to a system property:
+
+| route | measured result |
+|---|---|
+| `platform.library.path` | compile/link only, never searched at runtime |
+| `platform.preloadpath` | never searched |
+| `org.bytedeco.javacpp.cachedir` | only decides where extraction happens; never consulted while searching |
+| `System.setProperty("java.library.path")` | ignored — read once at JVM start |
+| reflecting `ClassLoader.sys_paths` / `usr_paths` | fields removed in JDK 9+ (`NoSuchFieldException`) |
+| reflecting the system loader's `ucp` | works, but needs `--add-opens java.base/jdk.internal.loader` |
+| `System.load(absolutePath)` | loads the object, `Loader` still reports "no jniavutil in java.library.path" |
+| **writing `Loader.foundLibraries`** | **works, no JVM flags required** |
+
+The last one is the chosen route because `org.bytedeco.javacpp` is a plain unnamed-module jar: reflecting into its
+own package-private static needs no `--add-opens`, so a mod can do it on any launcher without touching the user's
+JVM arguments. `--add-opens` is not an option — a mod cannot add it to someone else's launch command.
+
+**The map keys are JavaCPP's own spelling, dumped from a real classpath load.** A wrong key never throws; it just
+leaves the library unregistered and playback later dies with `no jniavcodec in java.library.path` on a device.
+`FfmpegNativesKeyTest` (10 cases) pins the mapping against the measured values:
+
+```
+libjniavutil.so      -> jniavutil        (unversioned)
+libavcodec.so.62     -> avcodec@.62      (dot kept verbatim, NOT avcodec@62)
+libavcodec.62.dylib  -> avcodec@.62
+avcodec-62.dll       -> avcodec@.62
+```
+
+Two parsing traps that cost real time: `.so` is only the ELF marker when nothing follows it or when what follows is
+a numeric ABI version — a naive `contains(".so")` classifies `config.something` as the library `config` (that
+exact case failed the first test run). And `.dylib`/`.dll` must be tested **before** `.so`, or a future name that
+contains both takes the wrong branch.
+
+Absolute paths must be registered as `file:` URLs. `Loader` derives the extraction file name from the URL and, on
+Linux/macOS, creates the short-name symlink itself; the bytedeco desktop archives only carry versioned names
+(`libavcodec.so.62`), so a hand-rolled `java.library.path` attempt fails on the missing short name even after the
+search path is fixed.
+
+`native/ffmpeg/collect.sh` asserts at packaging time that `h264_mediacodec` / `hevc_mediacodec` are registered in
+the Android `libavcodec`, because a silently missing decoder would surface only as "no suitable decoder" on a user's
+device. Desktop builds legitimately have no mediacodec (there is no Android MediaCodec to talk to), so that check is
+Android-only. The Mach-O symbol check must accept the leading underscore (`_avcodec_open2`): anchoring `^avcodec_`
+fails on macOS, which is how the first CI-shaped run of the script reported a false error.
+
+**Known upstream gap:** the `linux-arm64` classifier ships `libjniavutil` linked against system `libva`/`libva-drm`
+without bundling them (the `linux-x86_64` jar bundles both). It is a bytedeco packaging defect, not ours; the
+desktop Linux arm64 target therefore needs `libva2`/`libva-drm2` present. Do not "fix" it by dropping the VA-API
+libraries from the extraction filter.
+
+Windows x86 (32-bit) and Windows aarch64 have **no** bytedeco FFmpeg classifier, so those two platforms keep the
+libvlc video path and the manifest simply has no `ffmpeg` entry for them.
+
 ## Upload path and frame-queue liveness
 
 Two independent client-side rules keep a display from either starving the game's frame rate or freezing
