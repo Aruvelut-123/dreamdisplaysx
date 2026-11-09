@@ -705,6 +705,34 @@ checks over `git status --porcelain`'s `.kt` files before committing a sweep:
   leaves the video playable. Refusing a playable video is worse than missing a panorama, so do not
   promote the shape test on its own. `BilibiliPanoramaTest` pins "VRChat"/"360p" as non-markers.
 
+## Optional FFmpeg MediaCodec pipeline (Android, opt-in)
+
+A second, standalone decode path sits beside libvlc: `FfmpegDemuxer` reads packets, `AndroidMediaCodecHwSolver`
+feeds them to FFmpeg's `h264_mediacodec`/`hevc_mediacodec`, and the result is published as packed BGRA. It is
+gated by the client config key `enable-android-mediacodec` (**default `false`**) and exposed to the media module
+as `PlaybackConfig.androidMediaCodecEnabled`; desktop short-circuits to `false` and never loads an Android class.
+
+Rules that cost real debugging time and must not be undone:
+
+- **The decoder must emit packed BGRA, not I420.** `DisplayYuvRenderTypes.active` is hard-coded `false` because the
+  GPU-YUV planar path renders a black screen under Sodium, so a planar buffer has no route to the screen. The
+  conversion is `av_hwframe_transfer_data` (surface → system memory) followed by `sws_scale` (YUV → BGRA), feeding
+  the existing `FramePixelFormat.BGRA32` upload path. Do not "restore" the planar path to avoid the conversion.
+- **A MediaCodec frame is not pixels.** `mediacodec` decoders emit `AV_PIX_FMT_MEDIACODEC`, where `data(0)` is an
+  opaque GPU surface handle. Reading it as a plane faults or produces garbage; it must go through
+  `av_hwframe_transfer_data` first.
+- **Packets need padding.** FFmpeg's bitstream readers over-read up to `AV_INPUT_BUFFER_PADDING_SIZE` bytes past the
+  payload, so packets are allocated with `av_new_packet` rather than wrapping the caller's buffer with
+  `av_packet_from_data`; handing over an unpadded array reads past the heap.
+- **`ndk_codec=1` is mandatory here.** The JNI backend needs `android.media.MediaCodec`, which does not exist on
+  Pojav/Zalith game JVMs (desktop OpenJDK, no `android.jar`), so only the NDK `AMediaCodec` path can work.
+- **The switch lives on `PlaybackConfig`, not on the client `Config`.** `MediaPlayer` only sees the media-facing
+  interface; reading `env.config.enableAndroidMediaCodec` there is an unresolved reference and fails the whole
+  `:media:player` compile. New media-level switches go through `PlaybackConfig` with a default so that other hosts
+  (and any addon backend) keep compiling.
+- Verify with `./gradlew :media:player:compileKotlin --configure-on-demand` and a **JDK 21** `JAVA_HOME`; the
+  stonecutter 0.9.7 plugin refuses a Java 17 JVM, and a plain `--offline` run cannot resolve fabric-loom.
+
 ## Upload path and frame-queue liveness
 
 Two independent client-side rules keep a display from either starving the game's frame rate or freezing
