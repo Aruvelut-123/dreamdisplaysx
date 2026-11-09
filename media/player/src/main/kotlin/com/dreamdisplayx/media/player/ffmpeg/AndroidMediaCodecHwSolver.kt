@@ -110,6 +110,18 @@ internal class AndroidMediaCodecHwSolver(
         private set
 
     /**
+     * 最近一帧**自己**的 PTS（微秒），来自 `AVFrame.pts`。
+     *
+     * 不能用「刚送入那个包的 PTS」代替：有 B 帧时解码器会重排，输出帧与输入包并不同序，
+     * 拿输入包的时间戳当显示时刻会让画面抖动。调用方在 [Result.FRAME_READY] 后读这个值。
+     *
+     * 值为 [AV_NOPTS_VALUE] 表示这一帧没有时间戳（部分裸流如此），调用方应按「立即显示」处理。
+     */
+    @Volatile
+    var lastFramePtsMicros: Long = AV_NOPTS_VALUE
+        private set
+
+    /**
      * I420 → BGRA 的转换上下文（`SwsContext`）。
      *
      * 解码器产出的是平面 I420，但渲染管线只接受打包 BGRA：GPU-YUV 平面路径
@@ -305,6 +317,9 @@ internal class AndroidMediaCodecHwSolver(
             val rrc = avcodec.avcodec_receive_frame(c, f)
             when {
                 rrc == 0 -> {
+                    // 抓这一帧自己的 PTS 必须在 av_frame_unref 之前：解码器可能因 B 帧重排
+                    // 而晚于送入的包输出，用「刚才送进去那个包」的 PTS 会算错显示时刻。
+                    lastFramePtsMicros = f.pts()
                     // 硬解帧是 AV_PIX_FMT_MEDIACODEC：data(0) 是 GPU surface 句柄，不是像素，
                     // 必须先拷回系统内存再转色彩空间。
                     if (convertFrameToBgra(f)) {
@@ -439,6 +454,29 @@ internal class AndroidMediaCodecHwSolver(
         out.position(0)
         out.limit(needed)
         return true
+    }
+
+    /**
+     * 清空解码器内部缓冲。
+     *
+     * seek 之后必须调用：解码器里还压着旧位置的包和已重排待输出的帧，不清就会先吐出
+     * 几帧上一个位置的画面（表现为「跳到新位置后闪一下旧画面」）。
+     *
+     * @return true 表示已清空；未打开时返回 false
+     */
+    fun flush(): Boolean {
+        val c = ctx ?: return false
+        if (!opened.get()) return false
+        return try {
+            avcodec.avcodec_flush_buffers(c)
+            // 上一位点的帧 PTS 已经无意义，重置掉，免得调用方误读。
+            lastFramePtsMicros = AV_NOPTS_VALUE
+            true
+        } catch (t: Throwable) {
+            lastError = "flush threw ${t::class.simpleName}: ${t.message}"
+            logger.warn("flush failed: ${t.message}")
+            false
+        }
     }
 
     /**
