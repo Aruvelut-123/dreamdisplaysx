@@ -14,6 +14,7 @@ import com.dreamdisplayx.api.media.source.model.SubtitleTrack
 import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplayx.media.player.events.PlayerEvents
+import com.dreamdisplayx.media.player.ffmpeg.FfmpegCodecScheduler
 import com.dreamdisplayx.media.player.managers.LibVlcSessionManager
 import com.dreamdisplayx.media.player.managers.StatsReporter
 import com.dreamdisplayx.media.player.managers.WarmTrack
@@ -301,9 +302,17 @@ class MediaPlayer(
 
     @Volatile
     private var subtitleSecondaryTimeline = SubtitleTimeline(emptyList())
-
     private val subtitlesEnabled = AtomicBoolean(false)
     private val subtitleFetchId = AtomicInteger(0)
+
+    /**
+     * Whether the Android FFmpeg MediaCodec backend should be attempted for this player.
+     * Desktop builds always resolve to false (see [FfmpegCodecScheduler]), so no Android-only
+     * class is ever touched there; the libvlc path stays the default everywhere else.
+     */
+    @Volatile
+    private var ffmpegCodecEnabled: Boolean = false
+
 
     /**
      * The video URL actually handed to the decoder in the last [startStreams] — i.e. AFTER the CDN
@@ -1005,6 +1014,8 @@ class MediaPlayer(
         } else streamSet
         activeVideoUrl = probedStreamSet.currentVideo.url
 
+        // 探测 FFmpeg MediaCodec 是否可用（Android 端由 config 控制，桌面端永远 false，保证不加载任何 Android 类）
+        FfmpegCodecScheduler.probeAndSet(env.config.enableAndroidMediaCodec)
         try {
             val started = sessionManager.start(
                 probedStreamSet,
