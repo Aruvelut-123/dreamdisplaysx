@@ -36,13 +36,79 @@ class FfmpegHwBackendPolicyTest {
     }
 
     @Test
-    fun desktopChainIsSoftwareOnly() {
-        // The desktop FFmpeg decode pipeline has not started; the chain must not pretend
-        // otherwise or the README progress table and the code drift apart again.
-        val sel = assertNotNull(select(platform = FfmpegHwBackendPolicy.Platform.DESKTOP))
-        assertEquals(listOf("h264"), sel.chain.map { it.decoderName })
-        assertEquals("h264", sel.decoderName)
-        assertTrue(sel.isSoftware)
+    fun desktopH264ChainHasHardwareThenSoftware() {
+        // The desktop chain lists this platform's hardware decoders in priority order,
+        // ending with the software fallback. Exact contents depend on the FFmpeg build;
+        // here we verify: (1) there's at least one HW entry for H.264 on desktop, and
+        // (2) the last entry is always the software decoder so falling back never fails.
+        val sel = assertNotNull(select(platform = FfmpegHwBackendPolicy.Platform.WINDOWS))
+        assertTrue(sel.chain.any { it.hardware }, "desktop H264 chain must contain a hardware backend")
+        assertEquals(
+            FfmpegCodec.H264.softwareDecoder,
+            sel.chain.last().decoderName,
+            "software decoder must be last in the chain",
+        )
+        assertTrue(sel.chain.last().kind == FfmpegHwBackendKind.SOFTWARE)
+    }
+
+    @Test
+    fun eachDesktopPlatformListsOnlyItsOwnDecoders() {
+        // A name that is not registered in a platform's FFmpeg build costs a pointless
+        // failed open on every start, so the chain must be per-platform rather than the
+        // union of everything.
+        val win = FfmpegHwBackendPolicy.chain(FfmpegCodec.H264, FfmpegHwBackendPolicy.Platform.WINDOWS)
+            .map { it.decoderName }
+        assertTrue("h264_d3d11va" in win, "Windows must offer D3D11VA (the AMD path): $win")
+        assertTrue("h264_mf" in win, "Windows must offer Media Foundation: $win")
+        assertTrue("h264_videotoolbox" !in win, "Windows has no VideoToolbox: $win")
+
+        val mac = FfmpegHwBackendPolicy.chain(FfmpegCodec.H264, FfmpegHwBackendPolicy.Platform.MACOS)
+            .map { it.decoderName }
+        assertEquals(listOf("h264_videotoolbox", "h264"), mac)
+
+        val linux = FfmpegHwBackendPolicy.chain(FfmpegCodec.HEVC, FfmpegHwBackendPolicy.Platform.LINUX)
+            .map { it.decoderName }
+        assertTrue("hevc_vaapi" in linux, "Linux must offer VA-API: $linux")
+        assertTrue("hevc_d3d11va" !in linux, "Linux has no D3D11VA: $linux")
+        assertEquals("hevc", linux.last())
+    }
+
+    @Test
+    fun desktopHardwareRungsAreNotMediacodec() {
+        // The regression this whole kind field exists for: a desktop hardware rung is
+        // hardware=true but must NOT be configured with AV_PIX_FMT_MEDIACODEC, or
+        // avcodec_open2 fails and the pipeline silently ends up on software forever.
+        FfmpegHwBackendPolicy.Platform.entries
+            .filter { it != FfmpegHwBackendPolicy.Platform.ANDROID }
+            .forEach { platform ->
+                FfmpegHwBackendPolicy.chain(FfmpegCodec.H264, platform)
+                    .filter { it.hardware }
+                    .forEach { backend ->
+                        assertEquals(
+                            FfmpegHwBackendKind.DESKTOP,
+                            backend.kind,
+                            "${backend.decoderName} on $platform must be DESKTOP, not MEDIACODEC",
+                        )
+                    }
+            }
+    }
+
+    @Test
+    fun androidHardwareRungIsMediacodec() {
+        val chain = FfmpegHwBackendPolicy.chain(FfmpegCodec.H264, FfmpegHwBackendPolicy.Platform.ANDROID)
+        assertEquals(FfmpegHwBackendKind.MEDIACODEC, chain.first().kind)
+        assertTrue(chain.first().hardware)
+    }
+
+    @Test
+    fun desktopAdvancingThroughMultipleHardwareStepsReachesSoftware() {
+        val first = assertNotNull(select(platform = FfmpegHwBackendPolicy.Platform.WINDOWS))
+        assertTrue(first.hardware, "first step should be hardware on desktop")
+        var current = first
+        while (current.hasNext) {
+            current = assertNotNull(FfmpegHwBackendPolicy.advance(current))
+        }
+        assertTrue(current.isSoftware, "advancing from any hardware step must eventually reach software")
     }
 
     @Test

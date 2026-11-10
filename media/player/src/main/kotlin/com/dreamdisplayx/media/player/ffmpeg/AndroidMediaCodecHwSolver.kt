@@ -57,26 +57,37 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * @param width  码流原始宽度（必须与 SPS 一致，否则 MediaCodec 配置会失败）
  * @param height 码流原始高度
- * @param decoderName FFmpeg 解码器名；由策略给出（`h264_mediacodec` / `h264` / …）
- * @param hardware true 表示该解码器走 GPU。**必须与 [decoderName] 一致**：
- *   硬件解码器要求 `AV_PIX_FMT_MEDIACODEC`，软件解码器要求默认像素格式；
- *   给软解设 mediacodec 像素格式会让 `avcodec_open2` 直接失败，
- *   那样「降级到软解」这条退路就成了空话。
+ * @param decoderName FFmpeg 解码器名；由策略给出（`h264_mediacodec` / `h264_cuvid` / `h264` / …）
+ * @param kind 这一档的解码器类型。**必须与 [decoderName] 一致**，因为它决定 open 前
+ *   要配什么，而配错就直接打不开：
+ *   - [FfmpegHwBackendKind.MEDIACODEC]：`AV_PIX_FMT_MEDIACODEC` + `ndk_codec=1`；
+ *   - [FfmpegHwBackendKind.DESKTOP]：**不设** `pix_fmt`（cuvid/qsv/d3d11va/videotoolbox
+ *     各自在 `avcodec_open2` 内部协商 hwdevice）；设成 mediacodec 必然失败；
+ *   - [FfmpegHwBackendKind.SOFTWARE]：不设 `pix_fmt`，让解码器自选。
+ *
+ *   注意**不要**再用「`hardware == true` 就套 mediacodec 参数」这种写法：桌面硬解
+ *   同样是 hardware，但它是完全不同的另一套约定。
  */
 internal class AndroidMediaCodecHwSolver(
     private val width: Int,
     private val height: Int,
     decoderName: String = FfmpegCodec.H264.mediacodecDecoder ?: FfmpegCodec.H264.softwareDecoder,
-    hardware: Boolean = true,
+    kind: FfmpegHwBackendKind = FfmpegHwBackendKind.fromDecoderName(decoderName),
 ) : AutoCloseable {
 
     /** 当前使用的解码器名；[openWithFallback] 降级时会替换。 */
     var decoderName: String = decoderName
         private set
 
-    /** 当前这一档是否走硬件；与 [decoderName] 同步变化。 */
-    var hardware: Boolean = hardware
+    /** 当前这一档的解码器类型；与 [decoderName] 同步变化。 */
+    var kind: FfmpegHwBackendKind = kind
         private set
+
+    /** 当前这一档是否走硬件。派生自 [kind]，不单独存储以免两者不一致。 */
+    val hardware: Boolean get() = kind != FfmpegHwBackendKind.SOFTWARE
+
+    /** 这一档是否是 Android 的 mediacodec 包装器（唯一需要 mediacodec 像素格式的类型）。 */
+    private val isMediacodec: Boolean get() = kind == FfmpegHwBackendKind.MEDIACODEC
 
     private val logger = DreamLog.of("AndroidMediaCodecHwSolver")
 
@@ -165,9 +176,11 @@ internal class AndroidMediaCodecHwSolver(
             lastError = "invalid dimensions ${width}x$height"
             return false
         }
-        // 硬解在隔离 JVM 上的可用性完全由桥接器判定，这里再兜一层防止误用。
-        // 软解降级档不受这个门槛限制：桥接器不可用恰恰是降级的常见原因。
-        if (hardware && !FfmpegMediaCodecBridge.isAvailable()) {
+        // mediacodec 包装器在隔离 JVM 上的可用性完全由桥接器判定，这里再兜一层防止误用。
+        // 只对 MEDIACODEC 生效：桌面硬解（cuvid/qsv/d3d11va/videotoolbox）与桥接器无关，
+        // 拿它当门槛会让桌面上每一档硬解在 avcodec_open2 之前就被拒掉。
+        // 软解档同样不受限制——桥接器不可用恰恰是降级的常见原因。
+        if (isMediacodec && !FfmpegMediaCodecBridge.isAvailable()) {
             lastError = "MediaCodec bridge unavailable (not Android, or FFmpeg build lacks mediacodec)"
             return false
         }
@@ -184,7 +197,10 @@ internal class AndroidMediaCodecHwSolver(
                 }
             c.width(width)
             c.height(height)
-            if (hardware) {
+            // 只有 mediacodec 包装器要预设像素格式。桌面硬解（cuvid/qsv/d3d11va/
+            // videotoolbox/mf/v4l2m2m）在 avcodec_open2 内部创建并协商自己的
+            // hwdevice/hwframes，从外面设成 MEDIACODEC 会让它当场失败。
+            if (isMediacodec) {
                 c.pix_fmt(avutil.AV_PIX_FMT_MEDIACODEC)
             }
 
@@ -196,9 +212,10 @@ internal class AndroidMediaCodecHwSolver(
             }
 
             val opts = AVDictionary()
-            if (hardware) {
+            if (isMediacodec) {
                 // ndk_codec=1：走原生 AMediaCodec C API，而不是 JNI 反射 android.media.MediaCodec。
                 // 这是隔离 JVM（无 android.jar）下唯一可行的路径。
+                // 桌面硬解不认这个选项，传了只会被忽略或触发初始化失败，故限定在 mediacodec 档。
                 avutil.av_dict_set(opts, "ndk_codec", "1", 0)
             }
             // 低延迟：直播/短片段优先出帧，牺牲一点吞吐。软硬解都适用。
@@ -269,7 +286,7 @@ internal class AndroidMediaCodecHwSolver(
         close()
         logger.warn("Falling back from hardware to software decoder '$target' for {}", codec)
         decoderName = target
-        hardware = false
+        kind = FfmpegHwBackendKind.SOFTWARE
         return open()
     }
 

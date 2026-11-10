@@ -63,6 +63,14 @@ internal class FfmpegSession(
 
     /** 会话结束（正常 EOF 或不可恢复错误）时通知上层。 */
     private val onStreamEnd: (stderr: String, normalEos: Boolean) -> Unit = { _, _ -> },
+
+    /**
+     * 可选的空间化 / 均衡处理阶段，透传给 [FfmpegAudioOutput]。
+     *
+     * 由 [MediaPlayer] 注入（与 libvlc 会话共用同一个 stage 实例）；为 null 时
+     * 音频输出只做音量缩放，保持普通立体声。
+     */
+    private val dspStage: com.dreamdisplayx.api.media.audio.service.AudioDspStage? = null,
 ) : PlaybackSession {
 
     /** 后端标识。宿主代码若需要区分后端，查这个名字而不是做 `is` 判断。 */
@@ -141,6 +149,27 @@ internal class FfmpegSession(
     private var demuxer: FfmpegDemuxer? = null
     @Volatile
     private var solver: AndroidMediaCodecHwSolver? = null
+
+    /**
+     * 音频解码器，仅在源里真有音频流、且本平台有 PCM 输出时才创建。
+     *
+     * `null` 有明确含义：「本会话不出声音」。桌面与 Android 的差别只体现在
+     * [FfmpegAudioOutput.hasDevice] 上，解码循环不必知道平台。
+     */
+    @Volatile
+    private var audioDecoder: FfmpegAudioDecoder? = null
+
+    /** 音频输出（设备 + 节奏 + 时钟）。[FfmpegAudioOutput.hasDevice] 为 false 时永不为 active。 */
+    @Volatile
+    private var audioOutput: FfmpegAudioOutput? = null
+
+    /** 音频流的包计数，仅用于诊断「音轨比视频短」这类报告。 */
+    @Volatile
+    private var audioPacketsRead = 0L
+
+    /** 音频累计播放时长（纳秒），诊断用。 */
+    @Volatile
+    private var audioPlayedNanos = 0L
 
     /** 当前流集合与偏移，供 [suspend] / [resume] 重新打开。 */
     @Volatile
@@ -244,6 +273,8 @@ internal class FfmpegSession(
         if (released.get()) return false
         // 起播前的清理顺序很重要：先让解码线程退出，否则它会继续用即将被释放的
         // native 上下文，属于「关掉时偶发 SIGSEGV」的典型成因。
+        // 设备里可能还有上一轮的音频，必须一起丢掉，否则起播会先播一段旧声音。
+        runCatching { audioOutput?.flush() }
         stopPipeline(waitForThread = true)
 
         currentStreamSet = streamSet
@@ -315,6 +346,10 @@ internal class FfmpegSession(
             FfmpegHwBackendPolicy.describe(selection.chain),
         )
 
+        // 音频：源里有音频流、且本平台有 PCM 设备时才起。失败一律不致命——
+        // 画面已经能出，把整条播放拖垮只为了声音是错误的取舍。
+        startAudio(dm, offsetNanos)
+
         startDecodeLoop()
         playing = true
 
@@ -350,7 +385,7 @@ internal class FfmpegSession(
                 width = dm.videoWidth,
                 height = dm.videoHeight,
                 decoderName = sel.decoderName,
-                hardware = sel.hardware,
+                kind = sel.kind,
             )
             if (candidate.open(extradata)) return candidate
             logger.warn(
@@ -366,6 +401,120 @@ internal class FfmpegSession(
             }
         }
         return null
+    }
+
+    /**
+     * 起音频通路：定位到的音频流 → [FfmpegAudioDecoder] → [FfmpegAudioOutput]。
+     *
+     * 四种「不出声音」的情况都在这里安静地结束，且**都不影响视频**：
+     *  - 源里没有音频流（静音视频、部分直播分片）；
+     *  - 本平台没有 PCM 设备（Android 在阶段 3 之前就是这种，音频仍归 libvlc）；
+     *  - 解码器打不开（不认识的编码、缺解码器）；
+     *  - 设备打不开（无声卡、被独占）。
+     *
+     * 之所以把四条全部按「静音」处理而不是按失败处理：画面已经能出了，为了
+     * 声音把整条播放判定为失败，用户看到的是黑屏而不是无声，那是更糟的结果。
+     */
+    private fun startAudio(dm: FfmpegDemuxer, offsetNanos: Long) {
+        stopAudio()
+        audioPacketsRead = 0L
+        audioPlayedNanos = 0L
+
+        if (dm.audioStreamIndex < 0) {
+            logger.debug("{} source has no audio stream", debugLabel)
+            return
+        }
+        val par = dm.audioCodecParameters
+        if (par == null) {
+            logger.warn("{} audio stream present but codecpar is null", debugLabel)
+            return
+        }
+
+        val out = FfmpegAudioOutput(debugLabel, dspStage)
+        if (!out.hasDevice) {
+            // 选中的是「没有设备」而不是「设备坏了」：这属于平台能力，不用 warn。
+            logger.info(
+                "{} no PCM output on this platform; audio stays on the other backend",
+                debugLabel,
+            )
+            out.close()
+            return
+        }
+
+        val decoder = FfmpegAudioDecoder(par, debugLabel)
+        if (!decoder.open()) {
+            logger.warn("{} audio decoder failed to open: {}", debugLabel, decoder.lastError)
+            decoder.close()
+            out.close()
+            return
+        }
+
+        if (!out.open(offsetNanos)) {
+            logger.warn("{} audio device failed to open; playing silently", debugLabel)
+            decoder.close()
+            out.close()
+            return
+        }
+
+        audioDecoder = decoder
+        audioOutput = out
+        logger.info(
+            "{} audio started: {} {}Hz/{}ch -> {}Hz stereo, at {}ns",
+            debugLabel, decoder.sourceCodec, decoder.sourceSampleRate, decoder.sourceChannels,
+            FfmpegAudioDecoder.TARGET_RATE, offsetNanos,
+        )
+    }
+
+    /**
+     * 把一个音频包送进解码器，并把出来的 PCM 交给设备。
+     *
+     * 解码器可能吞下若干包才吐一帧（AAC 的帧长与包长不严格对应），所以没有输出
+     * 是常态而不是异常，这里不写日志。
+     */
+    private fun handleAudioPacket(dm: FfmpegDemuxer) {
+        val decoder = audioDecoder ?: return
+        val out = audioOutput ?: return
+        val pkt = dm.rawPacket() ?: return
+        val size = dm.packetSize()
+        if (size <= 0) return
+
+        audioPacketsRead++
+        val decoded = decoder.decode(pkt, size) ?: return
+        out.write(decoded.bytes, decoded.bytes.size)
+        audioPlayedNanos += decoded.nanos()
+    }
+
+    /**
+     * 流结束时排空音频解码器。
+     *
+     * 解码器内部会缓冲若干包（AAC 通常是 1-2 帧），不 flush 就会丢掉最后
+     * 几十毫秒的声音。与视频不同，这里不需要「等设备播完」——设备自己会把
+     * 已写入的音频播出去，而视频的 EOS 由渲染侧决定。
+     */
+    private fun drainAudio() {
+        val decoder = audioDecoder ?: return
+        val out = audioOutput ?: return
+        runCatching {
+            val tail = decoder.flush()
+            if (tail != null) {
+                out.write(tail.bytes, tail.bytes.size)
+                audioPlayedNanos += tail.nanos()
+            }
+        }.onFailure { logger.warn("{} audio drain failed: {}", debugLabel, it.message) }
+        if (audioPacketsRead > 0L) {
+            logger.debug(
+                "{} audio drained: {} packets, {} ms fed",
+                debugLabel, audioPacketsRead, audioPlayedNanos / 1_000_000L,
+            )
+        }
+    }
+
+    /** 释放音频通路。可重复调用。 */
+    private fun stopAudio() {
+        runCatching { audioDecoder?.close() }
+        runCatching { audioOutput?.close() }
+        audioDecoder = null
+        audioOutput = null
     }
 
     /**
@@ -395,7 +544,12 @@ internal class FfmpegSession(
         val dm = demuxer ?: return
         val sv = solver ?: return
         while (!stopped.get() && !released.get()) {
-            when (val r = dm.readVideoPacket()) {
+            // readPacket() rather than readVideoPacket(): a demuxer with one
+            // reader is what keeps the two decoders serialised, and it is the
+            // only way the audio side ever sees a packet. readVideoPacket()
+            // would silently `unref` every audio packet, which is exactly the
+            // bug this change exists to fix.
+            when (val r = dm.readPacket()) {
                 FfmpegDemuxer.Result.PACKET_READY -> {
                     val view = dm.packetView() ?: continue
                     val size = dm.packetSize()
@@ -423,7 +577,12 @@ internal class FfmpegSession(
                         }
                     }
                 }
+                // 音频包：交给音频解码器。这条分支不需要 continue 特判，循环本身就会
+                // 继续读下一个包，A/V 因此天然交替推进（音轨比视频短是常态，那时这里
+                // 只是不再有音频包可读，视频照常解码）。
+                FfmpegDemuxer.Result.AUDIO_PACKET_READY -> handleAudioPacket(dm)
                 FfmpegDemuxer.Result.EOF -> {
+                    drainAudio()
                     finishNormally()
                     return
                 }
@@ -434,14 +593,6 @@ internal class FfmpegSession(
                 }
                 FfmpegDemuxer.Result.NOT_OPEN -> {
                     finishWithError("demuxer closed unexpectedly")
-                    return
-                }
-                // readVideoPacket() cannot produce this: it exists for readPacket(),
-                // which returns audio packets to the audio decode path. Reaching it
-                // here means the wrong reader was called, so fail loudly instead of
-                // spinning on a packet nobody consumes.
-                FfmpegDemuxer.Result.AUDIO_PACKET_READY -> {
-                    finishWithError("audio packet delivered to the video decode loop")
                     return
                 }
             }
@@ -470,7 +621,7 @@ internal class FfmpegSession(
             width = dm.videoWidth,
             height = dm.videoHeight,
             decoderName = next.decoderName,
-            hardware = next.hardware,
+            kind = next.kind,
         )
         if (!replacement.open(dm.videoExtradata())) {
             logger.warn("{} replacement backend '{}' failed: {}", debugLabel, next.decoderName, replacement.lastError)
@@ -649,6 +800,9 @@ internal class FfmpegSession(
             runCatching { t.join(THREAD_JOIN_TIMEOUT_MS) }
         }
         decodeThread = null
+        // 音频必须先于解封装器释放：解码器持有 codecpar 派生的 AVCodecContext，
+        // 而 demuxer.close() 会关掉 AVFormatContext，两者共享的 stream 描述随之失效。
+        stopAudio()
         runCatching { solver?.close() }
         runCatching { demuxer?.close() }
         solver = null
@@ -705,6 +859,10 @@ internal class FfmpegSession(
      * 更彻底的做法是给 demuxer 加真正的 seek，已记在 README 的待办里。
      */
     override fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
+        // 先刷掉设备里已排队的音频：那些是 seek 之前的内容，留着就会先播几秒旧声音，
+        // 而画面已经跳到新位置——比没有声音更难受。放在 stopPipeline 之前，
+        // 是因为它依赖仍存活的 audioOutput 实例。
+        runCatching { audioOutput?.flush() }
         val wasPlaying = isPlaying
         stopPipeline(waitForThread = true)
         surface.clear()
@@ -782,21 +940,54 @@ internal class FfmpegSession(
     /**
      * 播放位置（纳秒）。
      *
-     * 本会话没有音频主时钟，因此以 [PlaybackClock] 为准：它在首帧时开始走，
-     * seek 时重置。这比 libvlc 的 `get_time` 粗，但没有第二个时钟可以对齐。
+     * 两种情况，按优先级：
+     *
+     * 1. **有音频输出**：位置来自设备的已播字节计数（[FfmpegAudioOutput.positionNanos]）。
+     *    这是唯一能真正对齐音画的位置来源——音频是连续流，设备自己按真实时钟推进，
+     *    视频跟它走才不会漂。这也正是 libvlc 会话做的事（它从 `get_time` 取）。
+     * 2. **没有音频输出**（静音源、或本平台无 PCM 设备）：退化为 [PlaybackClock]，
+     *    在首帧时启动、seek 时重置。它比音频时钟粗，但没有第二个时钟可对齐。
+     *
+     * 之所以要区分而不是一律用挂钟：挂钟会在每次解码抖动、GC 停顿、窗口失焦时
+     * 与真实播放进度偏离，而视频显示时刻是按这个数算的，偏离就直接表现为画面抖动。
      */
-    override fun currentPacingNanos(): Long = clock.currentTime()
+    override fun currentPacingNanos(): Long {
+        val audio = audioOutput
+        if (audio != null && audio.isActive) return audio.positionNanos()
+        return clock.currentTime()
+    }
 
     override fun activeBridgeEdgeNanos(): Long? = null
 
-    // ── 音频（不在本会话职责内） ────────────────────────────────────────────
+    // ── 音频 ────────────────────────────────────────────────────────────────
 
-    override fun setVolume(volume: Double) = Unit
+    /**
+     * 应用音量。
+     *
+     * 与 libvlc 会话不同，这里**不需要** mute 与 volume 两个旋钮：那个双旋钮设计
+     * 是为了绕过 libvlc「音量绑在 audio-output 实例上、每次重建就丢失」的缺陷。
+     * 我们是直接把增益乘进 PCM，设备本身没有音量状态，因此 0 就是静音，且不会
+     * 因为任何重建而失效。
+     */
+    override fun setVolume(volume: Double) {
+        audioOutput?.setVolume(volume)
+    }
 
+    /**
+     * 重新应用音量。本实现不需要「漂移修复」：增益乘在每个 PCM 块上，
+     * 不存在被底层重建丢弃的可能。保留空实现以满足契约。
+     */
     override fun verifyVolume() = Unit
 
+    /** 暖轨道池是 libvlc 专用的预开播放器机制；FFmpeg 侧没有对应物。 */
     override fun setWarmAudioTracks(tracks: List<WarmTrack>) = Unit
 
+    /**
+     * 抓取最近解码出的 PCM，供回放 / 诊断使用。
+     *
+     * 本实现还没有 PCM 环形缓冲（回放通路整体未实现），返回 null 表示「不支持」，
+     * 调用方据此跳过。不要改成返回空数组：那会让上层以为「抓到了 0 字节」。
+     */
     override fun captureAudioPcm(maxNanos: Long): ByteArray? = null
 
     // ── 回放（不支持） ──────────────────────────────────────────────────────

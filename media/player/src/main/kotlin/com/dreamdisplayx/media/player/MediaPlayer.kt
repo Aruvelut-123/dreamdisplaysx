@@ -15,6 +15,7 @@ import com.dreamdisplayx.api.security.policy.MediaHosts
 import com.dreamdisplayx.media.player.MediaPlayer.Companion.INIT_EXECUTOR
 import com.dreamdisplayx.media.player.events.PlayerEvents
 import com.dreamdisplayx.media.player.ffmpeg.FfmpegCodecScheduler
+import com.dreamdisplayx.media.player.ffmpeg.FfmpegPcmSinks
 import com.dreamdisplayx.media.player.ffmpeg.FfmpegSession
 import com.dreamdisplayx.media.player.managers.LibVlcSessionManager
 import com.dreamdisplayx.media.player.session.CompositeSession
@@ -298,13 +299,32 @@ class MediaPlayer(
         }
 
         val plan = FfmpegVideoOwnership.plan(
-            ffmpegRequested = env.config.androidMediaCodecEnabled,
+            ffmpegRequested = env.config.ffmpegPipelineEnabled,
             isAndroid = OsInfo.isAndroid,
             hwAccelEnabled = env.config.useHwAccel,
+            // 桌面已有 SourceDataLine 实现；Android 要等阶段 3 的 AudioTrack 通路。
+            // 这个入参是「有没有设备实现」，不是「能不能打开设备」——打不开设备是
+            // 运行期问题（无声卡、被独占），由 FfmpegAudioOutput.open() 自己降级为静音，
+            // 不该让编排回退到 libvlc。
+            audioSinkAvailable = FfmpegPcmSinks.isSupported,
         )
         if (!plan.videoIsFfmpeg) {
             if (plan.isSplit) logger.warn("$debugLabel unsupported split plan: $plan")
             return libVlc()
+        }
+
+        if (!plan.isSplit) {
+            // 视频和音频都在 FFmpeg：一个会话全包，不需要 CompositeSession。
+            logger.info("$debugLabel video and audio will both be handled by FFmpeg")
+            return FfmpegSession(
+                debugLabel = debugLabel,
+                clock = clock,
+                renderExecutor = env.renderExecutor,
+                uploaderFactory = env.uploaderFactory,
+                useHwAccel = env.config.useHwAccel,
+                onStreamEnd = ::handleStreamEnd,
+                dspStage = audioStage,
+            )
         }
 
         logger.info("$debugLabel video will be decoded by FFmpeg; audio and clock stay on libvlc")
@@ -316,6 +336,7 @@ class MediaPlayer(
                 uploaderFactory = env.uploaderFactory,
                 useHwAccel = env.config.useHwAccel,
                 onStreamEnd = ::handleStreamEnd,
+                dspStage = audioStage,
             ),
             // 只出声音：不装 vmem 回调，也不等首帧（那两件事都由视频后端负责）。
             audio = LibVlcSessionManager(
@@ -1091,8 +1112,8 @@ class MediaPlayer(
         } else streamSet
         activeVideoUrl = probedStreamSet.currentVideo.url
 
-        // 探测 FFmpeg MediaCodec 是否可用（Android 端由 config 控制，桌面端永远 false，保证不加载任何 Android 类）
-        FfmpegCodecScheduler.probeAndSet(env.config.androidMediaCodecEnabled)
+        // 探测 FFmpeg 管线是否可用（Android 走 MediaCodec 桥，桌面走软/硬解链）
+        FfmpegCodecScheduler.probeAndSet(env.config.ffmpegPipelineEnabled)
         try {
             val started = sessionManager.start(
                 probedStreamSet,

@@ -2,8 +2,10 @@
  * 全平台统一 MediaCodec 硬解切换桥接
  *
  * 核心约束：
- * 1. 桌面端（非 Android）永远返回 isAvailable()=false，不加载任何 Android 专用类，保留 libvlc 行为
- * 2. Android 端通过 config 开关控制：`ffmpeg.enableAndroidMediaCodec` 为 true 时启动硬解路径
+ * 1. 桌面端（非 Android）永远返回 isAvailable()=false，不加载任何 Android 专用类
+ *    ——它只守护 **mediacodec 那一档**；桌面硬解（cuvid/qsv/d3d11va/videotoolbox）
+ *    与本桥无关，绝不能用它当门槛。
+ * 2. Android 端通过 config 开关控制：`ffmpeg.enable-ffmpeg-pipeline` 为 true 时启动 FFmpeg 路径
  * 3. NDK 后端（mediacodec-ndk）优先，因为它走原生 C API，不需要游戏 JVM 有 android.* 框架类
  *    （Pojav/Zalith 等 game JVM 的 JNI 后端 LoadLibrary 会因为缺少 android/os/Environment 而崩溃）
  * 4. JNI 后端仅在确认环境有 android.* 时备用

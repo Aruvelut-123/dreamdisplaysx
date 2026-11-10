@@ -122,8 +122,15 @@ internal class FfmpegDemuxer(
             lastError = "blank url"
             return false
         }
-        if (!FfmpegMediaCodecBridge.isAvailable()) {
-            lastError = "MediaCodec bridge unavailable (not Android, or FFmpeg build lacks mediacodec)"
+        // The gate is "is any FFmpeg runtime loaded", NOT "is the MediaCodec
+        // bridge available". Demuxing needs only the container/network layer, and
+        // the desktop build has no MediaCodec at all — gating on it made
+        // `open()` fail unconditionally off Android, so the audio path could
+        // never be reached there. Hardware decoding is still gated where it
+        // belongs, in AndroidMediaCodecHwSolver.open(): it refuses a hardware
+        // decoder when this bridge is absent, and lets the software rung run.
+        if (!FfmpegNatives.install()) {
+            lastError = "FFmpeg runtime unavailable (not downloaded for this platform)"
             return false
         }
         return try {
@@ -322,6 +329,19 @@ internal class FfmpegDemuxer(
 
     /** 当前包的大小（字节）。 */
     fun packetSize(): Int = packet?.size() ?: 0
+
+    /**
+     * 当前包的原始 `AVPacket`，供音频解码器直接 `avcodec_send_packet`。
+     *
+     * 为什么不复用 [packetView]：那个方法把包内容拷进一个新的 direct
+     * `ByteBuffer`，对视频是必要的（解码器 API 要缓冲区），但音频解码器接受
+     * `AVPacket` 本身，再拷一次纯属浪费——一个 4 分钟的 AAC 音轨有几千个包，
+     * 每个包都是一次 native→Java 的内存复制。
+     *
+     * **所有权不变**：返回的指针仍归 demuxer 所有，下次 [readVideoPacket] /
+     * [readPacket] 会 `unref` 并覆盖它。调用方必须在本次迭代内用完，不能缓存。
+     */
+    fun rawPacket(): AVPacket? = packet
 
     /** 当前包的 PTS 换算成微秒；未知返回 [AV_NOPTS_VALUE]。 */
     fun packetPtsMicros(): Long {

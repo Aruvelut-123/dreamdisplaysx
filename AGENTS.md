@@ -730,15 +730,44 @@ Rules:
 - **`backendName` and the frame sinks are the only mutable/shared surface**; the three sinks are `var`
   set by `MediaPlayer` from any thread, everything else is a method call.
 
-## Optional FFmpeg MediaCodec pipeline (Android, opt-in)
+## Optional FFmpeg playback pipeline (cross-platform, opt-in)
 
-A second, standalone decode path sits beside libvlc: `FfmpegDemuxer` reads packets, `AndroidMediaCodecHwSolver`
-feeds them to FFmpeg's `h264_mediacodec`/`hevc_mediacodec`, and the result is published as packed BGRA. It is
-gated by the client config key `enable-android-mediacodec` (**default `false`**) and exposed to the media module
-as `PlaybackConfig.androidMediaCodecEnabled`; desktop short-circuits to `false` and never loads an Android class.
+A second, standalone decode path sits beside libvlc: `FfmpegDemuxer` reads packets, `FfmpegSession`
+drives `AndroidMediaCodecHwSolver` to decode them, and the result is published as packed BGRA. It is
+gated by the client config key `enable-ffmpeg-pipeline` (**default `false`**) and exposed to the media
+module as `PlaybackConfig.ffmpegPipelineEnabled`.
+
+The switch used to be called `enable-android-mediacodec` and was Android-only; it is now
+cross-platform. On Android the hardware rung is FFmpeg's `mediacodec` backend; on desktop it is the
+standalone FFmpeg hardware decoders.
 
 Rules that cost real debugging time and must not be undone:
-
+- **Desktop hardware decoders are NOT libvlc's hwaccel names.** libvlc takes `-hwaccel cuda|qsv|vaapi|…`
+  names, but this path calls `avcodec_find_decoder_by_name`, which needs a *decoder* name. Those
+  differ per platform and were verified by extracting the shipped bytedeco builds (`ffmpeg-8.1.2-1.5.14`,
+  the artifacts `native/ffmpeg/collect.sh` packs) and listing their registered decoders:
+  Windows → `h264_cuvid`, `h264_qsv`, `h264_d3d11va`, `h264_dxva2`, `h264_mf` (`h264_vulkan` exists but is unusable, see below);
+  macOS → `h264_videotoolbox`; Linux x86_64 → `h264_vaapi`, `h264_v4l2m2m` (`h264_vulkan` likewise);
+  Linux arm64 → only `h264_cuvid`, `h264_v4l2m2m` (**no vaapi at all**: the string survives in the shared object
+  but the decoder is not registered — confirmed by running that build's own `ffprobe -decoders`).
+  Notably `h264_d3d11va` is a plain `avcodec_find_decoder_by_name` target in FFmpeg 8, and `h264_videotoolbox` is a
+  decoder (its `_videotoolbox` is also an encoder name — do not confuse the two lists). Guessing a name that is not
+  registered in that platform's build fails `avcodec_open2` and silently degrades to software, so verify against the
+  real artifact before adding a rung. `FfmpegHwBackendPolicyTest` asserts the shape (hw entries present, software
+  last) *and* that each platform lists only its own names.
+- **`*_vulkan` is deliberately not in the chain.** Vulkan decoding requires the caller to create an
+  `AVHWDeviceContext` for Vulkan and attach it before `avcodec_open2`; this pipeline only opens decoders by name, so a
+  `vulkan` rung can only ever fail. Listing it would buy one guaranteed failed open per start, not acceleration.
+- **The `AV_PIX_FMT_MEDIACODEC` / `ndk_codec=1` setup is Android-only, and the gate is the decoder *kind*, not
+  `hardware`.** Both the pixel format and `ndk_codec` are now applied only when the rung's
+  `FfmpegHwBackendKind == MEDIACODEC`. A desktop rung is `hardware == true` but must set **no** `pix_fmt`: cuvid, qsv,
+  d3d11va, videotoolbox and v4l2m2m each create and negotiate their own hwdevice inside `avcodec_open2`, and handing
+  them the mediacodec pixel format makes the open fail outright. Because failure is absorbed by the step-down, the
+  only visible symptom is "hardware is on, yet it always ends up on software" — so this must not regress.
+- **`FfmpegMediaCodecBridge.isAvailable()` gates the mediacodec rung only.** It returns `false` on every non-Android
+  platform, so using it as a general "hardware available?" check rejects every desktop hardware rung before
+  `avcodec_open2` is even reached. Bridge absence is also the usual reason to be falling back, so it must never block
+  the software rung either.
 - **The decoder must emit packed BGRA, not I420.** `DisplayYuvRenderTypes.active` is hard-coded `false` because the
   GPU-YUV planar path renders a black screen under Sodium, so a planar buffer has no route to the screen. The
   conversion is `av_hwframe_transfer_data` (surface → system memory) followed by `sws_scale` (YUV → BGRA), feeding
@@ -746,25 +775,33 @@ Rules that cost real debugging time and must not be undone:
 - **A MediaCodec frame is not pixels.** `mediacodec` decoders emit `AV_PIX_FMT_MEDIACODEC`, where `data(0)` is an
   opaque GPU surface handle. Reading it as a plane faults or produces garbage; it must go through
   `av_hwframe_transfer_data` first.
+- **The `AV_PIX_FMT_MEDIACODEC` / `ndk_codec=1` setup is Android-only.** It is keyed off `hardware`, which
+  now also covers desktop rungs like `h264_cuvid`. Feeding a cuvid/qsv/vaapi decoder the mediacodec pixel
+  format makes `avcodec_open2` fail immediately. If desktop hardware rungs are wired into
+  `AndroidMediaCodecHwSolver`, the mediacodec-specific setup must be gated on the decoder actually being a
+  mediacodec one, not merely on `hardware`.
 - **Packets need padding.** FFmpeg's bitstream readers over-read up to `AV_INPUT_BUFFER_PADDING_SIZE` bytes past the
   payload, so packets are allocated with `av_new_packet` rather than wrapping the caller's buffer with
   `av_packet_from_data`; handing over an unpadded array reads past the heap.
 - **`ndk_codec=1` is mandatory here.** The JNI backend needs `android.media.MediaCodec`, which does not exist on
   Pojav/Zalith game JVMs (desktop OpenJDK, no `android.jar`), so only the NDK `AMediaCodec` path can work.
 - **The switch lives on `PlaybackConfig`, not on the client `Config`.** `MediaPlayer` only sees the media-facing
-  interface; reading `env.config.enableAndroidMediaCodec` there is an unresolved reference and fails the whole
+  interface; reading `env.config.enableFfmpegPipeline` there is an unresolved reference and fails the whole
   `:media:player` compile. New media-level switches go through `PlaybackConfig` with a default so that other hosts
   (and any addon backend) keep compiling.
 - **The decoder name is chosen, not hard-coded.** `FfmpegHwBackendPolicy` owns the candidate chain
-  (`<codec>_mediacodec → <codec>` on Android, software only on desktop), the step-down, and the
-  `-Ddreamdisplayx.hwDecode` override, mirroring libvlc's `hwBackendChain`/`advanceHwBackendAfterHwFailure`.
-  It is deliberately pure JVM (no `android.*`, no bytedeco, no JNA) so all 14 cases in `FfmpegHwBackendPolicyTest`
-  run without a device; keep it that way, or the chain becomes unverifiable again.
-- **Pixel format must follow the `hardware` flag.** Setting `AV_PIX_FMT_MEDIACODEC` (and `ndk_codec=1`) on a
-  *software* decoder makes `avcodec_open2` fail, so a fallback rung opened that way can never succeed and
-  "degrade to software" stays an empty promise. Software rungs set no `pix_fmt` and pass no `ndk_codec`.
-  Likewise the `FfmpegMediaCodecBridge.isAvailable()` gate is hardware-only: bridge absence is the usual reason
-  to be falling back, so it must not block the software rung.
+  (`<codec>_mediacodec → <codec>` on Android; `<codec>_cuvid/_qsv/_d3d11va/_dxva2/_mf → <codec>` on Windows,
+  `<codec>_videotoolbox → <codec>` on macOS, `<codec>_cuvid/_vaapi/_v4l2m2m → <codec>` on Linux), the
+  step-down, and the `-Ddreamdisplayx.hwDecode` override, mirroring libvlc's
+  `hwBackendChain`/`advanceHwBackendAfterHwFailure`.
+  It is deliberately pure JVM (no `android.*`, no bytedeco, no JNA) so all cases in `FfmpegHwBackendPolicyTest`
+  run without a device; keep it that way, or the chain becomes unverifiable again. Because it must stay
+  dependency-free it does **not** read `OsInfo`; `FfmpegCodecScheduler` resolves the platform and passes it in.
+- **Pixel format follows the decoder *kind*, not a `hardware` boolean.** Every rung carries a
+  `FfmpegHwBackendKind` (`MEDIACODEC` / `DESKTOP` / `SOFTWARE`) derived from its decoder name. Only `MEDIACODEC`
+  sets `AV_PIX_FMT_MEDIACODEC` and passes `ndk_codec=1`; the other two set no `pix_fmt` at all. Setting the
+  mediacodec pixel format on a software *or* desktop rung makes `avcodec_open2` fail, which turns
+  "degrade to software" / "use desktop hardware" into empty promises.
 - **An empty `-Ddreamdisplayx.hwDecode` means "force software", not "unset".** libvlc spells this `"none"`; here the
   value is a *decoder name*, so it is translated to the codec's software decoder. Passing `""` straight to
   `avcodec_find_decoder_by_name` returns null and turns "force software" into "force failure".

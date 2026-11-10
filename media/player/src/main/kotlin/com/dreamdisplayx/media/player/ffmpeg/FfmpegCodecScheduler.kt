@@ -10,9 +10,8 @@ internal object FfmpegCodecScheduler {
     /**
      * 当前是否走 FFmpeg 解码路径。
      *
-     * 注意：这个开关目前**只写不读**——`FfmpegSession` 尚未实现，所以没有任何代码
-     * 依据它在 libvlc 与 FFmpeg 之间做选择。保留它是因为它记录了「环境是否具备条件」，
-     * 接线时就是它来决定走哪条路。这一点已记在 README 的进度表里，不要误以为已生效。
+     * 注意：这个开关的记录值是「环境是否具备条件」。真正在 libvlc 与 FFmpeg 之间做选择的
+     * 是 `MediaPlayer`，它读这个值决定起哪条会话。
      */
     @Volatile
     var useFfmpeg: Boolean = false
@@ -34,25 +33,37 @@ internal object FfmpegCodecScheduler {
     /**
      * 探测一次（由配置开关触发）。
      *
-     * @param enableAndroidMediaCodec 客户端 `enable-android-mediacodec` 的取值
+     * 桌面端不再短路为软解/libvlc：只要下载到的 FFmpeg 运行时能注册，`useFfmpeg` 就为 true，
+     * 由 `FfmpegHwBackendPolicy` 在桌面链上按 `cuvid/qsv/vaapi/videotoolbox → 软件` 逐级降级。
+     *
+     * @param ffmpegPipelineEnabled 客户端 `enable-ffmpeg-pipeline` 的取值
      */
-    fun probeAndSet(enableAndroidMediaCodec: Boolean) {
-        if (!OsInfo.isAndroid) {
-            // 桌面端：始终使用软解回退（libvlc），不加载任何 Android 类
+    fun probeAndSet(ffmpegPipelineEnabled: Boolean) {
+        if (!ffmpegPipelineEnabled) {
             useFfmpeg = false
-            logger.info("Desktop platform: FFmpeg MediaCodec disabled, using libvlc fallback")
+            logger.info("FFmpeg pipeline disabled by config, using libvlc")
             return
         }
-        if (enableAndroidMediaCodec && FfmpegMediaCodecBridge.isAvailable()) {
-            useFfmpeg = true
-            logger.info("Android: FFmpeg MediaCodec hard decode enabled")
-        } else {
+        // 原生运行时是否就绪与平台无关；Android 额外要求 MediaCodec 桥可用（硬解门槛）。
+        val runtimeReady = FfmpegNatives.install()
+        if (!runtimeReady) {
             useFfmpeg = false
-            if (enableAndroidMediaCodec) {
-                logger.warn("Android: MediaCodec not available, falling back to libvlc")
+            logger.warn("FFmpeg pipeline enabled but the native runtime is not available, using libvlc")
+            return
+        }
+        if (OsInfo.isAndroid) {
+            if (FfmpegMediaCodecBridge.isAvailable()) {
+                useFfmpeg = true
+                logger.info("Android: FFmpeg MediaCodec hard decode enabled")
             } else {
-                logger.info("Android: MediaCodec disabled by config, using libvlc")
+                // Android 上的软解档同样需要 AVCodec，桥只决定硬解那几档；
+                // 这里仍允许走 FFmpeg，让策略链自行降到软件解码器。
+                useFfmpeg = true
+                logger.warn("Android: MediaCodec bridge unavailable; FFmpeg will use the software rung")
             }
+        } else {
+            useFfmpeg = true
+            logger.info("Desktop: FFmpeg decode pipeline enabled (hw chain → software)")
         }
     }
 
@@ -70,11 +81,11 @@ internal object FfmpegCodecScheduler {
         noHardwareAccel: Boolean,
         override: String? = System.getProperty("dreamdisplayx.hwDecode"),
     ): FfmpegHwSelection? {
-        val platform = if (OsInfo.isAndroid) {
-            FfmpegHwBackendPolicy.Platform.ANDROID
-        } else {
-            FfmpegHwBackendPolicy.Platform.DESKTOP
-        }
+        val platform = FfmpegHwBackendPolicy.Platform.of(
+            isAndroid = OsInfo.isAndroid,
+            isWindows = OsInfo.isWindows,
+            isMac = OsInfo.isMac,
+        )
         val selection = FfmpegHwBackendPolicy.select(
             codec = codec,
             platform = platform,

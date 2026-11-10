@@ -124,14 +124,14 @@ Android 渲染后端。libvlc 是一个「解封装 + 解码 + 渲染 + 音频�
 | 会话契约 `PlaybackSession` | ✅ 已完成 | 把原先硬编码在 `MediaPlayer` 里的 37 个调用点抽成接口，`LibVlcSessionManager` 是第一个实现（`backendName = "libvlc"`） |
 | 解封装 `FfmpegDemuxer` | ✅ 已完成 | `avformat_open_input` + `av_read_frame`，自动丢弃音视频以外的包 |
 | 解码 `AndroidMediaCodecHwSolver` | ✅ 已完成 | FFmpeg `h264_mediacodec` / `hevc_mediacodec`，输出打包 BGRA；可按 `hardware` 分派像素格式并降级到软解 |
-| 硬解后端选择 `FfmpegHwBackendPolicy` | ⚠️ 已就位，未接线 | 候选链 + 逐级降级 + `-Ddreamdisplayx.hwDecode` 覆盖，与 libvlc 同形；纯 JVM，14 个单测覆盖。**目前没有任何运行时调用点**，等 `FfmpegSession` 接线 |
-| `FfmpegSession` 实现 | 🚧 未开始 | 把上面三者串成「解封装 → 解码 → 发布帧」的会话，尚未接线 |
-| 桌面端 FFmpeg 解码 | 🚧 未开始 | 目前只有 Android 走 MediaCodec 后端 |
-| 音频迁出 libvlc | 🚧 未开始 | 音频暂时继续由 libvlc 的 `:no-video` 播放器承担 |
+| 硬解后端选择 `FfmpegHwBackendPolicy` | ✅ 已完成 | 候选链 + 逐级降级 + `-Ddreamdisplayx.hwDecode` 覆盖；纯 JVM，16 个单测覆盖。Android 链 `<codec>_mediacodec → 软解`，桌面链按 `cuvid/qsv/vaapi/videotoolbox → 软解` 排列 |
+| `FfmpegSession` 实现 | ✅ 已完成 | 把解封装、解码、PCM 音频输出串成「解封装 → 解码 → 发布帧」的会话，桌面与 Android 共用 |
+| 桌面端 FFmpeg 解码 | ✅ 已完成 | 桌面走独立硬解解码器（NVDEC / QSV / VA-API / VideoToolbox），再降级到软件解码 |
+| 音频迁出 libvlc | 🟡 桌面已完成 | 桌面用 Java Sound `SourceDataLine` 输出 PCM；Android 的 `AudioTrack` 通路尚未接线，仍由 libvlc 承担 |
 | 移除 libvlc 依赖 | 🚧 未开始 | 迁移完成的标志 |
 
-**在迁移完成之前，`enable-android-mediacodec` 开关打开后行为仍与 libvlc 一致**——解封装器与解码器
-已经就绪，但还没有代码把它们串起来驱动播放。
+**`enable-ffmpeg-pipeline` 开关（默认 `false`）打开后，FFmpeg 接管视频解码**；桌面端还会接管音频
+与播放时钟（`isSplit = false`，单个 `FfmpegSession` 全包），Android 端音频暂时仍归 libvlc。
 
 ## 已落地的部分
 
@@ -165,14 +165,15 @@ Bilibili 等 CDN 的防盗链因此可用；码流的 `extradata`（H.264 的 SP
 
 ### 配置开关
 
-`enable-android-mediacodec`（**默认 `false`**）控制是否允许使用这条管线：
+`enable-ffmpeg-pipeline`（**默认 `false`**）控制是否允许使用这条管线：
 
 ```toml
-enable-android-mediacodec = true
+enable-ffmpeg-pipeline = true
 ```
 
-它通过 `PlaybackConfig.androidMediaCodecEnabled` 暴露给媒体层，默认值保证未实现该属性的宿主
-行为不变。桌面端直接短路为 `false`，不会加载任何 Android 类。
+它通过 `PlaybackConfig.ffmpegPipelineEnabled` 暴露给媒体层，默认值保证未实现该属性的宿主
+行为不变。开关是**全平台**的：Android 上走 MediaCodec NDK 硬解，桌面端走独立硬解解码器
+（`h264_cuvid` / `h264_qsv` / `h264_vaapi` / `h264_videotoolbox`）并逐级降级到软解。
 
 # 从源码构建
 

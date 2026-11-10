@@ -135,14 +135,15 @@ engine in use:
 | Session contract `PlaybackSession` | ✅ Done | The 37 call sites previously hard-wired in `MediaPlayer` are now an interface; `LibVlcSessionManager` is the first implementation (`backendName = "libvlc"`) |
 | Demuxer `FfmpegDemuxer` | ✅ Done | `avformat_open_input` + `av_read_frame`, drops non-video packets automatically |
 | Decoder `AndroidMediaCodecHwSolver` | ✅ Done | FFmpeg `h264_mediacodec` / `hevc_mediacodec`, emits packed BGRA; pixel format now follows `hardware` so it can drop to software |
-| HW backend choice `FfmpegHwBackendPolicy` | ⚠️ In place, not wired | Candidate chain + step-down + `-Ddreamdisplayx.hwDecode` override, mirroring libvlc; pure JVM, 14 unit tests. **No runtime call site yet** — waits on `FfmpegSession` |
-| `FfmpegSession` implementation | 🚧 Not started | Wires the three above into a demux → decode → publish session; not connected yet |
-| Desktop FFmpeg decode | 🚧 Not started | Only Android uses the MediaCodec backend so far |
-| Moving audio off libvlc | 🚧 Not started | Audio still runs on libvlc's `:no-video` player |
+| HW backend choice `FfmpegHwBackendPolicy` | ✅ Done | Candidate chain + step-down + `-Ddreamdisplayx.hwDecode` override; pure JVM, 16 unit tests. Android chain is `<codec>_mediacodec → software`, the desktop chain orders `cuvid/qsv/vaapi/videotoolbox → software` |
+| `FfmpegSession` implementation | ✅ Done | Wires demux, decode and PCM audio output into a demux → decode → publish session, shared by desktop and Android |
+| Desktop FFmpeg decode | ✅ Done | Desktop uses the standalone hardware decoders (NVDEC / QSV / VA-API / VideoToolbox) and steps down to software |
+| Moving audio off libvlc | 🟡 Desktop done | Desktop emits PCM through a Java Sound `SourceDataLine`; Android's `AudioTrack` route is not wired yet, so libvlc still carries it there |
 | Removing the libvlc dependency | 🚧 Not started | The marker for a finished migration |
 
-**Until the migration completes, turning on `enable-android-mediacodec` still behaves exactly like
-libvlc** — the demuxer and decoder exist, but nothing drives them yet.
+**Turning on `enable-ffmpeg-pipeline` (default `false`) hands video decoding to FFmpeg**; on desktop it
+also takes over audio and the playback clock (`isSplit = false`, a single `FfmpegSession` covers both),
+while Android still keeps audio on libvlc for now.
 
 ## What already landed
 
@@ -178,15 +179,16 @@ Two implementation details that matter:
 
 ### Configuration switch
 
-`enable-android-mediacodec` (**default `false`**) gates the pipeline:
+`enable-ffmpeg-pipeline` (**default `false`**) gates the pipeline:
 
 ```toml
-enable-android-mediacodec = true
+enable-ffmpeg-pipeline = true
 ```
 
-It reaches the media layer as `PlaybackConfig.androidMediaCodecEnabled`; the default keeps hosts that
-do not implement the property unchanged. Desktop short-circuits to `false` and never loads an Android
-class.
+It reaches the media layer as `PlaybackConfig.ffmpegPipelineEnabled`; the default keeps hosts that do
+not implement the property unchanged. The switch is **cross-platform**: Android uses the MediaCodec NDK
+hardware backend, desktop uses the standalone hardware decoders (`h264_cuvid` / `h264_qsv` /
+`h264_vaapi` / `h264_videotoolbox`) and steps down to software decode.
 
 # Building from source
 
