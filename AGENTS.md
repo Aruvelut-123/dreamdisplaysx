@@ -852,6 +852,42 @@ audio implementation, so that combination would be a silent picture.
   software-only Android never splitting, the opt-in being off, and the unsplit plan). The composite dispatch
   itself is compile-verified only: it forwards to native backends with no JVM-only seam.
 
+### FFmpeg network inputs: protocol whitelist and the SSRF guard
+
+`FfmpegDemuxer.open()` has two obligations libvlc used to fulfil for us, and both fail *silently* — the open simply
+returns a negative code, `lastError` gets a line, and the display stays black with nothing in the log pointing at
+the cause.
+
+- **`protocol_whitelist` is mandatory for manifests and harmless for direct files.** FFmpeg's default whitelist is
+  `file,crypto,data`, which covers only local protocols. A direct `.mp4` is opened once by `avformat_open_input` and
+  never consults it, but an HLS/DASH demuxer has to **nested-open** every segment and sub-playlist after parsing the
+  index, and those hit the whitelist. Symptom without it: direct links play, manifests are black. The value is
+  `http,https,tls,tcp` **only** — `file`/`crypto`/`data`/`pipe` are deliberately absent, since a manifest has no
+  legitimate reason to make the player read local files and `file` is the most common local-disclosure primitive.
+- **The decision lives in `FfmpegNetworkPolicy`, not at the call site.** `isManifest(url, kind)` takes the resolver's
+  `CustomMediaKind` when it has one and otherwise falls back to the path extension; `needsManifestProtocols(url)` is
+  the URL-only half; `optionsFor(url, referer, userAgent)` returns the ordered dictionary entries. `PROBE_OPTIONS`
+  (`analyzeduration` 3 s, `probesize` 1 MB) is kept separate so "is this a manifest" and "how long may probing take"
+  never get entangled in one assertion. `FfmpegNetworkPolicyTest` (28 cases) pins all of it.
+- **Query parameters are deliberately not read.** A signed URL appends `?sign=…` which must be ignored, and a
+  `?format=m3u8` must **not** be trusted: letting the remote side's input choose our protocol whitelist is exactly
+  the boundary you do not hand over. A genuine extension-less manifest is instead caught by `kind`, which the resolver
+  works out from the response body.
+- **`MediaHostGuard.resolveSafeUrl` must run before every `FfmpegDemuxer` construction**, exactly as
+  `LibVlcSessionManager.start()` does for libvlc. Three call sites hold this line: `FfmpegSession.start()`,
+  `FfmpegFrameExtractor.extractJpeg()` and `FfmpegFrameExtractor.ScrubSession.open()`. Each wraps the call in
+  `runCatching` and returns a failure (never propagates), then passes the **resolved** URL — not the original — to the
+  demuxer, because the guard is what walked the redirect chain.
+- **DASH stays refused by `DirectStreamResolver`, and the reason is not libxml2.** The old comment claimed the bundled
+  FFmpeg "is built without libxml2, so it has no DASH demuxer"; nothing in the repo verifies that —
+  `native/ffmpeg/collect.sh` asserts decoder symbols only and never inspects demuxers. The real justification is that a
+  DASH manifest only becomes useful through the extractor chain (rendition list, separated audio/video, subtitles, DRM),
+  none of which "open one URL" produces. Do not relax that refusal on the strength of a `protocol_whitelist` change.
+- **Do not state unverified claims about the shipped FFmpeg build.** Both comment sites contradicted each other (one
+  claimed `hls`/`dash` were "measured to be registered", the other claimed no `dash` at all) and neither could be
+  reproduced locally because no downloaded runtime exists in this checkout. Until a build is inspected, describe what
+  the code does and what the whitelist does, not what a runtime is assumed to contain.
+
 ### FFmpeg native runtime: downloaded, then registered with `Loader.foundLibraries`
 
 The FFmpeg shared objects are **not** inside the mod jar. `native/ffmpeg/collect.sh` downloads the matching

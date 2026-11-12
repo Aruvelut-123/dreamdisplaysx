@@ -8,6 +8,7 @@ import com.dreamdisplayx.media.player.pipeline.FrameSurface
 import com.dreamdisplayx.media.player.pipeline.PlaybackClock
 import com.dreamdisplayx.media.player.session.PlaybackSession
 import com.dreamdisplayx.media.player.stream.ActiveStreams
+import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.dreamdisplayx.util.log.DreamLog
 import org.bytedeco.ffmpeg.global.avcodec
 import java.nio.ByteBuffer
@@ -287,14 +288,19 @@ internal class FfmpegSession(
         resetFirstFrameLatch()
         clock.reset(offsetNanos)
 
-        val url = streamSet.currentVideo.url
-        if (url.isBlank()) {
-            logger.warn("{} start: blank video url", debugLabel)
-            stopped.set(true)
-            return false
-        }
+         val url = streamSet.currentVideo.url
+         if (url.isBlank()) {
+             logger.warn("{} start: blank video url", debugLabel)
+             stopped.set(true)
+             return false
+         }
+         val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(url) }
+             .getOrElse { error -> 
+                 logger.warn("{} start: unsafe url {}: {}", debugLabel, url, error.message)
+                 return false
+             }
 
-        val dm = FfmpegDemuxer(url, referer = refererFor(url), userAgent = USER_AGENT)
+         val dm = FfmpegDemuxer(safeUrl, referer = refererFor(safeUrl), userAgent = USER_AGENT)
         if (!dm.open()) {
             logger.warn("{} demuxer open failed: {}", debugLabel, dm.lastError)
             dm.close()

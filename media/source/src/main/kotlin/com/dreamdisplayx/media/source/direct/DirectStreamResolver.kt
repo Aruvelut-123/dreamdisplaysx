@@ -195,10 +195,12 @@ object DirectStreamResolver : MediaResolverService {
         originalUrl: String,
         kind: CustomMediaKind,
     ): ResolvedMedia {
-        // The bundled FFmpeg is built without libxml2, so it has no DASH demuxer at all
+        // DASH 清单要走 extractor chain 才有意义：拿 rendition 列表、音视频分离、
+        // 字幕轨和 DRM 信息，这些都不是「打开一个 URL」能给出来的。
         if (kind == CustomMediaKind.DASH) {
             throw DreamMediaException.NotFound("DASH manifests need the extractor chain, not the direct player.")
         }
+
         val durationNanos = if (probe.acceptsRanges) {
             DirectMediaDuration.probe(probe.finalUrl, CustomMediaUrls.extensionOf(originalUrl), probe.contentLength)
         } else {

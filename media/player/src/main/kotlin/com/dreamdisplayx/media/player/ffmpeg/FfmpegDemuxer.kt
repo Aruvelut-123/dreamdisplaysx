@@ -140,18 +140,18 @@ internal class FfmpegDemuxer(
                     return false
                 }
 
-            // CDN 防盗链：Bilibili 的 DASH 分片没有 Referer 会返回 403。
-            // FFmpeg 的 http 协议读取这两个字典项。
+            // CDN 防盗链 + 清单协议白名单：两者都由 FfmpegNetworkPolicy 给出，理由见该类注释。
+            // 白名单这条漏了，HLS/DASH 会在 demuxer 打开第一个分片时报
+            // "Protocol not on whitelist 'file,crypto,data'"，而直链文件照常能播——
+            // 症状是"某些链接黑屏"，没有任何异常指向真正的原因。
             val opts = AVDictionary()
-            referer?.takeIf { it.isNotBlank() }?.let {
-                avutil.av_dict_set(opts, "headers", "Referer: $it\r\n", 0)
-            }
-            userAgent?.takeIf { it.isNotBlank() }?.let {
-                avutil.av_dict_set(opts, "user_agent", it, 0)
+            for ((key, value) in FfmpegNetworkPolicy.optionsFor(url, referer, userAgent)) {
+                avutil.av_dict_set(opts, key, value, 0)
             }
             // 降低起播延迟：只探测有限字节数做流信息分析。
-            avutil.av_dict_set(opts, "analyzeduration", "3000000", 0)
-            avutil.av_dict_set(opts, "probesize", "1000000", 0)
+            for ((key, value) in FfmpegNetworkPolicy.PROBE_OPTIONS) {
+                avutil.av_dict_set(opts, key, value, 0)
+            }
 
             val orc = avformat.avformat_open_input(ctx, url, null, opts)
             avutil.av_dict_free(opts)
