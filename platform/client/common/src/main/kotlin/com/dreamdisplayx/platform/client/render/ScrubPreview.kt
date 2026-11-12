@@ -6,7 +6,7 @@ import com.dreamdisplayx.platform.client.utils.identifier
 import net.minecraft.resources.Identifier
 //?} else
 /*import net.minecraft.resources.ResourceLocation as Identifier*/
-import com.dreamdisplayx.media.player.process.LibVlcFrameExtractor
+import com.dreamdisplayx.media.player.process.FfmpegFrameExtractor
 import com.dreamdisplayx.media.runtime.security.MediaHostGuard
 import com.dreamdisplayx.util.DreamCoroutines
 import com.github.benmanes.caffeine.cache.Cache
@@ -30,11 +30,11 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Real-time scrub-preview thumbnails for the seek bar. Unlike a pre-generated sample sweep, each
  * frame is extracted on demand: when the mouse hovers at a position that is not already cached,
- * a single libvlc extraction is queued for exactly that position and the resulting texture is
+ * a single FFmpeg extraction is queued for exactly that position and the resulting texture is
  * cached (a small per-video ring), so re-hovering nearby positions hits the cache immediately.
  *
  * Rapid mouse movement is coalesced: only the newest requested position survives per video while
- * an extraction is running, so a fast drag never spawns more than one libvlc player at a time.
+ * an extraction is running, so a fast drag never runs more than one extraction at a time.
  */
 object ScrubPreview {
     private val logger = DreamLog.of("ScrubPreview")
@@ -79,12 +79,16 @@ object ScrubPreview {
     private val extractingKeys = ConcurrentHashMap.newKeySet<String>()
 
     /**
-     * One long-lived, video-only libvlc player per key. The player is created lazily on the first
-     * extraction of a video and REUSED for every subsequent scrub frame — the expensive setup
-     * (player creation + first-frame decode) happens once per video instead of per hover. Closed
-     * when the video is switched/released via [release].
+     * One long-lived, video-only extractor per key. The extractor is created lazily on the first
+     * extraction of a video and REUSED for every subsequent scrub frame — the expensive part (opening
+     * the container and finding the first decodable frame) happens once per video instead of per
+     * hover. Released when the video is switched via [release].
+     *
+     * FFmpeg is a pull model, so "reuse" here only means "do not reopen the container". Unlike the
+     * libvlc scrub session this holds no vmem callback, no aligned frame buffer pool and no keep-alive
+     * list, because a seek already lands on the exact target frame (see [FfmpegFrameExtractor]).
      */
-    private val sessions = ConcurrentHashMap<String, LibVlcFrameExtractor.ScrubSession>()
+    private val sessions = ConcurrentHashMap<String, FfmpegFrameExtractor.ScrubSession>()
 
     /** Records the raw URL for [key] so later hovers can extract without re-resolving it. */
     fun request(key: String, rawUrl: String, durationNanos: Long, seekByDecoding: Boolean = false) {
@@ -94,14 +98,13 @@ object ScrubPreview {
 
     /**
      * Releases the long-lived extractor (and cached frames/textures) for [key]. Call when the video
-     * is switched away or unloaded so the native libvlc player is destroyed; the next [frameAt] on
+     * is switched away or unloaded so the container handle is dropped; the next [frameAt] on
      * this key lazily recreates it.
      *
-     * The close is handed to a background coroutine: [LibVlcFrameExtractor.ScrubSession.close] stops and
-     * releases a native libvlc player, which blocks until its input/vout/aout threads finish. Running
-     * that inline blocked the caller — and the caller is the display's serial swap executor, so a slow
-     * preview teardown made every later video switch queue up behind it ("switching only works after
-     * closing and reopening the screen").
+     * The close is handed to a background coroutine: closing a demuxer releases native contexts and
+     * can block on the open socket, and the caller is the display's serial swap executor, so a slow
+     * preview teardown would make every later video switch queue up behind it ("switching only works
+     * after closing and reopening the screen").
      */
     fun release(key: String) {
         sessions.remove(key)?.let { session ->
@@ -153,28 +156,28 @@ object ScrubPreview {
     /** Extracts one frame at [offsetNanos] (reusing the per-key player) and adds it to the cache ring. */
     private suspend fun extractAndCache(key: String, url: String, offsetNanos: Long) {
         val session = sessions.computeIfAbsent(key) {
-            LibVlcFrameExtractor.ScrubSession(url)
+            FfmpegFrameExtractor.ScrubSession(url)
         }
         // Open lazily on first use; a failed open is torn down so the next attempt rebuilds.
-        // libvlc extraction uses blocking latches and polling. Run it in an interruptible context so
-        // the coroutine timeout can actually wake a stalled decoder instead of merely cancelling the
-        // caller while the native worker keeps occupying the shared IO dispatcher.
+        // Opening a container plus a decoder is blocking native work. Run it in an interruptible
+        // context so the coroutine timeout can actually wake a stalled reader instead of merely
+        // cancelling the caller while the native worker keeps occupying the shared IO dispatcher.
         val ok = withTimeoutOrNull(EXTRACT_TIMEOUT) {
             runInterruptible { session.open() }
         } ?: false
         if (!ok) {
             sessions.remove(key, session)
-            session.close()
+            runCatching { session.close() }
             return
         }
         val bytes = withTimeoutOrNull(EXTRACT_TIMEOUT) {
             runInterruptible { session.extractAt(offsetNanos, FRAME_WIDTH, FRAME_HEIGHT) }
         }
         if (bytes == null) {
-            // A CDN can leave a reused player buffering forever. Retire it after a timeout so the
-            // next hover gets a fresh connection instead of replaying the same dead session.
+            // A CDN can leave a reused connection half-dead. Retire it after a timeout so the
+            // next hover gets a fresh one instead of replaying the same dead session.
             sessions.remove(key, session)
-            session.close()
+            runCatching { session.close() }
             return
         }
         val id = registerFrame(key, offsetNanos, bytes) ?: return
