@@ -302,10 +302,10 @@ class MediaPlayer(
             ffmpegRequested = env.config.ffmpegPipelineEnabled,
             isAndroid = OsInfo.isAndroid,
             hwAccelEnabled = env.config.useHwAccel,
-            // 桌面已有 SourceDataLine 实现；Android 要等阶段 3 的 AudioTrack 通路。
-            // 这个入参是「有没有设备实现」，不是「能不能打开设备」——打不开设备是
-            // 运行期问题（无声卡、被独占），由 FfmpegAudioOutput.open() 自己降级为静音，
-            // 不该让编排回退到 libvlc。
+            // 「有没有设备实现」，不是「能不能打开设备」——后者是运行期问题（无声卡、
+            // 被独占、Pojav 的 JVM 没有 android.jar），由 FfmpegAudioOutput.open() 自己
+            // 降级为静音，不该让编排回退到 libvlc（否则没有音频类的宿主永远用不上
+            // FFmpeg 视频解码）。
             audioSinkAvailable = FfmpegPcmSinks.isSupported,
         )
         if (!plan.videoIsFfmpeg) {

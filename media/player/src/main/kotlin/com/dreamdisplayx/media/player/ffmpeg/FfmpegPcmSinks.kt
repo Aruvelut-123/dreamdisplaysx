@@ -36,10 +36,13 @@ internal object FfmpegPcmSinks {
      */
     fun create(debugLabel: String): FfmpegPcmSink? =
         if (OsInfo.isAndroid) {
-            // Android audio output is not implemented yet: there is no AudioTrack-backed
-            // FfmpegPcmSink. Returning null (rather than throwing) is what lets the session
-            // run video-only on Android, with libvlc's OpenSL ES path still in charge of sound.
-            null
+            // Android now has an AudioTrack-backed sink. Naming it here is NOT the
+            // same hazard as naming a `android.media.*` type: FfmpegAndroidPcmSink
+            // touches Android only through Class.forName/reflection, so its own
+            // linking never resolves an android class. Safe on a Pojav game JVM
+            // (where `android.media.AudioTrack` does not exist at all: open() then
+            // returns false and the display simply plays without sound).
+            FfmpegAndroidPcmSink(debugLabel)
         } else {
             // Desktop only. Naming this type inside the branch is safe because
             // the JVM links it lazily, at first use, and this line is only
@@ -52,7 +55,10 @@ internal object FfmpegPcmSinks {
      *
      * Callers use this to decide between "FFmpeg owns audio" and "keep libvlc for
      * audio" without constructing a sink first — creating one opens a device.
+     *
+     * True everywhere now: Android joined when [FfmpegAndroidPcmSink] landed, so the
+     * FFmpeg pipeline can own both video and audio on every supported platform.
      */
     val isSupported: Boolean
-        get() = !OsInfo.isAndroid
+        get() = true
 }

@@ -61,27 +61,27 @@ internal object FfmpegVideoOwnership {
      *  - 平台维度可行：Android 需要允许硬解（软解在手机上会明显卡顿，等同于退化），
      *    桌面则没有这个要求——桌面链本来就只有软件档，且桌面 CPU 足以软解 1080p。
      *
-     * ## 音频归谁
+     *  ## 音频归谁
      *
-     * 音频交给 FFmpeg 的**唯一**前提是本平台真有 PCM 输出实现
-     * （[audioSinkAvailable]）。这不是可有可无的修饰：`FfmpegSession` 的音频半边
-     * 完全建立在 `FfmpegPcmSink` 之上，没有设备就等于没有声音。
+     *  音频交给 FFmpeg 的前提是本平台真有 PCM 输出实现（[audioSinkAvailable]）。
+     *  这是硬性前提，不是修饰：`FfmpegSession` 的音频半边完全建立在 `FfmpegPcmSink`
+     *  之上，没有设备就等于没有声音。
      *
-     * 这一点决定了 Android 与桌面的分野，也解释了为什么现在两个平台的行为不同：
+     *  这一点曾经决定了 Android 与桌面的分野：Android 长期没有 PCM 设备实现，
+     *  音频只能留在 libvlc，形成「FFmpeg 出画面 + libvlc 出声音」的拆分编排。自从
+     *  安卓端的 AudioTrack sink 落地，两个平台都有了设备实现，`isSplit` 因此
+     *  **恒为 false**——除非日后某个平台真的失去设备能力。
      *
-     *  - **Android**：阶段 3 之前没有 PCM 设备实现，`audioSinkAvailable == false`，
-     *    于是音频仍归 libvlc，整体形成「FFmpeg 出画面 + libvlc 出声音」的拆分编排。
-     *  - **桌面**：`FfmpegPcmSink` 已有 `SourceDataLine` 实现，两边都归 FFmpeg，
-     *    `isSplit == false`，因此是**单个** FfmpegSession，不需要 CompositeSession。
+     *  之所以仍把能力作为入参而不是写死 true：Android 上「有实现」和「这台设备能打开
+     *  设备」是两件事（Pojav 的游戏 JVM 根本没有 android.jar）。不过后者属于运行期问题，
+     *  由 `FfmpegAudioOutput.open()` 自己降级成静音，**不该**让编排回退到 libvlc——
+     *  否则一个没有音频类的主机就永远用不上 FFmpeg 视频解码。
      *
-     * 之所以不把「视频 FFmpeg + 音频 FFmpeg」写成无条件组合：Android 上那样会得到
-     * 静音画面。音频能力必须是入参，不能靠假设。
-     *
-     * @param ffmpegRequested 配置是否请求了 FFmpeg 管线
-     * @param isAndroid 当前是否 Android（Pojav/FCL/Zalith 这类游戏 JVM 也算）
-     * @param hwAccelEnabled 是否允许硬解（仅 Android 影响视频归属）
-     * @param audioSinkAvailable 本平台是否有可用的 FFmpeg PCM 输出实现
-     * @return 编排；不确定时返回全 libvlc 的保守结果
+     *  @param ffmpegRequested 配置是否请求了 FFmpeg 管线
+     *  @param isAndroid 当前是否 Android（Pojav/FCL/Zalith 这类游戏 JVM 也算）
+     *  @param hwAccelEnabled 是否允许硬解（仅 Android 影响视频归属）
+     *  @param audioSinkAvailable 本平台是否有可用的 FFmpeg PCM 输出实现
+     *  @return 编排；不确定时返回全 libvlc 的保守结果
      */
     internal fun plan(
         ffmpegRequested: Boolean,
