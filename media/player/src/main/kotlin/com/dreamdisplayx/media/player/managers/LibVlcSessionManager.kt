@@ -11,6 +11,7 @@ import com.dreamdisplayx.media.player.MediaPlayer
 import com.dreamdisplayx.media.player.events.PlayerEvents
 import com.dreamdisplayx.media.player.pipeline.FrameSurface
 import com.dreamdisplayx.media.player.pipeline.PlaybackClock
+import com.dreamdisplayx.media.player.session.PlaybackSession
 import com.dreamdisplayx.media.player.stream.ActiveStreams
 import com.dreamdisplayx.media.player.stream.MediaStreamSelector
 import com.dreamdisplayx.media.player.util.LibVlcMediaOptions
@@ -74,7 +75,24 @@ internal class LibVlcSessionManager(
 
     /** Per-display acoustics DSP stage for the desktop Java Sound callback path. */
     audioStage: AudioDspStage? = null,
-) {
+
+    /**
+     * 是否只出声音：不安装 vmem 视频回调，让本会话只负责音频。
+     *
+     * 用于 FFmpeg 接管视频的编排（见 `FfmpegVideoOwnership`）：视频帧由
+     * `FfmpegSession` 经同一条 `FrameSurface` 上传，本会话只保留音频与主时钟。
+     *
+     * 默认 true，原有单后端行为完全不变。设为 false 后：
+     *  - 不注册 `libvlc_video_set_callbacks` / `set_format_callbacks`（没有 vmem 消费者）；
+     *  - 视频媒体带上 `:no-video`，免得 libvlc 建一个没人读的 vout；
+     *  - `textureFilled` 恒为 false，`updateFrame` 恒为 false —— 本会话不产帧。
+     */
+    private val videoSinkEnabled: Boolean = true,
+) : PlaybackSession {
+
+    /** Backend identity, for logs and for host code that must not type-check on the class. */
+    override val backendName: String = "libvlc"
+
     private val logger = DreamLog.of("LibVlcSession")
 
     /**
@@ -107,7 +125,7 @@ internal class LibVlcSessionManager(
     private var fpsValue = 0.0
 
     /** Delivered-video FPS (frames displayed per second), smoothed over a 1s sliding window. */
-    val currentVideoFps: Double get() = fpsValue
+    override val currentVideoFps: Double get() = fpsValue
 
     // ── Frame-interval diagnostics (min/avg/max gap between vout displays, in ms) ──
     // Reveals the vout's actual pacing pattern: if min ≈ source-frame interval (e.g. 33ms for 30fps)
@@ -120,7 +138,7 @@ internal class LibVlcSessionManager(
     @Volatile private var gapCount = 0L
 
     /** "min/avg/max ms" frame-interval summary of the last ~N vout displays; null when no frames yet. */
-    fun frameIntervalInfo(): String? {
+    override fun frameIntervalInfo(): String? {
         if (gapCount <= 0) return null
         val avg = gapSumMs.toDouble() / gapCount
         return "${gapMinMs}/${"%.0f".format(avg)}/${gapMaxMs}ms"
@@ -304,9 +322,9 @@ internal class LibVlcSessionManager(
 
     private val noFrames = AtomicLong(0)
 
-    var isPlaying = false; private set
+    override var isPlaying = false; private set
 
-    val lastFrameNanos: AtomicLong get() = noFrames
+    override val lastFrameNanos: AtomicLong get() = noFrames
 
     // ── EOS / error signals ─────────────────────────────────────────────────
 
@@ -334,16 +352,16 @@ internal class LibVlcSessionManager(
     var ambientLightColor: Int = 0
         private set
 
-    var popoutFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
+    override var popoutFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
         get() = popoutSink
         set(value) { popoutSink = value }
 
-    var previewFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
+    override var previewFrameSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)?
         get() = previewSink
         set(value) { previewSink = value }
 
     /** Samples a decoded frame for optional client-side lighting integrations. */
-    var ambientLightSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
+    override var ambientLightSink: ((ByteBuffer, Int, Int, FramePixelFormat) -> Unit)? = null
 
     // ── Low-level callbacks (held strongly for life) ───────────────────────
 
@@ -554,7 +572,7 @@ internal class LibVlcSessionManager(
      * mute does not survive an `aout` rebuild — the fresh `integer_mixer` comes up at its own default
      * — which is why the mute button and a 0 % slider both used to do nothing.
      */
-    fun setVolume(volume: Double) {
+    override fun setVolume(volume: Double) {
         audioOutput?.setVolume(volume)
         lastVolume = volume
         if (systemAudio) {
@@ -607,7 +625,7 @@ internal class LibVlcSessionManager(
      * The mute flag is verified as well, not just the percent: a rebuild resets both, and an
      * un-muted-but-silent player is indistinguishable from a muted one until the user unmutes.
      */
-    fun verifyVolume() {
+    override fun verifyVolume() {
         if (!systemAudio) return
         val now = System.currentTimeMillis()
         if (now - lastVolumeCheckMs < VOLUME_CHECK_INTERVAL_MS) return
@@ -685,10 +703,13 @@ internal class LibVlcSessionManager(
     }
 
     // ── Frame pipe proxy ────────────────────────────────────────────────────
-
-    fun textureFilled(): Boolean = surface.textureFilled()
-
-    fun updateFrame(texture: GpuTextureRef, w: Int, h: Int): Boolean {
+    // Audio-only mode (videoSinkEnabled = false): this session produces no frames at all, so the
+    // three read paths below must answer "nothing here" rather than inspect a surface no decoder
+    // will ever fill. Without this the renderer would keep asking a permanently empty surface and
+    // could upload a stale frame over the one FFmpeg just delivered.
+    override fun textureFilled(): Boolean = videoSinkEnabled && surface.textureFilled()
+    override fun updateFrame(texture: GpuTextureRef, w: Int, h: Int): Boolean {
+        if (!videoSinkEnabled) return false
         if (w != expectedW || h != expectedH) {
             // Render thread drives the authoritative texture size. Adopt it (the old JavaCPP
             // pipeline did the same via getTextureSize()) and drop the stale-size ready frame;
@@ -702,8 +723,8 @@ internal class LibVlcSessionManager(
         }
         return surface.updateFrame(texture, w, h, expectedW, expectedH)
     }
-
-    fun updateFramePlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, w: Int, h: Int): Boolean {
+    override fun updateFramePlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, w: Int, h: Int): Boolean {
+        if (!videoSinkEnabled) return false
         if (w != expectedW || h != expectedH) {
             if (w > 0 && h > 0) {
                 expectedW = w
@@ -715,13 +736,13 @@ internal class LibVlcSessionManager(
         return surface.updateFramePlanar(y, u, v, w, h, expectedW, expectedH)
     }
 
-    fun hasIncoming(): Boolean = false // hard quality switch, no parallel channel
+    override fun hasIncoming(): Boolean = false // hard quality switch, no parallel channel
 
-    fun updateIncomingFrame(texture: GpuTextureRef, w: Int, h: Int): Boolean = false
+    override fun updateIncomingFrame(texture: GpuTextureRef, w: Int, h: Int): Boolean = false
 
-    fun updateIncomingFramePlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, w: Int, h: Int): Boolean = false
+    override fun updateIncomingFramePlanar(y: GpuTextureRef, u: GpuTextureRef, v: GpuTextureRef, w: Int, h: Int): Boolean = false
 
-    fun clearFrame() = surface.clear()
+    override fun clearFrame() = surface.clear()
 
     // ── Session lifecycle ───────────────────────────────────────────────────
 
@@ -730,7 +751,7 @@ internal class LibVlcSessionManager(
      * Video is delivered via the low-level callbacks; audio uses the dedicated player on desktop
      * and on Android only when the selected rendition is separate from the video URL.
      */
-    fun start(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
+    override fun start(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         val (w, h) = targetDims(streamSet, lastQuality)
         val safeUrl = MediaHostGuard.resolveSafeUrl(streamSet.currentVideo.url)
         val audioUrl = streamSet.currentAudio.url
@@ -784,6 +805,11 @@ internal class LibVlcSessionManager(
         // frame back to system memory before handing it to the vmem lock callback, so vmem and hw
         // coexist and 4K H.264/HEVC decodes on the GPU instead of starving the CPU.
         val mediaOptions = mutableListOf(*LibVlcMediaOptions.forUrl(safeUrl))
+        // 视频由另一条会话提供时，让 libvlc 不要建 vout：没人消费 vmem 回调，
+        // 白白解码一遍并占用一个视频输出线程。
+        if (!videoSinkEnabled) {
+            mediaOptions.add(":no-video")
+        }
         // Media-level hw decode is an avcodec-module concept (desktop backends only); Android
         // selects its decoder at instance level and defaults to explicit software avcodec when
         // the launcher cannot provide a real MediaCodec bridge.
@@ -956,12 +982,17 @@ internal class LibVlcSessionManager(
 
         // Wait for the first frame so the caller can rely on frames being delivered (with timeout).
         // The control-executor submit is asynchronous, so unconditionally await the latch.
-        try {
-            if (!firstFrameLatch.await(10, TimeUnit.SECONDS)) {
-                logger.error("$debugLabel libvlc first frame timeout")
+        // Only when this session actually produces frames: with the video sink disabled (FFmpeg owns
+        // video) nothing will ever count this latch down, so waiting would burn the full 10 s timeout
+        // on every start and still return started.get() — a pointless stall.
+        if (videoSinkEnabled) {
+            try {
+                if (!firstFrameLatch.await(10, TimeUnit.SECONDS)) {
+                    logger.error("$debugLabel libvlc first frame timeout")
+                }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
             }
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
         }
         return started.get()
     }
@@ -987,7 +1018,7 @@ internal class LibVlcSessionManager(
             // Each native player gets an independent callback set and direct-buffer pool. Skippable
             // via the diagnostic switch for bisection; callback sets are retained for delayed callbacks
             // from retired Android players.
-            if (!LibVlcDiagnostics.noVideoCallback) {
+            if (!LibVlcDiagnostics.noVideoCallback && videoSinkEnabled) {
                 val callbacks = VideoCallbackSet()
                 videoCallbackSets += callbacks
                 videoCallbacksByPlayer[Pointer.nativeValue(mp)] = callbacks
@@ -1079,7 +1110,7 @@ internal class LibVlcSessionManager(
     /**
      * Starts video-only replay (not supported by libvlc port; returns false).
      */
-    fun startReplayVideoOnly(
+    override fun startReplayVideoOnly(
         @Suppress("UNUSED_PARAMETER") snapshot: ByteArray?,
         @Suppress("UNUSED_PARAMETER") resume: Long,
         @Suppress("UNUSED_PARAMETER") positionNanos: Long,
@@ -1089,14 +1120,14 @@ internal class LibVlcSessionManager(
     /**
      * Attaches a live stream after a video-only replay (not supported; returns false).
      */
-    fun attachLiveAfterReplay(
+    override fun attachLiveAfterReplay(
         @Suppress("UNUSED_PARAMETER") streamSet: ActiveStreams,
         @Suppress("UNUSED_PARAMETER") liveOffsetNanos: Long,
         @Suppress("UNUSED_PARAMETER") lastQuality: Int,
     ): Boolean = false
 
     /** Seeks both the video and audio players to [offsetNanos]. */
-    fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
+    override fun beginSeek(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         // Reset audio flags before the seek so a pause-then-resume immediately after seek starts clean.
         audioOutput?.onSeekReset()
         // A seek/loop reuses the native player, but it also resets the software clock. Let the first
@@ -1557,7 +1588,7 @@ internal class LibVlcSessionManager(
      * the players then stay allocated for the JVM lifetime and the OS reclaims them on exit.
      * Desktop keeps stop (its threads join synchronously and there is no Android TLS destructor).
      */
-    fun stop() {
+    override fun stop() {
         markStopped(parked = false)
         // Wake a MediaPlayer.start() waiting for its first frame. Without this, a switch that
         // arrives while the old stream is buffering waits the full ten-second first-frame timeout
@@ -1588,7 +1619,7 @@ internal class LibVlcSessionManager(
      * API is thread-safe, so calling stop/pause directly here tears the media down immediately;
      * the queued [stop]/[cleanup] tasks that follow become near-instant no-ops.
      */
-    fun stopNow() {
+    override fun stopNow() {
         markStopped(parked = false)
         firstFrameLatch.countDown()
         val mp = mediaPlayer
@@ -1615,7 +1646,7 @@ internal class LibVlcSessionManager(
      * CDN edge). A caller about to release GPU resources can therefore be sure no further frames are
      * produced without freezing the render / client thread.
      */
-    fun pauseNow() {
+    override fun pauseNow() {
         markStopped(parked = true)
         // stopAsync() uses this path while a start task may be waiting for the first frame.
         firstFrameLatch.countDown()
@@ -1760,7 +1791,7 @@ internal class LibVlcSessionManager(
      * the safe order; the OS reclaims paused players at process exit. Desktop has no such TLS
      * destructor and keeps serialised stop -> release.
      */
-    fun cleanup() {
+    override fun cleanup() {
         markStopped(parked = false, releasing = true)
         val (mp, ap) = synchronized(lifecycleLock) {
             val oldVideo = mediaPlayer
@@ -1816,27 +1847,27 @@ internal class LibVlcSessionManager(
     // ── Quality switch ──────────────────────────────────────────────────────
 
     /** Hard quality switch: stop current media and start the new rendition. */
-    fun beginQualitySwitch(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int) {
+    override fun beginQualitySwitch(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int) {
         stop()
         start(streamSet, offsetNanos, lastQuality)
     }
 
-    fun promoteIncoming(): Boolean = true // hard switch already promoted
+    override fun promoteIncoming(): Boolean = true // hard switch already promoted
 
     // ── Audio track switch ──────────────────────────────────────────────────
 
     @Suppress("UNUSED_PARAMETER")
-    fun setWarmAudioTracks(tracks: List<WarmTrack>) {
+    override fun setWarmAudioTracks(tracks: List<WarmTrack>) {
         // Not needed with libvlc.
     }
 
     // ── Park / suspend / resume ─────────────────────────────────────────────
 
-    fun canPark(): Boolean = true
+    override fun canPark(): Boolean = true
 
     private fun canHoldWarm(): Boolean = true
 
-    fun suspend(allowExternalProcess: Boolean = false, retainBuffered: Boolean = false): Boolean {
+    override fun suspend(allowExternalProcess: Boolean, retainBuffered: Boolean): Boolean {
         val mp = mediaPlayer ?: return false
         parkFlag.set(true)
         // Parked: the last displayed frame stays on screen naturally; release any pending seek
@@ -1859,7 +1890,7 @@ internal class LibVlcSessionManager(
         return true
     }
 
-    fun resume() {
+    override fun resume() {
         val mp = mediaPlayer ?: return
         parkFlag.set(false)
         submit {
@@ -1872,9 +1903,9 @@ internal class LibVlcSessionManager(
         }
     }
 
-    fun isParked(): Boolean = parkFlag.get()
+    override fun isParked(): Boolean = parkFlag.get()
 
-    fun parkedPositionNanos(): Long? = parkPositionNanos.takeIf { parkFlag.get() && it >= 0 }
+    override fun parkedPositionNanos(): Long? = parkPositionNanos.takeIf { parkFlag.get() && it >= 0 }
 
     /**
      * Repositions the frozen anchor of a parked session after an in-place seek. A warm-paused or
@@ -1882,7 +1913,7 @@ internal class LibVlcSessionManager(
      * position, [resume] pacing fallback), so the anchor must follow the seek or the UI would show
      * the pre-seek position until the session is resumed. No-op when not parked.
      */
-    fun repositionParked(nanos: Long) {
+    override fun repositionParked(nanos: Long) {
         if (parkFlag.get() && nanos >= 0) parkPositionNanos = nanos
     }
 
@@ -1893,7 +1924,7 @@ internal class LibVlcSessionManager(
      * full session restart because switching between muxed and separate renditions changes whether
      * the video player itself must carry audio; its native players are never reused after media.
      */
-    fun restartAudio(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
+    override fun restartAudio(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         if (released.get()) return false
         if (streamSet.currentAudio.url.isBlank()) return false
         // A cold-paused or EOS session has no native channel to replace. Keeping the new stream in
@@ -1973,13 +2004,13 @@ internal class LibVlcSessionManager(
         }
     }
 
-    fun captureAudioPcm(maxNanos: Long): ByteArray? = null
+    override fun captureAudioPcm(maxNanos: Long): ByteArray? = null
 
-    fun captureVideoCacheSnapshot(): ByteArray? = null
+    override fun captureVideoCacheSnapshot(): ByteArray? = null
 
     // ── Pacing / clock ──────────────────────────────────────────────────────
 
-    fun currentPacingNanos(): Long {
+    override fun currentPacingNanos(): Long {
         // libvlc is the authoritative player clock: get_time returns MILLISECONDS (×1e6 → nanos), and
         // it tracks the frames libvlc actually DISPLAYS. Do NOT use the Java Sound line position here:
         // the line's real internal ring buffer rounds the requested size up (often to seconds on some
@@ -2047,7 +2078,7 @@ internal class LibVlcSessionManager(
         return if (ms >= 0) ms * 1_000_000L else clock.currentTime()
     }
 
-    fun activeBridgeEdgeNanos(): Long? = null
+    override fun activeBridgeEdgeNanos(): Long? = null
 
     // ── Control executor ─────────────────────────────────────────────────────
 

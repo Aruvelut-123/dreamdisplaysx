@@ -99,6 +99,82 @@ Paper 是跨版本单插件，一个 jar 覆盖 1.21.1 – 26.3；Velocity 与 B
 - MobileGlues 会自动限制解码线程数并绕开可能黑帧的直接 PBO 上传
 - 字幕与弹幕在提供 Cacio/AWT 的启动器上加载系统 CJK 字体，缺少 AWT 时安全降级
 
+# 播放引擎：从 libvlc 迁回 FFmpeg
+
+本分支的长期目标是**把播放引擎整体从 libvlc 迁回 FFmpeg**，而不是给 libvlc 打补丁、也不是只加一个
+Android 渲染后端。libvlc 是一个「解封装 + 解码 + 渲染 + 音频」的整包方案，迁回 FFmpeg 意味着把这四层
+拆开、逐层换成 FFmpeg 的原生 API 自己驱动，最终不再依赖 libvlc 的进程内实例。
+
+## 为什么迁移
+
+- **可控性**：libvlc 把解封装、解码、渲染、音频时钟全部封装在自己的 `libvlc_media_player` 里，
+  我们能调的只有少量选项。出现「音画不同步」「音量漂移」「DASH 分片被当成流结束」这类问题时，
+  只能靠日志反推它的内部状态。
+- **体积与依赖**：libvlc 需要为每个平台准备一整套原生运行时（含插件目录），
+  Android 上还要额外处理 `libc++` SONAME 冲突、JNI `JNI_OnLoad` 崩溃、`AudioTrack` 数量上限等
+  平台特有陷阱。FFmpeg 的 JavaCPP 绑定是单一 artifact，按平台自动解压。
+- **可测试性**：解封装与解码是纯数据流，可以脱离播放器单独验证；libvlc 的行为只能整机实测。
+
+## 当前进度
+
+迁移分阶段推进，**尚未完成**，libvlc 仍是默认且唯一在用的引擎：
+
+| 组件 | 状态 | 说明 |
+|---|---|---|
+| 会话契约 `PlaybackSession` | ✅ 已完成 | 把原先硬编码在 `MediaPlayer` 里的 37 个调用点抽成接口，`LibVlcSessionManager` 是第一个实现（`backendName = "libvlc"`） |
+| 解封装 `FfmpegDemuxer` | ✅ 已完成 | `avformat_open_input` + `av_read_frame`，自动丢弃音视频以外的包 |
+| 解码 `AndroidMediaCodecHwSolver` | ✅ 已完成 | FFmpeg `h264_mediacodec` / `hevc_mediacodec`，输出打包 BGRA；可按 `hardware` 分派像素格式并降级到软解 |
+| 硬解后端选择 `FfmpegHwBackendPolicy` | ✅ 已完成 | 候选链 + 逐级降级 + `-Ddreamdisplayx.hwDecode` 覆盖；纯 JVM，16 个单测覆盖。Android 链 `<codec>_mediacodec → 软解`，桌面链按 `cuvid/qsv/vaapi/videotoolbox → 软解` 排列 |
+| `FfmpegSession` 实现 | ✅ 已完成 | 把解封装、解码、PCM 音频输出串成「解封装 → 解码 → 发布帧」的会话，桌面与 Android 共用 |
+| 桌面端 FFmpeg 解码 | ✅ 已完成 | 桌面走独立硬解解码器（NVDEC / QSV / VA-API / VideoToolbox），再降级到软件解码 |
+| 音频迁出 libvlc | 🟡 桌面已完成 | 桌面用 Java Sound `SourceDataLine` 输出 PCM；Android 的 `AudioTrack` 通路尚未接线，仍由 libvlc 承担 |
+| 移除 libvlc 依赖 | 🚧 未开始 | 迁移完成的标志 |
+
+**`enable-ffmpeg-pipeline` 开关（默认 `false`）打开后，FFmpeg 接管视频解码**；桌面端还会接管音频
+与播放时钟（`isSplit = false`，单个 `FfmpegSession` 全包），Android 端音频暂时仍归 libvlc。
+
+## 已落地的部分
+
+### 会话契约
+
+`PlaybackSession` 定义了播放器需要的全部生命周期：启动、跳转、画质切换、挂起/恢复、帧发布、
+音频控制、销毁。`MediaPlayer` 持有的是这个接口而不是具体类，因此新增后端不需要改动调用点，
+调用点也不必靠 `is LibVlcSessionManager` 判断后端类型——用 `backendName` 即可。
+
+### 解封装
+
+`FfmpegDemuxer` 用 `avformat_open_input` → `avformat_find_stream_info` → `av_read_frame` 读取压缩包，
+自动跳过并释放音频/字幕包。`Referer` / `User-Agent` 通过 `av_dict_set` 传入，
+Bilibili 等 CDN 的防盗链因此可用；码流的 `extradata`（H.264 的 SPS/PPS、H.265 的 VPS/SPS/PPS）
+会暴露出来，因为 MediaCodec 需要在配置阶段就拿到参数集。
+
+### 解码
+
+`AndroidMediaCodecHwSolver` 以 `ndk_codec=1` 走 FFmpeg 的 mediacodec **NDK** 后端，
+**不引用任何 `android.*` 类**，因此在 Pojav / Zalith 这类「桌面 OpenJDK、没有 android.jar」的
+隔离 JVM 上也能加载。
+
+两个必须注意的实现细节：
+
+- **硬解帧不是像素**。mediacodec 解码器输出 `AV_PIX_FMT_MEDIACODEC`，其 `data(0)` 是一个不透明的
+  GPU surface 句柄；直接按平面读取会崩溃或花屏。必须先经 `av_hwframe_transfer_data` 拷回系统内存。
+- **输出打包 BGRA**。取回 YUV 帧后用 `sws_scale` 一次性完成色彩空间转换与平面打包，
+  接入既有的 `FramePixelFormat.BGRA32` 上传路径。
+  不走 GPU-YUV 三平面路径，因为该路径（`DisplayYuvRenderTypes.active`）在 Sodium 环境下会黑屏，
+  已被永久关闭。
+
+### 配置开关
+
+`enable-ffmpeg-pipeline`（**默认 `false`**）控制是否允许使用这条管线：
+
+```toml
+enable-ffmpeg-pipeline = true
+```
+
+它通过 `PlaybackConfig.ffmpegPipelineEnabled` 暴露给媒体层，默认值保证未实现该属性的宿主
+行为不变。开关是**全平台**的：Android 上走 MediaCodec NDK 硬解，桌面端走独立硬解解码器
+（`h264_cuvid` / `h264_qsv` / `h264_vaapi` / `h264_videotoolbox`）并逐级降级到软解。
+
 # 从源码构建
 
 ```bash

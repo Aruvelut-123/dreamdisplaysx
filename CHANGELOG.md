@@ -22,6 +22,10 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - All client and server language files now match the English key set (239 client keys, 127 server keys). The danmaku overlay, sort, display-mode and config-page strings were missing from 10 client languages, and the global Bilibili login/logout strings were missing from 10 server languages.
 - Fixed the frame rate collapsing again on the renamed `MobileGL` GLES bridge: the probe only knew the older `MobileGlues` spelling, so the `PBO` ring with its emulated fence waits came back. It now matches the `mobilegl` prefix, and the upload-path line logs the renderer strings it saw.
 - Fixed a hull-mounted display juddering against a moving ship: one frame asked for the structure transform from the renderer, the distance census, the acoustic plane and the crosshair test, each paying the full reflective lookup. Those readers now share one read per frame.
+- The opt-in FFmpeg video pipeline now plays: it can decode a display's video itself while libvlc keeps the audio and the playback clock, so enabling `enable-ffmpeg-pipeline` finally shows a picture instead of being a decode path with nothing wired to it.
+- The FFmpeg native runtime is now downloaded and versioned like the libvlc one, so the FFmpeg pipeline works on a clean install instead of only where FFmpeg happened to be on the classpath.
+- The opt-in FFmpeg pipeline now opens HLS/DASH links: FFmpeg only whitelists `file,crypto,data` by default, so a manifest's own segments and sub-playlists were refused and the display stayed black while a direct `.mp4` played fine.
+- The opt-in FFmpeg pipeline now runs media URLs through the same public-host check as libvlc, so a link redirecting to an internal address is refused instead of fetched.
 
 # 1.10.8.1 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).

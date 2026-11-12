@@ -104,6 +104,92 @@ On the **client**, drop the jar into your mods folder. On the **server**, instal
 - MobileGlues bounds the decoder thread pool and bypasses the PBO upload path that can produce black frames
 - Subtitle and danmaku textures load an Android system CJK font when Cacio/AWT is available and degrade safely otherwise
 
+# Playback engine: migrating from libvlc back to FFmpeg
+
+The long-term goal of this branch is to **replace the playback engine wholesale, moving from libvlc
+back to FFmpeg** — not to patch libvlc, and not merely to add one Android renderer. libvlc is an
+all-in-one "demux + decode + render + audio" stack; moving back to FFmpeg means splitting those four
+layers apart and driving each of them through FFmpeg's own APIs, until no in-process libvlc instance
+is needed at all.
+
+## Why migrate
+
+- **Control.** libvlc hides demux, decode, render and the audio clock inside its own
+  `libvlc_media_player`, exposing only a handful of options. When something like A/V drift, volume
+  decay or "a DASH fragment is treated as end-of-stream" goes wrong, the only way to understand it is
+  to reverse-engineer its internal state from logs.
+- **Size and dependencies.** libvlc needs a full native runtime (including a plugin directory) for
+  every platform, and on Android it drags in platform-specific traps — `libc++` SONAME collisions,
+  `JNI_OnLoad` crashes, the `AudioTrack` instance cap. FFmpeg's JavaCPP binding is a single artifact
+  that extracts the right native library per platform.
+- **Testability.** Demuxing and decoding are pure data flows that can be verified without a player;
+  libvlc's behaviour can only be checked on a real device.
+
+## Current progress
+
+The migration proceeds in stages and is **not finished**; libvlc is still the default and the only
+engine in use:
+
+| Component | Status | Notes |
+|---|---|---|
+| Session contract `PlaybackSession` | ✅ Done | The 37 call sites previously hard-wired in `MediaPlayer` are now an interface; `LibVlcSessionManager` is the first implementation (`backendName = "libvlc"`) |
+| Demuxer `FfmpegDemuxer` | ✅ Done | `avformat_open_input` + `av_read_frame`, drops non-video packets automatically |
+| Decoder `AndroidMediaCodecHwSolver` | ✅ Done | FFmpeg `h264_mediacodec` / `hevc_mediacodec`, emits packed BGRA; pixel format now follows `hardware` so it can drop to software |
+| HW backend choice `FfmpegHwBackendPolicy` | ✅ Done | Candidate chain + step-down + `-Ddreamdisplayx.hwDecode` override; pure JVM, 16 unit tests. Android chain is `<codec>_mediacodec → software`, the desktop chain orders `cuvid/qsv/vaapi/videotoolbox → software` |
+| `FfmpegSession` implementation | ✅ Done | Wires demux, decode and PCM audio output into a demux → decode → publish session, shared by desktop and Android |
+| Desktop FFmpeg decode | ✅ Done | Desktop uses the standalone hardware decoders (NVDEC / QSV / VA-API / VideoToolbox) and steps down to software |
+| Moving audio off libvlc | 🟡 Desktop done | Desktop emits PCM through a Java Sound `SourceDataLine`; Android's `AudioTrack` route is not wired yet, so libvlc still carries it there |
+| Removing the libvlc dependency | 🚧 Not started | The marker for a finished migration |
+
+**Turning on `enable-ffmpeg-pipeline` (default `false`) hands video decoding to FFmpeg**; on desktop it
+also takes over audio and the playback clock (`isSplit = false`, a single `FfmpegSession` covers both),
+while Android still keeps audio on libvlc for now.
+
+## What already landed
+
+### Session contract
+
+`PlaybackSession` defines the whole lifecycle the player needs: start, seek, quality handoff,
+park/resume, frame delivery, audio control and teardown. `MediaPlayer` holds the interface rather than
+a concrete class, so adding a backend does not touch the call sites, and no call site has to detect
+the backend with an `is LibVlcSessionManager` check — `backendName` answers that.
+
+### Demuxing
+
+`FfmpegDemuxer` reads compressed packets through `avformat_open_input` → `avformat_find_stream_info`
+→ `av_read_frame`, skipping and releasing audio/subtitle packets. `Referer` and `User-Agent` are
+passed with `av_dict_set`, which is what makes CDN hotlink protection (Bilibili and friends) work.
+The stream's `extradata` (H.264 SPS/PPS, H.265 VPS/SPS/PPS) is exposed because MediaCodec needs the
+parameter sets at configure time.
+
+### Decoding
+
+`AndroidMediaCodecHwSolver` drives FFmpeg's mediacodec **NDK** backend with `ndk_codec=1` and
+**references no `android.*` class**, so it loads on isolated game JVMs such as Pojav / Zalith, which
+ship a desktop OpenJDK without `android.jar`.
+
+Two implementation details that matter:
+
+- **A hardware frame is not pixels.** mediacodec decoders emit `AV_PIX_FMT_MEDIACODEC`, whose
+  `data(0)` is an opaque GPU surface handle; reading it as a plane faults or produces garbage. It has
+  to go through `av_hwframe_transfer_data` first.
+- **Output is packed BGRA.** `sws_scale` does the colour conversion and the planar-to-packed step in
+  one pass, feeding the existing `FramePixelFormat.BGRA32` upload path. The GPU-YUV planar path is
+  deliberately not used: it renders a black screen under Sodium and is permanently disabled.
+
+### Configuration switch
+
+`enable-ffmpeg-pipeline` (**default `false`**) gates the pipeline:
+
+```toml
+enable-ffmpeg-pipeline = true
+```
+
+It reaches the media layer as `PlaybackConfig.ffmpegPipelineEnabled`; the default keeps hosts that do
+not implement the property unchanged. The switch is **cross-platform**: Android uses the MediaCodec NDK
+hardware backend, desktop uses the standalone hardware decoders (`h264_cuvid` / `h264_qsv` /
+`h264_vaapi` / `h264_videotoolbox`) and steps down to software decode.
+
 # Building from source
 
 ```bash

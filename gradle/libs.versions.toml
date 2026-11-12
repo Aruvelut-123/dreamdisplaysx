@@ -30,6 +30,8 @@ zxing = "3.5.3"
 checkerQual = "3.42.0"
 libvlc = "3.0.0"
 jna = "5.17.0"
+javacpp = "1.5.14"
+ffmpeg = "8.1.2-1.5.14"
 
 [libraries]
 jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
@@ -64,6 +66,8 @@ velocityApi = { module = "com.velocitypowered:velocity-api", version.ref = "velo
 bungeecordApi = { module = "net.md-5:bungeecord-api", version.ref = "bungeecordApi" }
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 jnaPlatform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
+javacpp = { module = "org.bytedeco:javacpp", version.ref = "javacpp" }
+ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "ffmpeg" }
 
 [plugins]
 paperweight = { id = "io.papermc.paperweight.userdev", version.ref = "paperweight" }

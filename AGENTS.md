@@ -705,6 +705,249 @@ checks over `git status --porcelain`'s `.kt` files before committing a sweep:
   leaves the video playable. Refusing a playable video is worse than missing a panorama, so do not
   promote the shape test on its own. `BilibiliPanoramaTest` pins "VRChat"/"360p" as non-markers.
 
+## Playback backends: the `PlaybackSession` contract
+
+`MediaPlayer` does not own libvlc; it owns a **session backend**. The contract is
+`com.dreamdisplayx.media.player.session.PlaybackSession` (start / seek / quality handoff / park /
+frame delivery / audio control / teardown) and `LibVlcSessionManager` is merely the first
+implementation (`backendName = "libvlc"`). The plan for this branch is to replace that implementation
+with an FFmpeg demux + decode pipeline, which is why the contract exists at all.
+
+Rules:
+
+- **Never type-check a session at a call site.** Use `backendName` or a capability member. `MediaPlayer`
+  used to hold a concrete `LibVlcSessionManager`, so "the session" and "libvlc" were the same object;
+  that coincidence is exactly what this interface removes.
+- **A backend only has to serve video.** Audio stays on libvlc (`:no-video` on a dedicated player), which
+  already carries the Android `AudioTrack` budget, warm-track pool and park bookkeeping. Do not clone that
+  next to a second video backend; implement the audio members as no-ops instead.
+- **Defaults go on the interface, not the override.** Kotlin rejects default parameter values on an
+  overriding function (`suspend()` used to declare them in the class and that fails once it implements).
+- **A member that "hides" rather than overrides fails the build** with *"hides member of supertype and
+  needs an 'override' modifier"*. When adding a member to `PlaybackSession`, every implementing method
+  needs `override` — including ones with multi-line signatures, which are easy to miss in a
+  search-and-replace that only matches single lines.
+- **`backendName` and the frame sinks are the only mutable/shared surface**; the three sinks are `var`
+  set by `MediaPlayer` from any thread, everything else is a method call.
+
+## Optional FFmpeg playback pipeline (cross-platform, opt-in)
+
+A second, standalone decode path sits beside libvlc: `FfmpegDemuxer` reads packets, `FfmpegSession`
+drives `AndroidMediaCodecHwSolver` to decode them, and the result is published as packed BGRA. It is
+gated by the client config key `enable-ffmpeg-pipeline` (**default `false`**) and exposed to the media
+module as `PlaybackConfig.ffmpegPipelineEnabled`.
+
+The switch used to be called `enable-android-mediacodec` and was Android-only; it is now
+cross-platform. On Android the hardware rung is FFmpeg's `mediacodec` backend; on desktop it is the
+standalone FFmpeg hardware decoders.
+
+Rules that cost real debugging time and must not be undone:
+- **Desktop hardware decoders are NOT libvlc's hwaccel names.** libvlc takes `-hwaccel cuda|qsv|vaapi|…`
+  names, but this path calls `avcodec_find_decoder_by_name`, which needs a *decoder* name. Those
+  differ per platform and were verified by extracting the shipped bytedeco builds (`ffmpeg-8.1.2-1.5.14`,
+  the artifacts `native/ffmpeg/collect.sh` packs) and listing their registered decoders:
+  Windows → `h264_cuvid`, `h264_qsv`, `h264_d3d11va`, `h264_dxva2`, `h264_mf` (`h264_vulkan` exists but is unusable, see below);
+  macOS → `h264_videotoolbox`; Linux x86_64 → `h264_vaapi`, `h264_v4l2m2m` (`h264_vulkan` likewise);
+  Linux arm64 → only `h264_cuvid`, `h264_v4l2m2m` (**no vaapi at all**: the string survives in the shared object
+  but the decoder is not registered — confirmed by running that build's own `ffprobe -decoders`).
+  Notably `h264_d3d11va` is a plain `avcodec_find_decoder_by_name` target in FFmpeg 8, and `h264_videotoolbox` is a
+  decoder (its `_videotoolbox` is also an encoder name — do not confuse the two lists). Guessing a name that is not
+  registered in that platform's build fails `avcodec_open2` and silently degrades to software, so verify against the
+  real artifact before adding a rung. `FfmpegHwBackendPolicyTest` asserts the shape (hw entries present, software
+  last) *and* that each platform lists only its own names.
+- **`*_vulkan` is deliberately not in the chain.** Vulkan decoding requires the caller to create an
+  `AVHWDeviceContext` for Vulkan and attach it before `avcodec_open2`; this pipeline only opens decoders by name, so a
+  `vulkan` rung can only ever fail. Listing it would buy one guaranteed failed open per start, not acceleration.
+- **The `AV_PIX_FMT_MEDIACODEC` / `ndk_codec=1` setup is Android-only, and the gate is the decoder *kind*, not
+  `hardware`.** Both the pixel format and `ndk_codec` are now applied only when the rung's
+  `FfmpegHwBackendKind == MEDIACODEC`. A desktop rung is `hardware == true` but must set **no** `pix_fmt`: cuvid, qsv,
+  d3d11va, videotoolbox and v4l2m2m each create and negotiate their own hwdevice inside `avcodec_open2`, and handing
+  them the mediacodec pixel format makes the open fail outright. Because failure is absorbed by the step-down, the
+  only visible symptom is "hardware is on, yet it always ends up on software" — so this must not regress.
+- **`FfmpegMediaCodecBridge.isAvailable()` gates the mediacodec rung only.** It returns `false` on every non-Android
+  platform, so using it as a general "hardware available?" check rejects every desktop hardware rung before
+  `avcodec_open2` is even reached. Bridge absence is also the usual reason to be falling back, so it must never block
+  the software rung either.
+- **The decoder must emit packed BGRA, not I420.** `DisplayYuvRenderTypes.active` is hard-coded `false` because the
+  GPU-YUV planar path renders a black screen under Sodium, so a planar buffer has no route to the screen. The
+  conversion is `av_hwframe_transfer_data` (surface → system memory) followed by `sws_scale` (YUV → BGRA), feeding
+  the existing `FramePixelFormat.BGRA32` upload path. Do not "restore" the planar path to avoid the conversion.
+- **A MediaCodec frame is not pixels.** `mediacodec` decoders emit `AV_PIX_FMT_MEDIACODEC`, where `data(0)` is an
+  opaque GPU surface handle. Reading it as a plane faults or produces garbage; it must go through
+  `av_hwframe_transfer_data` first.
+- **The `AV_PIX_FMT_MEDIACODEC` / `ndk_codec=1` setup is Android-only.** It is keyed off `hardware`, which
+  now also covers desktop rungs like `h264_cuvid`. Feeding a cuvid/qsv/vaapi decoder the mediacodec pixel
+  format makes `avcodec_open2` fail immediately. If desktop hardware rungs are wired into
+  `AndroidMediaCodecHwSolver`, the mediacodec-specific setup must be gated on the decoder actually being a
+  mediacodec one, not merely on `hardware`.
+- **Packets need padding.** FFmpeg's bitstream readers over-read up to `AV_INPUT_BUFFER_PADDING_SIZE` bytes past the
+  payload, so packets are allocated with `av_new_packet` rather than wrapping the caller's buffer with
+  `av_packet_from_data`; handing over an unpadded array reads past the heap.
+- **`ndk_codec=1` is mandatory here.** The JNI backend needs `android.media.MediaCodec`, which does not exist on
+  Pojav/Zalith game JVMs (desktop OpenJDK, no `android.jar`), so only the NDK `AMediaCodec` path can work.
+- **The switch lives on `PlaybackConfig`, not on the client `Config`.** `MediaPlayer` only sees the media-facing
+  interface; reading `env.config.enableFfmpegPipeline` there is an unresolved reference and fails the whole
+  `:media:player` compile. New media-level switches go through `PlaybackConfig` with a default so that other hosts
+  (and any addon backend) keep compiling.
+- **The decoder name is chosen, not hard-coded.** `FfmpegHwBackendPolicy` owns the candidate chain
+  (`<codec>_mediacodec → <codec>` on Android; `<codec>_cuvid/_qsv/_d3d11va/_dxva2/_mf → <codec>` on Windows,
+  `<codec>_videotoolbox → <codec>` on macOS, `<codec>_cuvid/_vaapi/_v4l2m2m → <codec>` on Linux), the
+  step-down, and the `-Ddreamdisplayx.hwDecode` override, mirroring libvlc's
+  `hwBackendChain`/`advanceHwBackendAfterHwFailure`.
+  It is deliberately pure JVM (no `android.*`, no bytedeco, no JNA) so all cases in `FfmpegHwBackendPolicyTest`
+  run without a device; keep it that way, or the chain becomes unverifiable again. Because it must stay
+  dependency-free it does **not** read `OsInfo`; `FfmpegCodecScheduler` resolves the platform and passes it in.
+- **Pixel format follows the decoder *kind*, not a `hardware` boolean.** Every rung carries a
+  `FfmpegHwBackendKind` (`MEDIACODEC` / `DESKTOP` / `SOFTWARE`) derived from its decoder name. Only `MEDIACODEC`
+  sets `AV_PIX_FMT_MEDIACODEC` and passes `ndk_codec=1`; the other two set no `pix_fmt` at all. Setting the
+  mediacodec pixel format on a software *or* desktop rung makes `avcodec_open2` fail, which turns
+  "degrade to software" / "use desktop hardware" into empty promises.
+- **An empty `-Ddreamdisplayx.hwDecode` means "force software", not "unset".** libvlc spells this `"none"`; here the
+  value is a *decoder name*, so it is translated to the codec's software decoder. Passing `""` straight to
+  `avcodec_find_decoder_by_name` returns null and turns "force software" into "force failure".
+- **A forced backend never advances.** `step == -1` (set when an override is active) makes `advance` return null and
+  `openWithFallback` refuse, because silently swapping in a backend the user did not ask for hides the failure they
+  were trying to observe.
+- **`selectBackend`/`reportFailure` now have a runtime caller.** `FfmpegSession` drives the decode loop and
+  `AndroidMediaCodecHwSolver.Result.ERROR` lands in `FfmpegSession.tryDecodeFallback`, which calls
+  `FfmpegCodecScheduler.reportFailure` and reopens a replacement solver. Do not weaken the forced-backend guard:
+  when `step == -1` the fallback must refuse rather than silently substitute a backend the user did not ask for.
+  `openWithFallback` must `close()` before reopening, since a half-open mediacodec context carries its old config
+  into the second `avcodec_open2`.
+- Verify with `./gradlew :media:player:compileKotlin --configure-on-demand` and a **JDK 21** `JAVA_HOME`; the
+  stonecutter 0.9.7 plugin refuses a Java 17 JVM, and a plain `--offline` run cannot resolve fabric-loom.
+
+### Backend ownership: FFmpeg owns video, libvlc keeps audio and the clock
+
+A display no longer means "one backend". `FfmpegVideoOwnership.plan(ffmpegRequested, isAndroid, hwAccelEnabled)`
+answers three separate questions — who produces video frames, who plays audio, who supplies the playback
+position — and only splits them when **all three** of FFmpeg-requested, Android and hardware-decode-allowed hold.
+Any other combination returns one libvlc backend, never "FFmpeg video + FFmpeg audio": the FFmpeg side has no
+audio implementation, so that combination would be a silent picture.
+
+- **Never re-join the three into one switch.** The moment video and clock come from different objects you get
+  "video is on screen, so ask libvlc how many FPS it decoded" style mismatches. `Play` exposes `videoIsFfmpeg` /
+  `audioIsFfmpeg` / `isSplit` so call sites query a named capability instead of `is`-checking a backend.
+- **`CompositeSession` dispatches, it does not decide.** Video members (frame delivery, FPS, the three raw frame
+  sinks, incoming-frame/prefetch, quality switch, replay video) go to the video backend; audio members (volume,
+  warm tracks, PCM capture, `restartAudio`) go to the audio backend. `isPlaying`, `currentPacingNanos` and
+  `parkedPositionNanos` **must** come from the audio backend: the clock and the "is it playing" answer have to
+  share one owner or the progress bar drifts between two independent timelines. Lifecycle calls notify both —
+  each side holds native resources, and starting only one yields "picture without sound" or the reverse.
+- **`start` reports only the video result.** A failed audio start logs and continues: the picture already
+  delivered its first frame, and rolling it back would flash the loading state over a merely muted display.
+- **`LibVlcSessionManager(videoSinkEnabled = false)` is the audio-only form** (default `true`, so the single
+  backend path is byte-for-byte unchanged). It installs no vmem callbacks, adds `:no-video` to the media, skips
+  the first-frame latch wait — nothing will ever count that latch down, so waiting would burn the full 10 s on
+  every start — and reports no frames from `textureFilled`/`updateFrame`/`updateFramePlanar`. That last part is
+  what stops the renderer from uploading a permanently empty surface over the frame FFmpeg just delivered.
+- **Audio end-of-stream is not playback end.** `MediaPlayer.handleAudioOnlyStreamEnd` exists because a Bilibili
+  DASH audio rendition is routinely shorter than its video; routing it to `handleStreamEnd` would end the display
+  a few seconds in. Only the video backend decides that playback finished.
+- Current simplifications, all documented at the member: a quality switch restarts both backends (hard switch,
+  no parallel pre-warm), `suspend`/`resume` reopen instead of retaining natives, and the FFmpeg pacing clock is
+  wall-clock (`FfmpegSession.currentPacingNanos`) precisely because audio — and its master clock — lives on the
+  other backend.
+- `FfmpegVideoOwnershipTest` pins the decision matrix (split plan, the clock staying on libvlc, desktop fallback,
+  software-only Android never splitting, the opt-in being off, and the unsplit plan). The composite dispatch
+  itself is compile-verified only: it forwards to native backends with no JVM-only seam.
+
+### FFmpeg network inputs: protocol whitelist and the SSRF guard
+
+`FfmpegDemuxer.open()` has two obligations libvlc used to fulfil for us, and both fail *silently* — the open simply
+returns a negative code, `lastError` gets a line, and the display stays black with nothing in the log pointing at
+the cause.
+
+- **`protocol_whitelist` is mandatory for manifests and harmless for direct files.** FFmpeg's default whitelist is
+  `file,crypto,data`, which covers only local protocols. A direct `.mp4` is opened once by `avformat_open_input` and
+  never consults it, but an HLS/DASH demuxer has to **nested-open** every segment and sub-playlist after parsing the
+  index, and those hit the whitelist. Symptom without it: direct links play, manifests are black. The value is
+  `http,https,tls,tcp` **only** — `file`/`crypto`/`data`/`pipe` are deliberately absent, since a manifest has no
+  legitimate reason to make the player read local files and `file` is the most common local-disclosure primitive.
+- **The decision lives in `FfmpegNetworkPolicy`, not at the call site.** `isManifest(url, kind)` takes the resolver's
+  `CustomMediaKind` when it has one and otherwise falls back to the path extension; `needsManifestProtocols(url)` is
+  the URL-only half; `optionsFor(url, referer, userAgent)` returns the ordered dictionary entries. `PROBE_OPTIONS`
+  (`analyzeduration` 3 s, `probesize` 1 MB) is kept separate so "is this a manifest" and "how long may probing take"
+  never get entangled in one assertion. `FfmpegNetworkPolicyTest` (28 cases) pins all of it.
+- **Query parameters are deliberately not read.** A signed URL appends `?sign=…` which must be ignored, and a
+  `?format=m3u8` must **not** be trusted: letting the remote side's input choose our protocol whitelist is exactly
+  the boundary you do not hand over. A genuine extension-less manifest is instead caught by `kind`, which the resolver
+  works out from the response body.
+- **`MediaHostGuard.resolveSafeUrl` must run before every `FfmpegDemuxer` construction**, exactly as
+  `LibVlcSessionManager.start()` does for libvlc. Three call sites hold this line: `FfmpegSession.start()`,
+  `FfmpegFrameExtractor.extractJpeg()` and `FfmpegFrameExtractor.ScrubSession.open()`. Each wraps the call in
+  `runCatching` and returns a failure (never propagates), then passes the **resolved** URL — not the original — to the
+  demuxer, because the guard is what walked the redirect chain.
+- **DASH stays refused by `DirectStreamResolver`, and the reason is not libxml2.** The old comment claimed the bundled
+  FFmpeg "is built without libxml2, so it has no DASH demuxer"; nothing in the repo verifies that —
+  `native/ffmpeg/collect.sh` asserts decoder symbols only and never inspects demuxers. The real justification is that a
+  DASH manifest only becomes useful through the extractor chain (rendition list, separated audio/video, subtitles, DRM),
+  none of which "open one URL" produces. Do not relax that refusal on the strength of a `protocol_whitelist` change.
+- **Do not state unverified claims about the shipped FFmpeg build.** Both comment sites contradicted each other (one
+  claimed `hls`/`dash` were "measured to be registered", the other claimed no `dash` at all) and neither could be
+  reproduced locally because no downloaded runtime exists in this checkout. Until a build is inspected, describe what
+  the code does and what the whitelist does, not what a runtime is assumed to contain.
+
+### FFmpeg native runtime: downloaded, then registered with `Loader.foundLibraries`
+
+The FFmpeg shared objects are **not** inside the mod jar. `native/ffmpeg/collect.sh` downloads the matching
+`org.bytedeco:ffmpeg` classifier jar on CI, drops the `ffmpeg`/`ffprobe` executables and repacks the shared
+objects; `NativesDownloader` then fetches that archive on first launch into `<natives>/<os>/<arch>/ffmpeg/` and
+publishes the directory through the `dreamdisplayx.ffmpeg.dir` system property. `FfmpegNatives.install()` (media
+module) registers it and `FfmpegMediaCodecBridge.probe()` calls it before the first `Loader.load`.
+
+**Every other route was measured and does not work.** Do not "simplify" this back to a system property:
+
+| route | measured result |
+|---|---|
+| `platform.library.path` | compile/link only, never searched at runtime |
+| `platform.preloadpath` | never searched |
+| `org.bytedeco.javacpp.cachedir` | only decides where extraction happens; never consulted while searching |
+| `System.setProperty("java.library.path")` | ignored — read once at JVM start |
+| reflecting `ClassLoader.sys_paths` / `usr_paths` | fields removed in JDK 9+ (`NoSuchFieldException`) |
+| reflecting the system loader's `ucp` | works, but needs `--add-opens java.base/jdk.internal.loader` |
+| `System.load(absolutePath)` | loads the object, `Loader` still reports "no jniavutil in java.library.path" |
+| **writing `Loader.foundLibraries`** | **works, no JVM flags required** |
+
+The last one is the chosen route because `org.bytedeco.javacpp` is a plain unnamed-module jar: reflecting into its
+own package-private static needs no `--add-opens`, so a mod can do it on any launcher without touching the user's
+JVM arguments. `--add-opens` is not an option — a mod cannot add it to someone else's launch command.
+
+**The map keys are JavaCPP's own spelling, dumped from a real classpath load.** A wrong key never throws; it just
+leaves the library unregistered and playback later dies with `no jniavcodec in java.library.path` on a device.
+`FfmpegNativesKeyTest` (10 cases) pins the mapping against the measured values:
+
+```
+libjniavutil.so      -> jniavutil        (unversioned)
+libavcodec.so.62     -> avcodec@.62      (dot kept verbatim, NOT avcodec@62)
+libavcodec.62.dylib  -> avcodec@.62
+avcodec-62.dll       -> avcodec@.62
+```
+
+Two parsing traps that cost real time: `.so` is only the ELF marker when nothing follows it or when what follows is
+a numeric ABI version — a naive `contains(".so")` classifies `config.something` as the library `config` (that
+exact case failed the first test run). And `.dylib`/`.dll` must be tested **before** `.so`, or a future name that
+contains both takes the wrong branch.
+
+Absolute paths must be registered as `file:` URLs. `Loader` derives the extraction file name from the URL and, on
+Linux/macOS, creates the short-name symlink itself; the bytedeco desktop archives only carry versioned names
+(`libavcodec.so.62`), so a hand-rolled `java.library.path` attempt fails on the missing short name even after the
+search path is fixed.
+
+`native/ffmpeg/collect.sh` asserts at packaging time that `h264_mediacodec` / `hevc_mediacodec` are registered in
+the Android `libavcodec`, because a silently missing decoder would surface only as "no suitable decoder" on a user's
+device. Desktop builds legitimately have no mediacodec (there is no Android MediaCodec to talk to), so that check is
+Android-only. The Mach-O symbol check must accept the leading underscore (`_avcodec_open2`): anchoring `^avcodec_`
+fails on macOS, which is how the first CI-shaped run of the script reported a false error.
+
+**Known upstream gap:** the `linux-arm64` classifier ships `libjniavutil` linked against system `libva`/`libva-drm`
+without bundling them (the `linux-x86_64` jar bundles both). It is a bytedeco packaging defect, not ours; the
+desktop Linux arm64 target therefore needs `libva2`/`libva-drm2` present. Do not "fix" it by dropping the VA-API
+libraries from the extraction filter.
+
+Windows x86 (32-bit) and Windows aarch64 have **no** bytedeco FFmpeg classifier, so those two platforms keep the
+libvlc video path and the manifest simply has no `ffmpeg` entry for them.
+
 ## Upload path and frame-queue liveness
 
 Two independent client-side rules keep a display from either starving the game's frame rate or freezing

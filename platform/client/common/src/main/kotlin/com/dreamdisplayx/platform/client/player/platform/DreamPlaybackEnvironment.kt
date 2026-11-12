@@ -40,6 +40,10 @@ object DreamPlaybackEnvironment : PlaybackEnvironment {
         /** Hardware-accelerated decode candidates — libvlc auto-detects internally. */
         override val hwAccelCandidates: List<String> get() = emptyList()
 
+        /** Opt-in switch for the standalone FFmpeg demux+decode pipeline (all platforms). */
+        override val ffmpegPipelineEnabled: Boolean
+            get() = ClientStateManager.config.enableFfmpegPipeline
+
         /** Preferred Bilibili CDN mirror host, or auto-select by probe when unset / `"auto"`. */
         override val bilibiliCdnMirror: String? get() =
             ClientStateManager.config.bilibiliCdnMirror.ifBlank { null }

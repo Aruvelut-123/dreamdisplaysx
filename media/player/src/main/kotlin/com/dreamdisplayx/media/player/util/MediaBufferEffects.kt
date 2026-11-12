@@ -32,10 +32,29 @@ object MediaBufferEffects {
     /**
      * Apply volume in place to an interleaved S16LE buffer. `len` is the number of valid bytes (must be a multiple of 2).
      */
-    fun applyVolumeS16LE(buf: ByteArray, len: Int, volume: Double) {
+    fun applyVolumeS16LE(buf: ByteArray, len: Int, volume: Double) =
+        applyVolumeS16LE(buf, 0, len, volume)
+
+    /**
+     * Apply volume in place to a window of an interleaved S16LE buffer.
+     *
+     * `offset`/`len` exist because a sink that is handed one large block may only
+     * be able to accept part of it, so the gain has to be applied to exactly the
+     * bytes that are about to be written — scaling the whole buffer up front
+     * would apply the gain twice to whatever gets retried.
+     *
+     * @param offset first valid byte, must be even (an odd offset splits a sample)
+     * @param len number of valid bytes from [offset], must be even
+     */
+    fun applyVolumeS16LE(buf: ByteArray, offset: Int, len: Int, volume: Double) {
         if (abs(volume - 1.0) < 1e-5) return
-        var i = 0
-        while (i + 1 < len) {
+        if (offset < 0 || len <= 0) return
+        // Clamp instead of trusting callers: an over-long window used to throw
+        // ArrayIndexOutOfBounds from inside an audio callback, where the
+        // exception was swallowed and the block silently dropped.
+        val end = minOf(buf.size, offset + len).let { if ((it - offset) % 2 != 0) it - 1 else it }
+        var i = offset
+        while (i + 1 < end) {
             val lo = buf[i].toInt() and 0xFF
             val hi = buf[i + 1].toInt()
             val s = (hi shl 8) or lo

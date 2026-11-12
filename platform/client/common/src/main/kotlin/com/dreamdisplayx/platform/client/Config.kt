@@ -54,6 +54,14 @@ class Config(private val baseDir: File) {
     var useHwAccel: Boolean = true
 
     /**
+     * FFmpeg 播放管线开关（全平台）：
+     * - true  时尝试使用 FFmpeg 原生解封装+解码管线（Android 走 MediaCodec NDK，桌面端走 cuvid/qsv/vaapi/videotoolbox 等硬解回退软解）
+     * - false 时直接使用 libvlc 既有路径
+     * 默认 false，保持出厂行为不变。
+     */
+    var enableFfmpegPipeline: Boolean = false
+
+    /**
      * Whether to prefer 60 fps streams when the video offers them (e.g. Bilibili 1080p60).
      * Videos without a 60 fps variant still play at their native framerate. Toggle via `prefer-fps60`.
      */
@@ -196,6 +204,7 @@ class Config(private val baseDir: File) {
         flashbackRenderDisplays = t?.getBoolean("flashback-render-displays") ?: flashbackRenderDisplays
         t?.getDouble("global-audio-multiplier")?.let { globalAudioMultiplier = it.coerceIn(0.0, 2.0) }
         useHwAccel = t?.getBoolean("use-hw-accel") ?: useHwAccel
+        enableFfmpegPipeline = t?.getBoolean("enable-ffmpeg-pipeline") ?: enableFfmpegPipeline
         preferFps60 = t?.getBoolean("prefer-fps60") ?: preferFps60
         t?.getString("audio-acoustics")?.let { token ->
             AcousticQuality.entries.firstOrNull { it.name.equals(token, ignoreCase = true) }?.let { audioAcoustics = it }
@@ -268,6 +277,13 @@ class Config(private val baseDir: File) {
             ConfigEntryType.BOOLEAN,
             get = { useHwAccel },
             apply = { useHwAccel = it; save() },
+        ),
+        ConfigEntry(
+            "enable-ffmpeg-pipeline", "FFmpeg playback pipeline",
+            "Use the standalone FFmpeg demux+decode pipeline instead of libvlc for video decoding. On Android this also enables MediaCodec hardware decoding.",
+            ConfigEntryType.BOOLEAN,
+            get = { enableFfmpegPipeline },
+            apply = { enableFfmpegPipeline = it; save() },
         ),
         ConfigEntry(
             "mute-on-alt-tab", "Mute on alt-tab",
@@ -401,6 +417,7 @@ class Config(private val baseDir: File) {
             appendLine("flashback-render-displays = $flashbackRenderDisplays")
             appendLine("global-audio-multiplier = $globalAudioMultiplier")
             appendLine("use-hw-accel = $useHwAccel")
+            appendLine("enable-ffmpeg-pipeline = $enableFfmpegPipeline")
             appendLine("prefer-fps60 = $preferFps60")
             appendLine("audio-acoustics = \"${audioAcoustics.name.lowercase()}\"")
             appendLine("audio-output-profile = \"${if (audioBinauralOutput) "headphones" else "speakers"}\"")

@@ -1,7 +1,7 @@
 package com.dreamdisplayx.platform.client.render
 
 import com.dreamdisplayx.util.log.DreamLog
-import com.dreamdisplayx.media.player.process.LibVlcFrameExtractor
+import com.dreamdisplayx.media.player.process.FfmpegFrameExtractor
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -10,16 +10,16 @@ import java.util.concurrent.Executors
  * Extracts the first frame of a direct-link video as its search-card thumbnail.
  *
  * Platform results (YouTube / Twitch / Bilibili) all carry a thumbnail, but a pasted direct link — a
- * custom media file with no cover art — has none to show. This schedules one one-shot libvlc
+ * custom media file with no cover art — has none to show. This schedules one one-shot FFmpeg
  * extraction per unique card key and hands the resulting JPEG bytes to [Thumbnails.registerBytes] so
  * they flow through the exact same decode / GPU-register / disk-cache pipeline as any other thumbnail.
  *
  * Guard rails:
- *  - a single worker thread: one full libvlc player at a time (player setup is ~1-2s, far too heavy
- *    to parallelize across cards);
+ *  - a single worker thread: one full demux + decode session at a time (opening a stream and
+ *    decoding its first frame costs seconds on a slow host, far too heavy to parallelize across cards);
  *  - requests coalesced by key, so re-rendering or re-hovering the same card never re-extracts;
  *  - extraction is strictly best-effort: a pasted link may be an HTML page, a dead host, or a file
- *    libvlc cannot demux. Every failure resolves to `null` and the card simply keeps its placeholder
+ *    FFmpeg cannot demux. Every failure resolves to `null` and the card simply keeps its placeholder
  *    shimmer — the search panel must never block or crash on a thumbnail.
  */
 object FirstFrameThumbnails {
@@ -42,7 +42,7 @@ object FirstFrameThumbnails {
         synchronized(list) { list.add(onFrame) }
         if (list.size > 1) return // a worker is already extracting this video
         executor.execute {
-            val jpeg = runCatching { LibVlcFrameExtractor.extractJpeg(url, 0L, 320, 180) }
+            val jpeg = runCatching { FfmpegFrameExtractor.extractJpeg(url, 0L, 320, 180) }
                 .getOrElse { t ->
                     logger.warn("First-frame extraction failed for $key: ${t.message}")
                     null
