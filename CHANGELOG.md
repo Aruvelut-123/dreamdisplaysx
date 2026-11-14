@@ -22,6 +22,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - All client and server language files now match the English key set (239 client keys, 127 server keys). The danmaku overlay, sort, display-mode and config-page strings were missing from 10 client languages, and the global Bilibili login/logout strings were missing from 10 server languages.
 - Fixed the frame rate collapsing again on the renamed `MobileGL` GLES bridge: the probe only knew the older `MobileGlues` spelling, so the `PBO` ring with its emulated fence waits came back. It now matches the `mobilegl` prefix, and the upload-path line logs the renderer strings it saw.
 - Fixed a hull-mounted display juddering against a moving ship: one frame asked for the structure transform from the renderer, the distance census, the acoustic plane and the crosshair test, each paying the full reflective lookup. Those readers now share one read per frame.
+- Fixed the Forge mod crashing on launch when KotlinForForge is installed: `kotlinx-coroutines-core` ships a top-level `_COROUTINE` package that the fat jar's `kotlinx` relocation never matched, so the JVM module layer refused the duplicate export and aborted before the main menu.
 
 # 1.10.8.1 Release
 Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplays/commit/c1824ffa879f11c8a292e84645c287f68402d545).
