@@ -52,6 +52,12 @@ val dreamDisplaysShadedPackages = listOf(
     "org.tukaani.xz",
     "kotlin",
     "kotlinx",
+    // `kotlinx-coroutines-core-jvm` ships `_COROUTINE/` as a *top-level* package, not under
+    // `kotlinx/`, so relocating "kotlinx" alone leaves it untouched and it then collides with the
+    // same package in KotlinForForge ("Modules dreamdisplayx and thedarkcolour.kotlinforforge
+    // export package _COROUTINE to module ..."), which the JPMS module layer refuses at launch.
+    // Shadow matches a relocate by exact package path, so this needs its own entry.
+    "_COROUTINE",
     "org.jetbrains.annotations",
     "org.intellij.lang.annotations",
     "org.tomlj",
