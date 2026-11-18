@@ -7,3 +7,4 @@
 - [ ] Find why keyword search returns nothing on Forge: `SuggestionsController.runSearch` calls `BilibiliApi` directly, so the cause is not the Forge networking layer.
 - [ ] Smoke-test the display hotkeys in `Options -> Controls` with runClient on Fabric/NeoForge/Forge: the four catalog bindings should appear under their own categories, be rebindable, and stay unbound by default. Compile-only verification so far (no JVM-only seam).
 - [ ] Extend the CI `unit-test` job to `:platform:client:common:test` once `./gradlew :platform:client:common:test` has been seen green somewhere — `ModKeyMappingsTest`/`DisplayHotkeysTest` currently never run in CI.
+- [ ] Smoke-test the opt-in FFmpeg audio path on a real device: switch between two audio tracks in one container, and open a Bilibili DASH display (separate audio URL) to confirm it is not silent. The native demuxer/decoder/PCM chain has no JVM seam, so `FfmpegAudioSourcePolicyTest` only pins the "which input" decision.
