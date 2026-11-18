@@ -21,25 +21,23 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * ## 它负责什么
  *
- * 只负责**视频**。解封装走 [FfmpegDemuxer]，解码后端由 [FfmpegHwBackendPolicy] 选（硬解失败
+ * 视频：解封装走 [FfmpegDemuxer]，解码后端由 [FfmpegHwBackendPolicy] 选（硬解失败
  * 经 [FfmpegCodecScheduler.reportFailure] 降级到同编码的软解），成品是打包 BGRA，经
  * [FrameSurface] 交给渲染线程。这正是 libvlc 会话里 `FrameSurface` 那段所做的工作，
  * 所以两条后端共用同一条上传通路，`updateFrame` / `textureFilled` 的行为天然一致。
  *
- * ## 它不负责什么（刻意的）
- *
- * **音频仍归 libvlc**，本类所有音频成员都是空实现。原因写在
- * [PlaybackSession] 的类注释里：libvlc 的 `:no-video` 音频路径承载了 Android 的
- * AudioTrack 预算、暖轨道池与 park/resume 记账，把这段逻辑在 FFmpeg 旁边重写一遍，
- * 等于把模块里最危险的代码复制一份而收益为零。所以选择本会话**只接管视频**，
- * 音频照旧由另一条 libvlc 会话播放。
+ * 音频：本会话**也**承载音频（[FfmpegAudioDecoder] → [FfmpegAudioOutput]）。既然
+ * `FfmpegPcmSinks.isSupported` 在所有受支持平台都为 true，`FfmpegVideoOwnership.plan()`
+ * 就不会再拆出 libvlc 音频后端，本类必须自己把声音放出来，否则就是「有画面、无声音」。
+ * DASH 那种「视频 URL + 音频 URL」分离的源会再开一个纯音频 [FfmpegDemuxer]，
+ * 由独立线程读取，见 [resolveAudioSource] / [startAudioThread]。
  *
  * ## 线程模型
  *
  * 与 [PlaybackSession] 的约定一致：渲染线程那一半（[textureFilled] / [updateFrame] /
- * [clearFrame]）只在渲染线程调用；[start] / [stop] 等在控制线程调用；解码循环跑在
- * 本类自有的单线程执行器上，串行执行，不与其他线程争用 native 上下文
- * （[FfmpegDemuxer] 与 [AndroidMediaCodecHwSolver] 都明确要求串行访问）。
+ * [clearFrame]）只在渲染线程调用；[start] / [stop] 等在控制线程调用；视频解码循环与
+ * 独立音频循环各跑一条线程，分别独占自己的 [FfmpegDemuxer]（不同实例互不共享
+ * native 上下文，因此可以并行）。
  *
  * ## 现在的完成度（不要高估）
  *
@@ -146,10 +144,29 @@ internal class FfmpegSession(
     @Volatile
     private var decodeThread: Thread? = null
 
+    /**
+     * 独立音频线程，仅在 [audioDemuxer] 非 null 时启动。
+     *
+     * 为什么必须单独一条线程：`av_read_frame` 在网络上会阻塞，若音频包也在视频
+     * 线程里读，两个输入互相拖累（视频等音频的网络抖动 → 掉帧）。分开读之后
+     * 音视频各自推进，只有 [FfmpegAudioOutput] 的节奏把它们对齐。
+     */
+    @Volatile
+    private var audioThread: Thread? = null
+
     @Volatile
     private var demuxer: FfmpegDemuxer? = null
     @Volatile
     private var solver: AndroidMediaCodecHwSolver? = null
+
+    /**
+     * 音频独立解封装器（DASH 分离源：视频 URL 与 音频 URL 分开）。
+     *
+     * 非 null 时表示当前会话的音频来自另一个输入；此时 `demuxer` 只负责视频。
+     * null 表示单容器，音频（如有）从主 `demuxer` 读，由 `startAudio` 负责。
+     */
+    @Volatile
+    private var audioDemuxer: FfmpegDemuxer? = null
 
     /**
      * 音频解码器，仅在源里真有音频流、且本平台有 PCM 输出时才创建。
@@ -354,7 +371,10 @@ internal class FfmpegSession(
 
         // 音频：源里有音频流、且本平台有 PCM 设备时才起。失败一律不致命——
         // 画面已经能出，把整条播放拖垮只为了声音是错误的取舍。
-        startAudio(dm, offsetNanos)
+        //
+        // DASH 把音频单独放一个 URL 时，主 demuxer 里根本没有音频流，
+        // 必须为它新开一个纯音频输入，否则 FFmpeg 模式下画面有声无音。
+        startAudio(resolveAudioSource(streamSet, dm, offsetNanos), offsetNanos)
 
         startDecodeLoop()
         playing = true
@@ -407,6 +427,67 @@ internal class FfmpegSession(
             }
         }
         return null
+    }
+
+    /**
+     * 选出本次起播的音频输入。
+     *
+     * 三种情况，按顺序判断：
+     * 1. 主 demuxer 自己就有音频流（单容器 / muxed）→ 直接用它，不必开第二个输入；
+     * 2. 主 demuxer 没有音频，但 [ActiveStreams.currentAudio] 指向另一个 URL
+     *    （Bilibili DASH 把音频拆成独立一路）→ 为它开一个纯音频 [FfmpegDemuxer]，
+     *    并记到 [audioDemuxer]；
+     * 3. 都没有 → 返回主 demuxer（它的 `audioStreamIndex < 0`，[startAudio] 会安静跳过）。
+     *
+     * 失败一律回落到主 demuxer：宁可无声，也不能因为音频把画面拖垮。
+     */
+    private fun resolveAudioSource(
+        streamSet: ActiveStreams,
+        videoDemuxer: FfmpegDemuxer,
+        offsetNanos: Long,
+    ): FfmpegDemuxer {
+        if (!FfmpegAudioSourcePolicy.needsSeparateInput(
+                streamSet.currentVideo.url, streamSet.currentAudio.url,
+                videoDemuxer.audioStreamIndex >= 0,
+            )) return videoDemuxer
+
+        val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(audioUrl) }.getOrElse {
+            logger.warn("{} audio url rejected by host guard: {}", debugLabel, it.message)
+            return videoDemuxer
+        }
+
+        val adm = FfmpegDemuxer(
+            safeUrl,
+            referer = refererFor(safeUrl),
+            userAgent = USER_AGENT,
+            audioOnly = true,
+        )
+        if (!adm.open()) {
+            logger.warn("{} audio demuxer open failed: {}", debugLabel, adm.lastError)
+            adm.close()
+            return videoDemuxer
+        }
+        if (adm.audioStreamIndex < 0) {
+            logger.warn("{} audio url has no audio stream; playing silently", debugLabel)
+            adm.close()
+            return videoDemuxer
+        }
+        // 音频独立输入必须自己定位到播放位置，否则换轨后声音从 0 秒开始而画面在中段。
+        if (offsetNanos > 0L) {
+            val targetMicros = offsetNanos / 1_000L
+            if (!adm.seekTo(targetMicros)) {
+                logger.warn(
+                    "{} audio seek to {}ns failed ({}); audio will start from the top",
+                    debugLabel, offsetNanos, adm.lastError,
+                )
+            }
+        }
+        audioDemuxer = adm
+        logger.info(
+            "{} audio uses a separate input ({} track(s), {}ns offset)",
+            debugLabel, adm.audioTrackCount(), offsetNanos,
+        )
+        return adm
     }
 
     /**
@@ -469,6 +550,58 @@ internal class FfmpegSession(
             debugLabel, decoder.sourceCodec, decoder.sourceSampleRate, decoder.sourceChannels,
             FfmpegAudioDecoder.TARGET_RATE, offsetNanos,
         )
+
+        // DASH 分离源：音频来自独立输入，必须开一条线程专门读它。
+        // 主解码线程只负责视频输入，两路网络读互不阻塞。
+        // 不同 FfmpegDemuxer 实例持有各自的 AVFormatContext / packet，并发安全。
+        if (dm !== demuxer) startAudioThread(dm)
+    }
+
+    /** 起独立音频线程：读音频包 → 解码 → 送设备。仅在 [audioDemuxer] 非 null 时启动。 */
+    private fun startAudioThread(dm: FfmpegDemuxer) {
+        stopAudioThread(waitForThread = true)
+        val thread = Thread({
+            try {
+                audioDecodeLoop(dm)
+            } catch (t: Throwable) {
+                logger.error("{} audio thread threw {}: {}", debugLabel, t::class.simpleName, t.message)
+            }
+        }, "MediaPlayer-ffmpeg-audio-$debugLabel")
+        thread.isDaemon = true
+        audioThread = thread
+        thread.start()
+    }
+
+    /**
+     * 独立音频读取循环。纯音频输入里每个包都是音频包，所以只处理
+     * [FfmpegDemuxer.Result.AUDIO_PACKET_READY]；EOF 正常结束，ERROR 上报后静默退出。
+     */
+    private fun audioDecodeLoop(dm: FfmpegDemuxer) {
+        if (audioDecoder == null || audioOutput == null) return
+        while (!stopped.get() && !released.get()) {
+            when (val r = dm.readPacket()) {
+                FfmpegDemuxer.Result.AUDIO_PACKET_READY -> handleAudioPacket(dm)
+                FfmpegDemuxer.Result.EOF -> {
+                    drainAudio()
+                    return
+                }
+                FfmpegDemuxer.Result.ERROR -> {
+                    logger.warn("{} audio demux error: {}", debugLabel, dm.lastError)
+                    return
+                }
+                FfmpegDemuxer.Result.NOT_OPEN -> return
+                else -> continue // PACKET_READY/SKIP 不会出现在纯音频输入里
+            }
+        }
+    }
+
+    /** 停止独立音频线程。在关闭音频设备/解码器之前必须先调用，避免用到已释放的 native 上下文。 */
+    private fun stopAudioThread(waitForThread: Boolean) {
+        val t = audioThread
+        audioThread = null
+        if (waitForThread && t != null && t !== Thread.currentThread()) {
+            runCatching { t.join(THREAD_JOIN_TIMEOUT_MS) }
+        }
     }
 
     /**
@@ -517,6 +650,8 @@ internal class FfmpegSession(
 
     /** 释放音频通路。可重复调用。 */
     private fun stopAudio() {
+        // 顺序不能反：解码线程正在 `decode()` 里持有 AVCodecContext，先 close 就是释放后使用。
+        stopAudioThread(waitForThread = true)
         runCatching { audioDecoder?.close() }
         runCatching { audioOutput?.close() }
         audioDecoder = null
@@ -588,7 +723,9 @@ internal class FfmpegSession(
                 // 只是不再有音频包可读，视频照常解码）。
                 FfmpegDemuxer.Result.AUDIO_PACKET_READY -> handleAudioPacket(dm)
                 FfmpegDemuxer.Result.EOF -> {
-                    drainAudio()
+                    // 音频来自独立输入时，排空由音频线程自己负责：两处都 drain 会让
+                    // 两条线程同时进 FfmpegAudioDecoder.flush()，那是 native 上下文并发访问。
+                    if (audioDemuxer == null) drainAudio()
                     finishNormally()
                     return
                 }
@@ -811,8 +948,10 @@ internal class FfmpegSession(
         stopAudio()
         runCatching { solver?.close() }
         runCatching { demuxer?.close() }
+        runCatching { audioDemuxer?.close() }
         solver = null
         demuxer = null
+        audioDemuxer = null
     }
 
     private fun resetFirstFrameLatch() {
@@ -892,12 +1031,102 @@ internal class FfmpegSession(
     }
 
     /**
-     * 只换音频。本会话不承载音频（音频仍由 libvlc 负责），所以这里只需回 true 表示
-     * 「选择已接受」，真正的音频替换由上层交给短视频会话处理。
+     * 换音轨。
+     *
+     * FFmpeg 模式下音频由本会话承载（`FfmpegPcmSinks.isSupported` 恒为 true，
+     * 所以 `FfmpegVideoOwnership.plan()` 不会拆出 libvlc 音频后端），因此这里必须真的
+     * 重建音频通道——旧实现只写一行日志并返回 true，导致菜单里换了音轨、响的还是原来那条。
+     *
+     * 两条路径，由「音频 URL 是否与视频 URL 相同」决定：
+     *  - **同一个容器**（muxed，或 MP4 内嵌多音轨）：音频随主 demuxer 走，无需重开输入。
+     *    已经没有独立音频输入时它就是正确的选择，直接成功；
+     *  - **独立音频 URL**（Bilibili DASH 把音频拆成单独一路）：为它新开一个纯音频
+     *    [FfmpegDemuxer]，先定位到当前播放位置，再替换解码器与输出设备。
+     *
+     * 失败返回 `false`，让 [com.dreamdisplayx.media.player.MediaPlayer] 回滚 `streams`
+     * 并重试旧音轨——原实现无条件 `true` 正是「UI 说切了、实际没切」的根源。
+     *
+     * 调用发生在控制线程；[stopAudio] 会先 join 独立音频线程，再关解码器，
+     * 因此不会与解码线程争用 native 上下文。
      */
     override fun restartAudio(streamSet: ActiveStreams, offsetNanos: Long, lastQuality: Int): Boolean {
         if (released.get()) return false
-        logger.info("{} restartAudio: audio is not owned by this session (stays on libvlc)", debugLabel)
+        val videoDemuxer = demuxer
+        if (videoDemuxer == null) {
+            // 还没起播（或已停止）时没有音频通道可换：如实拒绝，让上层回滚元数据。
+            logger.warn("{} restartAudio: session not started", debugLabel)
+            return false
+        }
+
+        val separateInput = FfmpegAudioSourcePolicy.isSeparateUrl(
+            streamSet.currentVideo.url, streamSet.currentAudio.url,
+        )
+
+        val audioUrl = streamSet.currentAudio.url
+
+        if (!separateInput) {
+            // 音频与视频同属一个容器。主 demuxer 已有音频流时什么都不用做；
+            // 之前若挂着独立音频输入，则要把它关掉、回到主 demuxer 的音频。
+            if (audioDemuxer == null) {
+                currentStreamSet = streamSet
+                currentOffsetNanos = offsetNanos
+                logger.info("{} restartAudio: audio already comes from the container", debugLabel)
+                return true
+            }
+            stopAudio()
+            runCatching { audioDemuxer?.close() }
+            audioDemuxer = null
+            currentStreamSet = streamSet
+            currentOffsetNanos = offsetNanos
+            if (videoDemuxer.audioStreamIndex < 0) {
+                logger.warn("{} restartAudio: container has no audio stream, playing silently", debugLabel)
+                return true
+            }
+            startAudio(videoDemuxer, offsetNanos)
+            return audioOutput != null
+        }
+
+        // 独立音频 URL：先开新输入，成功了再拆旧的——倒过来会在新轨打不开时留下静音。
+        val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(audioUrl) }.getOrElse {
+            logger.warn("{} restartAudio: unsafe audio url: {}", debugLabel, it.message)
+            return false
+        }
+        val adm = FfmpegDemuxer(
+            safeUrl,
+            referer = refererFor(safeUrl),
+            userAgent = USER_AGENT,
+            audioOnly = true,
+        )
+        if (!adm.open()) {
+            logger.warn("{} restartAudio: audio demuxer open failed: {}", debugLabel, adm.lastError)
+            adm.close()
+            return false
+        }
+        if (adm.audioStreamIndex < 0) {
+            logger.warn("{} restartAudio: audio url has no audio stream", debugLabel)
+            adm.close()
+            return false
+        }
+        if (offsetNanos > 0L && !adm.seekTo(offsetNanos / 1_000L)) {
+            logger.warn(
+                "{} restartAudio: audio seek to {}ns failed ({}); starting from the top",
+                debugLabel, offsetNanos, adm.lastError,
+            )
+        }
+
+        // 换掉旧音频：stopAudio() 会 join 音频线程，再关掉解码器与设备。
+        stopAudio()
+        runCatching { audioDemuxer?.close() }
+        audioDemuxer = adm
+        currentStreamSet = streamSet
+        currentOffsetNanos = offsetNanos
+        startAudio(adm, offsetNanos)
+        if (audioOutput == null) {
+            // 设备/解码器打不开：如实失败，让上层把选择回滚到原来那条。
+            logger.warn("{} restartAudio: new audio track could not be started", debugLabel)
+            return false
+        }
+        logger.info("{} restartAudio: switched to a separate audio input", debugLabel)
         return true
     }
 

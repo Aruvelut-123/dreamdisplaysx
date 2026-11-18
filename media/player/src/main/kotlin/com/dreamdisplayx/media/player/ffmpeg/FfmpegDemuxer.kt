@@ -43,11 +43,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @param url 视频源 URL（可为直链或 HLS/DASH 清单）
  * @param referer 可选 Referer，CDN 防盗链需要
  * @param userAgent 可选 User-Agent
+ * @param audioOnly true 表示这是「只有音频」的输入（DASH 分离源的音频一半）。
+ *   此时没有视频流是正常的，[open] 不再因此失败，[videoStreamIndex] 保持 -1。
  */
 internal class FfmpegDemuxer(
     private val url: String,
     private val referer: String? = null,
     private val userAgent: String? = null,
+    private val audioOnly: Boolean = false,
 ) : AutoCloseable {
 
     private val logger = DreamLog.of("FfmpegDemuxer")
@@ -171,37 +174,48 @@ internal class FfmpegDemuxer(
             val vsIdx = avformat.av_find_best_stream(
                 ctx, avutil.AVMEDIA_TYPE_VIDEO, -1, -1, null as org.bytedeco.ffmpeg.avcodec.AVCodec?, 0,
             )
-            if (vsIdx < 0) {
+            if (vsIdx >= 0) {
+                val vStream: AVStream = ctx.streams(vsIdx)
+                    ?: run {
+                        lastError = "null AVStream at index $vsIdx"
+                        avformat.avformat_close_input(ctx)
+                        return false
+                    }
+                val vPar: AVCodecParameters = vStream.codecpar()
+                    ?: run {
+                        lastError = "null codecpar for video stream"
+                        avformat.avformat_close_input(ctx)
+                        return false
+                    }
+
+                videoStreamIndex = vsIdx
+                videoCodecId = vPar.codec_id()
+                videoWidth = vPar.width()
+                videoHeight = vPar.height()
+                // 时间基：PTS × num / den = 秒；× 1e6 得微秒。
+                tbNum = vStream.time_base().num()
+                tbDen = vStream.time_base().den()
+            } else if (audioOnly) {
+                // 纯音频输入（DASH 分离源的音频一半）：没有视频流是正常的。
+                // videoStreamIndex 保持 -1，readVideoPacket() 不会被调用，读包走 readPacket()。
+                videoStreamIndex = -1
+                videoCodecId = avcodec.AV_CODEC_ID_NONE
+                videoWidth = 0
+                videoHeight = 0
+                tbNum = 1
+                tbDen = 1
+            } else {
                 lastError = "no video stream (av_find_best_stream=${ffErr(vsIdx)})"
                 avformat.avformat_close_input(ctx)
                 return false
             }
 
-            val stream: AVStream = ctx.streams(vsIdx)
-                ?: run {
-                    lastError = "null AVStream at index $vsIdx"
-                    avformat.avformat_close_input(ctx)
-                    return false
-                }
-            val par: AVCodecParameters = stream.codecpar()
-                ?: run {
-                    lastError = "null codecpar for video stream"
-                    avformat.avformat_close_input(ctx)
-                    return false
-                }
-
-            videoStreamIndex = vsIdx
-            videoCodecId = par.codec_id()
-            videoWidth = par.width()
-            videoHeight = par.height()
-            // 时间基：PTS × num / den = 秒；× 1e6 得微秒。
-            tbNum = stream.time_base().num()
-            tbDen = stream.time_base().den()
             durationMicros = if (ctx.duration() != avutil.AV_NOPTS_VALUE) ctx.duration() else 0L
-
-            // 音频流：找不到不是错误。Bilibili DASH 会把视频和音频拆成两条流，
-            // 纯视频源也合法；调用方按 audioStreamIndex < 0 跳过音频即可。
-            locateAudioStream(ctx)
+            // 音频流：找不到不是错误。DASH 音视频分离的源里，视频这一半本来就没有音频；
+            // 纯视频源也合法，调用方按 audioStreamIndex < 0 跳过音频即可。
+            // 这里必须显式传 ctx：`fmtCtx` 要到函数末尾才赋值，此时走 switchAudioStream()
+            // 会读到 null 而直接 return false——那会让每个源的音频流都定位失败。
+            locateAudioStream(ctx, -1)
 
             packet = avcodec.av_packet_alloc()
                 ?: run {
@@ -371,19 +385,26 @@ internal class FfmpegDemuxer(
             return false
         }
         if (timeMicros < 0L) return true // 0 之前无意义，当作从头开始
-        if (tbNum <= 0 || tbDen <= 0) {
-            lastError = "seek: invalid time base $tbNum/$tbDen"
+        // 有视频就用视频流定位（这才是调用方真正要对齐的那条时间轴）；
+        // 纯音频输入（DASH 分离源的音频一半）没有视频流，退回音频流 + 音频时间基，
+        // 否则音频轨永远无法 seek，换轨后就只能从头播。
+        val useVideo = videoStreamIndex >= 0
+        val streamIdx = if (useVideo) videoStreamIndex else audioStreamIndex
+        val num = if (useVideo) tbNum else audioTbNum
+        val den = if (useVideo) tbDen else audioTbDen
+        if (streamIdx < 0) {
+            lastError = "seek: no seekable stream"
             return false
         }
-        if (videoStreamIndex < 0) {
-            lastError = "seek: no video stream"
+        if (num <= 0 || den <= 0) {
+            lastError = "seek: invalid time base $num/$den"
             return false
         }
         return try {
             // av_seek_frame 的时间戳单位是「该流的时间基」，不是微秒。
-            val target = timeMicros * tbDen / (tbNum * 1_000_000L)
+            val target = timeMicros * den / (num * 1_000_000L)
             val rc = avformat.av_seek_frame(
-                ctx, videoStreamIndex, target, avformat.AVSEEK_FLAG_BACKWARD,
+                ctx, streamIdx, target, avformat.AVSEEK_FLAG_BACKWARD,
             )
             if (rc < 0) {
                 lastError = "av_seek_frame failed: ${ffErr(rc)}"
@@ -426,40 +447,107 @@ internal class FfmpegDemuxer(
         packet = null
         fmtCtx = null
         videoStreamIndex = -1
-        audioStreamIndex = -1
-        audioCodecId = avcodec.AV_CODEC_ID_NONE
-        audioCodecParameters = null
+        clearAudioStream()
     }
 
     /**
      * 定位音频流并记住其 codecpar / 时间基。
      *
-     * 找不到不算失败：DASH 音视频分离的源由调用方分别打开，纯视频源也合法。
-     * 每次 `open()` 都必须先清空上一次的结果，否则换源后会拿旧 codecpar 去开解码器。
+     * @param ctx 已打开的输入上下文（[open] 期间 `fmtCtx` 还没赋值，所以必须显式传）
+     * @param trackIndex 第几条音频流（0 起，指音频流的序号而不是 `AVStream` 的绝对下标）；
+     *   负数表示「自动挑默认那条」
      */
-    private fun locateAudioStream(ctx: AVFormatContext) {
-        audioStreamIndex = -1
-        audioCodecId = avcodec.AV_CODEC_ID_NONE
-        audioCodecParameters = null
-        audioTbNum = 1
-        audioTbDen = 1
+    private fun locateAudioStream(ctx: AVFormatContext, trackIndex: Int) {
+        val wanted = if (trackIndex < 0) -1 else absoluteAudioStreamIndex(ctx, trackIndex)
+        if (trackIndex >= 0 && wanted < 0) {
+            clearAudioStream()
+            lastError = "no audio track #$trackIndex (input has ${audioTrackCount(ctx)})"
+            return
+        }
         val idx = avformat.av_find_best_stream(
-            ctx, avutil.AVMEDIA_TYPE_AUDIO, -1, -1, null as org.bytedeco.ffmpeg.avcodec.AVCodec?, 0,
+            ctx, avutil.AVMEDIA_TYPE_AUDIO, wanted, -1, null as org.bytedeco.ffmpeg.avcodec.AVCodec?, 0,
         )
-        if (idx < 0) return
-        val stream: AVStream = ctx.streams(idx) ?: return
-        val par: AVCodecParameters = stream.codecpar() ?: return
+        if (idx < 0) {
+            // 找不到不算失败：DASH 音视频分离的源里，视频这一半本来就没有音频；
+            // 纯视频源也合法。调用方按 audioStreamIndex < 0 跳过音频即可。
+            clearAudioStream()
+            logger.debug("no audio stream in input (av_find_best_stream={})", ffErr(idx))
+            return
+        }
+        val stream: AVStream = ctx.streams(idx) ?: run { clearAudioStream(); return }
+        val par: AVCodecParameters = stream.codecpar() ?: run { clearAudioStream(); return }
         audioStreamIndex = idx
         audioCodecId = par.codec_id()
         audioCodecParameters = par
         audioTbNum = stream.time_base().num()
         audioTbDen = stream.time_base().den()
         logger.info(
-            "demuxer audio stream: index={} codec={} {}Hz/{}ch tb={}/{}",
-            idx, codecName(audioCodecId), par.sample_rate(), par.ch_layout().nb_channels(),
+            "demuxer located audio track={} index={} codec={} {}Hz/{}ch tb={}/{}",
+            trackIndex, idx, codecName(audioCodecId), par.sample_rate(), par.ch_layout().nb_channels(),
             audioTbNum, audioTbDen,
         )
     }
+
+    /**
+     * 在已打开的输入里改用第 [trackIndex] 条音频流（多音轨容器的换轨）。
+     *
+     * 单容器多音轨（MP4 内嵌多语言）走这条；DASH 那种「视频 URL + 音频 URL」的分离源
+     * 不是同一个容器，换轨必须新开一个 [FfmpegDemuxer]，见 `FfmpegSession.restartAudio`。
+     *
+     * @param trackIndex 第几条音频流（0 起）；负数表示清空音频
+     * @return false 表示该序号不存在；此时解封装器仍然可用，但音频被清空
+     */
+    fun switchAudioStream(trackIndex: Int): Boolean {
+        val ctx = fmtCtx ?: run {
+            lastError = "switchAudioStream before open"
+            return false
+        }
+        if (trackIndex < 0) {
+            clearAudioStream()
+            return true
+        }
+        locateAudioStream(ctx, trackIndex)
+        // locateAudioStream 找不到时会把 audioStreamIndex 置 -1；那条路径要如实报告失败，
+        // 否则上层以为换过去了，实际是静音。
+        return audioStreamIndex >= 0
+    }
+
+    /** 本输入里有几条音频流（换轨前用它校验序号是否合法）。 */
+    fun audioTrackCount(): Int = fmtCtx?.let { audioTrackCount(it) } ?: 0
+
+    /** [ctx] 里音频流的条数。 */
+    private fun audioTrackCount(ctx: AVFormatContext): Int {
+        var n = 0
+        for (i in 0 until ctx.nb_streams()) {
+            val st = ctx.streams(i) ?: continue
+            val par = st.codecpar() ?: continue
+            if (par.codec_type() == avutil.AVMEDIA_TYPE_AUDIO) n++
+        }
+        return n
+    }
+
+    /** 第 [trackIndex] 条音频流的绝对 `AVStream` 下标；不存在返回 -1。 */
+    private fun absoluteAudioStreamIndex(ctx: AVFormatContext, trackIndex: Int): Int {
+        var n = 0
+        for (i in 0 until ctx.nb_streams()) {
+            val st = ctx.streams(i) ?: continue
+            val par = st.codecpar() ?: continue
+            if (par.codec_type() != avutil.AVMEDIA_TYPE_AUDIO) continue
+            if (n == trackIndex) return i
+            n++
+        }
+        return -1
+    }
+
+    /** 清空音频流信息（[close] 与找不到流时共用）。 */
+    private fun clearAudioStream() {
+        audioStreamIndex = -1
+        audioCodecId = avcodec.AV_CODEC_ID_NONE
+        audioCodecParameters = null
+        audioTbNum = 1
+        audioTbDen = 1
+    }
+
 
     /** 音频流的 PTS 换算成微秒；未知返回 [AV_NOPTS_VALUE]。 */
     fun packetAudioPtsMicros(): Long {
