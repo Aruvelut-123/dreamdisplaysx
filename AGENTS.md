@@ -948,6 +948,41 @@ libraries from the extraction filter.
 Windows x86 (32-bit) and Windows aarch64 have **no** bytedeco FFmpeg classifier, so those two platforms keep the
 libvlc video path and the manifest simply has no `ffmpeg` entry for them.
 
+### FFmpeg audio ownership: a DASH audio URL is its own input
+
+`FfmpegSession.restartAudio()` used to log and return `true`, so `MediaPlayer.changeAudioTrack()` believed the switch
+had happened and no audio changed. It is real now, and the shape follows from the fact that FFmpeg owns audio when
+`FfmpegVideoOwnership` splits video from libvlc:
+
+- **`FfmpegAudioSourcePolicy.needsSeparateInput(videoUrl, audioUrl, videoHasAudio)` is the only decision.** A muxed
+  source reuses the main demuxer's stream; a Bilibili DASH source (video and audio URLs differ) needs a second,
+  audio-only `FfmpegDemuxer`. Keep it pure JVM — `FfmpegAudioSourcePolicyTest` pins both branches and the
+  same-URL-but-no-audio case.
+- **`FfmpegDemuxer.switchAudioStream(trackIndex)` takes an *audio track ordinal*, not a container stream index.**
+  Lane 0 is the first audio stream, which in a normal file is stream index 1. It returns `false` and leaves the audio
+  cleared (not the demuxer closed) when the ordinal does not exist, so the caller can roll back.
+- **`open()` must locate the audio stream before `fmtCtx = ctx`.** The previous code called `switchAudioStream(0)`
+  three lines *above* that assignment, and the method reads `fmtCtx`, so it returned `false` every single time and
+  no FFmpeg session had ever played audio. `open()` now calls a private `locateAudioStream(ctx, -1)` that takes the
+  context as a parameter, so the ordering cannot regress by accident.
+- **`FfmpegDemuxer(audioOnly = true)` is required for the second input**, since a DASH audio rendition has no video
+  stream and a normal open would fail. `seekTo` falls back to the audio stream's time base for the same reason.
+- **A separate audio input owns a dedicated thread.** `audioDecodeLoop` reads packets from `audioDemuxer` while the
+  video loop drives the main demuxer; the two native contexts must not be touched from one thread. The main loop
+  therefore skips `drainAudio` entirely when a separate input exists, otherwise both threads would call `flush()`
+  on the same decoder.
+- **`stopAudio` stops that thread before closing the decoder and the PCM device.** Closing the output first leaves
+  the loop writing into a released sink.
+- **`restartAudio` returns `false` on failure on purpose.** `MediaPlayer.changeAudioTrack()` only restores the old
+  track and retries when the backend reports failure; reporting success for a rebuild that did not happen is the
+  original bug in a new place.
+- A rejected audio URL (host guard) or an audio URL with no audio stream degrades to the main demuxer's audio rather
+  than failing the switch — a silent picture is worse than a wrong track, but a broken one is worse than silent.
+
+CI is the only verifier here: the bytedeco artifacts are not cached locally, so `:media:player` cannot be compiled
+on this machine. Run `gh workflow run ci.yml --ref <branch>` after a push — the branch push alone does not trigger
+`ci.yml`, and a failed push leaves the remote head one commit behind without any local indication.
+
 ## Upload path and frame-queue liveness
 
 Two independent client-side rules keep a display from either starving the game's frame rate or freezing

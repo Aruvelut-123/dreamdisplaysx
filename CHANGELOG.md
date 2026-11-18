@@ -26,6 +26,7 @@ Based on Dream Displays [c1824ffa](https://github.com/arnodoelinger/dreamdisplay
 - The FFmpeg native runtime is now downloaded and versioned like the libvlc one, so the FFmpeg pipeline works on a clean install instead of only where FFmpeg happened to be on the classpath.
 - The opt-in FFmpeg pipeline now opens HLS/DASH links: FFmpeg only whitelists `file,crypto,data` by default, so a manifest's own segments and sub-playlists were refused and the display stayed black while a direct `.mp4` played fine.
 - The opt-in FFmpeg pipeline now runs media URLs through the same public-host check as libvlc, so a link redirecting to an internal address is refused instead of fetched.
+- The opt-in FFmpeg pipeline now switches audio tracks instead of ignoring the request, and a Bilibili DASH source whose audio is a separate URL finally produces sound: the audio input is opened on its own and resumed at the current playback position.
 - Fixed the Forge mod crashing on launch when KotlinForForge is installed: `kotlinx-coroutines-core` ships a top-level `_COROUTINE` package that the fat jar's `kotlinx` relocation never matched, so the JVM module layer refused the duplicate export and aborted before the main menu.
 
 # 1.10.8.1 Release
