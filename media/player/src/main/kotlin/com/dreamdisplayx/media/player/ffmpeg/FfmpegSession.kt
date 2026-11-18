@@ -451,6 +451,8 @@ internal class FfmpegSession(
                 videoDemuxer.audioStreamIndex >= 0,
             )) return videoDemuxer
 
+        // 走到这里说明策略已判定「需要独立音频输入」，音频 URL 一定非空且不同于视频 URL。
+        val audioUrl = streamSet.currentAudio.url
         val safeUrl = runCatching { MediaHostGuard.resolveSafeUrl(audioUrl) }.getOrElse {
             logger.warn("{} audio url rejected by host guard: {}", debugLabel, it.message)
             return videoDemuxer
