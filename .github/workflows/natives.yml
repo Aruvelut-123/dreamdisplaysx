@@ -1,23 +1,13 @@
 # Build Natives — standalone workflow
 #
-# Collects the prebuilt native runtimes the mod downloads at first launch and
-# publishes them as a GitHub Release:
+# Builds native runtimes from source and publishes them as a GitHub Release:
 #
 #   libvlc — the official VideoLAN runtime (libvlc.dll / .so / .dylib + plugins).
 #            Still required for audio output and the playback clock while the
 #            FFmpeg video pipeline owns decoding.
-#   ffmpeg — the official bytedeco FFmpeg runtime (libavcodec / libavformat /
-#            libavutil / swscale / swresample + the JavaCPP JNI shims).
-#
-# Neither is compiled here. Both are repackaged from upstream binaries; see
-# native/ffmpeg/collect.sh for why FFmpeg is a download rather than a build.
-#
-# Only the main project build workflow downloads them from that release, so the
-# MSYS2 toolchains on Windows are not needed on every CI run.
-#
-# sqlite-jdbc ships as a plain dependency now: on NeoForge it rides along as a
-# jar-in-jar, on Fabric/Paper the stock native binaries inside the fat loader
-# jar are used directly — no custom-built (relocated-JNI) sqlite natives needed.
+#   ffmpeg — FFmpeg built from upstream source (libavcodec / libavformat /
+#            libavutil / swscale / swresample / swresample + the JavaCPP JNI shims).
+#            Uses FFmpeg 9.0.2 with all hardware acceleration backends enabled.
 #
 # Trigger: manual (workflow_dispatch). The release tag is auto-generated from
 # the commit SHA and timestamp, and the tag marker file
@@ -35,6 +25,10 @@ concurrency:
 
 permissions:
   contents: write
+
+env:
+  # Single source of truth for the FFmpeg version. Update here when bumping.
+  FFMPEG_VER: 9.0.2
 
 jobs:
   libvlc:
@@ -117,23 +111,29 @@ jobs:
 
   ffmpeg:
     name: ffmpeg ${{ matrix.ffmpeg.platform }}
-    # Every target is a plain Maven download plus repacking, so one Linux
-    # runner can serve all of them; no per-platform toolchain is involved.
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Each target runs on a runner appropriate for the platform (native or cross-compile).
+    runs-on: ${{ matrix.ffmpeg.runner }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         ffmpeg:
-          - { platform: linux-x86_64,  key: linux-x64 }
-          - { platform: linux-arm64,   key: linux-aarch64 }
-          - { platform: macosx-x86_64, key: macos-x64 }
-          - { platform: macosx-arm64,  key: macos-aarch64 }
-          - { platform: windows-x86_64,key: windows-x64 }
-          # Windows x86 (32-bit) and aarch64 have no bytedeco FFmpeg
-          # classifier, so those two platforms keep the libvlc video path.
-          - { platform: android-arm64, key: android-aarch64 }
-          - { platform: android-x86_64,key: android-x64 }
+          # Linux x86_64 (native)
+          - { platform: linux-x86_64,  key: linux-x64,      runner: ubuntu-latest }
+          # Linux ARM64 (cross-compile on x86_64 runner)
+          - { platform: linux-aarch64,  key: linux-aarch64,  runner: ubuntu-latest }
+          # macOS x86_64 (native on Intel runner)
+          - { platform: macos-x86_64,   key: macos-x64,      runner: macos-15-intel }
+          # macOS ARM64 (native on Apple Silicon runner)
+          - { platform: macos-aarch64,  key: macos-aarch64,  runner: macos-14 }
+          # Windows x86_64 (native on Windows runner with MSYS2/mingw-w64)
+          - { platform: windows-x86_64, key: windows-x64,    runner: windows-latest }
+          # Windows ARM64 (native on Windows ARM runner with mingw-w64 aarch64)
+          - { platform: windows-aarch64, key: windows-aarch64, runner: windows-11-arm }
+          # Android ARM64 (cross-compile on Linux runner with NDK)
+          - { platform: android-arm64,  key: android-aarch64, runner: ubuntu-latest }
+          # Android x86_64 (cross-compile on Linux runner with NDK)
+          - { platform: android-x86_64, key: android-x64,    runner: ubuntu-latest }
 
     steps:
       - name: Checkout repository
@@ -141,17 +141,51 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Collect FFmpeg runtime
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.ffmpeg.msystem || 'MINGW64' }}
+          update: false
+          install: >
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkg-config
+            ${{ matrix.ffmpeg.platform == 'windows-aarch64' && 'mingw-w64-aarch64-gcc' || '' }}
+
+      - name: Setup Android NDK (Android targets)
+        if: matrix.ffmpeg.platform == 'android-arm64' || matrix.ffmpeg.platform == 'android-x86_64'
+        uses: android-actions/setup-android@v3
+        with:
+          ndk-version: r27c
+          api-level: 24
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux' && (matrix.ffmpeg.platform == 'linux-x86_64' || matrix.ffmpeg.platform == 'linux-aarch64')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config \
+            libva-dev libvdpau-dev libdrm-dev \
+            ${{ matrix.ffmpeg.platform == 'linux-aarch64' && 'gcc-aarch64-linux-gnu g++-aarch64-linux-gnu' || '' }}
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install pkg-config
+          # For cross-compiling to ARM64 on Intel runner
+          if [[ "${{ matrix.ffmpeg.platform }}" == "macos-aarch64" && "$(uname -m)" != "arm64" ]]; then
+            brew install llvm mingw-w64
+          fi
+
+      - name: Build FFmpeg native runtime from source
         shell: bash
         env:
-          # Single source of truth for the runtime version. Bumping it must also
-          # bump the "ffmpeg" version in gradle/libs.versions.toml, or the Java
-          # bindings and the native libraries drift apart.
-          FFPKG_VER: 8.1.2-1.5.14
+          FFMPEG_VER: ${{ env.FFMPEG_VER }}
+          ANDROID_NDK: ${{ env.ANDROID_NDK_HOME || '/opt/android/ndk' }}
         run: |
           set -euo pipefail
           export OUT_DIR="$PWD/native-artifact/ffmpeg/${{ matrix.ffmpeg.key }}"
-          bash native/ffmpeg/collect.sh ${{ matrix.ffmpeg.platform }}
+          bash native/ffmpeg/build.sh ${{ matrix.ffmpeg.platform }}
 
       - name: Package FFmpeg runtime
         shell: bash
@@ -206,8 +240,8 @@ jobs:
           name: Natives ${{ steps.gen_tag.outputs.tag }}
           body: >
             Pre-built native libraries: the official LibVLC runtime (9 target
-            platforms: 7 desktop + Android arm64/x86_64) and the official
-            bytedeco FFmpeg runtime (5 desktop + Android arm64/x86_64).
+            platforms: 7 desktop + Android arm64/x86_64) and FFmpeg 9.0.2 built
+            from source (9 target platforms including Windows ARM64).
           files: native-archives/*.tar.gz
           fail_on_unmatched_files: true
           draft: false

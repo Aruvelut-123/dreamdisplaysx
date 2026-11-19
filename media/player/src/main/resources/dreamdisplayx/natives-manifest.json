@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "release_base": "https://github.com/Aruvelut-123/dreamdisplaysx/releases/download/natives-7f303c9-1787719531",
   "libvlc": {
     "linux-x64": "libvlc-linux-x64.tar.gz",
@@ -18,6 +18,7 @@
     "macos-x64": "ffmpeg-macos-x64.tar.gz",
     "macos-aarch64": "ffmpeg-macos-aarch64.tar.gz",
     "windows-x64": "ffmpeg-windows-x64.tar.gz",
+    "windows-aarch64": "ffmpeg-windows-aarch64.tar.gz",
     "android-aarch64": "ffmpeg-android-aarch64.tar.gz",
     "android-x64": "ffmpeg-android-x64.tar.gz"
   }
