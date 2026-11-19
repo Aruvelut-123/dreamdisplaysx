@@ -138,26 +138,47 @@ case "$PLATFORM" in
       --arch="$TARGET_ARCH"
       --cross-prefix="${HOST_TRIPLE}-"
     )
-    # MSYS2 provides the mingw-w64 toolchain. Explicitly tell configure which
-    # toolchain to use so make's compat/windows/makedef can find
-    # ${TRIPLE}-ar/nm/ranlib/strip (aarch64 runs clang instead of gcc).
+
+    # MSYS2's binutils installs the *unprefixed* `ar`/`nm`/`ranlib`/`strip`, not
+    # `${TRIPLE}-ar`. That matters because FFmpeg's compat/windows/makedef is
+    # invoked from the makefile with `AR=$(AR)`, and a name that does not exist
+    # kills the build with:
+    #
+    #   ./compat/windows/makedef: line 49: x86_64-w64-mingw32-ar: command not found
+    #   Could not create temporary library.
+    #
+    # configure never validates `--ar`, so this only surfaces mid-build. Probe
+    # for the prefixed spelling first (real cross toolchains usually have it)
+    # and fall back to the bare name that MSYS2 actually ships.
+    probe_tool() {
+      local prefixed="$1" bare="$2"
+      if command -v "$prefixed" >/dev/null 2>&1; then echo "$prefixed"; else echo "$bare"; fi
+    }
+    TOOL_AR="$(probe_tool "${HOST_TRIPLE}-ar" ar)"
+    TOOL_NM="$(probe_tool "${HOST_TRIPLE}-nm" nm)"
+    TOOL_RANLIB="$(probe_tool "${HOST_TRIPLE}-ranlib" ranlib)"
+    TOOL_STRIP="$(probe_tool "${HOST_TRIPLE}-strip" strip)"
+    echo ">>> Toolchain: ar=$TOOL_AR nm=$TOOL_NM ranlib=$TOOL_RANLIB strip=$TOOL_STRIP"
+
+    CONFIGURE_FLAGS+=(
+      --ar="$TOOL_AR"
+      --nm="$TOOL_NM"
+      --ranlib="$TOOL_RANLIB"
+      --strip="$TOOL_STRIP"
+    )
+
+    # CLANGARM64 (aarch64) is clang-based; MINGW32/MINGW64 use gcc. Neither
+    # package installs a prefixed C compiler under every MSYS2 release, so the
+    # same probe applies.
     if [[ "$PLATFORM" == "windows-aarch64" ]]; then
       CONFIGURE_FLAGS+=(
-        --cc="${HOST_TRIPLE}-clang"
-        --cxx="${HOST_TRIPLE}-clang++"
-        --ar="${HOST_TRIPLE}-ar"
-        --nm="${HOST_TRIPLE}-nm"
-        --ranlib="${HOST_TRIPLE}-ranlib"
-        --strip="${HOST_TRIPLE}-strip"
+        --cc="$(probe_tool "${HOST_TRIPLE}-clang" clang)"
+        --cxx="$(probe_tool "${HOST_TRIPLE}-clang++" clang++)"
       )
     else
       CONFIGURE_FLAGS+=(
-        --cc="${HOST_TRIPLE}-gcc"
-        --cxx="${HOST_TRIPLE}-g++"
-        --ar="${HOST_TRIPLE}-ar"
-        --nm="${HOST_TRIPLE}-nm"
-        --ranlib="${HOST_TRIPLE}-ranlib"
-        --strip="${HOST_TRIPLE}-strip"
+        --cc="$(probe_tool "${HOST_TRIPLE}-gcc" gcc)"
+        --cxx="$(probe_tool "${HOST_TRIPLE}-g++" g++)"
       )
     fi
     # d3d11va/dxva2 are autodetected from the mingw headers and back the
