@@ -106,13 +106,14 @@ case "$PLATFORM" in
       --target-os=linux
       --arch="$TARGET_ARCH"
       --enable-pthreads
+      # Explicitly disable VA-API/VDPAU/X11 on cross-compile runners where headers
+      # exist but runtime libs (libGL, libva, libvdpau) are missing, causing
+      # configure to fail. Native builds on actual target hardware would detect
+      # them automatically if present; we keep it simple and safe.
+      --disable-vaapi
+      --disable-vdpau
+      --disable-xlib
     )
-    # VA-API / VDPAU are deliberately NOT forced here: FFmpeg's configure
-    # auto-detects them when the dev headers + libraries exist, and forcing
-    # --enable-vaapi on a runner whose headers are present but whose runtime
-    # libs/libGL are missing would fail configure. The hardware-decoder
-    # rungs in FfmpegHwBackendPolicy will still see h264_vaapi / hevc_vaapi
-    # when the target system really has them.
     if [[ "$PLATFORM" == "linux-aarch64" && "$(uname -m)" != "aarch64" ]]; then
       CONFIGURE_FLAGS+=(--cross-prefix="${HOST_TRIPLE}-")
     fi
@@ -136,9 +137,21 @@ case "$PLATFORM" in
       --arch="$TARGET_ARCH"
       --cross-prefix="${HOST_TRIPLE}-"
     )
-    # MSYS2/CLANGARM64 provides its own clang via PATH; FFmpeg's configure will
-    # probe for the compiler itself. d3d11va/dxva2 are autodetected from the
-    # mingw headers and back the Windows hardware-decoder rungs.
+    # MSYS2/CLANGARM64 provides clang, not gcc. Explicitly tell configure to use
+    # clang for the aarch64 target so it doesn't fall back to the missing
+    # aarch64-w64-mingw32-gcc.
+    if [[ "$PLATFORM" == "windows-aarch64" ]]; then
+      CONFIGURE_FLAGS+=(
+        --cc="${HOST_TRIPLE}-clang"
+        --cxx="${HOST_TRIPLE}-clang++"
+        --ar="${HOST_TRIPLE}-ar"
+        --nm="${HOST_TRIPLE}-nm"
+        --ranlib="${HOST_TRIPLE}-ranlib"
+        --strip="${HOST_TRIPLE}-strip"
+      )
+    fi
+    # d3d11va/dxva2 are autodetected from the mingw headers and back the
+    # Windows hardware-decoder rungs.
     ;;
 
   android-arm64|android-x86_64)
