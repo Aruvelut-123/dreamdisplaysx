@@ -165,6 +165,8 @@ jobs:
             base-devel
             ${{ matrix.ffmpeg.msystem == 'MINGW64'
                 && 'mingw-w64-x86_64-toolchain mingw-w64-x86_64-nasm'
+                || matrix.ffmpeg.msystem == 'MINGW32'
+                && 'mingw-w64-i686-toolchain mingw-w64-i686-nasm'
                 || 'mingw-w64-clang-aarch64-toolchain mingw-w64-clang-aarch64-nasm' }}
 
       - name: Setup Android NDK

@@ -50,7 +50,7 @@ case "$PLATFORM" in
   macos-aarch64)   OS_DIR=Mac;     ARCH_DIR=aarch64 ; TARGET_OS=darwin  ; TARGET_ARCH=arm64   ; HOST_TRIPLE=arm64-apple-darwin    ;;
   windows-x86)     OS_DIR=Windows; ARCH_DIR=x86     ; TARGET_OS=mingw32 ; TARGET_ARCH=x86     ; HOST_TRIPLE=i686-w64-mingw32      ;;
   windows-x86_64)  OS_DIR=Windows; ARCH_DIR=x86_64  ; TARGET_OS=mingw32 ; TARGET_ARCH=x86_64  ; HOST_TRIPLE=x86_64-w64-mingw32    ;;
-  windows-aarch64) OS_DIR=Windows; ARCH_DIR=aarch64 ; TARGET_OS=mingw32 ; TARGET_ARCH=arm64   ; HOST_TRIPLE=aarch64-w64-mingw32   ;;
+  windows-aarch64) OS_DIR=Windows; ARCH_DIR=aarch64 ; TARGET_OS=mingw32 ; TARGET_ARCH=aarch64 ; HOST_TRIPLE=aarch64-w64-mingw32   ;;
   android-arm64)   OS_DIR=Android; ARCH_DIR=aarch64 ; TARGET_OS=android ; TARGET_ARCH=aarch64 ; HOST_TRIPLE=aarch64-linux-android ;;
   android-x86_64)  OS_DIR=Android; ARCH_DIR=x86_64  ; TARGET_OS=android ; TARGET_ARCH=x86_64  ; HOST_TRIPLE=x86_64-linux-android  ;;
   *)
@@ -170,10 +170,18 @@ case "$PLATFORM" in
     # CLANGARM64 (aarch64) is clang-based; MINGW32/MINGW64 use gcc. Neither
     # package installs a prefixed C compiler under every MSYS2 release, so the
     # same probe applies.
+    #
+    # CLANGARM64's clang defaults to an MSVC/PC target, so it must be told the
+    # mingw triple explicitly. Without `--target`, FFmpeg's C compiler test dies
+    # with "Host compiler lacks C11 support". gcc does NOT understand
+    # `--target=` at all (it is a clang option) and its prefixed binaries
+    # already emit the right ABI, so ONLY the clang branch gets it.
     if [[ "$PLATFORM" == "windows-aarch64" ]]; then
+      CLANG="$(probe_tool "${HOST_TRIPLE}-clang" clang)"
+      CLANGXX="$(probe_tool "${HOST_TRIPLE}-clang++" clang++)"
       CONFIGURE_FLAGS+=(
-        --cc="$(probe_tool "${HOST_TRIPLE}-clang" clang)"
-        --cxx="$(probe_tool "${HOST_TRIPLE}-clang++" clang++)"
+        --cc="${CLANG} --target=${HOST_TRIPLE}"
+        --cxx="${CLANGXX} --target=${HOST_TRIPLE}"
       )
     else
       CONFIGURE_FLAGS+=(
