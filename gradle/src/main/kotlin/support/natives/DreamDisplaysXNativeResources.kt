@@ -7,6 +7,7 @@ val nativePlatformKeys = listOf(
     "linux-aarch64",
     "macos-x64",
     "macos-aarch64",
+    "windows-x86",
     "windows-x64",
     "windows-aarch64",
 )
@@ -26,7 +27,11 @@ fun hostNativeKey(): String {
     val os = System.getProperty("os.name").lowercase()
     val arch = System.getProperty("os.arch").lowercase()
     return when {
-        os.contains("win") -> if (arch.contains("aarch64") || arch.contains("arm")) "windows-aarch64" else "windows-x64"
+        os.contains("win") -> when {
+            arch.contains("aarch64") || arch.contains("arm") -> "windows-aarch64"
+            arch.contains("x86") && !arch.contains("64") -> "windows-x86"
+            else -> "windows-x64"
+        }
         os.contains("mac") -> if (arch.contains("aarch64") || arch.contains("arm")) "macos-aarch64" else "macos-x64"
         else -> if (arch.contains("aarch64") || arch.contains("arm")) "linux-aarch64" else "linux-x64"
     }

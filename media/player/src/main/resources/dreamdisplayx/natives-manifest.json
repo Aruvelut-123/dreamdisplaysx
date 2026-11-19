@@ -17,6 +17,7 @@
     "linux-aarch64": "ffmpeg-linux-aarch64.tar.gz",
     "macos-x64": "ffmpeg-macos-x64.tar.gz",
     "macos-aarch64": "ffmpeg-macos-aarch64.tar.gz",
+    "windows-x86": "ffmpeg-windows-x86.tar.gz",
     "windows-x64": "ffmpeg-windows-x64.tar.gz",
     "windows-aarch64": "ffmpeg-windows-aarch64.tar.gz",
     "android-aarch64": "ffmpeg-android-aarch64.tar.gz",
