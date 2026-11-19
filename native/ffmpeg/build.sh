@@ -183,6 +183,12 @@ case "$PLATFORM" in
     fi
     # d3d11va/dxva2 are autodetected from the mingw headers and back the
     # Windows hardware-decoder rungs.
+    #
+    # Static gcc runtime: a mingw-w64 build otherwise emits DLLs that need
+    # libgcc_s_seh-1.dll / libwinpthread-1.dll / libstdc++-6.dll at load time,
+    # which an end user does not have. `-static-libgcc` is enough here because
+    # the C runtime is msvcrt (imported from Windows itself).
+    CONFIGURE_FLAGS+=(--extra-ldflags="-static-libgcc")
     ;;
 
   android-arm64|android-x86_64)
@@ -249,7 +255,22 @@ echo ">>> Building with $N_JOBS job(s)"
 make -j"$N_JOBS"
 
 echo ">>> Installing into $PREFIX"
-make install
+if [[ "$PLATFORM" == windows-* ]]; then
+  # `make install` on mingw tries `install libavdevice/avdevice.lib`, but a
+  # mingw-w64 gcc build only produces the DLL (+ import .dll.a), never the
+  # MSVC-style .lib, so the rule dies with:
+  #
+  #   install: cannot stat 'libavdevice/avdevice.lib': No such file or directory
+  #   make: *** [ffbuild/library.mak:138: install-libavdevice-shared] Error 1
+  #
+  # The compiled DLLs are already complete, so collect them straight from the
+  # build tree instead of running the install rules. `install-libs` also has to
+  # be skipped for the same reason; headers/pc files are of no use to the mod.
+  mkdir -p "$PREFIX/lib"
+  find . -maxdepth 2 -name '*.dll' -exec cp -f {} "$PREFIX/lib/" \;
+else
+  make install
+fi
 
 # ── Flatten the install tree ────────────────────────────────────────────────
 #
