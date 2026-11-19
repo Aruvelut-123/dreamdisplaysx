@@ -124,21 +124,23 @@ jobs:
       matrix:
         ffmpeg:
           # Linux x86_64 (native)
-          - { platform: linux-x86_64,  key: linux-x64,      runner: ubuntu-latest }
+          - { platform: linux-x86_64,  key: linux-x64,      runner: ubuntu-latest,   msystem: '',         ndk: false }
           # Linux ARM64 (cross-compile on x86_64 runner)
-          - { platform: linux-aarch64,  key: linux-aarch64,  runner: ubuntu-latest }
+          - { platform: linux-aarch64,  key: linux-aarch64,  runner: ubuntu-latest,   msystem: '',         ndk: false }
           # macOS x86_64 (native on Intel runner)
-          - { platform: macos-x86_64,   key: macos-x64,      runner: macos-15-intel }
-          # macOS ARM64 (native on Apple Silicon runner)
-          - { platform: macos-aarch64,  key: macos-aarch64,  runner: macos-14 }
+          - { platform: macos-x86_64,   key: macos-x64,      runner: macos-15-intel,  msystem: '',         ndk: false }
+          # macOS ARM64 (native; macos-14 is not offered in this org's runner set,
+          # so the default arm64 image is used)
+          - { platform: macos-aarch64,  key: macos-aarch64,  runner: macos-latest,    msystem: '',         ndk: false }
           # Windows x86_64 (native on Windows runner with MSYS2/mingw-w64)
-          - { platform: windows-x86_64, key: windows-x64,    runner: windows-latest }
-          # Windows ARM64 (native on Windows ARM runner with mingw-w64 aarch64)
-          - { platform: windows-aarch64, key: windows-aarch64, runner: windows-11-arm }
-          # Android ARM64 (cross-compile on Linux runner with NDK)
-          - { platform: android-arm64,  key: android-aarch64, runner: ubuntu-latest }
-          # Android x86_64 (cross-compile on Linux runner with NDK)
-          - { platform: android-x86_64, key: android-x64,    runner: ubuntu-latest }
+          - { platform: windows-x86_64, key: windows-x64,    runner: windows-latest,  msystem: MINGW64,    ndk: false }
+          # Windows ARM64: MSYS2's aarch64 toolchain lives in CLANGARM64 and is
+          # clang-based (there is no mingw-w64-aarch64-gcc target).
+          - { platform: windows-aarch64, key: windows-aarch64, runner: windows-latest, msystem: CLANGARM64, ndk: false }
+          # Android ARM64 / x86_64 (cross-compile on Linux runner; NDK is
+          # downloaded directly because setup-android@v3 has no ndk-version input)
+          - { platform: android-arm64,  key: android-aarch64, runner: ubuntu-latest,   msystem: '',         ndk: true }
+          - { platform: android-x86_64, key: android-x64,    runner: ubuntu-latest,   msystem: '',         ndk: true }
 
     steps:
       - name: Checkout repository
@@ -150,43 +152,67 @@ jobs:
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: ${{ matrix.ffmpeg.msystem || 'MINGW64' }}
+          msystem: ${{ matrix.ffmpeg.msystem }}
           update: false
-          install: >
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-pkg-config
-            ${{ matrix.ffmpeg.platform == 'windows-aarch64' && 'mingw-w64-aarch64-gcc' || '' }}
+          # MINGW64 uses gcc; CLANGARM64 (aarch64) is clang-based — there is no
+          # mingw-w64-aarch64-gcc package, so the toolchain name differs.
+          install: >-
+            base-devel
+            ${{ matrix.ffmpeg.msystem == 'MINGW64'
+                && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm'
+                || 'mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-lld' }}
 
-      - name: Setup Android NDK (Android targets)
-        if: matrix.ffmpeg.platform == 'android-arm64' || matrix.ffmpeg.platform == 'android-x86_64'
-        uses: android-actions/setup-android@v3
-        with:
-          ndk-version: r27c
-          api-level: 24
+      - name: Setup Android NDK
+        if: matrix.ffmpeg.ndk
+        shell: bash
+        run: |
+          set -euo pipefail
+          # setup-android@v3 has no `ndk-version` input (it only takes
+          # cmdline-tools-version / packages), so the NDK is fetched directly.
+          NDK_ZIP="android-ndk-r27c-linux.zip"
+          curl -fL --retry 4 --retry-all-errors -o "$RUNNER_TEMP/$NDK_ZIP" \
+            "https://dl.google.com/android/repository/$NDK_ZIP"
+          unzip -q "$RUNNER_TEMP/$NDK_ZIP" -d "$RUNNER_TEMP"
+          echo "ANDROID_NDK=$RUNNER_TEMP/android-ndk-r27c" >> "$GITHUB_ENV"
+          ls "$RUNNER_TEMP/android-ndk-r27c/toolchains/llvm/prebuilt"
 
       - name: Install build dependencies (Linux)
-        if: runner.os == 'Linux' && (matrix.ffmpeg.platform == 'linux-x86_64' || matrix.ffmpeg.platform == 'linux-aarch64')
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential pkg-config \
-            libva-dev libvdpau-dev libdrm-dev \
+            build-essential pkg-config nasm yasm \
             ${{ matrix.ffmpeg.platform == 'linux-aarch64' && 'gcc-aarch64-linux-gnu g++-aarch64-linux-gnu' || '' }}
+          # VA-API/VDPAU headers are optional: build.sh only enables those
+          # backends when the headers exist.
+          sudo apt-get install -y libva-dev libvdpau-dev libdrm-dev || \
+            echo "hardware-decoder headers unavailable; software decoding only"
 
       - name: Install build dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install pkg-config
-          # For cross-compiling to ARM64 on Intel runner
+          # nasm is required for x86 (32-bit) hand-written assembly; without it
+          # configure aborts with "nasm not found or too old".
+          brew install pkg-config nasm || true
           if [[ "${{ matrix.ffmpeg.platform }}" == "macos-aarch64" && "$(uname -m)" != "arm64" ]]; then
-            brew install llvm mingw-w64
+            brew install llvm || true
           fi
 
+      - name: Build FFmpeg native runtime from source (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          FFMPEG_VER: ${{ env.FFMPEG_VER }}
+        run: |
+          set -euo pipefail
+          export OUT_DIR="$PWD/native-artifact/ffmpeg/${{ matrix.ffmpeg.key }}"
+          bash native/ffmpeg/build.sh ${{ matrix.ffmpeg.platform }}
+
       - name: Build FFmpeg native runtime from source
+        if: runner.os != 'Windows'
         shell: bash
         env:
           FFMPEG_VER: ${{ env.FFMPEG_VER }}
-          ANDROID_NDK: ${{ env.ANDROID_NDK_HOME || '/opt/android/ndk' }}
         run: |
           set -euo pipefail
           export OUT_DIR="$PWD/native-artifact/ffmpeg/${{ matrix.ffmpeg.key }}"

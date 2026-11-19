@@ -135,8 +135,9 @@ case "$PLATFORM" in
       --arch="$TARGET_ARCH"
       --cross-prefix="${HOST_TRIPLE}-"
     )
-    # d3d11va/dxva2 are autodetected from the mingw headers and back the
-    # Windows hardware-decoder rungs in FfmpegHwBackendPolicy.
+    # MSYS2/CLANGARM64 provides its own clang via PATH; FFmpeg's configure will
+    # probe for the compiler itself. d3d11va/dxva2 are autodetected from the
+    # mingw headers and back the Windows hardware-decoder rungs.
     ;;
 
   android-arm64|android-x86_64)
