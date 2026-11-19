@@ -190,7 +190,7 @@ case "$PLATFORM" in
       # every explicit tool is already pinned above.
       CC_TOOL="$(probe_tool "${HOST_TRIPLE}-clang" clang)"
       CXX_TOOL="$(probe_tool "${HOST_TRIPLE}-clang++" clang++)"
-      if [[ "$CC_TOOL" == clang ]]; then
+      if [[ "$CC_TOOL" == *clang ]]; then
         SYSROOT="${MSYSTEM_PREFIX:-/clangarm64}"
         CC_TOOL="clang --target=${HOST_TRIPLE} --sysroot=${SYSROOT} -isystem ${SYSROOT}/include/c++/v1 -isystem ${SYSROOT}/include"
         CXX_TOOL="clang++ --target=${HOST_TRIPLE} --sysroot=${SYSROOT} -isystem ${SYSROOT}/include/c++/v1 -isystem ${SYSROOT}/include"
