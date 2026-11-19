@@ -278,7 +278,36 @@ esac
 
 # ── Build ───────────────────────────────────────────────────────────────────
 echo ">>> Configuring FFmpeg $FFMPEG_VER for $PLATFORM"
-./configure "${CONFIGURE_FLAGS[@]}" | tail -40
+
+# Print what the toolchain actually resolved to. A cross-toolchain that is
+# present but wrong (modular clang with no sysroot, a host compiler shadowing
+# the cross one on PATH) produces the same opaque one-liners inside configure
+# ("C compiler test failed", "Host compiler lacks C11 support") as a missing
+# one, and the resolved paths are what tell them apart.
+echo ">>> Toolchain probe:"
+for t in cc cxx ar nm ranlib strip; do
+  case "$t" in
+    cc)  v="$(printf '%s' "${CONFIGURE_FLAGS[*]}" | sed -n 's/.*--cc=\([^ ]*\).*/\1/p')" ;;
+    cxx) v="$(printf '%s' "${CONFIGURE_FLAGS[*]}" | sed -n 's/.*--cxx=\([^ ]*\).*/\1/p')" ;;
+    *)   v="$(printf '%s' "${CONFIGURE_FLAGS[*]}" | sed -n "s/.*--$t=\([^ ]*\).*/\1/p")" ;;
+  esac
+  echo "    $t = ${v:-<default>}"
+done
+for t in clang clang++ gcc g++ cc; do
+  if command -v "$t" >/dev/null 2>&1; then
+    echo "    $(command -v "$t") : $($t --version 2>&1 | head -1)"
+  fi
+done
+
+if ! ./configure "${CONFIGURE_FLAGS[@]}" > /tmp/configure.out 2>&1; then
+  tail -40 /tmp/configure.out
+  echo "=== ffbuild/config.log (compiler errors) ===" >&2
+  grep -nE 'error|fatal|not found|cannot|unable|undefined' ffbuild/config.log 2>/dev/null | head -60 >&2 || true
+  echo "=== last 60 lines of config.log ===" >&2
+  tail -60 ffbuild/config.log >&2 || true
+  exit 1
+fi
+tail -40 /tmp/configure.out
 
 echo ">>> Building with $N_JOBS job(s)"
 make -j"$N_JOBS"
