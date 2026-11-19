@@ -136,13 +136,25 @@ case "$PLATFORM" in
     CONFIGURE_FLAGS+=(
       --target-os=mingw32
       --arch="$TARGET_ARCH"
-      --cross-prefix="${HOST_TRIPLE}-"
     )
 
-    # MSYS2's binutils installs the *unprefixed* `ar`/`nm`/`ranlib`/`strip`, not
-    # `${TRIPLE}-ar`. That matters because FFmpeg's compat/windows/makedef is
-    # invoked from the makefile with `AR=$(AR)`, and a name that does not exist
-    # kills the build with:
+    # probe_tool <candidate>...: first candidate on PATH, else the last one.
+    probe_tool() {
+      local c last=""
+      for c in "$@"; do
+        last="$c"
+        if command -v "$c" >/dev/null 2>&1; then
+          echo "$c"
+          return
+        fi
+      done
+      echo "$last"
+    }
+
+    # MSYS2's binutils installs the *unprefixed* `ar`/`nm`/`ranlib`/`strip` (or
+    # LLVM's `llvm-*`), not `${TRIPLE}-ar`. That matters because FFmpeg's
+    # compat/windows/makedef is invoked from the makefile with `AR=$(AR)`, and a
+    # name that does not exist kills the build with:
     #
     #   ./compat/windows/makedef: line 49: x86_64-w64-mingw32-ar: command not found
     #   Could not create temporary library.
@@ -150,15 +162,11 @@ case "$PLATFORM" in
     # configure never validates `--ar`, so this only surfaces mid-build. Probe
     # for the prefixed spelling first (real cross toolchains usually have it)
     # and fall back to the bare name that MSYS2 actually ships.
-    probe_tool() {
-      local prefixed="$1" bare="$2"
-      if command -v "$prefixed" >/dev/null 2>&1; then echo "$prefixed"; else echo "$bare"; fi
-    }
-    TOOL_AR="$(probe_tool "${HOST_TRIPLE}-ar" ar)"
-    TOOL_NM="$(probe_tool "${HOST_TRIPLE}-nm" nm)"
-    TOOL_RANLIB="$(probe_tool "${HOST_TRIPLE}-ranlib" ranlib)"
-    TOOL_STRIP="$(probe_tool "${HOST_TRIPLE}-strip" strip)"
-    echo ">>> Toolchain: ar=$TOOL_AR nm=$TOOL_NM ranlib=$TOOL_RANLIB strip=$TOOL_STRIP"
+    TOOL_AR="$(probe_tool "${HOST_TRIPLE}-ar" llvm-ar ar)"
+    TOOL_NM="$(probe_tool "${HOST_TRIPLE}-nm" llvm-nm nm)"
+    TOOL_RANLIB="$(probe_tool "${HOST_TRIPLE}-ranlib" llvm-ranlib ranlib)"
+    TOOL_STRIP="$(probe_tool "${HOST_TRIPLE}-strip" llvm-strip strip)"
+    echo ">>> Toolchain binutils: ar=$TOOL_AR nm=$TOOL_NM ranlib=$TOOL_RANLIB strip=$TOOL_STRIP"
 
     CONFIGURE_FLAGS+=(
       --ar="$TOOL_AR"
@@ -167,36 +175,49 @@ case "$PLATFORM" in
       --strip="$TOOL_STRIP"
     )
 
-    # CLANGARM64 (aarch64) is clang-based; MINGW32/MINGW64 use gcc. Neither
-    # package installs a prefixed C compiler under every MSYS2 release, so the
-    # same probe applies.
-    #
-    # CLANGARM64's clang defaults to an MSVC/PC target, so it must be told the
-    # mingw triple explicitly. Without `--target`, FFmpeg's C compiler test dies
-    # with "Host compiler lacks C11 support". gcc does NOT understand
-    # `--target=` at all (it is a clang option) and its prefixed binaries
-    # already emit the right ABI, so ONLY the clang branch gets it.
     if [[ "$PLATFORM" == "windows-aarch64" ]]; then
-      CLANG="$(probe_tool "${HOST_TRIPLE}-clang" clang)"
-      CLANGXX="$(probe_tool "${HOST_TRIPLE}-clang++" clang++)"
+      # CLANGARM64 ships only the clang-based aarch64 mingw toolchain; there is
+      # no aarch64 mingw-w64 gcc at all. Its wrapper
+      # `${TRIPLE}-clang` already bakes in the target triple AND the
+      # /clangarm64 sysroot. Plain `clang` has neither, and the missing sysroot
+      # is what makes FFmpeg die with the very misleading
+      #
+      #   Host compiler lacks C11 support
+      #
+      # (the probe never reaches the C11 feature test: it cannot find stdio.h).
+      # Do not pass --cross-prefix here either; it would make configure hunt
+      # for ${TRIPLE}-{as,ld,dlltool,...} that CLANGARM64 does not install, and
+      # every explicit tool is already pinned above.
+      CC_TOOL="$(probe_tool "${HOST_TRIPLE}-clang" clang)"
+      CXX_TOOL="$(probe_tool "${HOST_TRIPLE}-clang++" clang++)"
+      if [[ "$CC_TOOL" == clang ]]; then
+        SYSROOT="${MSYSTEM_PREFIX:-/clangarm64}"
+        CC_TOOL="clang --target=${HOST_TRIPLE} --sysroot=${SYSROOT}"
+        CXX_TOOL="clang++ --target=${HOST_TRIPLE} --sysroot=${SYSROOT}"
+      fi
+      echo ">>> Toolchain cc: $CC_TOOL"
+      echo ">>> Toolchain cxx: $CXX_TOOL"
       CONFIGURE_FLAGS+=(
-        --cc="${CLANG} --target=${HOST_TRIPLE}"
-        --cxx="${CLANGXX} --target=${HOST_TRIPLE}"
+        --cc="$CC_TOOL"
+        --cxx="$CXX_TOOL"
       )
+      # clang links compiler-rt statically by default, so -static-libgcc is
+      # neither needed nor understood here (that flag is a GCC driver option).
     else
       CONFIGURE_FLAGS+=(
+        --cross-prefix="${HOST_TRIPLE}-"
         --cc="$(probe_tool "${HOST_TRIPLE}-gcc" gcc)"
         --cxx="$(probe_tool "${HOST_TRIPLE}-g++" g++)"
       )
+      # Static gcc runtime: a mingw-w64 build otherwise emits DLLs that need
+      # libgcc_s_seh-1.dll / libwinpthread-1.dll at load time, which an end user
+      # does not have. `-static-libgcc` is enough here because the C runtime is
+      # msvcrt (imported from Windows itself).
+      CONFIGURE_FLAGS+=(--extra-ldflags="-static-libgcc")
     fi
+
     # d3d11va/dxva2 are autodetected from the mingw headers and back the
     # Windows hardware-decoder rungs.
-    #
-    # Static gcc runtime: a mingw-w64 build otherwise emits DLLs that need
-    # libgcc_s_seh-1.dll / libwinpthread-1.dll / libstdc++-6.dll at load time,
-    # which an end user does not have. `-static-libgcc` is enough here because
-    # the C runtime is msvcrt (imported from Windows itself).
-    CONFIGURE_FLAGS+=(--extra-ldflags="-static-libgcc")
     ;;
 
   android-arm64|android-x86_64)
