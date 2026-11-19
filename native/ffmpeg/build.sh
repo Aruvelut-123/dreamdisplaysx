@@ -48,6 +48,7 @@ case "$PLATFORM" in
   linux-aarch64)   OS_DIR=Linux;   ARCH_DIR=aarch64 ; TARGET_OS=linux   ; TARGET_ARCH=aarch64 ; HOST_TRIPLE=aarch64-linux-gnu     ;;
   macos-x86_64)    OS_DIR=Mac;     ARCH_DIR=x86_64  ; TARGET_OS=darwin  ; TARGET_ARCH=x86_64  ; HOST_TRIPLE=x86_64-apple-darwin   ;;
   macos-aarch64)   OS_DIR=Mac;     ARCH_DIR=aarch64 ; TARGET_OS=darwin  ; TARGET_ARCH=arm64   ; HOST_TRIPLE=arm64-apple-darwin    ;;
+  windows-x86)     OS_DIR=Windows; ARCH_DIR=x86     ; TARGET_OS=mingw32 ; TARGET_ARCH=x86     ; HOST_TRIPLE=i686-w64-mingw32      ;;
   windows-x86_64)  OS_DIR=Windows; ARCH_DIR=x86_64  ; TARGET_OS=mingw32 ; TARGET_ARCH=x86_64  ; HOST_TRIPLE=x86_64-w64-mingw32    ;;
   windows-aarch64) OS_DIR=Windows; ARCH_DIR=aarch64 ; TARGET_OS=mingw32 ; TARGET_ARCH=arm64   ; HOST_TRIPLE=aarch64-w64-mingw32   ;;
   android-arm64)   OS_DIR=Android; ARCH_DIR=aarch64 ; TARGET_OS=android ; TARGET_ARCH=aarch64 ; HOST_TRIPLE=aarch64-linux-android ;;
@@ -131,7 +132,7 @@ case "$PLATFORM" in
     fi
     ;;
 
-  windows-x86_64|windows-aarch64)
+  windows-x86|windows-x86_64|windows-aarch64)
     CONFIGURE_FLAGS+=(
       --target-os=mingw32
       --arch="$TARGET_ARCH"

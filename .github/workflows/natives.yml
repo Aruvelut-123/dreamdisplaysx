@@ -132,6 +132,8 @@ jobs:
           # macOS ARM64 (native; macos-14 is not offered in this org's runner set,
           # so the default arm64 image is used)
           - { platform: macos-aarch64,  key: macos-aarch64,  runner: macos-15,        msystem: '',         ndk: false }
+          # Windows x86 (32-bit)
+          - { platform: windows-x86,    key: windows-x86,    runner: windows-latest,  msystem: MINGW32,    ndk: false }
           # Windows x86_64 (native on Windows runner with MSYS2/mingw-w64)
           - { platform: windows-x86_64, key: windows-x64,    runner: windows-latest,  msystem: MINGW64,    ndk: false }
           # Windows ARM64: MSYS2's aarch64 toolchain lives in CLANGARM64 and is clang
