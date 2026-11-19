@@ -134,9 +134,11 @@ jobs:
           - { platform: macos-aarch64,  key: macos-aarch64,  runner: macos-latest,    msystem: '',         ndk: false }
           # Windows x86_64 (native on Windows runner with MSYS2/mingw-w64)
           - { platform: windows-x86_64, key: windows-x64,    runner: windows-latest,  msystem: MINGW64,    ndk: false }
-          # Windows ARM64: MSYS2's aarch64 toolchain lives in CLANGARM64 and is
-          # clang-based (there is no mingw-w64-aarch64-gcc target).
-          - { platform: windows-aarch64, key: windows-aarch64, runner: windows-latest, msystem: CLANGARM64, ndk: false }
+          # Windows ARM64: MSYS2's aarch64 toolchain lives in CLANGARM64 and is clang
+          # based. It ships native aarch64 binaries, so it can only run on a native
+          # ARM64 runner — CLANGARM64 on windows-latest dies with
+          # "Exec format error".
+          - { platform: windows-aarch64, key: windows-aarch64, runner: windows-11-arm,  msystem: CLANGARM64, ndk: false }
           # Android ARM64 / x86_64 (cross-compile on Linux runner; NDK is
           # downloaded directly because setup-android@v3 has no ndk-version input)
           - { platform: android-arm64,  key: android-aarch64, runner: ubuntu-latest,   msystem: '',         ndk: true }
