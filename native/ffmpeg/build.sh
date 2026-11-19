@@ -192,14 +192,21 @@ case "$PLATFORM" in
       CXX_TOOL="$(probe_tool "${HOST_TRIPLE}-clang++" clang++)"
       if [[ "$CC_TOOL" == *clang ]]; then
         SYSROOT="${MSYSTEM_PREFIX:-/clangarm64}"
-        CC_TOOL="clang --target=${HOST_TRIPLE} --sysroot=${SYSROOT} -isystem ${SYSROOT}/include/c++/v1 -isystem ${SYSROOT}/include"
-        CXX_TOOL="clang++ --target=${HOST_TRIPLE} --sysroot=${SYSROOT} -isystem ${SYSROOT}/include/c++/v1 -isystem ${SYSROOT}/include"
+        # Use --cc with target+sysroot, and push include paths via extra-cflags
+        # so they are not mangled by make's word-splitting of CC.
+        CC_TOOL="clang --target=${HOST_TRIPLE} --sysroot=${SYSROOT}"
+        CXX_TOOL="clang++ --target=${HOST_TRIPLE} --sysroot=${SYSROOT}"
+        EXTRA_CFLAGS="-isystem ${SYSROOT}/include/c++/v1 -isystem ${SYSROOT}/include"
+        EXTRA_CXXFLAGS="-isystem ${SYSROOT}/include/c++/v1 -isystem ${SYSROOT}/include"
       fi
       echo ">>> Toolchain cc: $CC_TOOL"
       echo ">>> Toolchain cxx: $CXX_TOOL"
+      echo ">>> Toolchain extra-cflags: $EXTRA_CFLAGS"
       CONFIGURE_FLAGS+=(
         --cc="$CC_TOOL"
         --cxx="$CXX_TOOL"
+        --extra-cflags="$EXTRA_CFLAGS"
+        --extra-cxxflags="$EXTRA_CXXFLAGS"
       )
       # clang links compiler-rt statically by default, so -static-libgcc is
       # neither needed nor understood here (that flag is a GCC driver option).
@@ -218,6 +225,19 @@ case "$PLATFORM" in
 
     # d3d11va/dxva2 are autodetected from the mingw headers and back the
     # Windows hardware-decoder rungs.
+    #
+    # gfxcapture is a Windows screen-capture *source* filter; the mod only
+    # decodes, so it is dead weight. It is also the one translation unit that
+    # includes <version> from libc++ through the WinRT wrl headers, and on
+    # CLANGARM64 the FFmpeg source tree is on the include path, so the tree's
+    # own `./version` file (plain text "8.1.2") shadows the C++20 header:
+    #
+    #   ./version:1:1: error: expected unqualified-id
+    #       1 | 8.1.2
+    #
+    # -isystem cannot win against FFmpeg's own `-I.`. Disabling the filter
+    # removes the only include of <version> and is a no-op for playback.
+    CONFIGURE_FLAGS+=(--disable-filter=gfxcapture)
     ;;
 
   android-arm64|android-x86_64)
