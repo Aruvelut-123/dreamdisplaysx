@@ -158,11 +158,13 @@ jobs:
           update: false
           # MINGW64 uses gcc; CLANGARM64 (aarch64) is clang-based — there is no
           # mingw-w64-aarch64-gcc package, so the toolchain name differs.
+          # Install the full toolchain element so nm/ar/pkg-config are present,
+          # not only the C compiler.
           install: >-
             base-devel
             ${{ matrix.ffmpeg.msystem == 'MINGW64'
-                && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm'
-                || 'mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-lld' }}
+                && 'mingw-w64-x86_64-toolchain mingw-w64-x86_64-nasm'
+                || 'mingw-w64-clang-aarch64-toolchain mingw-w64-clang-aarch64-nasm' }}
 
       - name: Setup Android NDK
         if: matrix.ffmpeg.ndk

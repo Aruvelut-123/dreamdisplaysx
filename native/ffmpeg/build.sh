@@ -107,11 +107,12 @@ case "$PLATFORM" in
       --arch="$TARGET_ARCH"
       --enable-pthreads
     )
-    # VA-API / VDPAU are only enabled when their dev headers are present, so a
-    # runner without them still produces a usable software-decoding build
-    # instead of failing configure. (The workflow installs libva/libvdpau.)
-    [[ -f /usr/include/va/va.h ]] && CONFIGURE_FLAGS+=(--enable-vaapi)
-    [[ -f /usr/include/vdpau/vdpau.h ]] && CONFIGURE_FLAGS+=(--enable-vdpau)
+    # VA-API / VDPAU are deliberately NOT forced here: FFmpeg's configure
+    # auto-detects them when the dev headers + libraries exist, and forcing
+    # --enable-vaapi on a runner whose headers are present but whose runtime
+    # libs/libGL are missing would fail configure. The hardware-decoder
+    # rungs in FfmpegHwBackendPolicy will still see h264_vaapi / hevc_vaapi
+    # when the target system really has them.
     if [[ "$PLATFORM" == "linux-aarch64" && "$(uname -m)" != "aarch64" ]]; then
       CONFIGURE_FLAGS+=(--cross-prefix="${HOST_TRIPLE}-")
     fi
