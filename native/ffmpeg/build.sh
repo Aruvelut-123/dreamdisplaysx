@@ -131,20 +131,29 @@ case "$PLATFORM" in
       CONFIGURE_FLAGS+=(--cross-prefix="${HOST_TRIPLE}-")
     fi
     ;;
-
+ 
   windows-x86|windows-x86_64|windows-aarch64)
     CONFIGURE_FLAGS+=(
       --target-os=mingw32
       --arch="$TARGET_ARCH"
       --cross-prefix="${HOST_TRIPLE}-"
     )
-    # MSYS2/CLANGARM64 provides clang, not gcc. Explicitly tell configure to use
-    # clang for the aarch64 target so it doesn't fall back to the missing
-    # aarch64-w64-mingw32-gcc.
+    # MSYS2 provides the mingw-w64 toolchain. Explicitly tell configure which
+    # toolchain to use so make's compat/windows/makedef can find
+    # ${TRIPLE}-ar/nm/ranlib/strip (aarch64 runs clang instead of gcc).
     if [[ "$PLATFORM" == "windows-aarch64" ]]; then
       CONFIGURE_FLAGS+=(
         --cc="${HOST_TRIPLE}-clang"
         --cxx="${HOST_TRIPLE}-clang++"
+        --ar="${HOST_TRIPLE}-ar"
+        --nm="${HOST_TRIPLE}-nm"
+        --ranlib="${HOST_TRIPLE}-ranlib"
+        --strip="${HOST_TRIPLE}-strip"
+      )
+    else
+      CONFIGURE_FLAGS+=(
+        --cc="${HOST_TRIPLE}-gcc"
+        --cxx="${HOST_TRIPLE}-g++"
         --ar="${HOST_TRIPLE}-ar"
         --nm="${HOST_TRIPLE}-nm"
         --ranlib="${HOST_TRIPLE}-ranlib"
