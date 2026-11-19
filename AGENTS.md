@@ -948,6 +948,60 @@ libraries from the extraction filter.
 Windows x86 (32-bit) and Windows aarch64 have **no** bytedeco FFmpeg classifier, so those two platforms keep the
 libvlc video path and the manifest simply has no `ffmpeg` entry for them.
 
+### Building FFmpeg from source (`native/ffmpeg/build.sh`) — and the ABI trap
+
+`native/ffmpeg/build.sh` compiles FFmpeg from the upstream release tarball (`https://ffmpeg.org/releases/`), one
+platform per invocation, and flattens `make install`'s output into `$OUT_DIR/<os>/<arch>/`. It is the replacement for
+`collect.sh` (which only repacked bytedeco's prebuilt jar) and is what `natives.yml`'s `ffmpeg` matrix now runs.
+
+**The build is necessary for coverage, not for freshness.** org.bytedeco's newest published preset is
+`8.1.2-1.5.14` and there is no `windows-aarch64` classifier at all, so Windows ARM64 can only ever get FFmpeg by
+compiling it. Source build is also the only route to FFmpeg 9: `ffmpeg-9.0.2.tar.xz` is the current stable release.
+
+**The ABI trap is the thing to check before bumping the FFmpeg version.** The Java side never calls FFmpeg's C API
+directly — it goes through bytedeco's JavaCPP **JNI shims** (`libjniavcodec.so`, `libjniavformat.so`,
+`libjniavutil.so`, ...). Those shims are compiled against one specific FFmpeg ABI and carry its soname in their
+`DT_NEEDED`:
+
+| upstream FFmpeg | `libavcodec` soname | bytedeco jar that matches |
+|---|---|---|
+| 7.x | `libavcodec.so.61` | `ffmpeg-7.1.1-1.5.12` |
+| 8.x | `libavcodec.so.62` | `ffmpeg-8.0.1-1.5.13` / `8.1.2-1.5.14` |
+| 9.x | `libavcodec.so.63` | **none published yet** |
+
+Consequence: a source build of FFmpeg 9 produces `libavcodec.so.63`, but `gradle/libs.versions.toml`'s
+`ffmpeg = "8.1.2-1.5.14"` pulls shims built against `.so.62`. Loading those shims against a `.so.63` tree fails at
+`dlopen` with `libavcodec.so.62: cannot open shared object file`, and the FFmpeg path silently degrades to libvlc —
+a build that looks green on CI (which only compiles Java) and only breaks on a user's machine.
+
+So there are exactly two consistent states, and the two version knobs must move **together**:
+
+1. **FFmpeg 8.1.2 (the current, working state).** Source build with `FFMPEG_VER=8.1.2`, and `libs.versions.toml`
+   keeps `ffmpeg = "8.1.2-1.5.14"`. Shims and libraries agree on `.so.62`.
+2. **FFmpeg 9.x (only after the shims exist).** Requires bytedeco to publish a `9.x` preset (which populates
+   `libjniavcodec.so` linked against `.so.63`), *then* `FFMPEG_VER=9.x` and `libs.versions.toml`'s
+   `ffmpeg = "9.<rev>"` in the same commit.
+
+Do **not** set `FFMPEG_VER=9.0.2` while `libs.versions.toml` still says `8.1.2-1.5.14`. That combination builds
+fine and refuses to load at runtime. Check the pairing with
+`unzip -p <bytedeco-jar> '*.so' | strings | grep 'libavcodec.so'` when in doubt — the shim names the soname it wants.
+
+Other rules the script encodes:
+- **`--enable-shared --disable-static` is mandatory.** JavaCPP `dlopen`s `libavcodec.so.<N>`; a static-only build
+  produces `.a` files nothing can load.
+- **No external codec libraries** (`libx264`, `libvpx`, ...). Each would add a per-platform cross-compiled
+  dependency, and the playback path only decodes, which FFmpeg's own decoders cover.
+- **Android must pass `--enable-mediacodec --enable-jni`.** Without `--enable-jni`,
+  `avcodec_find_decoder_by_name("h264_mediacodec")` returns null and every Android start silently falls back — the
+  build still succeeds, so `build.sh` asserts both decoder names are present via `strings` at packaging time.
+- **VA-API/VDPAU are gated on their headers existing**, so a runner without `libva-dev` still produces a usable
+  software-decoding build instead of failing `configure`.
+- The NDK toolchain is looked up across `linux-x86_64` / `darwin-x86_64` / `darwin-arm64` / `windows-x86_64`
+  prebuilt hosts, so the Android targets are not tied to a Linux runner.
+
+CI never verifies the native load (it compiles Java only), so a natives regression reaches users before CI reacts.
+`gh run list --workflow=natives.yml` and `gh run watch` are the only verification for this path.
+
 ### FFmpeg audio ownership: a DASH audio URL is its own input
 
 `FfmpegSession.restartAudio()` used to log and return `true`, so `MediaPlayer.changeAudioTrack()` believed the switch

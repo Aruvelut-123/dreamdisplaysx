@@ -27,8 +27,13 @@ permissions:
   contents: write
 
 env:
-  # Single source of truth for the FFmpeg version. Update here when bumping.
-  FFMPEG_VER: 9.0.2
+  # PAIRED with gradle/libs.versions.toml's `ffmpeg` version. The Java side loads
+  # bytedeco's JavaCPP JNI shims (libjniavcodec.so etc.), which are linked against
+  # one FFmpeg ABI. FFmpeg 8.x -> libavcodec.so.62 -> shims from 8.1.2-1.5.14.
+  # FFmpeg 9.x -> libavcodec.so.63, and bytedeco publishes no 9.x preset yet, so
+  # bumping this alone makes the FFmpeg path fail to dlopen and fall back to
+  # libvlc at runtime. Bump only together with the bytedeco version.
+  FFMPEG_VER: 8.1.2
 
 jobs:
   libvlc:
