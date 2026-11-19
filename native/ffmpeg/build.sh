@@ -192,8 +192,8 @@ case "$PLATFORM" in
       CXX_TOOL="$(probe_tool "${HOST_TRIPLE}-clang++" clang++)"
       if [[ "$CC_TOOL" == clang ]]; then
         SYSROOT="${MSYSTEM_PREFIX:-/clangarm64}"
-        CC_TOOL="clang --target=${HOST_TRIPLE} --sysroot=${SYSROOT}"
-        CXX_TOOL="clang++ --target=${HOST_TRIPLE} --sysroot=${SYSROOT}"
+        CC_TOOL="clang --target=${HOST_TRIPLE} --sysroot=${SYSROOT} -isystem ${SYSROOT}/include/c++/v1 -isystem ${SYSROOT}/include"
+        CXX_TOOL="clang++ --target=${HOST_TRIPLE} --sysroot=${SYSROOT} -isystem ${SYSROOT}/include/c++/v1 -isystem ${SYSROOT}/include"
       fi
       echo ">>> Toolchain cc: $CC_TOOL"
       echo ">>> Toolchain cxx: $CXX_TOOL"
