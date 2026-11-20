@@ -346,6 +346,10 @@ if [[ "$PLATFORM" == windows-* ]]; then
   # be skipped for the same reason; headers/pc files are of no use to the mod.
   mkdir -p "$PREFIX/lib"
   find . -maxdepth 2 -name '*.dll' -exec cp -f {} "$PREFIX/lib/" \;
+  # The import libraries (libavcodec.dll.a, ...) are needed to link the JNI
+  # shims below. They are produced next to the DLLs by mingw's `--out-implib`.
+  # Without them the shim link fails with "cannot find -lavcodec".
+  find . -maxdepth 2 -name '*.dll.a' -exec cp -f {} "$PREFIX/lib/" \;
 
   # ── JavaCPP JNI shim source generation (windows-x86 / windows-aarch64) ─────
   # org.bytedeco does not publish windows-x86 / windows-aarch64 classifiers, so
@@ -369,21 +373,41 @@ if [[ "$PLATFORM" == windows-* ]]; then
     curl -fL --retry 4 --retry-all-errors --retry-delay 3 \
       -o "$JAVACPP_JAR" "https://repo1.maven.org/maven2/org/bytedeco/javacpp/1.5.14/javacpp-1.5.14.jar"
     curl -fL --retry 4 --retry-all-errors --retry-delay 3 \
-      -o "$FFMPEG_JAR" "https://repo1.maven.org/maven2/org/bytedeco/ffmpeg/ffmpeg/8.1.2-1.5.14/ffmpeg-8.1.2-1.5.14.jar"
+      -o "$FFMPEG_JAR" "https://repo1.maven.org/maven2/org/bytedeco/ffmpeg/8.1.2-1.5.14/ffmpeg-8.1.2-1.5.14.jar"
   fi
+  #
+  # Which classes must be passed: BOTH the `global.<lib>` function bindings AND
+  # every class of the `org.bytedeco.ffmpeg.<lib>` target package. Feeding only
+  # `global.*` produces 191 symbols for avcodec where the official DLL has 919 --
+  # the missing 728 are the target-package Pointer subclasses (AVCodecContext,
+  # AVPacket, ...). The official jniavcodec.dll symbol count is reproduced
+  # exactly (avcodec 919, avutil 2183, avformat 767, avfilter 336, swscale 120,
+  # swresample 35, avdevice 75) only when both sets are passed. Those classes
+  # already exist inside ffmpeg.jar, so no C header parsing is needed (passing
+  # the `presets.*` classes instead would require the full FFmpeg source tree
+  # on the include path, plus a configure-generated libavutil/ffversion.h and
+  # upstream's log_callback.h).
   echo ">>> Generating JavaCPP JNI shim sources for $PLATFORM"
+  SHIM_CLASSES=()
+  for lib in avcodec avdevice avfilter avformat avutil swresample swscale; do
+    SHIM_CLASSES+=("org.bytedeco.ffmpeg.global.$lib")
+    # All non-nested classes of the target package, read straight from the jar.
+    while IFS= read -r entry; do
+      [[ -z "$entry" ]] && continue
+      SHIM_CLASSES+=("${entry%.class}")
+    done < <(unzip -Z1 "$FFMPEG_JAR" \
+               | grep "^org/bytedeco/ffmpeg/$lib/" \
+               | grep '\.class$' \
+               | grep -v '\$' \
+               | sed 's#/#.#g; s#\.class$##')
+  done
+  echo "    ${#SHIM_CLASSES[@]} classes -> $JNI_DIR"
   java -cp "$JAVACPP_JAR:$FFMPEG_JAR" \
     org.bytedeco.javacpp.tools.Builder \
     -d "$JNI_DIR" \
     -classpath "$FFMPEG_JAR" \
     -nocompile \
-    org.bytedeco.ffmpeg.global.avcodec \
-    org.bytedeco.ffmpeg.global.avdevice \
-    org.bytedeco.ffmpeg.global.avfilter \
-    org.bytedeco.ffmpeg.global.avformat \
-    org.bytedeco.ffmpeg.global.avutil \
-    org.bytedeco.ffmpeg.global.swresample \
-    org.bytedeco.ffmpeg.global.swscale
+    "${SHIM_CLASSES[@]}"
   # Builder also emits a jnijavacpp.cpp helper; keep it alongside so the
   # compile step can link it into each shim DLL.
   cp -f "$JNI_DIR"/*.cpp "$PREFIX/lib/"
@@ -432,8 +456,19 @@ void setLogCallback(LogCallback lc) {
 EOF
 
   # Linker must see the FFmpeg import libraries (.dll.a) we just built.
+  # Those are named libavcodec.dll.a, libavutil.dll.a, ... (no version suffix).
   # -Wl,--enable-auto-image-base avoids the default image base clash of 7 DLLs.
   # -Wl,--out-implib produces the import lib for each shim (not strictly needed).
+  #
+  # -static-libgcc / -static-libstdc++ are GCC driver options. CLANGARM64 is a
+  # clang + libc++ toolchain and rejects `-static-libstdc++` outright
+  # ("argument unused during compilation"), so they are only added for the gcc
+  # branch. clang links compiler-rt statically by default anyway.
+  SHIM_LDFLAGS=()
+  if [[ "$PLATFORM" != "windows-aarch64" ]]; then
+    SHIM_LDFLAGS+=(-static-libgcc -static-libstdc++)
+  fi
+
   for lib in avcodec avdevice avfilter avformat avutil swresample swscale; do
     echo "  Building jni$lib.dll ..."
     $SHIM_CXX -shared -O2 -std=c++17 \
@@ -442,10 +477,10 @@ EOF
       $SHIM_CXXFLAGS \
       -o "jni$lib.dll" \
       "jni$lib.cpp" "jnijavacpp.cpp" \
-      -L. -l${lib}-62 \
+      -L. -l${lib} \
       -Wl,--enable-auto-image-base \
       -Wl,--out-implib,libjni$lib.dll.a \
-      -static-libgcc -static-libstdc++ \
+      "${SHIM_LDFLAGS[@]}" \
       2>&1 | tail -3
     if [[ ! -f "jni$lib.dll" ]]; then
       echo "ERROR: jni$lib.dll not produced" >&2
