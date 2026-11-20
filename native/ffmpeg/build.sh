@@ -395,16 +395,37 @@ if [[ "$PLATFORM" == windows-* ]]; then
   # an MSYS2 path (/c/Program Files/...) so `java` resolves correctly.
   JAVA_BIN=""
   if [[ -n "${JAVA_HOME:-}" ]]; then
-    # Step 1: turn backslashes into forward slashes (for %PATH% etc)
-    JAVA_HOME_MSYS2="${JAVA_HOME//\\//}"
-    # Step 2: strip the Windows drive prefix C: -> /c
-    JAVA_HOME_MSYS2="${JAVA_HOME_MSYS2#C:/}"
-    # Step 3: prepend /c to make MSYS2 resolve it as a drive root
-    JAVA_HOME_MSYS2="/${JAVA_HOME_MSYS2}"
-    JAVA_BIN="${JAVA_HOME_MSYS2}/bin/java"
+    # Resolve JAVA_HOME to an MSYS2 path. cygpath handles both Windows
+    # (C:\Program Files\...) and already-POSIX (/c/Program Files/...) forms.
+    # Without it, a naive backslash/colon rewrite produces //c/... or
+    # /C:/... paths that MSYS2 cannot execute.
+    if command -v cygpath >/dev/null 2>&1; then
+      JAVA_HOME_MSYS2="$(cygpath -u "$JAVA_HOME" 2>/dev/null || echo "$JAVA_HOME")"
+    else
+      JAVA_HOME_MSYS2="$JAVA_HOME"
+      JAVA_HOME_MSYS2="${JAVA_HOME_MSYS2//\\//}"
+      if [[ "$JAVA_HOME_MSYS2" =~ ^[A-Za-z]:/ ]]; then
+        drive="${JAVA_HOME_MSYS2:0:1}"
+        drive="${drive,,}"
+        JAVA_HOME_MSYS2="/$drive/${JAVA_HOME_MSYS2:3}"
+      fi
+    fi
+    JAVA_BIN="$JAVA_HOME_MSYS2/bin/java"
   fi
   if [[ -z "$JAVA_BIN" || ! -x "$JAVA_BIN" ]]; then
     JAVA_BIN="$(command -v java || true)"
+  fi
+  # Last resort: scan common JDK install locations under /c.
+  if [[ -z "$JAVA_BIN" || ! -x "$JAVA_BIN" ]]; then
+    for candidate in /c/Program\ Files/Eclipse\ Adoptium/*/bin/java \
+                    /c/Program\ Files/Java/*/bin/java \
+                    /c/Program\ Files/Microsoft/jdk-*/bin/java \
+                    /c/Program\ Files/Adoptium/*/bin/java; do
+      if [[ -x "$candidate" ]]; then
+        JAVA_BIN="$candidate"
+        break
+      fi
+    done
   fi
   if [[ -z "$JAVA_BIN" ]]; then
     echo "ERROR: no java found; the JNI shim generation stage needs a JDK" >&2
