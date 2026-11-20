@@ -219,16 +219,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         env:
-          FFMPEG_VER: ${{ env.FFMPEG_VER }}
+          FFMPEG_VER: 8.1.2
         run: |
           set -euo pipefail
           export OUT_DIR="$PWD/native-artifact/ffmpeg/${{ matrix.ffmpeg.key }}"
-          # Make the host JDK and unzip available to the MSYS2 shell
-          export JAVA_HOME="$JAVA_HOME_17_X64"
-          export PATH="$JAVA_HOME_17_X64/bin:$PATH"
-          # Use the host unzip.exe if available (MSYS2 doesn't install it by default)
-          unzip_bin="/c/Program Files/Git/usr/bin/unzip.exe"
-          [[ -x "$unzip_bin" ]] && export PATH="$(dirname "$unzip_bin"):$PATH"
+          # setup-java writes JAVA_HOME into the job environment; the msys2 shell
+          # does not always inherit it, so pass the Windows path explicitly and
+          # let build.sh convert it to its MSYS2 form when it needs `java`.
+          export JAVA_HOME="${JAVA_HOME_17_X64:-$JAVA_HOME}"
+          export PATH="$JAVA_HOME/bin:$PATH"
           bash native/ffmpeg/build.sh ${{ matrix.ffmpeg.platform }}
 
       - name: Build FFmpeg native runtime from source

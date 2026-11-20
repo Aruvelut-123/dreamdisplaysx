@@ -62,7 +62,16 @@ esac
 OUT_DIR="${OUT_DIR:-$PWD/out}"
 OUT_LIBDIR="$OUT_DIR/$OS_DIR/$ARCH_DIR"
 PREFIX="$OUT_DIR/build-prefix/$OS_DIR/$ARCH_DIR"
-WORK="$(mktemp -d)"
+# Scratch space deliberately lives under OUT_DIR rather than in `mktemp -d`.
+# On MSYS2 `mktemp -d` returns a path under its own `/tmp` mount, and both
+# `curl -o` and the tar extractor failed there with
+#   Warning: Failed to open the file /tmp/tmp.XXXX/ffmpeg-8.1.2.tar.xz: No such file or directory
+#   curl: (23) client returned ERROR on write
+# OUT_DIR is a plain Windows path, so it is writable for every tool involved.
+# A fixed name (not a random one) also lets a rerun reuse the tarball.
+WORK="$OUT_DIR/.work"
+rm -rf "$WORK"
+mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT_LIBDIR" "$PREFIX"
 
@@ -381,10 +390,19 @@ if [[ "$PLATFORM" == windows-* ]]; then
       -o "$FFMPEG_JAR" "https://repo1.maven.org/maven2/org/bytedeco/ffmpeg/8.1.2-1.5.14/ffmpeg-8.1.2-1.5.14.jar"
   fi
   ls -la "$JAR_CACHE"
-  # The JavaCPP Builder needs a JDK. On the MSYS2 CI shell `java` is not on
-  # PATH by default, so fall back to the host JDK that actions/setup-java
-  # exports (JAVA_HOME) before giving up.
-  JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/java}"
+  # The JavaCPP Builder needs a JDK. On MSYS2, JAVA_HOME comes from the host as a
+  # Windows path (e.g. C:\Program Files\Eclipse Adoptium\jdk-17.x). Convert it to
+  # an MSYS2 path (/c/Program Files/...) so `java` resolves correctly.
+  JAVA_BIN=""
+  if [[ -n "${JAVA_HOME:-}" ]]; then
+    # Step 1: turn backslashes into forward slashes (for %PATH% etc)
+    JAVA_HOME_MSYS2="${JAVA_HOME//\\//}"
+    # Step 2: strip the Windows drive prefix C: -> /c
+    JAVA_HOME_MSYS2="${JAVA_HOME_MSYS2#C:/}"
+    # Step 3: prepend /c to make MSYS2 resolve it as a drive root
+    JAVA_HOME_MSYS2="/${JAVA_HOME_MSYS2}"
+    JAVA_BIN="${JAVA_HOME_MSYS2}/bin/java"
+  fi
   if [[ -z "$JAVA_BIN" || ! -x "$JAVA_BIN" ]]; then
     JAVA_BIN="$(command -v java || true)"
   fi
