@@ -346,6 +346,114 @@ if [[ "$PLATFORM" == windows-* ]]; then
   # be skipped for the same reason; headers/pc files are of no use to the mod.
   mkdir -p "$PREFIX/lib"
   find . -maxdepth 2 -name '*.dll' -exec cp -f {} "$PREFIX/lib/" \;
+
+  # ── JavaCPP JNI shim source generation (windows-x86 / windows-aarch64) ─────
+  # org.bytedeco does not publish windows-x86 / windows-aarch64 classifiers, so
+  # there is no ready-made jniavcodec.dll for these two platforms. We generate
+  # the shim sources ourselves with JavaCPP's Builder: it reads the
+  # org.bytedeco.ffmpeg.global.* classes inside ffmpeg.jar (which carry the
+  # JavaCPP annotations describing every FFmpeg function the mod needs) and
+  # emits one .cpp per library. The .cpp files are architecture-agnostic; the
+  # MSYS2 CI runner compiles them with the same mingw target triple used for
+  # FFmpeg itself, producing jniavcodec.dll … jniswscale.dll.
+  #
+  # javacpp-1.5.14.jar and ffmpeg-8.1.2-1.5.14.jar are version-pinned in
+  # natives.yml; they must match FFMPEG_VER/gradle's ffmpeg preset so the ABI
+  # (avcodec-62.dll ...) lines up exactly.
+  JNI_DIR="$WORK/jni-src"
+  mkdir -p "$JNI_DIR"
+  JAVACPP_JAR="$WORK/javacpp-1.5.14.jar"
+  FFMPEG_JAR="$WORK/ffmpeg-8.1.2-1.5.14.jar"
+  if [[ ! -f "$JAVACPP_JAR" || ! -f "$FFMPEG_JAR" ]]; then
+    echo ">>> Downloading javacpp + ffmpeg preset jars for JNI shim generation"
+    curl -fL --retry 4 --retry-all-errors --retry-delay 3 \
+      -o "$JAVACPP_JAR" "https://repo1.maven.org/maven2/org/bytedeco/javacpp/1.5.14/javacpp-1.5.14.jar"
+    curl -fL --retry 4 --retry-all-errors --retry-delay 3 \
+      -o "$FFMPEG_JAR" "https://repo1.maven.org/maven2/org/bytedeco/ffmpeg/ffmpeg/8.1.2-1.5.14/ffmpeg-8.1.2-1.5.14.jar"
+  fi
+  echo ">>> Generating JavaCPP JNI shim sources for $PLATFORM"
+  java -cp "$JAVACPP_JAR:$FFMPEG_JAR" \
+    org.bytedeco.javacpp.tools.Builder \
+    -d "$JNI_DIR" \
+    -classpath "$FFMPEG_JAR" \
+    -nocompile \
+    org.bytedeco.ffmpeg.global.avcodec \
+    org.bytedeco.ffmpeg.global.avdevice \
+    org.bytedeco.ffmpeg.global.avfilter \
+    org.bytedeco.ffmpeg.global.avformat \
+    org.bytedeco.ffmpeg.global.avutil \
+    org.bytedeco.ffmpeg.global.swresample \
+    org.bytedeco.ffmpeg.global.swscale
+  # Builder also emits a jnijavacpp.cpp helper; keep it alongside so the
+  # compile step can link it into each shim DLL.
+  cp -f "$JNI_DIR"/*.cpp "$PREFIX/lib/"
+
+  # ── Compile JavaCPP JNI shim sources into DLLs ──────────────────────────────
+  # The generated .cpp files (jniavcodec.cpp ... jniswscale.cpp + jnijavacpp.cpp)
+  # must be compiled with the SAME mingw target as FFmpeg itself, and linked
+  # against the just-built avcodec-62.dll etc. in $PREFIX/lib.
+  echo ">>> Compiling JavaCPP JNI shims for $PLATFORM"
+  pushd "$PREFIX/lib" >/dev/null
+
+  # Reuse the exact CC/CXX/flags resolved during FFmpeg configure so ABI matches.
+  SHIM_CC="${CC_TOOL:-gcc}"
+  SHIM_CXX="${CXX_TOOL:-g++}"
+  SHIM_CXXFLAGS="${EXTRA_CXXFLAGS:-}"
+
+  # Headers: FFmpeg's own source tree + the bytedeco log_callback.h shim header
+  # (which is NOT inside ffmpeg.jar, it comes from javacpp-presets resources).
+  FFmpeg_SRC="$WORK/ffmpeg-${FFMPEG_VER}"
+  JNI_HDR="$PREFIX/lib/jni-headers"
+  mkdir -p "$JNI_HDR"
+  # log_callback.h is part of javacpp-presets ffmpeg module resources; embed it
+  # inline here so we don't depend on an extra network round-trip.
+  cat > "$JNI_HDR/log_callback.h" <<'EOF'
+/*
+ * Copyright (C) 2015 Samuel Audet
+ * Licensed under Apache-2.0 or GPLv2+ (Classpath exception).
+ */
+#include <libavutil/log.h>
+typedef void (*LogCallback)(int level, const char* msg);
+static LogCallback logCallback;
+void log_callback(void* ptr, int level, const char* fmt, va_list vl) {
+    static int print_prefix = 1;
+    char line[1024];
+    if ((level & 0xff) > av_log_get_level()) {
+        return;
+    }
+    av_log_format_line(ptr, level, fmt, vl, line, sizeof(line), &print_prefix);
+    logCallback(level, line);
+}
+
+void setLogCallback(LogCallback lc) {
+    av_log_set_callback(log_callback);
+    logCallback = lc;
+}
+EOF
+
+  # Linker must see the FFmpeg import libraries (.dll.a) we just built.
+  # -Wl,--enable-auto-image-base avoids the default image base clash of 7 DLLs.
+  # -Wl,--out-implib produces the import lib for each shim (not strictly needed).
+  for lib in avcodec avdevice avfilter avformat avutil swresample swscale; do
+    echo "  Building jni$lib.dll ..."
+    $SHIM_CXX -shared -O2 -std=c++17 \
+      -I"$FFmpeg_SRC" \
+      -I"$JNI_HDR" \
+      $SHIM_CXXFLAGS \
+      -o "jni$lib.dll" \
+      "jni$lib.cpp" "jnijavacpp.cpp" \
+      -L. -l${lib}-62 \
+      -Wl,--enable-auto-image-base \
+      -Wl,--out-implib,libjni$lib.dll.a \
+      -static-libgcc -static-libstdc++ \
+      2>&1 | tail -3
+    if [[ ! -f "jni$lib.dll" ]]; then
+      echo "ERROR: jni$lib.dll not produced" >&2
+      exit 1
+    fi
+  done
+
+  popd >/dev/null
 else
   make install
 fi
@@ -391,6 +499,23 @@ if [[ "$PLATFORM" == android-* ]]; then
     done
     echo "  ✓ mediacodec decoders registered"
   fi
+fi
+
+# Windows builds must also include the JavaCPP JNI shims (jniavcodec.dll etc.),
+# otherwise NativesDownloader.hasFfmpeg() will return false and the mod falls
+# back to libvlc silently.
+if [[ "$PLATFORM" == windows-* ]]; then
+  MISSING_SHIM=0
+  for shim in jniavcodec jniavdevice jniavfilter jniavformat jniavutil jniswresample jniswscale; do
+    if ! find . -maxdepth 1 -type f -name "${shim}*" | grep -q .; then
+      echo "ERROR: ${shim}.dll missing from $OUT_LIBDIR" >&2
+      MISSING_SHIM=1
+    fi
+  done
+  if [[ $MISSING_SHIM -ne 0 ]]; then
+    exit 1
+  fi
+  echo "  ✓ JavaCPP JNI shims present"
 fi
 
 echo ">>> Done: FFmpeg $FFMPEG_VER for $PLATFORM -> $OUT_LIBDIR"
