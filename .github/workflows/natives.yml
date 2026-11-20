@@ -213,6 +213,12 @@ jobs:
         run: |
           set -euo pipefail
           export OUT_DIR="$PWD/native-artifact/ffmpeg/${{ matrix.ffmpeg.key }}"
+          # Make the host JDK and unzip available to the MSYS2 shell
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME_17_X64/bin:$PATH"
+          # Use the host unzip.exe if available (MSYS2 doesn't install it by default)
+          unzip_bin="/c/Program Files/Git/usr/bin/unzip.exe"
+          [[ -x "$unzip_bin" ]] && export PATH="$(dirname "$unzip_bin"):$PATH"
           bash native/ffmpeg/build.sh ${{ matrix.ffmpeg.platform }}
 
       - name: Build FFmpeg native runtime from source
