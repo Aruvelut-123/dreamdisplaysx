@@ -151,15 +151,17 @@ jobs:
         uses: actions/checkout@v6.0.3
         with:
           fetch-depth: 1
-
       # The Windows JNI shim generation stage runs JavaCPP's Builder, which needs
       # a JDK. Installing it explicitly also exports JAVA_HOME/JAVA_HOME_17_X64 so
       # the MSYS2 shell inherits a working `java` on PATH.
+      # Java 17 is required by bytedeco ffmpeg preset 8.1.2-1.5.14's shims; on
+      # Windows ARM64 the runner ships Java 21 as minimum (temurin 17 may not
+      # exist there), so fall back to any JDK available on that runner.
       - name: Setup Java (JNI shim generation)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ matrix.ffmpeg.platform == 'windows-aarch64' && '21' || '17' }}
 
       - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
