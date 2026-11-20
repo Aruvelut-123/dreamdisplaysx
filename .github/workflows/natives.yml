@@ -152,6 +152,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      # The Windows JNI shim generation stage runs JavaCPP's Builder, which needs
+      # a JDK. Installing it explicitly also exports JAVA_HOME/JAVA_HOME_17_X64 so
+      # the MSYS2 shell inherits a working `java` on PATH.
+      - name: Setup Java (JNI shim generation)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -163,6 +172,7 @@ jobs:
           # mingw-w64-clang-aarch64-toolchain (clang-based).
           install: >-
             base-devel
+            unzip
             ${{ matrix.ffmpeg.msystem == 'MINGW64'
                 && 'mingw-w64-x86_64-toolchain mingw-w64-x86_64-nasm'
                 || matrix.ffmpeg.msystem == 'MINGW32'

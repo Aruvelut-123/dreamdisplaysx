@@ -375,6 +375,18 @@ if [[ "$PLATFORM" == windows-* ]]; then
     curl -fL --retry 4 --retry-all-errors --retry-delay 3 \
       -o "$FFMPEG_JAR" "https://repo1.maven.org/maven2/org/bytedeco/ffmpeg/8.1.2-1.5.14/ffmpeg-8.1.2-1.5.14.jar"
   fi
+  # The JavaCPP Builder needs a JDK. On the MSYS2 CI shell `java` is not on
+  # PATH by default, so fall back to the host JDK that actions/setup-java
+  # exports (JAVA_HOME) before giving up.
+  JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/java}"
+  if [[ -z "$JAVA_BIN" || ! -x "$JAVA_BIN" ]]; then
+    JAVA_BIN="$(command -v java || true)"
+  fi
+  if [[ -z "$JAVA_BIN" ]]; then
+    echo "ERROR: no java found; the JNI shim generation stage needs a JDK" >&2
+    exit 1
+  fi
+  echo "    java = $JAVA_BIN"
   #
   # Which classes must be passed: BOTH the `global.<lib>` function bindings AND
   # every class of the `org.bytedeco.ffmpeg.<lib>` target package. Feeding only
@@ -389,20 +401,30 @@ if [[ "$PLATFORM" == windows-* ]]; then
   # upstream's log_callback.h).
   echo ">>> Generating JavaCPP JNI shim sources for $PLATFORM"
   SHIM_CLASSES=()
+  # The JDK's `jar` tool enumerates the jar without needing `unzip`, which the
+  # MSYS2 shell does not ship by default.
+  JAR_BIN="$(dirname "$JAVA_BIN")/jar"
+  if [[ ! -x "$JAR_BIN" ]]; then
+    JAR_BIN="$(command -v jar || true)"
+  fi
+  if [[ -z "$JAR_BIN" ]]; then
+    echo "ERROR: no jar tool found; cannot enumerate $FFMPEG_JAR" >&2
+    exit 1
+  fi
   for lib in avcodec avdevice avfilter avformat avutil swresample swscale; do
     SHIM_CLASSES+=("org.bytedeco.ffmpeg.global.$lib")
-    # All non-nested classes of the target package, read straight from the jar.
+    # Every non-nested class of the target package, listed straight from the jar.
     while IFS= read -r entry; do
       [[ -z "$entry" ]] && continue
       SHIM_CLASSES+=("${entry%.class}")
-    done < <(unzip -Z1 "$FFMPEG_JAR" \
+    done < <("$JAR_BIN" tf "$FFMPEG_JAR" \
                | grep "^org/bytedeco/ffmpeg/$lib/" \
                | grep '\.class$' \
                | grep -v '\$' \
                | sed 's#/#.#g; s#\.class$##')
   done
   echo "    ${#SHIM_CLASSES[@]} classes -> $JNI_DIR"
-  java -cp "$JAVACPP_JAR:$FFMPEG_JAR" \
+  "$JAVA_BIN" -cp "$JAVACPP_JAR:$FFMPEG_JAR" \
     org.bytedeco.javacpp.tools.Builder \
     -d "$JNI_DIR" \
     -classpath "$FFMPEG_JAR" \
