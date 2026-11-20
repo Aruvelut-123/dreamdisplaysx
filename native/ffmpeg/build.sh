@@ -366,15 +366,21 @@ if [[ "$PLATFORM" == windows-* ]]; then
   # (avcodec-62.dll ...) lines up exactly.
   JNI_DIR="$WORK/jni-src"
   mkdir -p "$JNI_DIR"
-  JAVACPP_JAR="$WORK/javacpp-1.5.14.jar"
-  FFMPEG_JAR="$WORK/ffmpeg-8.1.2-1.5.14.jar"
-  if [[ ! -f "$JAVACPP_JAR" || ! -f "$FFMPEG_JAR" ]]; then
+  # Jar cache lives under OUT_DIR (a real Windows path) rather than $WORK:
+  # MSYS2's /tmp is a mount inside the MSYS root and curl's writes there were
+  # observed to fail with "curl: (23) client returned ERROR on write".
+  JAR_CACHE="$OUT_DIR/.jars"
+  mkdir -p "$JAR_CACHE"
+  JAVACPP_JAR="$JAR_CACHE/javacpp-1.5.14.jar"
+  FFMPEG_JAR="$JAR_CACHE/ffmpeg-8.1.2-1.5.14.jar"
+  if [[ ! -s "$JAVACPP_JAR" || ! -s "$FFMPEG_JAR" ]]; then
     echo ">>> Downloading javacpp + ffmpeg preset jars for JNI shim generation"
     curl -fL --retry 4 --retry-all-errors --retry-delay 3 \
       -o "$JAVACPP_JAR" "https://repo1.maven.org/maven2/org/bytedeco/javacpp/1.5.14/javacpp-1.5.14.jar"
     curl -fL --retry 4 --retry-all-errors --retry-delay 3 \
       -o "$FFMPEG_JAR" "https://repo1.maven.org/maven2/org/bytedeco/ffmpeg/8.1.2-1.5.14/ffmpeg-8.1.2-1.5.14.jar"
   fi
+  ls -la "$JAR_CACHE"
   # The JavaCPP Builder needs a JDK. On the MSYS2 CI shell `java` is not on
   # PATH by default, so fall back to the host JDK that actions/setup-java
   # exports (JAVA_HOME) before giving up.
